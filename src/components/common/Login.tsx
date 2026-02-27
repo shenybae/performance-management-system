@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Lock, User, ShieldAlert, TrendingUp, ChevronRight, Sun, Moon } from 'lucide-react';
+import { Lock, User, ShieldAlert, Sun, Moon } from 'lucide-react';
 import { Card } from './Card';
 
 interface UserSession {
@@ -32,29 +32,7 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
     }
   }, [isDarkMode]);
 
-  const handleQuickLogin = async (u: string, p: string) => {
-    setUsername(u);
-    setPassword(p);
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: u, password: p })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        onLogin(data);
-      } else {
-        setError(data.error || 'Login failed');
-      }
-    } catch (err) {
-      setError('Could not connect to server');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Quick demo access removed — use seeded accounts and the main sign-in form.
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,13 +47,39 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
       if (res.ok) {
         const user = await res.json();
         onLogin(user);
+        (window as any).notify('Signed in', 'success');
       } else {
         setError('Invalid username or password');
+        (window as any).notify('Invalid username or password', 'error');
       }
     } catch (err) {
       setError('Connection error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgot = async () => {
+    const uname = window.prompt('Enter your username for password reset');
+    if (!uname) return;
+    try {
+      const res = await fetch('/api/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: uname }) });
+      const data = await res.json();
+      if (res.ok) {
+        (window as any).notify('Password reset requested. Check console or copy token shown.', 'info');
+        if (data.token) {
+          // In dev we return token — allow immediate reset
+          const token = data.token;
+          const newPass = window.prompt('Enter new password (token provided)');
+          if (!newPass) return;
+          const r = await fetch('/api/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, newPassword: newPass }) });
+          if (r.ok) (window as any).notify('Password reset successful', 'success'); else { const j = await r.json(); (window as any).notify(j.error || 'Reset failed', 'error'); }
+        }
+      } else {
+        (window as any).notify(data.error || 'Failed to request reset', 'error');
+      }
+    } catch (err) {
+      (window as any).notify('Connection error', 'error');
     }
   };
 
@@ -141,41 +145,7 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
             </button>
           </form>
           
-          <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
-            <p className="text-xs text-slate-500 dark:text-slate-400 text-center uppercase font-bold tracking-widest mb-4">Quick Demo Access</p>
-            <div className="grid grid-cols-1 gap-2">
-              <button 
-                onClick={() => handleQuickLogin('hr_admin', 'password123')}
-                className="flex items-center justify-between p-3 system-bg hover:bg-teal-green/10 dark:hover:bg-teal-green/10 rounded-xl border border-slate-100 dark:border-slate-700 transition-colors group"
-              >
-                <div className="text-left">
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-100 group-hover:text-teal-deep dark:group-hover:text-teal-green">HR Admin Portal</p>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-300">Manage 201 & Users</p>
-                </div>
-                <ChevronRight size={14} className="text-slate-400 group-hover:text-teal-deep dark:group-hover:text-teal-green" />
-              </button>
-              <button 
-                onClick={() => handleQuickLogin('manager_bob', 'password123')}
-                className="flex items-center justify-between p-3 system-bg hover:bg-teal-green/10 dark:hover:bg-teal-green/10 rounded-xl border border-slate-100 dark:border-slate-700 transition-colors group"
-              >
-                <div className="text-left">
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-100 group-hover:text-teal-deep dark:group-hover:text-teal-green">Manager Dashboard</p>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-300">OKRs & Coaching</p>
-                </div>
-                <ChevronRight size={14} className="text-slate-400 group-hover:text-teal-deep dark:group-hover:text-teal-green" />
-              </button>
-              <button 
-                onClick={() => handleQuickLogin('employee_john', 'password123')}
-                className="flex items-center justify-between p-3 system-bg hover:bg-teal-green/10 dark:hover:bg-teal-green/10 rounded-xl border border-slate-100 dark:border-slate-700 transition-colors group"
-              >
-                <div className="text-left">
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-100 group-hover:text-teal-deep dark:group-hover:text-teal-green">Employee Self-Service</p>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-300">Career & Growth</p>
-                </div>
-                <ChevronRight size={14} className="text-slate-400 group-hover:text-teal-deep dark:group-hover:text-teal-green" />
-              </button>
-            </div>
-          </div>
+          {/* Quick demo access removed — use seeded accounts and the main sign-in form. */}
         </div>
         <p className="text-center text-[10px] text-slate-500 dark:text-slate-400 mt-8 font-medium">
           © {new Date().getFullYear()} Maptech Information Solutions Inc. All rights reserved.

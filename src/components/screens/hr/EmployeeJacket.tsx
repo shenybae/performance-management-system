@@ -20,6 +20,23 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
       </div>
       <SectionHeader title={`Digital 201 Jacket: ${employee.name}`} subtitle="Comprehensive employee profile and history" />
       
+      <div className="flex items-center justify-end mb-4">
+        <button onClick={async () => {
+          if (!confirm('Delete this employee? This action cannot be undone.')) return;
+          const token = localStorage.getItem('talentflow_token');
+          try {
+            const res = await fetch(`/api/employees/${employee.id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+            if (res.ok) {
+              (window as any).notify('Employee deleted', 'success');
+              onBack();
+            } else {
+              const err = await res.json();
+              (window as any).notify(err.error || 'Failed to delete', 'error');
+            }
+          } catch (err) { (window as any).notify('Server error', 'error'); }
+        }} className="px-3 py-2 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">Delete Employee</button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-2">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-teal-deep dark:text-teal-green"><Users size={18} className="text-teal-green" /> Personal Profile</h3>

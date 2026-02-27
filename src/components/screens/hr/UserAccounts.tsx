@@ -16,18 +16,21 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     const formData = new FormData(e.currentTarget);
     const data = Object.fromEntries(formData);
     try {
+      const token = localStorage.getItem('talentflow_token');
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch('/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(data)
       });
       if (res.ok) {
-        alert('User created successfully');
+        (window as any).notify('User created successfully', 'success');
         onRefresh();
         (e.target as HTMLFormElement).reset();
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to create user');
+        (window as any).notify(err.error || 'Failed to create user', 'error');
       }
     } catch (err) {
       alert('Error connecting to server');
@@ -79,6 +82,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Username</th>
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</th>
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Linked Employee</th>
+                  <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -95,6 +99,18 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                       </span>
                     </td>
                     <td className="py-3 text-slate-600 dark:text-slate-200">{u.employee_name || 'N/A'}</td>
+                    <td className="py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={async () => {
+                          if (!confirm('Delete user?')) return;
+                          const token = localStorage.getItem('talentflow_token');
+                          try {
+                            const res = await fetch(`/api/users/${u.id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+                            if (res.ok) { (window as any).notify('User deleted', 'success'); onRefresh(); } else { const err = await res.json(); (window as any).notify(err.error || 'Failed', 'error'); }
+                          } catch (err) { (window as any).notify('Server error', 'error'); }
+                        }} className="text-xs text-red-500 font-bold">Delete</button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

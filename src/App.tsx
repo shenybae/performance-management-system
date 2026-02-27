@@ -14,7 +14,8 @@ import {
   Sun,
   Moon,
   LayoutDashboard,
-  Briefcase
+  Briefcase,
+  Settings as SettingsIcon
 } from 'lucide-react';
 
 // --- Types ---
@@ -23,6 +24,8 @@ import { Employee } from './types';
 // --- Common Components ---
 import { SidebarItem } from './components/common/SidebarItem';
 import { Login } from './components/common/Login';
+import { NotificationProvider } from './notifications/NotificationProvider';
+import { DBViewer } from './components/screens/hr/DBViewer';
 
 // --- HR Screens ---
 import { EmployeeDirectory } from './components/screens/hr/EmployeeDirectory';
@@ -43,12 +46,14 @@ import { CareerDashboard } from './components/screens/employee/CareerDashboard';
 import { SelfAssessment } from './components/screens/employee/SelfAssessment';
 import { FeedbackBox } from './components/screens/employee/FeedbackBox';
 import { IDP } from './components/screens/employee/IDP';
+import { Settings } from './components/screens/common/Settings';
 
 interface UserSession {
   id: number;
   username: string;
   role: 'HR' | 'Manager' | 'Employee';
   employee_id: number | null;
+  token?: string;
 }
 
 export default function App() {
@@ -94,16 +99,23 @@ export default function App() {
   const handleLogin = (session: UserSession) => {
     setUser(session);
     localStorage.setItem('talentflow_user', JSON.stringify(session));
+    localStorage.setItem('user', JSON.stringify(session));
+    if ((session as any).token) localStorage.setItem('talentflow_token', (session as any).token);
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('talentflow_user');
+    localStorage.removeItem('user');
+    localStorage.removeItem('talentflow_token');
   };
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch('/api/employees');
+      const headers: any = { 'Content-Type': 'application/json' };
+      const token = localStorage.getItem('talentflow_token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch('/api/employees', { headers });
       const data = await res.json();
       setEmployees(data);
       setLoading(false);
@@ -114,7 +126,10 @@ export default function App() {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('/api/users');
+      const headers: any = { 'Content-Type': 'application/json' };
+      const token = localStorage.getItem('talentflow_token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch('/api/users', { headers });
       const data = await res.json();
       setUsers(data);
     } catch (err) {
@@ -124,7 +139,10 @@ export default function App() {
 
   const fetchEmployeeDetails = async (id: number) => {
     try {
-      const res = await fetch(`/api/employees/${id}`);
+      const headers: any = { 'Content-Type': 'application/json' };
+      const token = localStorage.getItem('talentflow_token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`/api/employees/${id}`, { headers });
       const data = await res.json();
       setSelectedEmployee(data);
     } catch (err) {
@@ -133,7 +151,11 @@ export default function App() {
   };
 
   if (!user) {
-    return <Login onLogin={handleLogin} />;
+    return (
+      <NotificationProvider>
+        <Login onLogin={handleLogin} />
+      </NotificationProvider>
+    );
   }
 
   const renderScreen = () => {
@@ -160,12 +182,13 @@ export default function App() {
           {(() => {
             switch (activeScreen) {
               // HR Screens
-              case 'A1': return <EmployeeDirectory employees={employees} onSelectEmployee={(id) => { fetchEmployeeDetails(id); setActiveScreen('A2'); }} />;
-              case 'A2': return <EmployeeJacket employee={selectedEmployee} onBack={() => setActiveScreen('A1')} />;
+              case 'A1': return <EmployeeDirectory employees={employees} onSelectEmployee={(id) => { fetchEmployeeDetails(id); setActiveScreen('A2'); }} onCreateEmployee={fetchEmployees} />;
+              case 'A2': return <EmployeeJacket employee={selectedEmployee} onBack={() => { setActiveScreen('A1'); fetchEmployees(); }} />;
               case 'A3': return <DisciplinaryLog employees={employees} />;
               case 'A4': return <RecruitmentBoard />;
               case 'A5': return <OffboardingHub />;
               case 'A6': return <UserAccounts employees={employees} users={users} onRefresh={fetchUsers} />;
+              case 'A7': return <DBViewer />;
 
               // Manager Screens
               case 'B1': return <OKRPlanner employees={employees} />;
@@ -174,10 +197,11 @@ export default function App() {
               case 'B4': return <Promotability />;
 
               // Employee Screens
-              case 'C1': return <CareerDashboard employee={employees.find(e => e.id === user.employee_id) || employees[0]} onNavigate={setActiveScreen} />;
+              case 'C1': return <CareerDashboard />;
               case 'C2': return <SelfAssessment />;
               case 'C3': return <FeedbackBox />;
               case 'C4': return <IDP />;
+              case 'S1': return <Settings />;
               
               default: return <div className="p-10 text-slate-500 italic">Screen not found.</div>;
             }
@@ -188,6 +212,7 @@ export default function App() {
   };
 
   return (
+    <NotificationProvider>
     <div className="flex h-screen bg-transparent overflow-hidden selection:bg-teal-green/30 selection:text-teal-deep transition-colors duration-500">
       {/* Sidebar */}
       <aside className="w-64 system-bg border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-500">
@@ -230,6 +255,8 @@ export default function App() {
               <SidebarItem icon={UserPlus} label="Recruitment Board" active={activeScreen === 'A4'} onClick={() => setActiveScreen('A4')} />
               <SidebarItem icon={LogOut} label="Offboarding Hub" active={activeScreen === 'A5'} onClick={() => setActiveScreen('A5')} />
               <SidebarItem icon={ShieldCheck} label="User Accounts" active={activeScreen === 'A6'} onClick={() => setActiveScreen('A6')} />
+                <SidebarItem icon={TrendingUp} label="DB Viewer" active={activeScreen === 'A7'} onClick={() => setActiveScreen('A7')} />
+              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => setActiveScreen('S1')} />
             </>
           )}
 
@@ -240,6 +267,7 @@ export default function App() {
               <SidebarItem icon={MessageSquare} label="Coaching Journal" active={activeScreen === 'B2'} onClick={() => setActiveScreen('B2')} />
               <SidebarItem icon={ClipboardCheck} label="Evaluation Portal" active={activeScreen === 'B3'} onClick={() => setActiveScreen('B3')} />
               <SidebarItem icon={Award} label="Promotability" active={activeScreen === 'B4'} onClick={() => setActiveScreen('B4')} />
+              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => setActiveScreen('S1')} />
             </>
           )}
 
@@ -250,6 +278,7 @@ export default function App() {
               <SidebarItem icon={ClipboardCheck} label="Self-Assessment" active={activeScreen === 'C2'} onClick={() => setActiveScreen('C2')} />
               <SidebarItem icon={MessageSquare} label="Feedback Box" active={activeScreen === 'C3'} onClick={() => setActiveScreen('C3')} />
               <SidebarItem icon={Briefcase} label="Development Plan" active={activeScreen === 'C4'} onClick={() => setActiveScreen('C4')} />
+              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => setActiveScreen('S1')} />
             </>
           )}
         </nav>
@@ -280,5 +309,6 @@ export default function App() {
         </div>
       </main>
     </div>
+    </NotificationProvider>
   );
 }
