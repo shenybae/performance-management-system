@@ -10,14 +10,14 @@ export const CareerDashboard = () => {
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
   const [selfAssessments, setSelfAssessments] = useState<any[]>([]);
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
 
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
-    try { const r = await fetch('/api/appraisals', { headers: getAuthHeaders() }); const d = await r.json(); setAppraisals(Array.isArray(d) ? d.filter((a: any) => a.employee_id === (user.employee_id || user.id) || !user.employee_id) : []); } catch { setAppraisals([]); }
-    try { const r = await fetch('/api/goals', { headers: getAuthHeaders() }); const d = await r.json(); setGoals(Array.isArray(d) ? d.filter((g: any) => g.employee_id === (user.employee_id || user.id) || !user.employee_id) : []); } catch { setGoals([]); }
-    try { const r = await fetch('/api/self_assessments', { headers: getAuthHeaders() }); const d = await r.json(); setSelfAssessments(Array.isArray(d) ? d.filter((s: any) => s.employee_id === (user.employee_id || user.id) || !user.employee_id) : []); } catch { setSelfAssessments([]); }
+    try { const r = await fetch('/api/appraisals', { headers: getAuthHeaders() }); const d = await r.json(); setAppraisals(Array.isArray(d) ? d.filter((a: any) => a.employee_id === (user.employee_id || user.id)) : []); } catch { setAppraisals([]); }
+    try { const r = await fetch('/api/goals', { headers: getAuthHeaders() }); const d = await r.json(); setGoals(Array.isArray(d) ? d.filter((g: any) => g.employee_id === (user.employee_id || user.id)) : []); } catch { setGoals([]); }
+    try { const r = await fetch('/api/self_assessments', { headers: getAuthHeaders() }); const d = await r.json(); setSelfAssessments(Array.isArray(d) ? d.filter((s: any) => s.employee_id === (user.employee_id || user.id)) : []); } catch { setSelfAssessments([]); }
   };
 
   // Performance trend from appraisals
@@ -164,9 +164,9 @@ export const CareerDashboard = () => {
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Progress</th></tr></thead>
               <tbody>{goals.map(g => (
                 <tr key={g.id} className="border-b border-slate-50 dark:border-slate-800/50">
-                  <td className="py-3 font-medium text-slate-700 dark:text-slate-200">{g.title}</td>
+                  <td className="py-3 font-medium text-slate-700 dark:text-slate-200">{g.title || g.statement}</td>
                   <td className="py-3 text-sm text-slate-500 dark:text-slate-400">{g.target_date}</td>
-                  <td className="py-3"><span className={`text-[10px] font-bold uppercase ${g.status === 'Completed' ? 'text-emerald-600' : g.status === 'In Progress' ? 'text-amber-500' : 'text-slate-400'}`}>{g.status}</span></td>
+                  <td className="py-3"><span className={`text-[10px] font-bold uppercase ${g.status === 'Completed' ? 'text-emerald-600' : g.status === 'In Progress' ? 'text-amber-500' : 'text-slate-400'}`}>{g.status || 'Not Started'}</span></td>
                   <td className="py-3"><div className="w-24 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-teal-500 rounded-full" style={{ width: `${g.progress || 0}%` }}></div></div></td>
                 </tr>
               ))}</tbody>

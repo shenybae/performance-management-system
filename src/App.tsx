@@ -15,7 +15,14 @@ import {
   Moon,
   LayoutDashboard,
   Briefcase,
-  Settings as SettingsIcon
+  Lightbulb,
+  GraduationCap,
+  Settings as SettingsIcon,
+  Bell,
+  X,
+  CheckCircle,
+  AlertTriangle,
+  Info
 } from 'lucide-react';
 
 // --- Types ---
@@ -23,8 +30,9 @@ import { Employee } from './types';
 
 // --- Common Components ---
 import { SidebarItem } from './components/common/SidebarItem';
+import { NotificationBell } from './components/common/NotificationBell';
 import { Login } from './components/common/Login';
-import { NotificationProvider } from './notifications/NotificationProvider';
+import { NotificationProvider, useNotifications } from './notifications/NotificationProvider';
 import { DBViewer } from './components/screens/hr/DBViewer';
 
 // --- HR Screens ---
@@ -33,6 +41,7 @@ import { EmployeeJacket } from './components/screens/hr/EmployeeJacket';
 import { DisciplinaryLog } from './components/screens/hr/DisciplinaryLog';
 import { RecruitmentBoard } from './components/screens/hr/RecruitmentBoard';
 import { OffboardingHub } from './components/screens/hr/OffboardingHub';
+import { OnboardingHub } from './components/screens/hr/OnboardingHub';
 import { UserAccounts } from './components/screens/hr/UserAccounts';
 
 // --- Manager Screens ---
@@ -40,12 +49,16 @@ import { OKRPlanner } from './components/screens/manager/OKRPlanner';
 import { CoachingJournal } from './components/screens/manager/CoachingJournal';
 import { EvaluationPortal } from './components/screens/manager/EvaluationPortal';
 import { Promotability } from './components/screens/manager/Promotability';
+import { PIPManager } from './components/screens/manager/PIPManager';
 
 // --- Employee Screens ---
 import { CareerDashboard } from './components/screens/employee/CareerDashboard';
 import { SelfAssessment } from './components/screens/employee/SelfAssessment';
 import { FeedbackBox } from './components/screens/employee/FeedbackBox';
+import { SuggestionForm } from './components/screens/employee/SuggestionForm';
+import { VerificationOfReview } from './components/screens/employee/VerificationOfReview';
 import { IDP } from './components/screens/employee/IDP';
+import { CoachingChat } from './components/screens/employee/CoachingChat';
 import { Settings } from './components/screens/common/Settings';
 
 interface UserSession {
@@ -54,6 +67,7 @@ interface UserSession {
   role: 'HR' | 'Manager' | 'Employee';
   employee_id: number | null;
   token?: string;
+  profile_picture?: string | null;
 }
 
 export default function App() {
@@ -181,27 +195,38 @@ export default function App() {
         >
           {(() => {
             switch (activeScreen) {
-              // HR Screens
+              // HR Screens (The Architect)
               case 'A1': return <EmployeeDirectory employees={employees} onSelectEmployee={(id) => { fetchEmployeeDetails(id); setActiveScreen('A2'); }} onCreateEmployee={fetchEmployees} />;
               case 'A2': return <EmployeeJacket employee={selectedEmployee} onBack={() => { setActiveScreen('A1'); fetchEmployees(); }} />;
-              case 'A3': return <DisciplinaryLog employees={employees} />;
-              case 'A4': return <RecruitmentBoard />;
-              case 'A5': return <OffboardingHub />;
-              case 'A6': return <UserAccounts employees={employees} users={users} onRefresh={fetchUsers} />;
-              case 'A7': return <DBViewer />;
+              case 'A3': return <RecruitmentBoard />;
+              case 'A7': return <OnboardingHub employees={employees} onRefresh={fetchEmployees} />;
+              case 'A4': return <OffboardingHub employees={employees} />;
+              case 'A5': return <UserAccounts employees={employees} users={users} onRefresh={fetchUsers} />;
+              case 'A6': return <DBViewer />;
 
-              // Manager Screens
+              // Manager Screens (The Coach & Evaluator)
               case 'B1': return <OKRPlanner employees={employees} />;
               case 'B2': return <CoachingJournal employees={employees} />;
-              case 'B3': return <EvaluationPortal employees={employees} />;
-              case 'B4': return <Promotability />;
+              case 'B3': return <DisciplinaryLog employees={employees} />;
+              case 'B4': return <EvaluationPortal employees={employees} />;
+              case 'B5': return <Promotability />;
+              case 'B6': return <PIPManager employees={employees} />;
+              case 'B7': return <SuggestionForm employees={employees} />;
 
-              // Employee Screens
+              // Employee Screens (The Performer)
               case 'C1': return <CareerDashboard />;
-              case 'C2': return <SelfAssessment />;
-              case 'C3': return <FeedbackBox />;
-              case 'C4': return <IDP />;
-              case 'S1': return <Settings />;
+              case 'C2': return <SuggestionForm />;
+              case 'C3': return <SelfAssessment />;
+              case 'C4': return <FeedbackBox employees={employees} />;
+              case 'C5': return <VerificationOfReview />;
+              case 'C6': return <IDP />;
+              case 'C7': return <CoachingChat />;
+              case 'S1': return <Settings onProfilePictureChanged={(pic) => {
+                const updated = { ...user, profile_picture: pic };
+                setUser(updated);
+                localStorage.setItem('talentflow_user', JSON.stringify(updated));
+                localStorage.setItem('user', JSON.stringify(updated));
+              }} />;
               
               default: return <div className="p-10 text-slate-500 italic">Screen not found.</div>;
             }
@@ -250,12 +275,12 @@ export default function App() {
           {user.role === 'HR' && (
             <>
               <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">HR Command Center</div>
+              <SidebarItem icon={UserPlus} label="Recruitment Board" active={activeScreen === 'A3'} onClick={() => setActiveScreen('A3')} />
+              <SidebarItem icon={Briefcase} label="Onboarding Hub" active={activeScreen === 'A7'} onClick={() => setActiveScreen('A7')} />
               <SidebarItem icon={Users} label="Employee Directory" active={activeScreen === 'A1' || activeScreen === 'A2'} onClick={() => setActiveScreen('A1')} />
-              <SidebarItem icon={ShieldAlert} label="Disciplinary Log" active={activeScreen === 'A3'} onClick={() => setActiveScreen('A3')} />
-              <SidebarItem icon={UserPlus} label="Recruitment Board" active={activeScreen === 'A4'} onClick={() => setActiveScreen('A4')} />
-              <SidebarItem icon={LogOut} label="Offboarding Hub" active={activeScreen === 'A5'} onClick={() => setActiveScreen('A5')} />
-              <SidebarItem icon={ShieldCheck} label="User Accounts" active={activeScreen === 'A6'} onClick={() => setActiveScreen('A6')} />
-                <SidebarItem icon={TrendingUp} label="DB Viewer" active={activeScreen === 'A7'} onClick={() => setActiveScreen('A7')} />
+              <SidebarItem icon={LogOut} label="Offboarding Hub" active={activeScreen === 'A4'} onClick={() => setActiveScreen('A4')} />
+              <SidebarItem icon={ShieldCheck} label="User Accounts" active={activeScreen === 'A5'} onClick={() => setActiveScreen('A5')} />
+              <SidebarItem icon={TrendingUp} label="DB Viewer" active={activeScreen === 'A6'} onClick={() => setActiveScreen('A6')} />
               <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => setActiveScreen('S1')} />
             </>
           )}
@@ -265,8 +290,11 @@ export default function App() {
               <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Performance Dashboard</div>
               <SidebarItem icon={Target} label="Target & OKR Planner" active={activeScreen === 'B1'} onClick={() => setActiveScreen('B1')} />
               <SidebarItem icon={MessageSquare} label="Coaching Journal" active={activeScreen === 'B2'} onClick={() => setActiveScreen('B2')} />
-              <SidebarItem icon={ClipboardCheck} label="Evaluation Portal" active={activeScreen === 'B3'} onClick={() => setActiveScreen('B3')} />
-              <SidebarItem icon={Award} label="Promotability" active={activeScreen === 'B4'} onClick={() => setActiveScreen('B4')} />
+              <SidebarItem icon={ShieldAlert} label="Disciplinary Action" active={activeScreen === 'B3'} onClick={() => setActiveScreen('B3')} />
+              <SidebarItem icon={ClipboardCheck} label="Evaluation Portal" active={activeScreen === 'B4'} onClick={() => setActiveScreen('B4')} />
+              <SidebarItem icon={Award} label="Promotability" active={activeScreen === 'B5'} onClick={() => setActiveScreen('B5')} />
+              <SidebarItem icon={TrendingUp} label="IDP / PIP Manager" active={activeScreen === 'B6'} onClick={() => setActiveScreen('B6')} />
+              <SidebarItem icon={Lightbulb} label="Suggestion Review" active={activeScreen === 'B7'} onClick={() => setActiveScreen('B7')} />
               <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => setActiveScreen('S1')} />
             </>
           )}
@@ -275,9 +303,12 @@ export default function App() {
             <>
               <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Self-Service & Growth</div>
               <SidebarItem icon={LayoutDashboard} label="My Career Dashboard" active={activeScreen === 'C1'} onClick={() => setActiveScreen('C1')} />
-              <SidebarItem icon={ClipboardCheck} label="Self-Assessment" active={activeScreen === 'C2'} onClick={() => setActiveScreen('C2')} />
-              <SidebarItem icon={MessageSquare} label="Feedback Box" active={activeScreen === 'C3'} onClick={() => setActiveScreen('C3')} />
-              <SidebarItem icon={Briefcase} label="Development Plan" active={activeScreen === 'C4'} onClick={() => setActiveScreen('C4')} />
+              <SidebarItem icon={Lightbulb} label="Suggestion Form" active={activeScreen === 'C2'} onClick={() => setActiveScreen('C2')} />
+              <SidebarItem icon={ClipboardCheck} label="Self-Assessment" active={activeScreen === 'C3'} onClick={() => setActiveScreen('C3')} />
+              <SidebarItem icon={MessageSquare} label="360° Feedback" active={activeScreen === 'C4'} onClick={() => setActiveScreen('C4')} />
+              <SidebarItem icon={ShieldCheck} label="Verification of Review" active={activeScreen === 'C5'} onClick={() => setActiveScreen('C5')} />
+              <SidebarItem icon={Briefcase} label="Development Plan" active={activeScreen === 'C6'} onClick={() => setActiveScreen('C6')} />
+              <SidebarItem icon={GraduationCap} label="Coaching & E-Learning" active={activeScreen === 'C7'} onClick={() => setActiveScreen('C7')} />
               <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => setActiveScreen('S1')} />
             </>
           )}
@@ -285,9 +316,13 @@ export default function App() {
 
         <div className="p-4 border-t border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-3 mb-4 px-2">
-            <div className="w-8 h-8 system-bg border border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-teal-deep dark:text-teal-green font-bold text-xs">
-              {user.username[0].toUpperCase()}
-            </div>
+            {user.profile_picture ? (
+              <img src={user.profile_picture} alt="Profile" className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700" />
+            ) : (
+              <div className="w-8 h-8 system-bg border border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-teal-deep dark:text-teal-green font-bold text-xs">
+                {user.username[0].toUpperCase()}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.username}</p>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">{user.role}</p>
@@ -303,7 +338,10 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-transparent transition-colors duration-500">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-transparent transition-colors duration-500 relative">
+        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-40">
+          <NotificationBell />
+        </div>
         <div className="max-w-6xl mx-auto min-h-full">
           {renderScreen()}
         </div>

@@ -61,3 +61,9 @@ export interface Property {
   serial_no: string;
   uom_qty: number;
 }
+
+declare global {
+  interface Window {
+    notify?: (message: string, type: 'success' | 'error' | 'info') => void;
+  }
+}

@@ -9,8 +9,8 @@ import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 export const IDP = () => {
   const [showForm, setShowForm] = useState(false);
   const [plans, setPlans] = useState<any[]>([]);
-  const [form, setForm] = useState({ skill_gap: '', growth_step: '', status: 'Not Started' });
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const [form, setForm] = useState({ skill_gap: '', growth_step: '', status: '' });
+  const user = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
 
   useEffect(() => { fetchPlans(); }, []);
 
@@ -18,7 +18,7 @@ export const IDP = () => {
     try {
       const res = await fetch('/api/development_plans', { headers: getAuthHeaders() });
       const data = await res.json();
-      const mine = Array.isArray(data) ? data.filter((p: any) => p.employee_id === (user.employee_id || user.id) || user.role === 'hr' || user.role === 'manager') : [];
+      const mine = Array.isArray(data) ? data.filter((p: any) => p.employee_id === (user.employee_id || user.id) || user.role === 'HR' || user.role === 'Manager') : [];
       setPlans(mine);
     } catch { setPlans([]); }
   };
@@ -29,7 +29,7 @@ export const IDP = () => {
       const res = await fetch('/api/development_plans', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ...form, employee_id: user.employee_id || user.id, step_order: plans.length + 1 }) });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Development plan added', 'success');
-      setForm({ skill_gap: '', growth_step: '', status: 'Not Started' });
+      setForm({ skill_gap: '', growth_step: '', status: '' });
       setShowForm(false); fetchPlans();
     } catch { window.notify?.('Failed to create', 'error'); }
   };
@@ -70,7 +70,7 @@ export const IDP = () => {
               <div className="grid grid-cols-3 gap-4">
                 <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Skill Gap</label><input type="text" value={form.skill_gap} onChange={e => setForm({ ...form, skill_gap: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="e.g. Leadership, Communication..." /></div>
                 <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Growth Step</label><input type="text" value={form.growth_step} onChange={e => setForm({ ...form, growth_step: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Action to take..." /></div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Status</label><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"><option>Not Started</option><option>In Progress</option><option>Completed</option></select></div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Status</label><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"><option value="">Select Status...</option><option>Not Started</option><option>In Progress</option><option>Completed</option></select></div>
               </div>
               <div className="flex justify-end"><button type="submit" className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green">Add Plan</button></div>
             </form>

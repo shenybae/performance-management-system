@@ -12,14 +12,14 @@ export const SelfAssessment = () => {
   const [assessments, setAssessments] = useState<any[]>([]);
   const [form, setForm] = useState({
     achievements: '',
-    job_knowledge: 3,
-    productivity: 3,
-    attendance: 3,
-    communication: 3,
-    dependability: 3
+    job_knowledge: 0,
+    productivity: 0,
+    attendance: 0,
+    communication: 0,
+    dependability: 0
   });
 
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
 
   useEffect(() => { fetchAssessments(); }, []);
 
@@ -27,7 +27,7 @@ export const SelfAssessment = () => {
     try {
       const res = await fetch('/api/self_assessments', { headers: getAuthHeaders() });
       const data = await res.json();
-      const mine = Array.isArray(data) ? data.filter((a: any) => a.employee_id === user.employee_id || !user.employee_id) : [];
+      const mine = Array.isArray(data) ? data.filter((a: any) => a.employee_id === (user.employee_id || user.id)) : [];
       setAssessments(mine);
     } catch { setAssessments([]); }
   };
@@ -42,7 +42,7 @@ export const SelfAssessment = () => {
       });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Self assessment submitted', 'success');
-      setForm({ achievements: '', job_knowledge: 3, productivity: 3, attendance: 3, communication: 3, dependability: 3 });
+      setForm({ achievements: '', job_knowledge: 0, productivity: 0, attendance: 0, communication: 0, dependability: 0 });
       fetchAssessments();
     } catch { window.notify?.('Failed to submit', 'error'); }
   };
@@ -64,6 +64,7 @@ export const SelfAssessment = () => {
     <div>
       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{label}</label>
       <select value={(form as any)[field]} onChange={e => setForm({ ...form, [field]: parseInt(e.target.value) })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100">
+        <option value={0} disabled>— Select Rating —</option>
         {[5, 4, 3, 2, 1].map(v => <option key={v} value={v}>{v} — {scoreLabels[v]}</option>)}
       </select>
     </div>

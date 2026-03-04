@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
+import { SearchableSelect } from '../../common/SearchableSelect';
 
 interface UserAccountsProps {
   employees: Employee[];
@@ -11,6 +12,7 @@ interface UserAccountsProps {
 }
 
 export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps) => {
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -33,7 +35,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
         (window as any).notify(err.error || 'Failed to create user', 'error');
       }
     } catch (err) {
-      alert('Error connecting to server');
+      window.notify?.('Error connecting to server', 'error');
     }
   };
 
@@ -55,6 +57,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</label>
               <select name="role" className="w-full mt-1 p-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50" required>
+                <option value="">Select Role...</option>
                 <option value="Employee">Employee</option>
                 <option value="Manager">Manager</option>
                 <option value="HR">HR</option>
@@ -62,12 +65,15 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Link to Employee</label>
-              <select name="employee_id" className="w-full mt-1 p-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50">
-                <option value="">None (Admin Only)</option>
-                {employees.map(emp => (
-                  <option key={emp.id} value={emp.id}>{emp.name}</option>
-                ))}
-              </select>
+              <input type="hidden" name="employee_id" value={selectedEmployeeId} />
+              <SearchableSelect
+                options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+                value={selectedEmployeeId}
+                onChange={v => setSelectedEmployeeId(v)}
+                placeholder="None (Admin Only)"
+                allowEmpty
+                emptyLabel="None (Admin Only)"
+              />
             </div>
             <button type="submit" className="w-full gradient-bg text-white py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-teal-green/10">Create User</button>
           </form>
