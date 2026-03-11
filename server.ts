@@ -1,7 +1,8 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
+import { createServer as createHttpServer } from "http";
+import { Server as SocketIOServer } from "socket.io";
 import pg from "pg";
-import Database from "better-sqlite3";
 import path from "path";
 import dotenv from "dotenv";
 import crypto from 'crypto';
@@ -11,66 +12,69 @@ import cors from "cors";
 
 dotenv.config();
 
-let usePostgres = !!process.env.DB_HOST;
-let pgPool: pg.Pool | null = null;
-let sqliteDb: any = null;
-
-if (usePostgres) {
-  try {
-    pgPool = new pg.Pool({
-      host: process.env.DB_HOST,
-      port: parseInt(process.env.DB_PORT || '5432'),
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-    });
-    console.log("PostgreSQL Pool created. Attempting connection...");
-  } catch (err) {
-    console.error("Failed to create PostgreSQL pool, falling back to SQLite:", err);
-    usePostgres = false;
-  }
+// Enforce PostgreSQL usage only. Require DB env vars and exit if missing.
+if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_NAME) {
+  console.error('PostgreSQL configuration missing. Please set DB_HOST, DB_USER, DB_PASSWORD, DB_NAME in your .env');
+  process.exit(1);
 }
 
-if (!usePostgres) {
-  console.log("Using SQLite (Demo Mode)");
-  sqliteDb = new Database("talentflow_demo.db");
+let usePostgres = true;
+let pgPool: pg.Pool | null = null;
+let sqliteDb: any = null; // kept declared for compatibility with legacy code paths (unused)
+
+try {
+  pgPool = new pg.Pool({
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || '5432'),
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
+  });
+  console.log("PostgreSQL Pool created. Attempting connection...");
+} catch (err) {
+  console.error("Failed to create PostgreSQL pool:", err);
+  process.exit(1);
 }
 
 async function query(sql: string, params: any[] = []) {
-  if (usePostgres && pgPool) {
-    try {
-      // Convert ? to $1, $2, etc for PostgreSQL
-      let pgSql = sql;
-      let count = 1;
-      while (pgSql.includes('?')) {
-        pgSql = pgSql.replace('?', `$${count++}`);
-      }
-      const res = await pgPool.query(pgSql, params);
-      
-      // Normalize response to match mysql2/sqlite behavior
-      if (sql.trim().toUpperCase().startsWith("INSERT")) {
-        return { insertId: res.rows[0]?.id, affectedRows: res.rowCount };
-      }
-      return res.rows;
-    } catch (err) {
-      console.error("PostgreSQL Query Error:", err);
-      throw err;
+  if (!pgPool) throw new Error('Postgres pool not initialized');
+  try {
+    // Convert ? placeholders to $1, $2, ... for pg
+    let pgSql = sql;
+    let count = 1;
+    while (pgSql.includes('?')) pgSql = pgSql.replace('?', `$${count++}`);
+    const res = await pgPool.query(pgSql, params);
+    if (sql.trim().toUpperCase().startsWith('INSERT')) {
+      return { insertId: res.rows[0]?.id, affectedRows: res.rowCount };
     }
-  } else {
-    try {
-      if (sql.trim().toUpperCase().startsWith("SELECT")) {
-        return sqliteDb.prepare(sql).all(...params);
-      } else {
-        const info = sqliteDb.prepare(sql).run(...params);
-        return { insertId: info.lastInsertRowid, affectedRows: info.changes };
-      }
-    } catch (err) {
-      console.error("SQLite Query Error:", err);
-      throw err;
-    }
+    return res.rows;
+  } catch (err) {
+    console.error('PostgreSQL Query Error:', err);
+    throw err;
+  }
+}
+
+// Simple audit recorder: stores who did what and snapshots of before/after plus metadata
+async function recordAudit(user: any, action: string, tableName: string, rowId: any = null, before: any = null, after: any = null, meta: any = null) {
+  try {
+    const user_id = user && (user.id || user.employee_id) ? (user.id || user.employee_id) : null;
+    const username = user && (user.username || user.full_name) ? (user.username || user.full_name) : null;
+    const source = meta && meta.source ? meta.source : null;
+    const ip = meta && meta.ip ? meta.ip : null;
+    const user_agent = meta && meta.user_agent ? meta.user_agent : null;
+    const route = meta && meta.route ? meta.route : null;
+    const method = meta && meta.method ? meta.method : null;
+    const meta_json = meta ? JSON.stringify(meta) : null;
+
+    await query(
+      'INSERT INTO audit_logs (user_id, username, action, table_name, row_id, before_json, after_json, source, ip, user_agent, route, method, meta_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [user_id, username, action, tableName, rowId, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null, source, ip, user_agent, route, method, meta_json]
+    );
+  } catch (err) {
+    console.error('recordAudit error:', err);
   }
 }
 
@@ -178,6 +182,9 @@ async function initDb() {
       password TEXT NOT NULL,
       role TEXT NOT NULL,
       employee_id INTEGER,
+      profile_picture TEXT,
+      full_name TEXT,
+      linked_user_id INTEGER,
       FOREIGN KEY(employee_id) REFERENCES employees(id)
     )`
     ,
@@ -330,6 +337,11 @@ async function initDb() {
       sender_role TEXT NOT NULL,
       sender_name TEXT,
       message TEXT NOT NULL,
+      status TEXT DEFAULT 'delivered',
+      reply_to INTEGER,
+      action_type TEXT,
+      action_payload TEXT,
+      action_status TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(employee_id) REFERENCES employees(id)
     )`,
@@ -355,6 +367,34 @@ async function initDb() {
       recommended_by TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(employee_id) REFERENCES employees(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS notifications (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      user_id INTEGER,
+      role TEXT,
+      type TEXT DEFAULT 'info',
+      message TEXT NOT NULL,
+      source TEXT,
+      read INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`
+    ,
+    `CREATE TABLE IF NOT EXISTS audit_logs (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      user_id INTEGER,
+      username TEXT,
+      action TEXT NOT NULL,
+      table_name TEXT NOT NULL,
+      row_id INTEGER,
+      before_json TEXT,
+      after_json TEXT,
+      source TEXT,
+      ip TEXT,
+      user_agent TEXT,
+      route TEXT,
+      method TEXT,
+      meta_json TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`
   ];
 
@@ -485,8 +525,27 @@ async function initDb() {
       'ALTER TABLE appraisals ADD COLUMN supervisor_print_name TEXT',
       'ALTER TABLE appraisals ADD COLUMN reviewer_print_name TEXT',
       'ALTER TABLE appraisals ADD COLUMN hr_print_name TEXT',
+      'ALTER TABLE appraisals ADD COLUMN job_knowledge_comment TEXT',
+      'ALTER TABLE appraisals ADD COLUMN work_quality_comment TEXT',
+      'ALTER TABLE appraisals ADD COLUMN attendance_comment TEXT',
+      'ALTER TABLE appraisals ADD COLUMN productivity_comment TEXT',
+      'ALTER TABLE appraisals ADD COLUMN communication_comment TEXT',
+      'ALTER TABLE appraisals ADD COLUMN dependability_comment TEXT',
     ];
     for (const sql of appraisalMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
+    // Safe migrations for self_assessments
+    const selfAssessmentMigrations = [
+      'ALTER TABLE self_assessments ADD COLUMN work_quality INTEGER',
+    ];
+    for (const sql of selfAssessmentMigrations) {
       try {
         if (usePostgres && pgPool) {
           const c = await pgPool.connect();
@@ -612,6 +671,21 @@ async function initDb() {
       } catch {}
     }
 
+    // Employee profile migrations — email, phone, address
+    const employeeProfileMigrations = [
+      'ALTER TABLE employees ADD COLUMN email TEXT',
+      'ALTER TABLE employees ADD COLUMN phone TEXT',
+      'ALTER TABLE employees ADD COLUMN address TEXT',
+    ];
+    for (const sql of employeeProfileMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
     // Property accountability migrations (expand table with full form fields)
     const propertyMigrations = [
       'ALTER TABLE property_accountability ADD COLUMN employee_name TEXT',
@@ -672,8 +746,33 @@ async function initDb() {
     // Safe migration: add profile_picture column to users
     const userMigrations = [
       'ALTER TABLE users ADD COLUMN profile_picture TEXT',
+      'ALTER TABLE users ADD COLUMN full_name TEXT',
+      'ALTER TABLE users ADD COLUMN linked_user_id INTEGER',
+      'ALTER TABLE coaching_chats ADD COLUMN status TEXT DEFAULT \'delivered\'',
+      'ALTER TABLE coaching_chats ADD COLUMN reply_to INTEGER',
+      'ALTER TABLE coaching_chats ADD COLUMN action_type TEXT',
+      'ALTER TABLE coaching_chats ADD COLUMN action_payload TEXT',
+      'ALTER TABLE coaching_chats ADD COLUMN action_status TEXT',
     ];
     for (const sql of userMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
+    // Safe migrations for audit_logs — add metadata columns if missing
+    const auditMigrations = [
+      'ALTER TABLE audit_logs ADD COLUMN source TEXT',
+      'ALTER TABLE audit_logs ADD COLUMN ip TEXT',
+      'ALTER TABLE audit_logs ADD COLUMN user_agent TEXT',
+      'ALTER TABLE audit_logs ADD COLUMN route TEXT',
+      'ALTER TABLE audit_logs ADD COLUMN method TEXT',
+      'ALTER TABLE audit_logs ADD COLUMN meta_json TEXT',
+    ];
+    for (const sql of auditMigrations) {
       try {
         if (usePostgres && pgPool) {
           const c = await pgPool.connect();
@@ -686,17 +785,67 @@ async function initDb() {
     const userCount = parseInt(userCountResult[0].count);
 
     if (userCount === 0) {
-      console.warn("No users found. No demo accounts are created automatically. Run `npm run seed` to create initial accounts.");
+      console.log("No users found — creating demo accounts...");
+      const bcrypt = await import('bcryptjs');
+      const hash = (pw: string) => bcrypt.default.hashSync(pw, 10);
+
+      // Create demo employees first
+      await query("INSERT INTO employees (name, status, position, dept, hire_date) VALUES (?, 'Regular', 'Software Engineer', 'Engineering', '2025-01-15')", ['John Doe']);
+      await query("INSERT INTO employees (name, status, position, dept, hire_date) VALUES (?, 'Probationary', 'QA Analyst', 'Engineering', '2025-06-01')", ['Jane Smith']);
+
+      const empRows = await query("SELECT id, name FROM employees ORDER BY id") as any[];
+      const johnId = empRows.find((e: any) => e.name === 'John Doe')?.id;
+      const janeId = empRows.find((e: any) => e.name === 'Jane Smith')?.id;
+
+      // Set manager_id on employees so manager sees them
+      if (johnId) await query("UPDATE employees SET manager_id = 0 WHERE id = ?", [johnId]);
+      if (janeId) await query("UPDATE employees SET manager_id = 0 WHERE id = ?", [janeId]);
+
+      // Create user accounts linked to employees
+      await query("INSERT INTO users (username, password, role, employee_id) VALUES (?, ?, 'Employee', ?)", ['employee_john', hash('demo123'), johnId]);
+      await query("INSERT INTO users (username, password, role, employee_id) VALUES (?, ?, 'Employee', ?)", ['employee_jane', hash('demo123'), janeId]);
+      await query("INSERT INTO users (username, password, role, employee_id) VALUES (?, ?, 'Manager', NULL)", ['manager_bob', hash('demo123')]);
+      await query("INSERT INTO users (username, password, role, employee_id) VALUES (?, ?, 'HR', NULL)", ['hr_admin', hash('demo123')]);
+
+      // Ensure demo accounts have human-friendly full_name values
+      await query("UPDATE users SET full_name = ? WHERE username = ?", ['John Doe', 'employee_john']);
+      await query("UPDATE users SET full_name = ? WHERE username = ?", ['Jane Smith', 'employee_jane']);
+      await query("UPDATE users SET full_name = ? WHERE username = ?", ['Manager Bob', 'manager_bob']);
+      await query("UPDATE users SET full_name = ? WHERE username = ?", ['HR Admin', 'hr_admin']);
+
+      // Update manager_id to the manager's user id after creation  
+      const mgrUser = (await query("SELECT id FROM users WHERE username = 'manager_bob'") as any[])[0];
+      if (mgrUser && johnId) await query("UPDATE employees SET manager_id = ? WHERE id = ?", [mgrUser.id, johnId]);
+      if (mgrUser && janeId) await query("UPDATE employees SET manager_id = ? WHERE id = ?", [mgrUser.id, janeId]);
+
+      // Seed demo goals for John Doe
+      if (johnId) {
+        await query("INSERT INTO goals (employee_id, title, statement, metric, target_date, status, progress, scope, priority, quarter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [johnId, 'Complete API Refactor', 'Refactor all legacy REST endpoints to use the new service layer', 'All endpoints migrated and tested', '2026-06-30', 'In Progress', 45, 'Individual', 'High', 'Q2 2026']);
+        await query("INSERT INTO goals (employee_id, title, statement, metric, target_date, status, progress, scope, priority, quarter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [johnId, 'Improve Test Coverage', 'Increase unit test coverage from 40% to 80%', 'Coverage report shows ≥80%', '2026-03-31', 'In Progress', 60, 'Individual', 'Medium', 'Q1 2026']);
+        await query("INSERT INTO goals (employee_id, title, statement, metric, target_date, status, progress, scope, priority, quarter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [johnId, 'Complete Onboarding Docs', 'Write developer onboarding documentation for the team', 'Document published and reviewed', '2026-02-28', 'Completed', 100, 'Team', 'Low', 'Q1 2026']);
+      }
+      // Seed demo goals for Jane Smith
+      if (janeId) {
+        await query("INSERT INTO goals (employee_id, title, statement, metric, target_date, status, progress, scope, priority, quarter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [janeId, 'Automate Regression Suite', 'Build automated regression test suite covering core user flows', '90% of core flows automated', '2026-05-31', 'In Progress', 30, 'Individual', 'High', 'Q2 2026']);
+        await query("INSERT INTO goals (employee_id, title, statement, metric, target_date, status, progress, scope, priority, quarter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [janeId, 'Zero Critical Bugs in Q1', 'Ensure no critical bugs reach production in Q1', '0 critical bugs in production', '2026-03-31', 'In Progress', 80, 'Individual', 'High', 'Q1 2026']);
+      }
+
+      console.log("Demo accounts created:");
+      console.log("  employee_john / demo123  → Employee (John Doe)");
+      console.log("  employee_jane / demo123  → Employee (Jane Smith)");
+      console.log("  manager_bob  / demo123  → Manager");
+      console.log("  hr_admin     / demo123  → HR");
     }
     console.log(`Database Initialized Successfully in ${usePostgres ? 'PostgreSQL' : 'SQLite'} mode`);
   } catch (err) {
     console.error("Database initialization failed:", err);
-    if (usePostgres) {
-      console.log("Attempting fallback to SQLite...");
-      usePostgres = false;
-      sqliteDb = new Database("talentflow_demo.db");
-      await initDb();
-    }
+    console.error("PostgreSQL initialization failed. This application requires a running PostgreSQL instance.\nPlease verify your DB connection settings in .env (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME) and ensure the database is reachable.");
+    process.exit(1);
   }
 }
 
@@ -725,6 +874,60 @@ async function startServer() {
     }
   }
 
+  // Utility: extract JWT payload without failing the request
+  function extractUserFromAuthHeader(req: any) {
+    try {
+      const auth = req.headers['authorization'];
+      if (!auth) return null;
+      const parts = auth.split(' ');
+      if (parts.length !== 2 || parts[0] !== 'Bearer') return null;
+      const token = parts[1];
+      const payload = jwt.verify(token, JWT_SECRET) as any;
+      return payload;
+    } catch (e) { return null; }
+  }
+
+  // Utility: shallow sanitize request bodies to avoid storing secrets
+  function sanitizeRequestBody(obj: any) {
+    if (!obj || typeof obj !== 'object') return null;
+    const out: any = Array.isArray(obj) ? [] : {};
+    for (const k of Object.keys(obj)) {
+      try {
+        if (/password|token|secret|ssn|card|cvv/i.test(k)) {
+          out[k] = '[REDACTED]';
+        } else {
+          out[k] = obj[k];
+        }
+      } catch (e) { out[k] = null; }
+    }
+    return out;
+  }
+
+  // Audit middleware: log all modifying HTTP requests (POST/PUT/PATCH/DELETE)
+  app.use(async (req: any, res: any, next: any) => {
+    try {
+      const method = (req.method || '').toUpperCase();
+      if (!['POST','PUT','PATCH','DELETE'].includes(method)) return next();
+      // Avoid logging the audit listing itself to prevent recursion
+      if (req.path && req.path.startsWith('/api/audit_logs')) return next();
+
+      const user = (req as any).user || extractUserFromAuthHeader(req) || null;
+      const meta = {
+        source: 'http',
+        ip: req.headers['x-forwarded-for'] || req.ip || (req.connection && (req.connection as any).remoteAddress) || null,
+        user_agent: req.headers['user-agent'] || null,
+        route: req.originalUrl || req.url || req.path,
+        method,
+        body: sanitizeRequestBody(req.body),
+        query: req.query || null,
+      };
+
+      // Fire-and-forget — we don't wait for DB write to avoid slowing requests
+      recordAudit(user, 'request', req.path || 'unknown', null, null, null, meta).catch(() => {});
+    } catch (e) { console.error('audit middleware error:', e); }
+    next();
+  });
+
   // API Routes
   app.post("/api/login", async (req, res) => {
     try {
@@ -735,7 +938,12 @@ async function startServer() {
       const match = await bcrypt.compare(password, user.password);
       if (!match) return res.status(401).json({ error: "Invalid credentials" });
       const token = jwt.sign({ id: user.id, username: user.username, role: user.role, employee_id: user.employee_id }, JWT_SECRET, { expiresIn: '8h' });
-      res.json({ token, id: user.id, username: user.username, role: user.role, employee_id: user.employee_id, profile_picture: user.profile_picture || null });
+      let employee_name: string | null = null, position: string | null = null, dept: string | null = null, email: string | null = null, phone: string | null = null, address: string | null = null, hire_date: string | null = null, status: string | null = null;
+      if (user.employee_id) {
+        const empRows = await query('SELECT name, position, dept, email, phone, address, hire_date, status FROM employees WHERE id = ?', [user.employee_id]) as any;
+        if (empRows[0]) { employee_name = empRows[0].name; position = empRows[0].position; dept = empRows[0].dept; email = empRows[0].email; phone = empRows[0].phone; address = empRows[0].address; hire_date = empRows[0].hire_date; status = empRows[0].status; }
+      }
+      res.json({ token, id: user.id, username: user.username, full_name: user.full_name || null, role: user.role, employee_id: user.employee_id, profile_picture: user.profile_picture || null, employee_name, position, dept, email, phone, address, hire_date, status });
     } catch (err) {
       res.status(500).json({ error: "Database error" });
     }
@@ -817,9 +1025,11 @@ async function startServer() {
   app.get("/api/users", async (req, res) => {
     try {
       const users = await query(`
-        SELECT u.id, u.username, u.role, u.employee_id, e.name as employee_name 
-        FROM users u 
+        SELECT u.id, u.username, u.role, u.employee_id, e.name as employee_name, u.full_name, u.profile_picture, u.linked_user_id,
+               lu.username as linked_user_username, lu.full_name as linked_user_full_name, lu.role as linked_user_role
+        FROM users u
         LEFT JOIN employees e ON u.employee_id = e.id
+        LEFT JOIN users lu ON u.linked_user_id = lu.id
       `);
       res.json(users);
     } catch (err) {
@@ -836,19 +1046,29 @@ async function startServer() {
       // (for simplicity, call it manually)
       const parts = authHeader.split(' ');
       if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
+      let creatorPayload: any = null;
       try {
-        const payload = jwt.verify(parts[1], JWT_SECRET) as any;
-        if (payload.role !== 'HR' && payload.role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+        creatorPayload = jwt.verify(parts[1], JWT_SECRET) as any;
+        if (creatorPayload.role !== 'HR' && creatorPayload.role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
       } catch (err) {
         return res.status(401).json({ error: 'Invalid token' });
       }
 
-      const { username, password, role, employee_id } = req.body;
+      const { username, password, role, employee_id, full_name, linked_user_id } = req.body;
+      if (!username || !password) return res.status(400).json({ error: 'Missing username or password' });
+      const allowedRoles = ['Employee', 'Manager', 'HR'];
+      if (!role || typeof role !== 'string' || !allowedRoles.includes(role)) return res.status(400).json({ error: 'Invalid or missing role' });
       const hashed = bcrypt.hashSync(password, 10);
-      await query("INSERT INTO users (username, password, role, employee_id) VALUES (?, ?, ?, ?)", 
-        [username, hashed, role, employee_id || null]);
+      await query("INSERT INTO users (username, password, role, employee_id, full_name, linked_user_id) VALUES (?, ?, ?, ?, ?, ?)", 
+        [username, hashed, role, employee_id || null, full_name || null, linked_user_id || null]);
+
+      try {
+        await recordAudit(creatorPayload, 'create', 'users', null, null, { username, role, employee_id: employee_id || null, full_name: full_name || null, linked_user_id: linked_user_id || null });
+      } catch (e) { /* ignore audit errors */ }
+
       res.json({ success: true });
     } catch (err) {
+      console.error('POST /api/users error:', err);
       res.status(500).json({ error: "Database error" });
     }
   });
@@ -865,14 +1085,88 @@ async function startServer() {
       if (payload.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
 
       const id = req.params.id;
-      const { password, role, employee_id } = req.body;
-      const hashed = password ? bcrypt.hashSync(password, 10) : undefined;
-      if (hashed) {
-        await query('UPDATE users SET password = ?, role = ?, employee_id = ? WHERE id = ?', [hashed, role, employee_id || null, id]);
-      } else {
-        await query('UPDATE users SET role = ?, employee_id = ? WHERE id = ?', [role, employee_id || null, id]);
+      const { password, role, employee_id, full_name, linked_user_id } = req.body;
+      // Capture previous state for audit
+      let before: any = null;
+      try {
+        const br: any = await query('SELECT * FROM users WHERE id = ?', [id]);
+        before = Array.isArray(br) ? br[0] : br;
+      } catch (e) { before = null; }
+      const sets: string[] = [];
+      const vals: any[] = [];
+      if (password) {
+        const hashed = bcrypt.hashSync(password, 10);
+        sets.push('password = ?');
+        vals.push(hashed);
       }
+      if (role !== undefined) {
+        const allowedRoles = ['Employee', 'Manager', 'HR'];
+        if (!role || !allowedRoles.includes(role)) return res.status(400).json({ error: 'Invalid role' });
+        sets.push('role = ?');
+        vals.push(role);
+      }
+      if (employee_id !== undefined) { sets.push('employee_id = ?'); vals.push(employee_id || null); }
+      if (full_name !== undefined) { sets.push('full_name = ?'); vals.push(full_name || null); }
+      if (linked_user_id !== undefined) { sets.push('linked_user_id = ?'); vals.push(linked_user_id || null); }
+      if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+      vals.push(id);
+      await query(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, vals);
+      // Capture after state and record audit
+      try {
+        const ar: any = await query('SELECT * FROM users WHERE id = ?', [id]);
+        const after = Array.isArray(ar) ? ar[0] : ar;
+        await recordAudit(payload, 'update', 'users', id, before, after);
+      } catch (e) { /* ignore audit errors */ }
+
       res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  // Get own account info
+  app.get('/api/account-info', authenticateToken, async (req, res) => {
+    try {
+      const userId = (req as any).user?.id;
+      const employeeId = (req as any).user?.employee_id;
+      const userRows = await query('SELECT id, username, role, employee_id, profile_picture, full_name FROM users WHERE id = ?', [userId]) as any;
+      const u = userRows[0];
+      if (!u) return res.status(404).json({ error: 'User not found' });
+      let emp: any = null;
+      if (employeeId) {
+        const empRows = await query('SELECT name, position, dept, email, phone, address, hire_date, status FROM employees WHERE id = ?', [employeeId]) as any;
+        emp = empRows[0] || null;
+      }
+      res.json({ ...u, ...(emp || {}) });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  // Update own account info (email, phone, address)
+  app.put('/api/account-info', authenticateToken, async (req, res) => {
+    try {
+      const employeeId = (req as any).user?.employee_id;
+      if (!employeeId) return res.status(400).json({ error: 'No linked employee' });
+      // Accept updates for contact info and basic profile fields
+      const { email, phone, address, employee_name, position, dept } = req.body;
+      const sets: string[] = [];
+      const vals: any[] = [];
+      if (employee_name !== undefined) { sets.push('name = ?'); vals.push(employee_name || null); }
+      if (position !== undefined) { sets.push('position = ?'); vals.push(position || null); }
+      if (dept !== undefined) { sets.push('dept = ?'); vals.push(dept || null); }
+      if (email !== undefined) { sets.push('email = ?'); vals.push(email || null); }
+      if (phone !== undefined) { sets.push('phone = ?'); vals.push(phone || null); }
+      if (address !== undefined) { sets.push('address = ?'); vals.push(address || null); }
+      if (sets.length > 0) {
+        vals.push(employeeId);
+        await query(`UPDATE employees SET ${sets.join(', ')} WHERE id = ?`, vals);
+      }
+      // If employee name was updated, mirror it to the linked user.full_name
+      if (employee_name !== undefined) {
+        try {
+          await query('UPDATE users SET full_name = ? WHERE employee_id = ?', [employee_name || null, employeeId]);
+        } catch (e) { /* ignore */ }
+      }
+      // Return refreshed employee info
+      const empRows = await query('SELECT name, position, dept, email, phone, address, hire_date, status FROM employees WHERE id = ?', [employeeId]) as any;
+      res.json({ success: true, ...(empRows[0] || {}) });
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
 
@@ -907,7 +1201,11 @@ async function startServer() {
       if (payload.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
 
       const id = req.params.id;
+      // capture before state
+      let before: any = null;
+      try { const br: any = await query('SELECT * FROM users WHERE id = ?', [id]); before = Array.isArray(br) ? br[0] : br; } catch (e) { before = null; }
       await query('DELETE FROM users WHERE id = ?', [id]);
+      try { await recordAudit(payload, 'delete', 'users', id, before, null); } catch (e) {}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
@@ -981,7 +1279,14 @@ async function startServer() {
       const logs = await query("SELECT * FROM coaching_logs WHERE employee_id = ?", [id]);
       const appraisals = await query("SELECT * FROM appraisals WHERE employee_id = ?", [id]);
       const discipline = await query("SELECT * FROM discipline_records WHERE employee_id = ?", [id]);
-      const property = await query("SELECT * FROM property_accountability WHERE employee_id = ?", [id]);
+      // Fetch property rows assigned to this employee by id.
+      // Also include records where employee_id is NULL but the saved employee_name
+      // matches the employee's name (case-insensitive, trimmed). This helps
+      // surface assets that were saved without an employee_id set.
+      const property = await query(
+        "SELECT * FROM property_accountability WHERE employee_id = ? OR (employee_id IS NULL AND TRIM(LOWER(employee_name)) = TRIM(LOWER(?)))",
+        [id, employee.name || '']
+      );
       
       res.json({ ...employee, goals, logs, appraisals, discipline, property });
     } catch (err) {
@@ -1021,6 +1326,12 @@ async function startServer() {
       const { employee_id, category, notes, is_positive, logged_by } = req.body;
       await query("INSERT INTO coaching_logs (employee_id, category, notes, is_positive, logged_by) VALUES (?, ?, ?, ?, ?)", 
         [employee_id, category, notes, is_positive ? 1 : 0, logged_by]);
+      // Notify the employee
+      const empUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employee_id]);
+      const empUser = Array.isArray(empUsers) ? empUsers[0] : empUsers;
+      if (empUser) {
+        await createNotification({ user_id: empUser.id, type: is_positive ? 'success' : 'info', message: `New coaching entry: ${category || 'General'} — ${is_positive ? 'Positive' : 'Constructive'}`, source: 'coaching_log' });
+      }
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: "Database error" });
@@ -1039,8 +1350,9 @@ async function startServer() {
           employee_signature, employee_signature_date, verified,
           hr_signature, hr_signature_date, overall_rating, recommendation, reviewer_agree, revised_rating,
           status, employee_department, employee_title, probationary_period,
-          supervisor_print_name, reviewer_print_name, hr_print_name)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          supervisor_print_name, reviewer_print_name, hr_print_name,
+          job_knowledge_comment, work_quality_comment, attendance_comment, productivity_comment, communication_comment, dependability_comment)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [b.employee_id, b.job_knowledge, b.productivity, b.attendance, b.overall, b.promotability_status, b.sign_off_date,
           b.form_type || null, b.eval_type || null, b.eval_period_from || null, b.eval_period_to || null,
           b.work_quality || null, b.communication || null, b.dependability || null,
@@ -1053,7 +1365,14 @@ async function startServer() {
           b.hr_signature || null, b.hr_signature_date || null,
           b.overall_rating || null, b.recommendation || null, b.reviewer_agree || null, b.revised_rating || null,
           b.status || null, b.employee_department || null, b.employee_title || null, b.probationary_period || null,
-          b.supervisor_print_name || null, b.reviewer_print_name || null, b.hr_print_name || null]);
+          b.supervisor_print_name || null, b.reviewer_print_name || null, b.hr_print_name || null,
+          b.job_knowledge_comment || null, b.work_quality_comment || null, b.attendance_comment || null, b.productivity_comment || null, b.communication_comment || null, b.dependability_comment || null]);
+      // Notify the employee about their new evaluation
+      const eUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [b.employee_id]);
+      const eUser = Array.isArray(eUsers) ? eUsers[0] : eUsers;
+      if (eUser) {
+        await createNotification({ user_id: eUser.id, type: 'info', message: `A new ${b.form_type || 'performance'} evaluation has been submitted for you`, source: 'appraisal' });
+      }
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: "Database error" });
@@ -1109,6 +1428,28 @@ async function startServer() {
       const { employee_id, sender_role, sender_name, message } = req.body;
       await query("INSERT INTO coaching_chats (employee_id, sender_role, sender_name, message) VALUES (?, ?, ?, ?)",
         [employee_id, sender_role, sender_name, message]);
+      // Notify the other party
+      if (sender_role === 'Employee') {
+        // Find the user linked to this employee's manager
+        const emp: any = await query("SELECT e.name, e.manager_id FROM employees e WHERE e.id = ?", [employee_id]);
+        const empRow = Array.isArray(emp) ? emp[0] : emp;
+        if (empRow) {
+          const mgrUsers: any = await query("SELECT id FROM users WHERE employee_id = ? AND role = 'Manager'", [empRow.manager_id]);
+          const mgrUser = Array.isArray(mgrUsers) ? mgrUsers[0] : mgrUsers;
+          if (mgrUser) {
+            await createNotification({ user_id: mgrUser.id, type: 'info', message: `New chat message from ${sender_name || empRow.name}`, source: 'coaching_chat' });
+          } else {
+            await createNotification({ role: 'Manager', type: 'info', message: `New chat message from ${sender_name || empRow.name}`, source: 'coaching_chat' });
+          }
+        }
+      } else {
+        // Manager sent — notify the employee
+        const empUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employee_id]);
+        const empUser = Array.isArray(empUsers) ? empUsers[0] : empUsers;
+        if (empUser) {
+          await createNotification({ user_id: empUser.id, type: 'info', message: `New chat message from ${sender_name || 'your Manager'}`, source: 'coaching_chat' });
+        }
+      }
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -1142,6 +1483,12 @@ async function startServer() {
       const { employee_id, course_id, course_title, reason, weakness, recommended_by } = req.body;
       await query("INSERT INTO elearning_recommendations (employee_id, course_id, course_title, reason, weakness, recommended_by) VALUES (?, ?, ?, ?, ?, ?)",
         [employee_id, course_id, course_title, reason, weakness, recommended_by]);
+      // Notify the employee about the new course recommendation
+      const recEmpUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employee_id]);
+      const recEmpUser = Array.isArray(recEmpUsers) ? recEmpUsers[0] : recEmpUsers;
+      if (recEmpUser) {
+        await createNotification({ user_id: recEmpUser.id, type: 'info', message: `New e-learning recommendation: ${course_title}`, source: 'elearning' });
+      }
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -1163,7 +1510,7 @@ async function startServer() {
 
   // ---- Discipline Records CRUD ----
   app.get("/api/discipline_records", async (req, res) => {
-    try { const rows = await query("SELECT d.*, e.name as employee_name FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try { const rows = await query("SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.post("/api/discipline_records", authenticateToken, async (req, res) => {
     try {
@@ -1211,32 +1558,80 @@ async function startServer() {
 
   // ---- Property Accountability CRUD ----
   app.get("/api/property_accountability", async (req, res) => {
-    try { const rows = await query("SELECT * FROM property_accountability ORDER BY created_at DESC"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try {
+      const qName = (req.query.employee_name || '').toString();
+      if (qName) {
+        // If an employee name query param was provided, attempt to return rows
+        // that belong to that employee by id OR where the saved employee_name
+        // matches (case-insensitive). This helps the UI when records were
+        // previously saved without an employee_id.
+        const empRows: any = await query('SELECT id FROM employees WHERE TRIM(LOWER(name)) = TRIM(LOWER(?))', [qName]);
+        const empId = (Array.isArray(empRows) && empRows[0]) ? empRows[0].id : null;
+        const rows = empId
+          ? await query('SELECT * FROM property_accountability WHERE employee_id = ? OR (employee_id IS NULL AND TRIM(LOWER(employee_name)) = TRIM(LOWER(?))) ORDER BY created_at DESC', [empId, qName])
+          : await query('SELECT * FROM property_accountability WHERE TRIM(LOWER(employee_name)) = TRIM(LOWER(?)) ORDER BY created_at DESC', [qName]);
+        res.json(rows);
+        return;
+      }
+      const rows = await query("SELECT * FROM property_accountability ORDER BY created_at DESC");
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
+
   app.post("/api/property_accountability", authenticateToken, async (req, res) => {
     try {
-      const { employee_id, employee_name, position_dept, date_prepared, items,
+      let { employee_id, employee_name, position_dept, date_prepared, items,
         turnover_by_name, turnover_by_date, turnover_by_sig,
         noted_by_name, noted_by_date, noted_by_sig,
         received_by_name, received_by_date, received_by_sig,
         audited_by_name, audited_by_date, audited_by_sig } = req.body;
+
+      // Resolve employee_id server-side when possible (handles cases where the
+      // client didn't provide it or the name formatting differs slightly).
+      if ((!employee_id || employee_id === null) && employee_name) {
+        try {
+          const empRows: any = await query('SELECT id FROM employees WHERE TRIM(LOWER(name)) = TRIM(LOWER(?))', [employee_name]);
+          if (Array.isArray(empRows) && empRows[0]) employee_id = empRows[0].id;
+        } catch (e) { /* ignore resolution errors and allow null */ }
+      }
+
+      // Accept both bulk `items` JSON or per-item `brand`/`serial_no`/`uom_qty`.
+      const brand = req.body.brand || null;
+      const serial_no = req.body.serial_no || null;
+      const uom_qty = req.body.uom_qty !== undefined ? req.body.uom_qty : null;
+
       await query(`INSERT INTO property_accountability
-        (employee_id, employee_name, position_dept, date_prepared, items,
+        (employee_id, employee_name, position_dept, date_prepared, items, brand, serial_no, uom_qty,
          turnover_by_name, turnover_by_date, turnover_by_sig,
          noted_by_name, noted_by_date, noted_by_sig,
          received_by_name, received_by_date, received_by_sig,
          audited_by_name, audited_by_date, audited_by_sig)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [employee_id, employee_name, position_dept, date_prepared, items,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [employee_id, employee_name, position_dept, date_prepared, items, brand, serial_no, uom_qty,
          turnover_by_name, turnover_by_date, turnover_by_sig,
          noted_by_name, noted_by_date, noted_by_sig,
          received_by_name, received_by_date, received_by_sig,
          audited_by_name, audited_by_date, audited_by_sig]);
+
+      // Record audit (who created the property accountability record)
+      try {
+        await recordAudit((req as any).user || null, 'create', 'property_accountability', null, null, {
+          employee_id, employee_name, position_dept, date_prepared, items, brand, serial_no, uom_qty
+        });
+      } catch (e) { /* non-fatal */ }
+
       res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: "Database error" }); }
+    } catch (err) { console.error('POST /api/property_accountability error:', err); res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/property_accountability/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM property_accountability WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try {
+      const id = req.params.id;
+      const beforeRows: any = await query('SELECT * FROM property_accountability WHERE id = ?', [id]);
+      const before = Array.isArray(beforeRows) ? beforeRows[0] : beforeRows;
+      await query("DELETE FROM property_accountability WHERE id = ?", [id]);
+      try { await recordAudit((req as any).user || null, 'delete', 'property_accountability', id, before || null, null); } catch (e) {}
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Suggestions CRUD ----
@@ -1261,6 +1656,10 @@ async function startServer() {
          b.cost_efficient_explanation || null, b.suggestion_priority || null, b.action_to_be_taken || null,
          b.suggested_reward || null, b.supervisor_signature || null, b.supervisor_signature_date || null,
          b.status || 'Under Review']);
+      // If employee submitted, notify Manager role
+      if (userRole === 'Employee') {
+        await createNotification({ role: 'Manager', type: 'info', message: `New employee suggestion submitted: ${b.title || b.concern || 'Untitled'}`, source: 'suggestion' });
+      }
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -1276,6 +1675,16 @@ async function startServer() {
          b.cost_efficient_explanation || null, b.suggestion_priority || null, b.action_to_be_taken || null,
          b.suggested_reward || null, b.supervisor_signature || null, b.supervisor_signature_date || null,
          b.status || 'Reviewed', req.params.id]);
+      // Notify the employee who submitted the suggestion
+      const sugRow: any = await query("SELECT employee_id FROM suggestions WHERE id = ?", [req.params.id]);
+      const sug = Array.isArray(sugRow) ? sugRow[0] : sugRow;
+      if (sug?.employee_id) {
+        const sugEmpUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [sug.employee_id]);
+        const sugEmpUser = Array.isArray(sugEmpUsers) ? sugEmpUsers[0] : sugEmpUsers;
+        if (sugEmpUser) {
+          await createNotification({ user_id: sugEmpUser.id, type: 'info', message: `Your suggestion has been reviewed by management (Status: ${b.status || 'Reviewed'})`, source: 'suggestion' });
+        }
+      }
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -1297,7 +1706,16 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/feedback_360/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM feedback_360 WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try {
+      const rows: any = await query("SELECT * FROM feedback_360 WHERE id = ?", [req.params.id]);
+      const feedback = Array.isArray(rows) ? rows[0] : rows;
+      if (!feedback) return res.status(404).json({ error: 'Feedback not found' });
+      const user: any = (req as any).user || {};
+      const allowed = user.role === 'HR' || user.role === 'Manager' || feedback.evaluator_id === user.employee_id || feedback.evaluator_id === user.id;
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+      await query("DELETE FROM feedback_360 WHERE id = ?", [req.params.id]);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Applicants CRUD ----
@@ -1322,18 +1740,46 @@ async function startServer() {
         q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
         additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
         hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, recommendation]);
+
+      try { await recordAudit((req as any).user || null, 'create', 'applicants', null, null, req.body); } catch (e) {}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.put("/api/applicants/:id", authenticateToken, async (req, res) => {
     try {
-      const { name, position, score, status } = req.body;
-      await query("UPDATE applicants SET name = ?, position = ?, score = ?, status = ? WHERE id = ?", [name, position, score, status, req.params.id]);
+      const { name, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
+        interview_impression, dept_fit, previous_qualifications,
+        q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
+        additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
+        hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, recommendation } = req.body;
+      // capture before state
+      let beforeApp: any = null;
+      try { const br: any = await query('SELECT * FROM applicants WHERE id = ?', [req.params.id]); beforeApp = Array.isArray(br) ? br[0] : br; } catch (e) { beforeApp = null; }
+
+      await query(`UPDATE applicants SET name=?, position=?, score=?, status=?, job_skills=?, asset_value=?, communication_skills=?, teamwork=?, overall_rating=?,
+        interview_impression=?, dept_fit=?, previous_qualifications=?,
+        q_experience=?, q_why_interested=?, q_strengths=?, q_weakness=?, q_conflict=?, q_goals=?, q_teamwork=?, q_pressure=?, q_contribution=?, q_questions=?,
+        additional_comments=?, interviewer_name=?, interviewer_title=?, interview_date=?, interviewer_signature=?,
+        hr_reviewer_name=?, hr_reviewer_signature=?, hr_reviewer_date=?, recommendation=? WHERE id=?`,
+        [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
+        interview_impression, dept_fit, previous_qualifications,
+        q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
+        additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
+        hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, recommendation, req.params.id]);
+      // record after state
+      try { const ar: any = await query('SELECT * FROM applicants WHERE id = ?', [req.params.id]); const afterApp = Array.isArray(ar) ? ar[0] : ar; await recordAudit((req as any).user || null, 'update', 'applicants', req.params.id, beforeApp, afterApp); } catch (e) {}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/applicants/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM applicants WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try {
+      const id = req.params.id;
+      let beforeApp: any = null;
+      try { const br: any = await query('SELECT * FROM applicants WHERE id = ?', [id]); beforeApp = Array.isArray(br) ? br[0] : br; } catch (e) { beforeApp = null; }
+      await query("DELETE FROM applicants WHERE id = ?", [id]);
+      try { await recordAudit((req as any).user || null, 'delete', 'applicants', id, beforeApp, null); } catch (e) {}
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Requisitions CRUD ----
@@ -1398,14 +1844,29 @@ async function startServer() {
     try {
       const { employee_name, last_day, clearance_status, reason } = req.body;
       const result = await query(`INSERT INTO offboarding (employee_name, last_day, clearance_status, reason) VALUES (?, ?, ?, ?) ${usePostgres ? 'RETURNING id' : ''}`, [employee_name, last_day, clearance_status || 'Pending', reason]) as any;
+      try { await recordAudit((req as any).user || null, 'create', 'offboarding', result.insertId || null, null, { employee_name, last_day, clearance_status: clearance_status || 'Pending', reason }); } catch (e) {}
       res.json({ success: true, id: result.insertId });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.put("/api/offboarding/:id", authenticateToken, async (req, res) => {
-    try { await query("UPDATE offboarding SET clearance_status = ? WHERE id = ?", [req.body.clearance_status, req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try {
+      const id = req.params.id;
+      let before: any = null;
+      try { const br: any = await query('SELECT * FROM offboarding WHERE id = ?', [id]); before = Array.isArray(br) ? br[0] : br; } catch (e) { before = null; }
+      await query("UPDATE offboarding SET clearance_status = ? WHERE id = ?", [req.body.clearance_status, id]);
+      try { const ar: any = await query('SELECT * FROM offboarding WHERE id = ?', [id]); const after = Array.isArray(ar) ? ar[0] : ar; await recordAudit((req as any).user || null, 'update', 'offboarding', id, before, after); } catch (e) {}
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/offboarding/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM offboarding WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try {
+      const id = req.params.id;
+      let before: any = null;
+      try { const br: any = await query('SELECT * FROM offboarding WHERE id = ?', [id]); before = Array.isArray(br) ? br[0] : br; } catch (e) { before = null; }
+      await query("DELETE FROM offboarding WHERE id = ?", [id]);
+      try { await recordAudit((req as any).user || null, 'delete', 'offboarding', id, before, null); } catch (e) {}
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Exit Interviews CRUD ----
@@ -1422,11 +1883,19 @@ async function startServer() {
          typeof b.satisfaction_ratings === 'object' ? JSON.stringify(b.satisfaction_ratings) : (b.satisfaction_ratings || null),
          b.would_recommend || null, b.improvement_suggestions || null, b.additional_comments || null,
          b.employee_sig || null, b.interviewer_name || null, b.interviewer_sig || null, b.interviewer_date || null, b.dismissal_details || null]);
+      try { await recordAudit((req as any).user || null, 'create', 'exit_interviews', null, null, b); } catch (e) {}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/exit_interviews/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM exit_interviews WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try {
+      const id = req.params.id;
+      let before: any = null;
+      try { const br: any = await query('SELECT * FROM exit_interviews WHERE id = ?', [id]); before = Array.isArray(br) ? br[0] : br; } catch (e) { before = null; }
+      await query("DELETE FROM exit_interviews WHERE id = ?", [id]);
+      try { await recordAudit((req as any).user || null, 'delete', 'exit_interviews', id, before, null); } catch (e) {}
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Development Plans CRUD ----
@@ -1470,9 +1939,9 @@ async function startServer() {
   });
   app.post("/api/self_assessments", authenticateToken, async (req, res) => {
     try {
-      const { employee_id, achievements, job_knowledge, productivity, attendance, communication, dependability } = req.body;
-      await query("INSERT INTO self_assessments (employee_id, achievements, job_knowledge, productivity, attendance, communication, dependability) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [employee_id, achievements, job_knowledge, productivity, attendance, communication, dependability]);
+      const { employee_id, achievements, job_knowledge, productivity, attendance, communication, dependability, work_quality } = req.body;
+      await query("INSERT INTO self_assessments (employee_id, achievements, job_knowledge, productivity, attendance, communication, dependability, work_quality) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [employee_id, achievements, job_knowledge, productivity, attendance, communication, dependability, work_quality || null]);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -1495,6 +1964,12 @@ async function startServer() {
       const b = req.body;
       await query(`INSERT INTO pip_plans (employee_id, appraisal_id, start_date, end_date, deficiency, improvement_objective, action_steps, support_provided, progress_check_date, progress_notes, outcome, supervisor_name, supervisor_signature, employee_signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [b.employee_id, b.appraisal_id || null, b.start_date, b.end_date, b.deficiency, b.improvement_objective, b.action_steps, b.support_provided || null, b.progress_check_date || null, b.progress_notes || null, b.outcome || 'In Progress', b.supervisor_name || null, b.supervisor_signature || null, b.employee_signature || null]);
+      // Notify the employee about the new PIP
+      const pipEmpUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [b.employee_id]);
+      const pipEmpUser = Array.isArray(pipEmpUsers) ? pipEmpUsers[0] : pipEmpUsers;
+      if (pipEmpUser) {
+        await createNotification({ user_id: pipEmpUser.id, type: 'info', message: `A Performance Improvement Plan has been created for you: ${b.deficiency}`, source: 'pip' });
+      }
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -1540,6 +2015,46 @@ async function startServer() {
     try { await query("DELETE FROM onboarding WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
+  // ---- Notifications CRUD ----
+  // Helper: create a notification for a user or role
+  async function createNotification(opts: { user_id?: number | null; role?: string | null; type?: string; message: string; source?: string }) {
+    try {
+      await query("INSERT INTO notifications (user_id, role, type, message, source) VALUES (?, ?, ?, ?, ?)",
+        [opts.user_id || null, opts.role || null, opts.type || 'info', opts.message, opts.source || null]);
+    } catch (err) { console.error('Failed to create notification:', err); }
+  }
+
+  app.get("/api/notifications", authenticateToken, async (req, res) => {
+    try {
+      const userId = (req as any).user?.id;
+      const userRole = (req as any).user?.role;
+      // Get notifications targeted at this specific user OR at their role
+      const rows = await query(
+        "SELECT * FROM notifications WHERE (user_id = ? OR role = ? OR (user_id IS NULL AND role IS NULL)) ORDER BY created_at DESC LIMIT 100",
+        [userId, userRole]
+      );
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.put("/api/notifications/read", authenticateToken, async (req, res) => {
+    try {
+      const userId = (req as any).user?.id;
+      const userRole = (req as any).user?.role;
+      await query("UPDATE notifications SET read = 1 WHERE (user_id = ? OR role = ?)", [userId, userRole]);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.delete("/api/notifications", authenticateToken, async (req, res) => {
+    try {
+      const userId = (req as any).user?.id;
+      const userRole = (req as any).user?.role;
+      await query("DELETE FROM notifications WHERE (user_id = ? OR role = ?)", [userId, userRole]);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
   // ---- Hire Candidate: Convert applicant to employee ----
   app.post("/api/applicants/:id/hire", authenticateToken, async (req, res) => {
     try {
@@ -1572,14 +2087,14 @@ async function startServer() {
   // DB overview: counts + sample rows
   app.get('/api/db/overview', async (req, res) => {
     try {
-      const tables = ['employees','goals','coaching_logs','appraisals','discipline_records','property_accountability','users','password_resets','suggestions','feedback_360','applicants','requisitions','offboarding','exit_interviews','development_plans','self_assessments','pip_plans','coaching_chats','elearning_courses','elearning_recommendations'];
+      const tables = ['employees','goals','coaching_logs','appraisals','discipline_records','property_accountability','users','password_resets','suggestions','feedback_360','applicants','requisitions','offboarding','exit_interviews','development_plans','self_assessments','pip_plans','coaching_chats','elearning_courses','elearning_recommendations','notifications'];
       const out: any = {};
       for (const t of tables) {
         try {
           const rows: any = await query(`SELECT COUNT(*) as count FROM ${t}`) as any;
           const count = parseInt(rows[0].count || rows[0].COUNT || 0);
           let sample = [];
-          try { sample = await query(`SELECT * FROM ${t} LIMIT 5`); } catch (e) { sample = [] }
+          try { sample = await query(`SELECT * FROM ${t} LIMIT 5`) as any[]; } catch (e) { sample = [] }
           out[t] = { count, sample };
         } catch (e) { out[t] = { count: 0, sample: [], error: 'Table not found' }; }
       }
@@ -1587,6 +2102,106 @@ async function startServer() {
     } catch (err) {
       res.status(500).json({ error: 'Database error' });
     }
+  });
+
+  // ---- Audit logs (HR only). Supports employee_activity flag and partial matches ----
+  app.get('/api/audit_logs', authenticateToken, async (req, res) => {
+    try {
+      const user = (req as any).user || {};
+      if (user.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
+
+      const qTableRaw = (req.query.table_name || req.query.table || '').toString();
+      const qUsernameRaw = (req.query.username || '').toString();
+      const qUserId = req.query.user_id ? parseInt(req.query.user_id as string) : null;
+      const qAction = (req.query.action || '').toString();
+      const employeeOnly = (req.query.employee === '1' || req.query.employee_activity === '1' || req.query.employee === 'true' || req.query.employee_activity === 'true');
+      const limit = Math.min(1000, parseInt((req.query.limit || '200').toString() || '200'));
+
+      const employeeTables = ['employees','appraisals','offboarding','property_accountability','self_assessments','development_plans','pip_plans','coaching_chats','discipline_records','goals','feedback_360','requisitions','onboarding','notifications'];
+
+      let sql = 'SELECT * FROM audit_logs WHERE 1=1';
+      const params: any[] = [];
+
+      if (employeeOnly) {
+        const placeholders = employeeTables.map(() => '?').join(',');
+        sql += ` AND table_name IN (${placeholders})`;
+        params.push(...employeeTables);
+      } else if (qTableRaw) {
+        const parts = qTableRaw.split(',').map((t: any) => t.trim()).filter(Boolean);
+        if (parts.length > 1) {
+          const placeholders = parts.map(() => '?').join(',');
+          sql += ` AND table_name IN (${placeholders})`;
+          params.push(...parts);
+        } else {
+          sql += ' AND table_name ILIKE ?';
+          params.push(`%${qTableRaw}%`);
+        }
+      }
+
+      if (qUsernameRaw) { sql += ' AND username ILIKE ?'; params.push(`%${qUsernameRaw}%`); }
+      if (!isNaN(Number(qUserId)) && qUserId !== null) { sql += ' AND user_id = ?'; params.push(qUserId); }
+      if (qAction) { sql += ' AND action = ?'; params.push(qAction); }
+      sql += ' ORDER BY created_at DESC LIMIT ?'; params.push(limit);
+
+      const rows: any = await query(sql, params);
+      res.json(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      console.error('GET /api/audit_logs error:', err);
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  // ─── Socket.io Real-Time Chat ───
+  const httpServer = createHttpServer(app);
+  const io = new SocketIOServer(httpServer, {
+    cors: { origin: '*', methods: ['GET', 'POST'] },
+    path: '/socket.io'
+  });
+
+  // Socket connection audit: log connect/disconnect events
+  io.on('connection', (socket) => {
+    try {
+      const hs = socket.handshake || {};
+      const meta = { source: 'socket', socketId: socket.id, auth: hs.auth || null, address: hs.address || null };
+      // record connection
+      recordAudit(null, 'socket_connect', 'socket', null, null, null, meta).catch(() => {});
+      socket.on('disconnect', (reason: any) => {
+        const dmeta = { ...meta, reason };
+        recordAudit(null, 'socket_disconnect', 'socket', null, null, null, dmeta).catch(() => {});
+      });
+    } catch (e) { console.error('socket audit error:', e); }
+  });
+
+  // ─── Goal Update Request API (creates actionable system message) ───
+  app.post("/api/goal_update_request", authenticateToken, async (req: any, res) => {
+    try {
+      const { employee_id, goal_id, goal_title, proposed_status, proposed_progress, reason } = req.body;
+      const user = req.user;
+      const actionPayload = JSON.stringify({ goal_id, goal_title, proposed_status, proposed_progress, reason });
+      const sysMessage = `📋 Goal Update Request: "${goal_title}" → ${proposed_status || ''}${proposed_progress !== undefined ? ` (${proposed_progress}%)` : ''}${reason ? ` — ${reason}` : ''}`;
+      await query(
+        "INSERT INTO coaching_chats (employee_id, sender_role, sender_name, message, status, action_type, action_payload, action_status) VALUES (?, 'System', 'System', ?, 'delivered', 'goal_update', ?, 'pending')",
+        [employee_id, sysMessage, actionPayload]
+      );
+      // Notify manager
+      const emp: any = await query("SELECT name, manager_id FROM employees WHERE id = ?", [employee_id]);
+      const empRow = Array.isArray(emp) ? emp[0] : emp;
+      if (empRow) {
+        const mgrUsers: any = await query("SELECT id FROM users WHERE role = 'Manager'", []);
+        for (const mu of (Array.isArray(mgrUsers) ? mgrUsers : [mgrUsers].filter(Boolean))) {
+          await createNotification({ user_id: mu.id, type: 'info', message: `${empRow.name} requests goal update approval: "${goal_title}"`, source: 'goal_update' });
+          io.to(`user_${mu.id}`).emit('notification', { type: 'info', message: `${empRow.name} requests goal update approval` });
+        }
+      }
+      // Broadcast the system message
+      const latest: any = await query("SELECT * FROM coaching_chats WHERE employee_id = ? ORDER BY id DESC LIMIT 1", [employee_id]);
+      const latestMsg = Array.isArray(latest) ? latest[0] : latest;
+      if (latestMsg) {
+        io.to(`employee_${employee_id}`).emit('chat:message', latestMsg);
+        io.to('role_Manager').emit('chat:message', latestMsg);
+      }
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // Vite middleware for development
@@ -1603,7 +2218,147 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  // Presence map: socketId → { userId, role, username, employeeId }
+  const onlineUsers = new Map<string, { userId: number; role: string; username: string; employeeId: number | null }>();
+
+  function broadcastPresence() {
+    const users = Array.from(onlineUsers.values());
+    io.emit('presence', users);
+  }
+
+  io.on('connection', (socket) => {
+    console.log(`Socket connected: ${socket.id}`);
+
+    // Client sends { token } on connect to authenticate
+    socket.on('auth', (data: { token: string }) => {
+      try {
+        const decoded: any = jwt.verify(data.token, JWT_SECRET);
+        onlineUsers.set(socket.id, {
+          userId: decoded.id,
+          role: decoded.role,
+          username: decoded.username,
+          employeeId: decoded.employee_id || null
+        });
+        // Join a room for their own userId for targeted messages
+        socket.join(`user_${decoded.id}`);
+        if (decoded.employee_id) socket.join(`employee_${decoded.employee_id}`);
+        socket.join(`role_${decoded.role}`);
+        broadcastPresence();
+        socket.emit('auth_ok', { userId: decoded.id, role: decoded.role });
+      } catch {
+        socket.emit('auth_error', { message: 'Invalid token' });
+      }
+    });
+
+    // Send a chat message
+    socket.on('chat:send', async (data: { employee_id: number; sender_role: string; sender_name: string; message: string; reply_to?: number }) => {
+      try {
+        const result: any = await query(
+          "INSERT INTO coaching_chats (employee_id, sender_role, sender_name, message, status, reply_to) VALUES (?, ?, ?, ?, 'delivered', ?) RETURNING id",
+          [data.employee_id, data.sender_role, data.sender_name, data.message, data.reply_to || null]
+        );
+        const insertId = result.insertId || result[0]?.id;
+        const rows: any = await query("SELECT * FROM coaching_chats WHERE id = ?", [insertId]);
+        const newMsg = Array.isArray(rows) ? rows[0] : rows;
+        if (!newMsg) {
+          // Fallback construct
+          const fallback = { id: insertId, ...data, status: 'delivered', reply_to: data.reply_to || null, action_type: null, action_payload: null, action_status: null, created_at: new Date().toISOString() };
+          io.to(`employee_${data.employee_id}`).emit('chat:message', fallback);
+          io.to('role_Manager').emit('chat:message', fallback);
+          return;
+        }
+        // Broadcast to relevant rooms
+        io.to(`employee_${data.employee_id}`).emit('chat:message', newMsg);
+        io.to('role_Manager').emit('chat:message', newMsg);
+
+        // Also create DB notification for the other party 
+        if (data.sender_role === 'Employee') {
+          const emp: any = await query("SELECT name, manager_id FROM employees WHERE id = ?", [data.employee_id]);
+          const empRow = Array.isArray(emp) ? emp[0] : emp;
+          if (empRow) {
+            const mgrUsers: any = await query("SELECT id FROM users WHERE employee_id = ? AND role = 'Manager'", [empRow.manager_id]);
+            const mgrUser = Array.isArray(mgrUsers) ? mgrUsers[0] : mgrUsers;
+            if (mgrUser) {
+              await createNotification({ user_id: mgrUser.id, type: 'info', message: `New chat from ${data.sender_name || empRow.name}`, source: 'coaching_chat' });
+              io.to(`user_${mgrUser.id}`).emit('notification', { type: 'info', message: `New chat from ${data.sender_name || empRow.name}`, source: 'coaching_chat', employee_id: data.employee_id });
+            }
+          }
+        } else {
+          const empUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [data.employee_id]);
+          const empUser = Array.isArray(empUsers) ? empUsers[0] : empUsers;
+          if (empUser) {
+            await createNotification({ user_id: empUser.id, type: 'info', message: `New chat from ${data.sender_name || 'your Manager'}`, source: 'coaching_chat' });
+            io.to(`user_${empUser.id}`).emit('notification', { type: 'info', message: `New chat from ${data.sender_name || 'your Manager'}`, source: 'coaching_chat', employee_id: data.employee_id });
+          }
+        }
+      } catch (err) { console.error('Socket chat:send error:', err); }
+    });
+
+    // Mark messages as read
+    socket.on('chat:read', async (data: { employee_id: number; reader_role: string }) => {
+      try {
+        const otherRole = data.reader_role === 'Employee' ? 'Manager' : 'Employee';
+        await query("UPDATE coaching_chats SET status = 'read' WHERE employee_id = ? AND sender_role = ? AND status != 'read'", [data.employee_id, otherRole]);
+        io.to(`employee_${data.employee_id}`).emit('chat:read_ack', { employee_id: data.employee_id, reader_role: data.reader_role });
+        io.to('role_Manager').emit('chat:read_ack', { employee_id: data.employee_id, reader_role: data.reader_role });
+      } catch (err) { console.error('Socket chat:read error:', err); }
+    });
+
+    // Typing indicator
+    socket.on('chat:typing', (data: { employee_id: number; sender_role: string; sender_name: string }) => {
+      io.to(`employee_${data.employee_id}`).emit('chat:typing', data);
+      io.to('role_Manager').emit('chat:typing', data);
+    });
+    socket.on('chat:stop_typing', (data: { employee_id: number; sender_role: string }) => {
+      io.to(`employee_${data.employee_id}`).emit('chat:stop_typing', data);
+      io.to('role_Manager').emit('chat:stop_typing', data);
+    });
+
+    // Goal update approval action (from system message)
+    socket.on('chat:action', async (data: { message_id: number; action: 'approved' | 'rejected' }) => {
+      try {
+        await query("UPDATE coaching_chats SET action_status = ? WHERE id = ?", [data.action, data.message_id]);
+        // If approved, apply the goal update
+        const msgs: any = await query("SELECT * FROM coaching_chats WHERE id = ?", [data.message_id]);
+        const msg = Array.isArray(msgs) ? msgs[0] : msgs;
+        if (msg && msg.action_type === 'goal_update' && msg.action_payload) {
+          const payload = JSON.parse(msg.action_payload);
+          if (data.action === 'approved') {
+            const sets: string[] = [];
+            const vals: any[] = [];
+            if (payload.status) { sets.push('status = ?'); vals.push(payload.status); }
+            if (payload.progress !== undefined) { sets.push('progress = ?'); vals.push(payload.progress); }
+            if (sets.length > 0) {
+              vals.push(payload.goal_id);
+              await query(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, vals);
+            }
+          }
+          // Notify the employee
+          const empUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [msg.employee_id]);
+          const empUser = Array.isArray(empUsers) ? empUsers[0] : empUsers;
+          if (empUser) {
+            const statusText = data.action === 'approved' ? 'approved' : 'rejected';
+            await createNotification({ user_id: empUser.id, type: data.action === 'approved' ? 'success' : 'error', message: `Your goal update was ${statusText} by your manager`, source: 'goal_action' });
+            io.to(`user_${empUser.id}`).emit('notification', { type: data.action === 'approved' ? 'success' : 'error', message: `Your goal update was ${statusText} by your manager` });
+          }
+        }
+        // Broadcast updated message
+        const updated: any = await query("SELECT * FROM coaching_chats WHERE id = ?", [data.message_id]);
+        const updMsg = Array.isArray(updated) ? updated[0] : updated;
+        if (updMsg) {
+          io.to(`employee_${updMsg.employee_id}`).emit('chat:action_update', updMsg);
+          io.to('role_Manager').emit('chat:action_update', updMsg);
+        }
+      } catch (err) { console.error('Socket chat:action error:', err); }
+    });
+
+    socket.on('disconnect', () => {
+      onlineUsers.delete(socket.id);
+      broadcastPresence();
+    });
+  });
+
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }

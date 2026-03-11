@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
-import { Download, Target, TrendingUp, Award, BarChart3 } from 'lucide-react';
+import { Download, Target, TrendingUp, Award, BarChart3, SendHorizonal } from 'lucide-react';
 import { LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 
 export const CareerDashboard = () => {
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
+  const [requesting, setRequesting] = useState<number | null>(null);
   const [selfAssessments, setSelfAssessments] = useState<any[]>([]);
   const user = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
 
@@ -161,13 +162,36 @@ export const CareerDashboard = () => {
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Goal</th>
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target</th>
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
-              <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Progress</th></tr></thead>
+              <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Progress</th>
+              <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Action</th></tr></thead>
               <tbody>{goals.map(g => (
                 <tr key={g.id} className="border-b border-slate-50 dark:border-slate-800/50">
                   <td className="py-3 font-medium text-slate-700 dark:text-slate-200">{g.title || g.statement}</td>
                   <td className="py-3 text-sm text-slate-500 dark:text-slate-400">{g.target_date}</td>
                   <td className="py-3"><span className={`text-[10px] font-bold uppercase ${g.status === 'Completed' ? 'text-emerald-600' : g.status === 'In Progress' ? 'text-amber-500' : 'text-slate-400'}`}>{g.status || 'Not Started'}</span></td>
                   <td className="py-3"><div className="w-24 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-teal-500 rounded-full" style={{ width: `${g.progress || 0}%` }}></div></div></td>
+                  <td className="py-3">
+                    {g.status !== 'Completed' && (
+                      <button
+                        disabled={requesting === g.id}
+                        onClick={async () => {
+                          setRequesting(g.id);
+                          try {
+                            const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
+                            await fetch('/api/goal_update_request', {
+                              method: 'POST', headers: getAuthHeaders(),
+                              body: JSON.stringify({ employee_id: user.employee_id, goal_id: g.id, goal_title: g.title || g.statement, proposed_status: g.status === 'In Progress' ? 'Completed' : 'In Progress', proposed_progress: g.status === 'In Progress' ? 100 : 50, reason: 'Progress update requested' }),
+                            });
+                            window.notify?.('Goal update request sent to your manager', 'success');
+                          } catch { window.notify?.('Failed to send request', 'error'); }
+                          setRequesting(null);
+                        }}
+                        className="text-[10px] font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1 whitespace-nowrap disabled:opacity-50"
+                      >
+                        <SendHorizonal size={12} /> Request Approval
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}</tbody>
             </table>

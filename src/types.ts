@@ -5,6 +5,10 @@ export interface Employee {
   position: string;
   dept: string;
   manager_id?: number;
+  // optional friendly fields used across UI
+  full_name?: string;
+  title?: string;
+  manager?: string;
   hire_date: string;
   salary_base: number;
   ssn: string;

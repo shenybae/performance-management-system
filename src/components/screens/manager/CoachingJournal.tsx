@@ -2,13 +2,15 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'motion/react';
 import {
   TrendingUp, MessageSquare, Plus, X, Download, Trash2, Send, ArrowLeft, Search,
-  AlertTriangle, BookOpen, GraduationCap, Target, Clock, Brain, Lightbulb, BarChart3
+  AlertTriangle, BookOpen, GraduationCap, Target, Clock, Brain, Lightbulb, BarChart3,
+  Check, CheckCheck, Reply, Wifi, WifiOff, ThumbsUp as ThumbsUpIcon, ThumbsDown, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { io, Socket } from 'socket.io-client';
 
 const WEAKNESS_CATEGORIES = [
   'Communication', 'Time Management', 'Technical Skills', 'Leadership',
@@ -31,11 +33,13 @@ const DEFAULT_COURSES = [
 
 interface CoachingJournalProps {
   employees: Employee[];
+  navContext?: { source?: string; employee_id?: number } | null;
+  onNavContextClear?: () => void;
 }
 
 type ViewMode = 'dashboard' | 'chat' | 'elearning' | 'addEntry' | 'weaknessAnalysis';
 
-export const CoachingJournal = ({ employees }: CoachingJournalProps) => {
+export const CoachingJournal = ({ employees, navContext, onNavContextClear }: CoachingJournalProps) => {
   const [view, setView] = useState<ViewMode>('dashboard');
   const [logs, setLogs] = useState<any[]>([]);
   const [form, setForm] = useState({ employee_id: '', category: '', notes: '', is_positive: true, logged_by: '', weakness_tags: '' as string });
@@ -46,6 +50,13 @@ export const CoachingJournal = ({ employees }: CoachingJournalProps) => {
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [replyTo, setReplyTo] = useState<any>(null);
+  const [employeeOnlineIds, setEmployeeOnlineIds] = useState<Set<number>>(new Set());
+  const [typingUser, setTypingUser] = useState<string | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const typingTimeout = useRef<any>(null);
+  const chatEmployeeRef = useRef<Employee | null>(null);
+  useEffect(() => { chatEmployeeRef.current = chatEmployee; }, [chatEmployee]);
 
   // E-learning state
   const [courses, setCourses] = useState<any[]>([]);
@@ -59,6 +70,68 @@ export const CoachingJournal = ({ employees }: CoachingJournalProps) => {
   useEffect(() => { fetchLogs(); fetchCourses(); fetchRecommendations(); }, []);
   useEffect(() => { if (chatEmployee) fetchChatMessages(chatEmployee.id); }, [chatEmployee]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
+
+  // Auto-navigate to chat from notification
+  useEffect(() => {
+    if (navContext?.source === 'coaching_chat' && navContext.employee_id) {
+      const emp = employees.find(e => e.id === navContext.employee_id);
+      if (emp) {
+        setView('chat');
+        setChatEmployee(emp);
+      }
+      onNavContextClear?.();
+    }
+  }, [navContext]);
+
+  // Socket.io connection
+  useEffect(() => {
+    const token = localStorage.getItem('talentflow_token');
+    if (!token) return;
+    const socket = io(window.location.origin, { path: '/socket.io', transports: ['websocket', 'polling'] });
+    socketRef.current = socket;
+
+    socket.on('connect', () => { socket.emit('auth', { token }); });
+
+    socket.on('chat:message', (msg: any) => {
+      const currentEmp = chatEmployeeRef.current;
+      setChatMessages(prev => {
+        if (!currentEmp || currentEmp.id !== msg.employee_id) return prev;
+        if (msg.id != null && prev.some(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+    });
+
+    socket.on('chat:read_ack', (data: any) => {
+      setChatMessages(prev => prev.map(m =>
+        m.sender_role === 'Manager' && m.status !== 'read' && m.employee_id === data.employee_id ? { ...m, status: 'read' } : m
+      ));
+    });
+
+    socket.on('chat:action_update', (msg: any) => {
+      setChatMessages(prev => prev.map(m => m.id === msg.id ? msg : m));
+    });
+
+    socket.on('chat:typing', (data: any) => {
+      if (data.sender_role === 'Employee') setTypingUser(data.sender_name || 'Employee');
+    });
+    socket.on('chat:stop_typing', (data: any) => {
+      if (data.sender_role === 'Employee') setTypingUser(null);
+    });
+
+    socket.on('presence', (users: any[]) => {
+      const ids = new Set(users.filter(u => u.role === 'Employee' && u.employeeId).map(u => u.employeeId as number));
+      setEmployeeOnlineIds(ids);
+    });
+
+    return () => { socket.disconnect(); socketRef.current = null; };
+  }, []);
+
+  // Mark messages as read when viewing chat
+  useEffect(() => {
+    if (view === 'chat' && chatEmployee && socketRef.current) {
+      socketRef.current.emit('chat:read', { employee_id: chatEmployee.id, reader_role: 'Manager' });
+    }
+  }, [view, chatEmployee, chatMessages.length]);
 
   const fetchLogs = async () => {
     try { const res = await fetch('/api/coaching_logs', { headers: getAuthHeaders() }); const data = await res.json(); setLogs(Array.isArray(data) ? data : []); } catch { setLogs([]); }
@@ -128,15 +201,49 @@ export const CoachingJournal = ({ employees }: CoachingJournalProps) => {
   const sendChat = async () => {
     if (!chatInput.trim() || !chatEmployee) return;
     const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
-    try {
-      await fetch('/api/coaching_chats', {
-        method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ employee_id: chatEmployee.id, sender_role: 'Manager', sender_name: user.username || 'Manager', message: chatInput.trim() }),
+    if (socketRef.current) {
+      socketRef.current.emit('chat:send', {
+        employee_id: chatEmployee.id,
+        sender_role: 'Manager',
+        sender_name: user.username || 'Manager',
+        message: chatInput.trim(),
+        reply_to: replyTo?.id || null
       });
-      setChatInput('');
-      window.notify?.('Message sent', 'success');
-      fetchChatMessages(chatEmployee.id);
-    } catch { window.notify?.('Failed to send message', 'error'); }
+      socketRef.current.emit('chat:stop_typing', { employee_id: chatEmployee.id, sender_role: 'Manager' });
+    } else {
+      try {
+        await fetch('/api/coaching_chats', {
+          method: 'POST', headers: getAuthHeaders(),
+          body: JSON.stringify({ employee_id: chatEmployee.id, sender_role: 'Manager', sender_name: user.username || 'Manager', message: chatInput.trim() }),
+        });
+        fetchChatMessages(chatEmployee.id);
+      } catch { window.notify?.('Failed to send message', 'error'); return; }
+    }
+    setChatInput('');
+    setReplyTo(null);
+  };
+
+  const handleManagerTyping = () => {
+    if (!socketRef.current || !chatEmployee) return;
+    const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
+    socketRef.current.emit('chat:typing', { employee_id: chatEmployee.id, sender_role: 'Manager', sender_name: user.username || 'Manager' });
+    clearTimeout(typingTimeout.current);
+    typingTimeout.current = setTimeout(() => {
+      socketRef.current?.emit('chat:stop_typing', { employee_id: chatEmployee!.id, sender_role: 'Manager' });
+    }, 2000);
+  };
+
+  const handleGoalAction = (msgId: number, action: 'approved' | 'rejected') => {
+    if (socketRef.current) {
+      socketRef.current.emit('chat:action', { message_id: msgId, action });
+    }
+  };
+
+  const statusIcon = (status: string, senderRole: string) => {
+    if (senderRole !== 'Manager') return null;
+    if (status === 'read') return <CheckCheck size={12} className="text-blue-400" />;
+    if (status === 'delivered') return <CheckCheck size={12} className="text-slate-400" />;
+    return <Check size={12} className="text-slate-400" />;
   };
 
   const handleRecommend = async () => {
@@ -202,7 +309,7 @@ export const CoachingJournal = ({ employees }: CoachingJournalProps) => {
             <div className="w-8 h-8 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center"><MessageSquare size={16} className="text-teal-600" /></div>
             <div>
               <h2 className="text-base font-black text-slate-800 dark:text-slate-100">Coaching Q&A Chat</h2>
-              <p className="text-[10px] text-slate-400">Interactive coaching conversation</p>
+              <p className="text-[10px] text-slate-400">Real-time coaching conversation</p>
             </div>
           </div>
         </div>
@@ -211,26 +318,40 @@ export const CoachingJournal = ({ employees }: CoachingJournalProps) => {
           <Card>
             <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">Select Employee to Start Chat</h3>
             <div className="grid grid-cols-3 gap-2">
-              {employees.map(e => (
-                <button key={e.id} onClick={() => setChatEmployee(e)}
-                  className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-900/20 border border-slate-200 dark:border-slate-700 hover:border-teal-400 transition-all text-left">
-                  <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center text-xs font-bold text-teal-700 dark:text-teal-400">{e.name.charAt(0)}</div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{e.name}</p>
-                    <p className="text-[10px] text-slate-400">{e.position || e.dept || 'Employee'}</p>
-                  </div>
-                </button>
-              ))}
+              {employees.map(e => {
+                const isOnline = employeeOnlineIds.has(e.id);
+                return (
+                  <button key={e.id} onClick={() => setChatEmployee(e)}
+                    className="flex flex-col items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-900/20 border border-slate-200 dark:border-slate-700 hover:border-teal-400 transition-all text-center relative">
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center text-sm font-bold text-teal-700 dark:text-teal-400">{e.name.charAt(0)}</div>
+                      <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-800 ${isOnline ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{e.name}</p>
+                      <p className="text-[10px] text-slate-400">{e.position || 'Employee'}</p>
+                      {e.dept && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold">{e.dept}</p>}
+                      <p className={`text-[10px] ${isOnline ? 'text-emerald-500' : 'text-slate-400'}`}>{isOnline ? 'Online' : 'Offline'}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </Card>
         ) : (
           <div className="flex flex-col flex-1 min-h-0">
             <div className="flex items-center justify-between mb-3 px-1">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center text-xs font-bold text-teal-700 dark:text-teal-400">{chatEmployee.name.charAt(0)}</div>
+                <div className="relative">
+                  <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center text-xs font-bold text-teal-700 dark:text-teal-400">{chatEmployee.name.charAt(0)}</div>
+                  <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-800 ${employeeOnlineIds.has(chatEmployee.id) ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                </div>
                 <div>
                   <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{chatEmployee.name}</span>
-                  <span className="text-[10px] text-slate-400 ml-2">{chatEmployee.position || chatEmployee.dept}</span>
+                  <span className="text-[10px] ml-2">{employeeOnlineIds.has(chatEmployee.id)
+                    ? <span className="text-emerald-500 flex items-center gap-1 inline-flex"><Wifi size={10} /> Online</span>
+                    : <span className="text-slate-400 flex items-center gap-1 inline-flex"><WifiOff size={10} /> Offline</span>
+                  }</span>
                 </div>
               </div>
               <button onClick={() => setChatEmployee(null)} className="text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">Switch Employee</button>
@@ -243,30 +364,100 @@ export const CoachingJournal = ({ employees }: CoachingJournalProps) => {
                     <div className="text-center py-12">
                       <MessageSquare size={36} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
                       <p className="text-sm text-slate-400 italic">No messages yet. Start the coaching conversation.</p>
-                      <p className="text-[10px] text-slate-400 mt-1">Ask about performance, share feedback, or discuss development goals.</p>
                     </div>
                   )}
                   {chatMessages.map((msg: any) => {
                     const isManager = msg.sender_role === 'Manager';
+                    const isSystem = msg.sender_role === 'System';
+                    const repliedMsg = msg.reply_to ? chatMessages.find((m: any) => m.id === msg.reply_to) : null;
+
+                    if (isSystem) {
+                      return (
+                        <div key={msg.id} className="flex justify-center">
+                          <div className="max-w-[85%] rounded-xl px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                            <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">{msg.message}</p>
+                            {msg.action_type === 'goal_update' && msg.action_status === 'pending' && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <button onClick={() => handleGoalAction(msg.id, 'approved')}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-200 transition-colors">
+                                  <ThumbsUpIcon size={12} /> Approve
+                                </button>
+                                <button onClick={() => handleGoalAction(msg.id, 'rejected')}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-200 transition-colors">
+                                  <ThumbsDown size={12} /> Reject
+                                </button>
+                              </div>
+                            )}
+                            {msg.action_status === 'approved' && (
+                              <p className="text-[10px] text-emerald-600 font-bold mt-2 flex items-center gap-1"><CheckCircle2 size={10} /> Approved</p>
+                            )}
+                            {msg.action_status === 'rejected' && (
+                              <p className="text-[10px] text-red-600 font-bold mt-2 flex items-center gap-1"><AlertCircle size={10} /> Rejected</p>
+                            )}
+                            <p className="text-[9px] text-amber-400 mt-1">{msg.created_at ? new Date(msg.created_at).toLocaleString() : ''}</p>
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
-                      <div key={msg.id} className={`flex ${isManager ? 'justify-end' : 'justify-start'}`}>
+                      <div key={msg.id} className={`flex ${isManager ? 'justify-end' : 'justify-start'} group`}>
+                        {!isManager && (
+                          <button onClick={() => setReplyTo(msg)} className="opacity-0 group-hover:opacity-100 mr-1 mt-1 text-slate-400 hover:text-teal-500 transition-all" title="Reply">
+                            <Reply size={14} />
+                          </button>
+                        )}
                         <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${isManager
                           ? 'bg-teal-deep text-white rounded-br-md'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-bl-md'
                         }`}>
+                          {repliedMsg && (
+                            <div className={`text-[10px] mb-1.5 px-2 py-1 rounded-lg border-l-2 ${
+                              isManager ? 'bg-teal-700/30 border-teal-300 text-teal-200' : 'bg-slate-200 dark:bg-slate-700 border-slate-400 text-slate-500'
+                            }`}>
+                              <span className="font-bold">{repliedMsg.sender_name || repliedMsg.sender_role}: </span>
+                              {(repliedMsg.message || '').substring(0, 60)}{repliedMsg.message?.length > 60 ? '...' : ''}
+                            </div>
+                          )}
                           <p className={`text-[10px] font-bold mb-1 ${isManager ? 'text-teal-200' : 'text-slate-400'}`}>
                             {msg.sender_name || msg.sender_role} · {msg.created_at ? new Date(msg.created_at).toLocaleString() : ''}
                           </p>
                           <p className="text-sm leading-relaxed">{msg.message}</p>
+                          <div className="flex items-center justify-end gap-1 mt-1">
+                            {statusIcon(msg.status, msg.sender_role)}
+                          </div>
                         </div>
+                        {isManager && (
+                          <button onClick={() => setReplyTo(msg)} className="opacity-0 group-hover:opacity-100 ml-1 mt-1 text-slate-400 hover:text-teal-500 transition-all" title="Reply">
+                            <Reply size={14} />
+                          </button>
+                        )}
                       </div>
                     );
                   })}
+                  {typingUser && (
+                    <div className="flex justify-start">
+                      <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl px-4 py-2 rounded-bl-md">
+                        <p className="text-[10px] text-slate-400 animate-pulse">{typingUser} is typing...</p>
+                      </div>
+                    </div>
+                  )}
                   <div ref={chatEndRef} />
                 </div>
 
+                {replyTo && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 mb-2">
+                    <Reply size={12} className="text-teal-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-teal-600">Replying to {replyTo.sender_name || replyTo.sender_role}</p>
+                      <p className="text-[10px] text-slate-500 truncate">{replyTo.message}</p>
+                    </div>
+                    <button onClick={() => setReplyTo(null)} className="text-slate-400 hover:text-red-400"><X size={12} /></button>
+                  </div>
+                )}
+
                 <div className="flex gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
-                  <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)}
+                  <input type="text" value={chatInput} onChange={e => { setChatInput(e.target.value); handleManagerTyping(); }}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
                     placeholder="Type your coaching message..."
                     className="flex-1 p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-black rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/50" />

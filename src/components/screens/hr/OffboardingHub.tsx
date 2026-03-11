@@ -90,10 +90,14 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
     if (!propForm.employee_name) { window.notify?.('Please enter employee name', 'error'); return; }
     if (propForm.items.length === 0) { window.notify?.('Please add at least one property item', 'error'); return; }
     try {
+      // try to resolve an employee id from the entered name so records attach to the employee file
+      const matched = (employees || []).find(e => (e.name || '').toString().trim().toLowerCase() === (propForm.employee_name || '').toString().trim().toLowerCase());
+      const employeeId = matched ? matched.id : null;
+
       const res = await fetch('/api/property_accountability', {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
-          employee_id: null,
+          employee_id: employeeId,
           employee_name: propForm.employee_name,
           position_dept: propForm.position_dept,
           date_prepared: propForm.date_prepared,
@@ -229,10 +233,12 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
       physical_conditions: 'Physical working conditions',
       benefits: 'Benefits'
     };
-    const sigBlock = (label: string, sig: string) => `
+    const sigBlock = (label: string, sig: string, printedName?: string) => `
       <div style="flex:1;text-align:center;">
         <div style="font-weight:bold;text-align:left;margin-bottom:4px;font-size:11px;">${label}</div>
         ${sig ? `<img src="${sig}" style="max-height:50px;margin:0 auto;display:block;" />` : '<div style="height:50px;border-bottom:1px solid #000;margin-bottom:2px;"></div>'}
+        <div style="font-size:11px;border-top:1px solid #333;padding-top:4px;font-weight:600;">${printedName || ''}</div>
+        <div style="font-size:9px;color:#666;">signature over printed name w/ date</div>
       </div>`;
     const w = window.open('', '_blank'); if (!w) return;
     w.document.write(`<html><head><title>Exit Interview — ${rec.employee_name}</title><style>
@@ -277,8 +283,8 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
     <p><b>Improvement suggestions:</b><br/>${rec.improvement_suggestions || 'N/A'}</p>
 
     <div class="sig-row">
-      ${sigBlock('Employee Signature:', rec.employee_sig)}
-      ${sigBlock(`Interviewer (${rec.interviewer_name || ''})${rec.interviewer_date ? ' — ' + rec.interviewer_date : ''}:`, rec.interviewer_sig)}
+      ${sigBlock('Employee Signature:', rec.employee_sig, rec.employee_name)}
+      ${sigBlock(`Interviewer (${rec.interviewer_name || ''})${rec.interviewer_date ? ' — ' + rec.interviewer_date : ''}:`, rec.interviewer_sig, rec.interviewer_name)}
     </div>
     </body></html>`);
     w.document.close(); setTimeout(() => w.print(), 300);

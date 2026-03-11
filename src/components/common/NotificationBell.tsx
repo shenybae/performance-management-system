@@ -3,8 +3,20 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Bell, X, CheckCircle, AlertTriangle, Info, Trash2 } from 'lucide-react';
 import { useNotifications } from '../../notifications/NotificationProvider';
 
-export const NotificationBell = () => {
+const SOURCE_SCREEN_MAP: Record<string, Record<string, string>> = {
+  coaching_chat: { Employee: 'C7', Manager: 'B2' },
+  coaching_log:  { Employee: 'C7', Manager: 'B2' },
+  elearning:     { Employee: 'C7', Manager: 'B2' },
+  goal_update:   { Employee: 'C1', Manager: 'B2' },
+  goal_action:   { Employee: 'C1', Manager: 'B2' },
+  appraisal:     { Employee: 'C1', Manager: 'B4' },
+  pip:           { Employee: 'C1', Manager: 'B6' },
+  suggestion:    { Employee: 'C2', Manager: 'B7', HR: 'A1' },
+};
+
+export const NotificationBell = ({ onNavigate }: { onNavigate?: (screen: string, context?: { source?: string; employee_id?: number }) => void }) => {
   const { history, unreadCount, markAllRead, clearHistory } = useNotifications();
+  const userRole: string = (() => { try { return JSON.parse(localStorage.getItem('talentflow_user') || '{}')?.role || ''; } catch { return ''; } })();
   const [isOpen, setIsOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -85,23 +97,30 @@ export const NotificationBell = () => {
                   <p className="text-xs text-slate-400 dark:text-slate-500">No notifications yet</p>
                 </div>
               ) : (
-                history.map(n => (
-                  <div
-                    key={n.id}
-                    className={`flex items-start gap-2.5 px-3 py-2.5 border-b border-slate-50 dark:border-slate-700/50 transition-colors ${
-                      !n.read ? 'bg-teal-50/50 dark:bg-teal-900/10' : ''
-                    }`}
-                  >
-                    {icon(n.type)}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-slate-700 dark:text-slate-200 leading-snug">{n.message}</p>
-                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{timeAgo(n.timestamp)}</p>
+                history.map(n => {
+                  const targetScreen = n.source ? (SOURCE_SCREEN_MAP[n.source]?.[userRole] ?? null) : null;
+                  return (
+                    <div
+                      key={n.id}
+                      onClick={() => { if (targetScreen && onNavigate) { onNavigate(targetScreen, { source: n.source, employee_id: n.employee_id }); setIsOpen(false); } }}
+                      className={`flex items-start gap-2.5 px-3 py-2.5 border-b border-slate-50 dark:border-slate-700/50 transition-colors ${
+                        !n.read ? 'bg-teal-50/50 dark:bg-teal-900/10' : ''
+                      } ${targetScreen && onNavigate ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/60' : ''}`}
+                    >
+                      {icon(n.type)}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-slate-700 dark:text-slate-200 leading-snug">{n.message}</p>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{timeAgo(n.timestamp)}</p>
+                      </div>
+                      {!n.read && (
+                        <span className="w-2 h-2 rounded-full bg-teal-green shrink-0 mt-1" />
+                      )}
+                      {targetScreen && onNavigate && (
+                        <span className="text-[9px] text-teal-600 dark:text-teal-400 font-semibold shrink-0 mt-1">→</span>
+                      )}
                     </div>
-                    {!n.read && (
-                      <span className="w-2 h-2 rounded-full bg-teal-green shrink-0 mt-1" />
-                    )}
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </motion.div>

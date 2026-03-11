@@ -930,7 +930,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
       {isManagement && employees.length > 0 && (
         <div className="mb-4">
           <Card>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 min-w-0">
               <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase shrink-0">Filter by Employee</label>
               <SearchableSelect
                 options={employees.map(e => ({ value: String(e.id), label: e.name }))}
@@ -939,7 +939,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                 placeholder="All Employees"
                 allowEmpty
                 emptyLabel="All Employees"
-                className="max-w-xs"
+                className="flex-1"
               />
             </div>
           </Card>

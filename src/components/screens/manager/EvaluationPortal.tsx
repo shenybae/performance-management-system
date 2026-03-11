@@ -95,11 +95,11 @@ const PERF_CATEGORIES: { key: string; label: string; desc: string; levels: strin
 
 const ACH_CATEGORIES = [
   { key: 'job_knowledge', label: 'Job Knowledge' },
-  { key: 'productivity', label: 'Productivity' },
   { key: 'work_quality', label: 'Work Quality' },
+  { key: 'attendance', label: 'Attendance / Punctuality' },
+  { key: 'productivity', label: 'Productivity' },
   { key: 'communication', label: 'Communication / Listening Skills' },
   { key: 'dependability', label: 'Dependability' },
-  { key: 'attendance', label: 'Attendance' },
 ];
 
 /* ── small helper: input class used everywhere ──────────────────────── */
@@ -120,8 +120,9 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
   /* ── Achievement Measure form state ─────────────────────────────── */
   const freshAch = () => ({
     employee_id: '', date: '', review_period_from: '', review_period_to: '',
-    job_knowledge: 0, productivity: 0, attendance: 0, work_quality: 0, communication: 0, dependability: 0,
-    promotability_status: '', additional_comments: '', employee_goals: '',
+    job_knowledge: 0, work_quality: 0, attendance: 0, productivity: 0, communication: 0, dependability: 0,
+    job_knowledge_comment: '', work_quality_comment: '', attendance_comment: '', productivity_comment: '', communication_comment: '', dependability_comment: '',
+    additional_comments: '', employee_goals: '',
     supervisor_signature: '', supervisor_signature_date: '',
     employee_signature: '', employee_signature_date: '',
   });
@@ -251,80 +252,100 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
         <ArrowLeft size={16} /> Back to Dashboard
       </button>
       <Card>
-        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-1">Employee Achievement Measure System</h2>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Employee Achievement Measure System</h2>
+        </div>
         <p className="text-xs text-slate-400 dark:text-slate-500 mb-5 border-b dark:border-slate-800 pb-3">
-          The purpose of this system is to communicate work expectations, monitor performance, and plan for professional development.
+          Ratings: <strong>1</strong> = Poor · <strong>2</strong> = Fair · <strong>3</strong> = Satisfactory · <strong>4</strong> = Good · <strong>5</strong> = Excellent
         </p>
         <form className="space-y-5" onSubmit={e => { e.preventDefault(); submitAchievement(); }}>
-          {/* Header Fields */}
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className={lbl}>Employee Name</label>
-              <SearchableSelect
-                options={employees.map(e => ({ value: String(e.id), label: e.name }))}
-                value={achForm.employee_id}
-                onChange={v => setAchForm({ ...achForm, employee_id: v })}
-                placeholder="Select Employee..."
-              />
-            </div>
-            <div><label className={lbl}>Date</label><input type="date" value={achForm.date} onChange={e => setAchForm({ ...achForm, date: e.target.value })} className={inp} /></div>
-            <div>
-              <label className={lbl}>Promotability Status</label>
-              <select value={achForm.promotability_status} onChange={e => setAchForm({ ...achForm, promotability_status: e.target.value })} className={inp}>
-                <option value="">Select Status...</option>
-                <option value="Satisfactory">Satisfactory</option>
-                <option value="Recommend Promotion">Recommend Promotion</option>
-                <option value="Needs Improvement">Needs Improvement</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className={lbl}>Review Period From</label><input type="date" value={achForm.review_period_from} onChange={e => setAchForm({ ...achForm, review_period_from: e.target.value })} className={inp} /></div>
-            <div><label className={lbl}>Review Period To</label><input type="date" value={achForm.review_period_to} onChange={e => setAchForm({ ...achForm, review_period_to: e.target.value })} className={inp} /></div>
-          </div>
-
-          {/* Rating Categories */}
+          {/* ── Employee Information ── */}
           <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-            <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Performance Rating</h4>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">1 = Unsatisfactory · 2 = Below Expectations · 3 = Meets Expectations · 4 = Exceeds Expectations · 5 = Outstanding</p>
-            <table className="w-full text-sm">
-              <thead><tr className="border-b dark:border-slate-700">
-                <th className="text-left py-2 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase w-1/3">Category</th>
-                {[1,2,3,4,5].map(n => <th key={n} className="text-center py-2 text-xs font-bold text-slate-500 dark:text-slate-400">{n}</th>)}
-              </tr></thead>
-              <tbody>
-                {ACH_CATEGORIES.map(({ key, label }) => (
-                  <tr key={key} className="border-b dark:border-slate-800">
-                    <td className="py-2 text-slate-700 dark:text-slate-300 font-medium">{label}</td>
-                    {[1,2,3,4,5].map(n => (
-                      <td key={n} className="text-center py-2"><input type="radio" name={`ach-${key}`} checked={(achForm as any)[key] === n} onChange={() => setAchForm({ ...achForm, [key]: n })} /></td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Employee Goals */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-            <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Employee Goals for Next Review Period</h4>
-            <textarea rows={3} value={achForm.employee_goals} onChange={e => setAchForm({ ...achForm, employee_goals: e.target.value })} className={inp} placeholder="List specific goals, objectives, and development plans..." />
-          </div>
-
-          {/* Additional Comments */}
-          <div><label className={lbl}>Additional Comments</label><textarea rows={2} value={achForm.additional_comments} onChange={e => setAchForm({ ...achForm, additional_comments: e.target.value })} className={inp} /></div>
-
-          {/* Signatures */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-4">
-            <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest">Signatures</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-3">
-                <SignatureUpload label="Supervisor Signature" value={achForm.supervisor_signature} onChange={v => setAchForm({ ...achForm, supervisor_signature: v })} />
-                <div><label className={lbl}>Supervisor Signature Date</label><input type="date" value={achForm.supervisor_signature_date} onChange={e => setAchForm({ ...achForm, supervisor_signature_date: e.target.value })} className={inp} /></div>
+            <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Employee Information</h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div>
+                <label className={lbl}>Employee Name</label>
+                <SearchableSelect
+                  options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+                  value={achForm.employee_id}
+                  onChange={v => setAchForm({ ...achForm, employee_id: v })}
+                  placeholder="Select Employee..."
+                />
               </div>
+              <div><label className={lbl}>Employee ID</label><input type="text" value={achForm.employee_id ? `#${achForm.employee_id}` : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
+              <div><label className={lbl}>Job Title</label><input type="text" value={achForm.employee_id ? (employees.find(e => String(e.id) === achForm.employee_id)?.title || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
+              <div><label className={lbl}>Date</label><input type="date" value={achForm.date} onChange={e => setAchForm({ ...achForm, date: e.target.value })} className={inp} /></div>
+              <div><label className={lbl}>Department</label><input type="text" value={achForm.employee_id ? (employees.find(e => String(e.id) === achForm.employee_id)?.dept || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
+              <div><label className={lbl}>Manager</label><input type="text" value={achForm.employee_id ? (employees.find(e => String(e.id) === achForm.employee_id)?.manager || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <div><label className={lbl}>Review Period From</label><input type="date" value={achForm.review_period_from} onChange={e => setAchForm({ ...achForm, review_period_from: e.target.value })} className={inp} /></div>
+              <div><label className={lbl}>Review Period To</label><input type="date" value={achForm.review_period_to} onChange={e => setAchForm({ ...achForm, review_period_to: e.target.value })} className={inp} /></div>
+            </div>
+          </div>
+
+          {/* ── Rating Categories with Comments ── */}
+          <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-1">Performance Ratings</h4>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">1 = Poor · 2 = Fair · 3 = Satisfactory · 4 = Good · 5 = Excellent</p>
+            {ACH_CATEGORIES.map(({ key, label }) => (
+              <div key={key} className="mb-4 pb-4 border-b border-slate-100 dark:border-slate-800 last:border-0 last:mb-0 last:pb-0">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{label}</span>
+                  <div className="flex items-center gap-3">
+                    {[1,2,3,4,5].map(n => (
+                      <label key={n} className="flex items-center gap-1 cursor-pointer">
+                        <input type="radio" name={`ach-${key}`} checked={(achForm as any)[key] === n} onChange={() => setAchForm({ ...achForm, [key]: n })} className="accent-teal-600" />
+                        <span className={`text-xs ${(achForm as any)[key] === n ? 'font-bold text-teal-deep dark:text-teal-green' : 'text-slate-400'}`}>{n}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <textarea rows={2} value={(achForm as any)[`${key}_comment`] || ''} onChange={e => setAchForm({ ...achForm, [`${key}_comment`]: e.target.value })} className={inp} placeholder={`Comments for ${label}...`} />
+              </div>
+            ))}
+            {/* Overall Rating (auto-computed) */}
+            {(() => {
+              const keys = ACH_CATEGORIES.map(c => c.key);
+              const rated = keys.filter(k => (achForm as any)[k] > 0);
+              const avg = rated.length > 0 ? (rated.reduce((s, k) => s + (achForm as any)[k], 0) / rated.length) : 0;
+              return (
+                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Overall Rating (Average)</span>
+                  <span className={`text-2xl font-black ${avg >= 4 ? 'text-teal-deep dark:text-teal-green' : avg >= 3 ? 'text-amber-500' : avg > 0 ? 'text-red-500' : 'text-slate-300'}`}>
+                    {avg > 0 ? avg.toFixed(1) : '—'}
+                  </span>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* ── Additional Comments ── */}
+          <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Additional Comments</h4>
+            <textarea rows={3} value={achForm.additional_comments} onChange={e => setAchForm({ ...achForm, additional_comments: e.target.value })} className={inp} placeholder="Any additional comments or observations..." />
+          </div>
+
+          {/* ── Employee Goals ── */}
+          <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Employee Goals</h4>
+            <textarea rows={3} value={achForm.employee_goals} onChange={e => setAchForm({ ...achForm, employee_goals: e.target.value })} className={inp} placeholder="List specific goals, objectives, and development plans for the next review period..." />
+          </div>
+
+          {/* ── Verification of Review ── */}
+          <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-4">
+            <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest">Verification of Review</h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+              Signing this form confirms that you have discussed this review in detail with your supervisor. Signing this form does not necessarily indicate that you agree with this evaluation.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-3">
                 <SignatureUpload label="Employee Signature" value={achForm.employee_signature} onChange={v => setAchForm({ ...achForm, employee_signature: v })} />
                 <div><label className={lbl}>Employee Signature Date</label><input type="date" value={achForm.employee_signature_date} onChange={e => setAchForm({ ...achForm, employee_signature_date: e.target.value })} className={inp} /></div>
+              </div>
+              <div className="space-y-3">
+                <SignatureUpload label="Manager Signature" value={achForm.supervisor_signature} onChange={v => setAchForm({ ...achForm, supervisor_signature: v })} />
+                <div><label className={lbl}>Manager Signature Date</label><input type="date" value={achForm.supervisor_signature_date} onChange={e => setAchForm({ ...achForm, supervisor_signature_date: e.target.value })} className={inp} /></div>
               </div>
             </div>
           </div>
@@ -653,14 +674,18 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
 
           {/* Signatures preview */}
           <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-            <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Signatures</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
+            <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">{isPerf ? 'Signatures' : 'Verification of Review'}</h4>
+            {!isPerf && <p className="text-xs text-slate-500 dark:text-slate-400 italic mb-3">Signing this form confirms that you have discussed this review in detail with your supervisor. Signing this form does not necessarily indicate that you agree with this evaluation.</p>}
+            <div className={`grid gap-4 ${isPerf ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
+              {(isPerf ? [
                 { label: 'Supervisor', sig: a.supervisor_signature, date: a.supervisor_signature_date, printName: a.supervisor_print_name },
                 { label: 'Reviewer', sig: a.reviewer_signature, date: a.reviewer_signature_date, printName: a.reviewer_print_name },
                 { label: 'Employee', sig: a.employee_signature, date: a.employee_signature_date },
                 { label: 'HR Officer', sig: a.hr_signature, date: a.hr_signature_date, printName: a.hr_print_name },
-              ].map(s => (
+              ] : [
+                { label: 'Employee', sig: a.employee_signature, date: a.employee_signature_date },
+                { label: 'Manager', sig: a.supervisor_signature, date: a.supervisor_signature_date },
+              ]).map(s => (
                 <div key={s.label} className="text-center">
                   <span className="text-[10px] font-bold text-slate-400 uppercase">{s.label}</span>
                   {s.printName && <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{s.printName}</span>}

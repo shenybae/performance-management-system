@@ -6,15 +6,16 @@ import { Download, Trash2 } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 
-const scoreLabels: Record<number, string> = { 5: 'Outstanding', 4: 'Exceeds', 3: 'Meets', 2: 'Below', 1: 'Poor' };
+const scoreLabels: Record<number, string> = { 5: 'Excellent', 4: 'Good', 3: 'Satisfactory', 2: 'Fair', 1: 'Poor' };
 
 export const SelfAssessment = () => {
   const [assessments, setAssessments] = useState<any[]>([]);
   const [form, setForm] = useState({
     achievements: '',
     job_knowledge: 0,
-    productivity: 0,
+    work_quality: 0,
     attendance: 0,
+    productivity: 0,
     communication: 0,
     dependability: 0
   });
@@ -42,7 +43,7 @@ export const SelfAssessment = () => {
       });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Self assessment submitted', 'success');
-      setForm({ achievements: '', job_knowledge: 0, productivity: 0, attendance: 0, communication: 0, dependability: 0 });
+      setForm({ achievements: '', job_knowledge: 0, work_quality: 0, attendance: 0, productivity: 0, communication: 0, dependability: 0 });
       fetchAssessments();
     } catch { window.notify?.('Failed to submit', 'error'); }
   };
@@ -54,8 +55,9 @@ export const SelfAssessment = () => {
 
   const radarData = [
     { subject: 'Job Knowledge', value: form.job_knowledge },
-    { subject: 'Productivity', value: form.productivity },
+    { subject: 'Work Quality', value: form.work_quality },
     { subject: 'Attendance', value: form.attendance },
+    { subject: 'Productivity', value: form.productivity },
     { subject: 'Communication', value: form.communication },
     { subject: 'Dependability', value: form.dependability },
   ];
@@ -87,9 +89,10 @@ export const SelfAssessment = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <SelectScore label="Job Knowledge" field="job_knowledge" />
+              <SelectScore label="Work Quality" field="work_quality" />
+              <SelectScore label="Attendance / Punctuality" field="attendance" />
               <SelectScore label="Productivity" field="productivity" />
-              <SelectScore label="Attendance" field="attendance" />
-              <SelectScore label="Communication" field="communication" />
+              <SelectScore label="Communication / Listening Skills" field="communication" />
               <SelectScore label="Dependability" field="dependability" />
             </div>
             <div className="flex justify-end"><button type="submit" className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green">Submit Assessment</button></div>
@@ -118,8 +121,9 @@ export const SelfAssessment = () => {
             <table className="w-full text-left"><thead><tr className="border-b border-slate-100 dark:border-slate-800">
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</th>
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Knowledge</th>
-              <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Productivity</th>
+              <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Work Quality</th>
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Attendance</th>
+              <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Productivity</th>
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Communication</th>
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dependability</th>
               <th className="pb-3"></th></tr></thead>
@@ -127,8 +131,9 @@ export const SelfAssessment = () => {
                 <tr key={a.id} className="border-b border-slate-50 dark:border-slate-800/50">
                   <td className="py-3 text-sm text-slate-500 dark:text-slate-400">{new Date(a.created_at).toLocaleDateString()}</td>
                   <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{a.job_knowledge}</td>
-                  <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{a.productivity}</td>
+                  <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{a.work_quality || '—'}</td>
                   <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{a.attendance}</td>
+                  <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{a.productivity}</td>
                   <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{a.communication}</td>
                   <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{a.dependability}</td>
                   <td className="py-3"><button onClick={() => deleteAssessment(a.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button></td>

@@ -43,6 +43,7 @@ import { RecruitmentBoard } from './components/screens/hr/RecruitmentBoard';
 import { OffboardingHub } from './components/screens/hr/OffboardingHub';
 import { OnboardingHub } from './components/screens/hr/OnboardingHub';
 import { UserAccounts } from './components/screens/hr/UserAccounts';
+import { AuditLogs } from './components/screens/hr/AuditLogs';
 
 // --- Manager Screens ---
 import { OKRPlanner } from './components/screens/manager/OKRPlanner';
@@ -68,6 +69,10 @@ interface UserSession {
   employee_id: number | null;
   token?: string;
   profile_picture?: string | null;
+  employee_name?: string | null;
+  position?: string | null;
+  dept?: string | null;
+  full_name?: string | null;
 }
 
 export default function App() {
@@ -76,6 +81,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
   const [activeScreen, setActiveScreen] = useState<string>('');
+  const [navContext, setNavContext] = useState<{ source?: string; employee_id?: number } | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -103,12 +109,35 @@ export default function App() {
         setActiveScreen('A1');
         fetchUsers();
       }
-      else if (user.role === 'Manager') setActiveScreen('B1');
+      else if (user.role === 'Manager') { setActiveScreen('B1'); fetchUsers(); }
       else if (user.role === 'Employee') setActiveScreen('C1');
       
       fetchEmployees();
     }
   }, [user]);
+
+  // On mount, refresh account info to pick up `full_name` or employee_name for existing sessions
+  useEffect(() => {
+    const token = localStorage.getItem('talentflow_token');
+    if (!token) return;
+    const fetchAccount = async () => {
+      try {
+        const headers: any = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+        const res = await fetch('/api/account-info', { headers });
+        if (!res.ok) return;
+        const account = await res.json();
+        const saved = localStorage.getItem('talentflow_user');
+        const existing = saved ? JSON.parse(saved) : {};
+        const merged = { ...existing, ...account };
+        setUser(merged);
+        localStorage.setItem('talentflow_user', JSON.stringify(merged));
+        localStorage.setItem('user', JSON.stringify(merged));
+      } catch (err) {
+        console.error('Failed to refresh account info', err);
+      }
+    };
+    fetchAccount();
+  }, []);
 
   const handleLogin = (session: UserSession) => {
     setUser(session);
@@ -202,25 +231,28 @@ export default function App() {
               case 'A7': return <OnboardingHub employees={employees} onRefresh={fetchEmployees} />;
               case 'A4': return <OffboardingHub employees={employees} />;
               case 'A5': return <UserAccounts employees={employees} users={users} onRefresh={fetchUsers} />;
+              case 'A9': return <AuditLogs />;
               case 'A6': return <DBViewer />;
+              case 'A8': return <FeedbackBox employees={employees} users={users} />;
 
               // Manager Screens (The Coach & Evaluator)
               case 'B1': return <OKRPlanner employees={employees} />;
-              case 'B2': return <CoachingJournal employees={employees} />;
+              case 'B2': return <CoachingJournal employees={employees} navContext={navContext} onNavContextClear={() => setNavContext(null)} />;
               case 'B3': return <DisciplinaryLog employees={employees} />;
               case 'B4': return <EvaluationPortal employees={employees} />;
               case 'B5': return <Promotability />;
               case 'B6': return <PIPManager employees={employees} />;
               case 'B7': return <SuggestionForm employees={employees} />;
+              case 'B8': return <FeedbackBox employees={employees} users={users} />;
 
               // Employee Screens (The Performer)
               case 'C1': return <CareerDashboard />;
               case 'C2': return <SuggestionForm />;
               case 'C3': return <SelfAssessment />;
-              case 'C4': return <FeedbackBox employees={employees} />;
+              case 'C4': return <FeedbackBox employees={employees} users={users} />;
               case 'C5': return <VerificationOfReview />;
               case 'C6': return <IDP />;
-              case 'C7': return <CoachingChat />;
+              case 'C7': return <CoachingChat navContext={navContext} onNavContextClear={() => setNavContext(null)} />;
               case 'S1': return <Settings onProfilePictureChanged={(pic) => {
                 const updated = { ...user, profile_picture: pic };
                 setUser(updated);
@@ -276,10 +308,12 @@ export default function App() {
             <>
               <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">HR Command Center</div>
               <SidebarItem icon={UserPlus} label="Recruitment Board" active={activeScreen === 'A3'} onClick={() => setActiveScreen('A3')} />
+              <SidebarItem icon={Users} label="360° Feedback" active={activeScreen === 'A8'} onClick={() => setActiveScreen('A8')} />
               <SidebarItem icon={Briefcase} label="Onboarding Hub" active={activeScreen === 'A7'} onClick={() => setActiveScreen('A7')} />
               <SidebarItem icon={Users} label="Employee Directory" active={activeScreen === 'A1' || activeScreen === 'A2'} onClick={() => setActiveScreen('A1')} />
               <SidebarItem icon={LogOut} label="Offboarding Hub" active={activeScreen === 'A4'} onClick={() => setActiveScreen('A4')} />
               <SidebarItem icon={ShieldCheck} label="User Accounts" active={activeScreen === 'A5'} onClick={() => setActiveScreen('A5')} />
+              <SidebarItem icon={ShieldCheck} label="Audit Logs" active={activeScreen === 'A9'} onClick={() => setActiveScreen('A9')} />
               <SidebarItem icon={TrendingUp} label="DB Viewer" active={activeScreen === 'A6'} onClick={() => setActiveScreen('A6')} />
               <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => setActiveScreen('S1')} />
             </>
@@ -288,6 +322,7 @@ export default function App() {
           {user.role === 'Manager' && (
             <>
               <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Performance Dashboard</div>
+              <SidebarItem icon={Users} label="360° Feedback" active={activeScreen === 'B8'} onClick={() => setActiveScreen('B8')} />
               <SidebarItem icon={Target} label="Target & OKR Planner" active={activeScreen === 'B1'} onClick={() => setActiveScreen('B1')} />
               <SidebarItem icon={MessageSquare} label="Coaching Journal" active={activeScreen === 'B2'} onClick={() => setActiveScreen('B2')} />
               <SidebarItem icon={ShieldAlert} label="Disciplinary Action" active={activeScreen === 'B3'} onClick={() => setActiveScreen('B3')} />
@@ -315,17 +350,19 @@ export default function App() {
         </nav>
 
         <div className="p-4 border-t border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-3 mb-4 px-2">
+          <div className="flex flex-col items-center gap-2 mb-4 px-2">
             {user.profile_picture ? (
-              <img src={user.profile_picture} alt="Profile" className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700" />
+              <img src={user.profile_picture} alt="Profile" className="w-14 h-14 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700" />
             ) : (
-              <div className="w-8 h-8 system-bg border border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-teal-deep dark:text-teal-green font-bold text-xs">
+              <div className="w-14 h-14 system-bg border-2 border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-teal-deep dark:text-teal-green font-bold text-lg">
                 {user.username[0].toUpperCase()}
               </div>
             )}
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.username}</p>
+            <div className="text-center min-w-0 w-full">
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.employee_name || user.full_name || user.username}</p>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">{user.role}</p>
+              {user.position && <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{user.position}</p>}
+              {user.dept && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold truncate">{user.dept}</p>}
             </div>
           </div>
           <button 
@@ -340,7 +377,7 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-transparent transition-colors duration-500 relative">
         <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-40">
-          <NotificationBell />
+          <NotificationBell onNavigate={(screen, ctx) => { setActiveScreen(screen); setNavContext(ctx || null); }} />
         </div>
         <div className="max-w-6xl mx-auto min-h-full">
           {renderScreen()}

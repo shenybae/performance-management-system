@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Users, Package, History, ChevronRight, Edit3, Save, X, ShieldAlert } from 'lucide-react';
 import { Employee } from '../../../types';
@@ -15,6 +15,22 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
   const [editForm, setEditForm] = useState({
     name: '', position: '', dept: '', hire_date: '', salary_base: 0, ssn: '', status: ''
   });
+  const [fallbackPropertyRows, setFallbackPropertyRows] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // If server didn't include property rows on the employee payload, try
+    // fetching property_accountability by employee name as a fallback.
+    if ((!employee.property || employee.property.length === 0) && employee.name) {
+      fetch(`/api/property_accountability?employee_name=${encodeURIComponent(employee.name)}`)
+        .then(r => r.json())
+        .then(rows => { if (!cancelled && Array.isArray(rows) && rows.length > 0) setFallbackPropertyRows(rows); })
+        .catch(() => {});
+    } else {
+      setFallbackPropertyRows(null);
+    }
+    return () => { cancelled = true; };
+  }, [employee?.id, employee?.name]);
 
   if (!employee) return <div>Select an employee from the directory.</div>;
 
@@ -115,13 +131,85 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
 
         <Card>
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-teal-deep dark:text-teal-green"><Package size={18} className="text-teal-green" /> Property Accountability</h3>
-          <div className="space-y-3">
-            {employee.property?.length ? employee.property.map(p => (
-              <div key={p.id} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{p.brand}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">SN: {p.serial_no} | Qty: {p.uom_qty}</p>
-              </div>
-            )) : <p className="text-sm text-slate-400 dark:text-slate-500 italic">No assets assigned.</p>}
+          <div className="space-y-4">
+            {(() => {
+              const propRows = (fallbackPropertyRows && fallbackPropertyRows.length > 0) ? fallbackPropertyRows : (employee.property || []);
+              const onboardingItems: any[] = [];
+              const accountabilityRecords: any[] = [];
+
+              propRows.forEach((p: any) => {
+                // Bulk records (offboarding / audits) usually store a JSON `items` array.
+                if (p.items) {
+                  accountabilityRecords.push(p);
+                  return;
+                }
+                // Onboarding typically creates per-item rows with brand/serial_no.
+                if (p.brand || p.serial_no) {
+                  onboardingItems.push(p);
+                  return;
+                }
+              });
+
+              return (
+                <>
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2">Issued (Onboarding)</h4>
+                    {onboardingItems.length === 0 ? (
+                      <p className="text-sm text-slate-400 dark:text-slate-500 italic">No issued items recorded.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-2">
+                        {onboardingItems.map(it => (
+                          <div key={it.id} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800">
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{it.brand}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">SN: {it.serial_no || '—'} | Qty: {it.uom_qty ?? '1'}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2 mt-4">Property / Accountability Records (Offboarding & Audits)</h4>
+                    {accountabilityRecords.length === 0 ? (
+                      <p className="text-sm text-slate-400 dark:text-slate-500 italic">No accountability records found.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {accountabilityRecords.map((rec: any) => {
+                          let parsedItems: any[] = [];
+                          try {
+                            const parsed = JSON.parse(rec.items || '[]');
+                            if (Array.isArray(parsed)) parsedItems = parsed;
+                          } catch { /* ignore parse errors */ }
+
+                          return (
+                            <div key={rec.id} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{rec.title || rec.type || `Record ${rec.id}`}</p>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400">{rec.sign_off_date || rec.created_at || rec.date || ''}</p>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400">Signed: {rec.signed_by || rec.signatory || rec.accepted_by || '—'}</p>
+                                </div>
+                              </div>
+
+                              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {parsedItems.length === 0 ? (
+                                  <p className="text-xs text-slate-500 italic">No item details.</p>
+                                ) : parsedItems.map((it: any, i: number) => (
+                                  <div key={i} className="p-2 bg-white dark:bg-slate-900 rounded border border-slate-100 dark:border-slate-800 text-xs">
+                                    <p className="font-medium">{it.brand || it.description || '—'}</p>
+                                    <p className="text-slate-500">SN: {it.serial_no || '—'}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </Card>
 

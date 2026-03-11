@@ -8,6 +8,13 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { Employee } from '../../../types';
 
+const Input = ({ label, value, onChange, type = 'text', placeholder = '' }: any) => (
+  <div>
+    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{label}</label>
+    <input type={type} value={value} onChange={onChange} placeholder={placeholder} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+  </div>
+);
+
 interface PIPManagerProps {
   employees: Employee[];
 }
@@ -97,13 +104,6 @@ export const PIPManager = ({ employees }: PIPManagerProps) => {
   const idpPieData = Object.keys(idpStatuses).map(k => ({ name: k, value: idpStatuses[k] }));
   const PIP_COLORS: Record<string, string> = { 'In Progress': '#f59e0b', 'Improved': '#10b981', 'Escalated': '#ef4444', 'Completed': '#0f766e' };
   const IDP_COLORS: Record<string, string> = { 'Not Started': '#94a3b8', 'In Progress': '#f59e0b', 'Completed': '#10b981' };
-
-  const Input = ({ label, value, onChange, type = 'text', placeholder = '' }: any) => (
-    <div>
-      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{label}</label>
-      <input type={type} value={value} onChange={onChange} placeholder={placeholder} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
-    </div>
-  );
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>

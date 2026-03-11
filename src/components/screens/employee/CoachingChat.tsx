@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion } from 'motion/react';
 import {
   MessageSquare, Send, ArrowLeft, GraduationCap, BookOpen, Clock, CheckCircle2,
-  AlertTriangle, Lightbulb, Brain, ClipboardList, ThumbsUp, AlertCircle, Calendar
+  AlertTriangle, Lightbulb, Brain, ClipboardList, ThumbsUp, AlertCircle, Calendar,
+  Check, CheckCheck, Reply, CircleDot, Wifi, WifiOff
 } from 'lucide-react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { getAuthHeaders } from '../../../utils/csv';
+import { io, Socket } from 'socket.io-client';
 
 type ViewMode = 'main' | 'chat' | 'courses' | 'journal';
 
-export const CoachingChat = () => {
+export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: { source?: string; employee_id?: number } | null; onNavContextClear?: () => void }) => {
   const [view, setView] = useState<ViewMode>('main');
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -18,12 +20,78 @@ export const CoachingChat = () => {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
   const [coachingLogs, setCoachingLogs] = useState<any[]>([]);
+  const [replyTo, setReplyTo] = useState<any>(null);
+  const [managerOnline, setManagerOnline] = useState(false);
+  const [typingUser, setTypingUser] = useState<string | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const typingTimeout = useRef<any>(null);
 
   const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
   const employeeId = user.employee_id;
 
+  // Socket.io connection
+  useEffect(() => {
+    const token = localStorage.getItem('talentflow_token');
+    if (!token) return;
+    const socket = io(window.location.origin, { path: '/socket.io', transports: ['websocket', 'polling'] });
+    socketRef.current = socket;
+
+    socket.on('connect', () => { socket.emit('auth', { token }); });
+
+    socket.on('chat:message', (msg: any) => {
+      if (msg.employee_id === employeeId || msg.employee_id === Number(employeeId)) {
+        setChatMessages(prev => {
+          if (msg.id != null && prev.some(m => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+    });
+
+    socket.on('chat:read_ack', (data: any) => {
+      if (data.employee_id === employeeId || data.employee_id === Number(employeeId)) {
+        setChatMessages(prev => prev.map(m =>
+          m.sender_role === 'Employee' && m.status !== 'read' ? { ...m, status: 'read' } : m
+        ));
+      }
+    });
+
+    socket.on('chat:action_update', (msg: any) => {
+      setChatMessages(prev => prev.map(m => m.id === msg.id ? msg : m));
+    });
+
+    socket.on('chat:typing', (data: any) => {
+      if ((data.employee_id === employeeId || data.employee_id === Number(employeeId)) && data.sender_role === 'Manager') {
+        setTypingUser(data.sender_name || 'Manager');
+      }
+    });
+    socket.on('chat:stop_typing', (data: any) => {
+      if (data.sender_role === 'Manager') setTypingUser(null);
+    });
+
+    socket.on('presence', (users: any[]) => {
+      setManagerOnline(users.some(u => u.role === 'Manager'));
+    });
+
+    return () => { socket.disconnect(); socketRef.current = null; };
+  }, [employeeId]);
+
   useEffect(() => { if (employeeId) { fetchChat(); fetchRecs(); fetchCourses(); fetchCoachingLogs(); } }, [employeeId]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
+
+  // Auto-navigate to chat from notification
+  useEffect(() => {
+    if (navContext?.source === 'coaching_chat') {
+      setView('chat');
+      onNavContextClear?.();
+    }
+  }, [navContext]);
+
+  // Mark messages as read when viewing chat
+  useEffect(() => {
+    if (view === 'chat' && employeeId && socketRef.current) {
+      socketRef.current.emit('chat:read', { employee_id: employeeId, reader_role: 'Employee' });
+    }
+  }, [view, employeeId, chatMessages.length]);
 
   const fetchChat = async () => {
     if (!employeeId) return;
@@ -48,15 +116,43 @@ export const CoachingChat = () => {
 
   const sendMessage = async () => {
     if (!chatInput.trim() || !employeeId) return;
-    try {
-      await fetch('/api/coaching_chats', {
-        method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ employee_id: employeeId, sender_role: 'Employee', sender_name: user.username || 'Employee', message: chatInput.trim() }),
+    if (socketRef.current) {
+      socketRef.current.emit('chat:send', {
+        employee_id: employeeId,
+        sender_role: 'Employee',
+        sender_name: user.username || 'Employee',
+        message: chatInput.trim(),
+        reply_to: replyTo?.id || null
       });
-      setChatInput('');
-      window.notify?.('Message sent', 'success');
-      fetchChat();
-    } catch { window.notify?.('Failed to send message', 'error'); }
+      socketRef.current.emit('chat:stop_typing', { employee_id: employeeId, sender_role: 'Employee' });
+    } else {
+      // Fallback to HTTP
+      try {
+        await fetch('/api/coaching_chats', {
+          method: 'POST', headers: getAuthHeaders(),
+          body: JSON.stringify({ employee_id: employeeId, sender_role: 'Employee', sender_name: user.username || 'Employee', message: chatInput.trim() }),
+        });
+        fetchChat();
+      } catch { window.notify?.('Failed to send message', 'error'); return; }
+    }
+    setChatInput('');
+    setReplyTo(null);
+  };
+
+  const handleTyping = () => {
+    if (!socketRef.current || !employeeId) return;
+    socketRef.current.emit('chat:typing', { employee_id: employeeId, sender_role: 'Employee', sender_name: user.username || 'Employee' });
+    clearTimeout(typingTimeout.current);
+    typingTimeout.current = setTimeout(() => {
+      socketRef.current?.emit('chat:stop_typing', { employee_id: employeeId, sender_role: 'Employee' });
+    }, 2000);
+  };
+
+  const statusIcon = (status: string, senderRole: string) => {
+    if (senderRole !== 'Employee') return null;
+    if (status === 'read') return <CheckCheck size={12} className="text-blue-400" />;
+    if (status === 'delivered') return <CheckCheck size={12} className="text-slate-400" />;
+    return <Check size={12} className="text-slate-400" />;
   };
 
   const updateRecStatus = async (id: number, status: string) => {
@@ -159,8 +255,14 @@ export const CoachingChat = () => {
             <div className="w-8 h-8 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center"><MessageSquare size={16} className="text-teal-600" /></div>
             <div>
               <h2 className="text-base font-black text-slate-800 dark:text-slate-100">Coaching Chat</h2>
-              <p className="text-[10px] text-slate-400">Communicate with your manager about your development</p>
+              <p className="text-[10px] text-slate-400">Real-time conversation with your manager</p>
             </div>
+          </div>
+          <div className="ml-auto flex items-center gap-1.5">
+            {managerOnline ? <Wifi size={12} className="text-emerald-500" /> : <WifiOff size={12} className="text-slate-400" />}
+            <span className={`text-[10px] font-bold ${managerOnline ? 'text-emerald-500' : 'text-slate-400'}`}>
+              Manager {managerOnline ? 'Online' : 'Offline'}
+            </span>
           </div>
         </div>
 
@@ -176,25 +278,87 @@ export const CoachingChat = () => {
               )}
               {chatMessages.map((msg: any) => {
                 const isEmployee = msg.sender_role === 'Employee';
+                const isSystem = msg.sender_role === 'System';
+                const repliedMsg = msg.reply_to ? chatMessages.find(m => m.id === msg.reply_to) : null;
+
+                if (isSystem) {
+                  return (
+                    <div key={msg.id} className="flex justify-center">
+                      <div className="max-w-[80%] rounded-xl px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                        <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">{msg.message}</p>
+                        {msg.action_type === 'goal_update' && msg.action_status === 'pending' && (
+                          <p className="text-[10px] text-amber-500 mt-2 italic">Waiting for manager approval...</p>
+                        )}
+                        {msg.action_status === 'approved' && (
+                          <p className="text-[10px] text-emerald-600 font-bold mt-2 flex items-center gap-1"><CheckCircle2 size={10} /> Approved by Manager</p>
+                        )}
+                        {msg.action_status === 'rejected' && (
+                          <p className="text-[10px] text-red-600 font-bold mt-2 flex items-center gap-1"><AlertCircle size={10} /> Rejected by Manager</p>
+                        )}
+                        <p className="text-[9px] text-amber-400 mt-1">{msg.created_at ? new Date(msg.created_at).toLocaleString() : ''}</p>
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
-                  <div key={msg.id} className={`flex ${isEmployee ? 'justify-end' : 'justify-start'}`}>
+                  <div key={msg.id} className={`flex ${isEmployee ? 'justify-end' : 'justify-start'} group`}>
                     <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${isEmployee
                       ? 'bg-teal-deep text-white rounded-br-md'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-bl-md'
                     }`}>
+                      {repliedMsg && (
+                        <div className={`text-[10px] mb-1.5 px-2 py-1 rounded-lg border-l-2 ${
+                          isEmployee ? 'bg-teal-700/30 border-teal-300 text-teal-200' : 'bg-slate-200 dark:bg-slate-700 border-slate-400 text-slate-500'
+                        }`}>
+                          <span className="font-bold">{repliedMsg.sender_name || repliedMsg.sender_role}: </span>
+                          {(repliedMsg.message || '').substring(0, 60)}{repliedMsg.message?.length > 60 ? '...' : ''}
+                        </div>
+                      )}
                       <p className={`text-[10px] font-bold mb-1 ${isEmployee ? 'text-teal-200' : 'text-slate-400'}`}>
                         {msg.sender_name || msg.sender_role} · {msg.created_at ? new Date(msg.created_at).toLocaleString() : ''}
                       </p>
                       <p className="text-sm leading-relaxed">{msg.message}</p>
+                      <div className="flex items-center justify-end gap-1 mt-1">
+                        {statusIcon(msg.status, msg.sender_role)}
+                      </div>
                     </div>
+                    {!isEmployee && (
+                      <button onClick={() => setReplyTo(msg)} className="opacity-0 group-hover:opacity-100 ml-1 mt-1 text-slate-400 hover:text-teal-500 transition-all" title="Reply">
+                        <Reply size={14} />
+                      </button>
+                    )}
+                    {isEmployee && (
+                      <button onClick={() => setReplyTo(msg)} className="opacity-0 group-hover:opacity-100 mr-1 mt-1 text-slate-400 hover:text-teal-500 transition-all order-first" title="Reply">
+                        <Reply size={14} />
+                      </button>
+                    )}
                   </div>
                 );
               })}
+              {typingUser && (
+                <div className="flex justify-start">
+                  <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl px-4 py-2 rounded-bl-md">
+                    <p className="text-[10px] text-slate-400 animate-pulse">{typingUser} is typing...</p>
+                  </div>
+                </div>
+              )}
               <div ref={chatEndRef} />
             </div>
 
+            {replyTo && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 mb-2">
+                <Reply size={12} className="text-teal-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold text-teal-600">Replying to {replyTo.sender_name || replyTo.sender_role}</p>
+                  <p className="text-[10px] text-slate-500 truncate">{replyTo.message}</p>
+                </div>
+                <button onClick={() => setReplyTo(null)} className="text-slate-400 hover:text-red-400"><AlertCircle size={12} /></button>
+              </div>
+            )}
+
             <div className="flex gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
-              <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)}
+              <input type="text" value={chatInput} onChange={e => { setChatInput(e.target.value); handleTyping(); }}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 placeholder="Type your message to your manager..."
                 className="flex-1 p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-black rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/50" />

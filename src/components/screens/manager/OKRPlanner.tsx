@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Download, Trash2, ChevronDown, ChevronUp, Search, AlertTriangle, Target, Users, User, Building2, TrendingDown, Printer, Check, ArrowLeft } from 'lucide-react';
+import { Plus, X, Download, Trash2, ChevronDown, ChevronUp, Search, AlertTriangle, Target, Users, User, Building2, TrendingDown, Printer, Check, ArrowLeft, Clock, Filter, MessageSquare } from 'lucide-react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
@@ -28,6 +28,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGoal, setExpandedGoal] = useState<number | null>(null);
   const [showUnderperforming, setShowUnderperforming] = useState(false);
+  // States used by the Underperforming view. Move to top-level to comply with Rules of Hooks.
+  const [empFilter, setEmpFilter] = useState('All');
+  const [quickEdit, setQuickEdit] = useState<number | null>(null);
+  const [editProgress, setEditProgress] = useState(0);
+  const [editStatus, setEditStatus] = useState('');
+  const [underperfView, setUnderperfView] = useState<'list'|'employee'|'team'|'department'>('list');
   const [form, setForm] = useState({
     employee_id: '', title: '', statement: '', metric: '', target_date: '',
     status: '', progress: 0, scope: '' as string,
@@ -72,10 +78,10 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     try { await fetch(`/api/goals/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Goal deleted', 'success'); fetchGoals(); } catch { window.notify?.('Failed to delete', 'error'); }
   };
 
-  const updateGoal = async (id: number, updates: Record<string, any>) => {
+  const updateGoal = async (id: number, updates: Record<string, any>, silent = true) => {
     try {
       const res = await fetch(`/api/goals/${id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(updates) });
-      if (res.ok) { window.notify?.('Goal updated', 'success'); fetchGoals(); }
+      if (res.ok) { if (!silent) window.notify?.('Goal updated', 'success'); fetchGoals(); }
     } catch { window.notify?.('Failed to update goal', 'error'); }
   };
 
@@ -131,6 +137,95 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     });
   }, [goals]);
 
+  // Aggregations for underperforming metrics by employee, team, department
+  const underperfAggregations = useMemo(() => {
+    const now = new Date();
+    const msDay = 1000 * 60 * 60 * 24;
+
+    const classifyReasons = (g: any) => {
+      const reasons: string[] = [];
+      const progress = Number(g.progress || 0);
+      if (g.status === 'At Risk') reasons.push('AT RISK');
+      if (g.target_date && new Date(g.target_date) < now && progress < 100) reasons.push('OVERDUE');
+      if ((g.priority === 'Critical' || g.priority === 'High') && progress < 25 && g.target_date) {
+        const created = new Date(g.created_at || now);
+        const due = new Date(g.target_date);
+        const total = due.getTime() - created.getTime();
+        const elapsed = now.getTime() - created.getTime();
+        if (total > 0 && elapsed / total > 0.5) reasons.push('HIGH_PRIORITY_DELAY');
+      }
+      if (progress < 10 && g.status === 'In Progress') reasons.push('STALLED');
+      if (reasons.length === 0) reasons.push('OTHER');
+      return reasons;
+    };
+
+    const empMap = new Map<string, any>();
+    const teamMap = new Map<string, any>();
+    const deptMap = new Map<string, any>();
+
+    // initialize totals from all goals
+    for (const g of goals) {
+      const emp = g.employee_name || g.delegation || 'Unassigned';
+      const team = g.team_name || 'Unassigned';
+      const dept = g.department || 'Unassigned';
+      const progress = Number(g.progress || 0);
+
+      if (!empMap.has(emp)) empMap.set(emp, { name: emp, total: 0, progressSum: 0, under: 0, overdueDaysSum: 0, reasons: {} });
+      const e = empMap.get(emp);
+      e.total++;
+      e.progressSum += progress;
+
+      if (!teamMap.has(team)) teamMap.set(team, { name: team, total: 0, progressSum: 0, under: 0, overdueDaysSum: 0, reasons: {} });
+      const t = teamMap.get(team);
+      t.total++;
+      t.progressSum += progress;
+
+      if (!deptMap.has(dept)) deptMap.set(dept, { name: dept, total: 0, progressSum: 0, under: 0, overdueDaysSum: 0, reasons: {} });
+      const d = deptMap.get(dept);
+      d.total++;
+      d.progressSum += progress;
+    }
+
+    // fill underperforming-specific counts
+    for (const g of underperforming) {
+      const emp = g.employee_name || g.delegation || 'Unassigned';
+      const team = g.team_name || 'Unassigned';
+      const dept = g.department || 'Unassigned';
+      const reasons = classifyReasons(g);
+      const days = (g.target_date && new Date(g.target_date) < now) ? Math.ceil((now.getTime() - new Date(g.target_date).getTime()) / msDay) : 0;
+
+      const e = empMap.get(emp) || { name: emp, total: 0, progressSum: 0, under: 0, overdueDaysSum: 0, reasons: {} };
+      e.under = (e.under || 0) + 1;
+      e.overdueDaysSum = (e.overdueDaysSum || 0) + days;
+      for (const r of reasons) e.reasons[r] = (e.reasons[r] || 0) + 1;
+      empMap.set(emp, e);
+
+      const t = teamMap.get(team) || { name: team, total: 0, progressSum: 0, under: 0, overdueDaysSum: 0, reasons: {} };
+      t.under = (t.under || 0) + 1;
+      t.overdueDaysSum = (t.overdueDaysSum || 0) + days;
+      for (const r of reasons) t.reasons[r] = (t.reasons[r] || 0) + 1;
+      teamMap.set(team, t);
+
+      const d = deptMap.get(dept) || { name: dept, total: 0, progressSum: 0, under: 0, overdueDaysSum: 0, reasons: {} };
+      d.under = (d.under || 0) + 1;
+      d.overdueDaysSum = (d.overdueDaysSum || 0) + days;
+      for (const r of reasons) d.reasons[r] = (d.reasons[r] || 0) + 1;
+      deptMap.set(dept, d);
+    }
+
+    const mapToArray = (m: Map<string, any>) => Array.from(m.values()).map(v => ({
+      name: v.name,
+      total: v.total || 0,
+      under: v.under || 0,
+      pctUnder: v.total > 0 ? Math.round(100 * (v.under || 0) / v.total) : 0,
+      avgProgress: v.total > 0 ? Math.round((v.progressSum || 0) / v.total) : 0,
+      avgDaysOverdue: (v.under || 0) > 0 ? Math.round((v.overdueDaysSum || 0) / (v.under || 0)) : 0,
+      reasons: v.reasons || {}
+    })).sort((a: any, b: any) => b.under - a.under);
+
+    return { employees: mapToArray(empMap), teams: mapToArray(teamMap), departments: mapToArray(deptMap) };
+  }, [goals, underperforming]);
+
   // Stats
   const stats = useMemo(() => {
     const total = goals.length;
@@ -181,11 +276,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     </style></head><body>
     <h1>OKR / Goal: ${g.title || g.statement}</h1>
     <div class="grid">
-      <div class="field"><span class="label">Scope</span><span class="val">${g.scope || 'Individual'}</span></div>
+      <div class="field"><span class="label">Goal Level</span><span class="val">${g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual'}</span></div>
       <div class="field"><span class="label">Department</span><span class="val">${g.department || '\u2014'}</span></div>
       <div class="field"><span class="label">Team</span><span class="val">${g.team_name || '\u2014'}</span></div>
       <div class="field"><span class="label">Assigned To</span><span class="val">${g.employee_name || '\u2014'}</span></div>
-      <div class="field"><span class="label">Delegation</span><span class="val">${g.delegation || '\u2014'}</span></div>
+      <div class="field"><span class="label">Goal Owner</span><span class="val">${g.delegation || '\u2014'}</span></div>
       <div class="field"><span class="label">Priority</span><span class="val">${g.priority || 'Medium'}</span></div>
       <div class="field"><span class="label">Quarter</span><span class="val">${g.quarter || '\u2014'}</span></div>
       <div class="field"><span class="label">Target Date</span><span class="val">${g.target_date || '\u2014'}</span></div>
@@ -203,10 +298,37 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
   /* ─── UNDERPERFORMING FULL-SCREEN VIEW ─── */
   if (showUnderperforming) {
+    const now = new Date();
+    const daysOverdue = (d: string) => { const diff = Math.ceil((now.getTime() - new Date(d).getTime()) / (1000 * 60 * 60 * 24)); return diff > 0 ? diff : 0; };
+    const uniqueEmployees = [...new Set(underperforming.map(g => g.employee_name || g.delegation || '').filter(Boolean))];
+
+    const displayGoals = empFilter === 'All' ? underperforming : underperforming.filter(g => (g.employee_name || g.delegation || '') === empFilter);
+
+    // Priority heatmap data
+    const heatmapData: Record<string, Record<string, number>> = {};
+    ['Critical', 'High', 'Medium', 'Low'].forEach(p => { heatmapData[p] = { OVERDUE: 0, 'AT RISK': 0, STALLED: 0 }; });
+    underperforming.forEach(g => {
+      const p = g.priority || 'Medium';
+      if (!heatmapData[p]) return;
+      if (g.target_date && new Date(g.target_date) < now) heatmapData[p].OVERDUE++;
+      if (g.status === 'At Risk') heatmapData[p]['AT RISK']++;
+      if ((g.progress || 0) <= 10 && g.status === 'In Progress') heatmapData[p].STALLED++;
+    });
+    const heatColor = (v: number) => v === 0 ? 'bg-slate-50 dark:bg-slate-800/50 text-slate-300 dark:text-slate-600' : v <= 2 ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
+
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="flex items-center gap-3 mb-5">
+        <div className="flex items-center justify-between mb-5">
           <button onClick={() => setShowUnderperforming(false)} className="flex items-center gap-1.5 text-sm font-bold text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors"><ArrowLeft size={18} /> Back to Dashboard</button>
+          <div className="flex gap-2">
+            <button onClick={() => exportToCSV(displayGoals.map(g => ({
+              goal: g.title || g.statement, scope: g.scope || 'Individual', department: g.department,
+              assigned: g.employee_name || g.delegation, priority: g.priority || 'Medium',
+              progress: `${g.progress || 0}%`, target_date: g.target_date,
+              days_overdue: g.target_date && new Date(g.target_date) < now ? daysOverdue(g.target_date) : 0,
+              issue: [g.target_date && new Date(g.target_date) < now ? 'OVERDUE' : '', g.status === 'At Risk' ? 'AT RISK' : '', (g.progress || 0) <= 10 && g.status === 'In Progress' ? 'STALLED' : ''].filter(Boolean).join(', ')
+            })), 'underperforming_goals')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> Export CSV</button>
+          </div>
         </div>
         <div className="flex items-center gap-2 mb-5">
           <div className="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center"><AlertTriangle size={18} className="text-red-500" /></div>
@@ -228,7 +350,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             <div className="grid grid-cols-4 gap-3">
               <Card><div className="p-1">
                 <p className="text-[10px] font-bold uppercase text-red-500">Overdue Goals</p>
-                <p className="text-2xl font-black text-red-600">{underperforming.filter(g => g.target_date && new Date(g.target_date) < new Date()).length}</p>
+                <p className="text-2xl font-black text-red-600">{underperforming.filter(g => g.target_date && new Date(g.target_date) < now).length}</p>
               </div></Card>
               <Card><div className="p-1">
                 <p className="text-[10px] font-bold uppercase text-orange-500">At Risk</p>
@@ -243,63 +365,268 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 <p className="text-2xl font-black text-slate-600 dark:text-slate-300">{underperforming.length > 0 ? Math.round(underperforming.reduce((s, g) => s + (g.progress || 0), 0) / underperforming.length) : 0}%</p>
               </div></Card>
             </div>
-            {/* By department breakdown */}
-            <Card>
-              <p className="text-[10px] font-bold uppercase text-slate-500 mb-2">By Department</p>
-              <div className="flex flex-wrap gap-2">
-                {DEPARTMENTS.map(d => {
-                  const count = underperforming.filter(g => g.department === d).length;
-                  if (count === 0) return null;
-                  return <span key={d} className="px-2 py-1 text-xs font-bold rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">{d}: {count}</span>;
-                })}
-              </div>
-            </Card>
-            {/* Table */}
-            <Card>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead><tr className="bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/50">
-                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Goal</th>
-                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Scope</th>
-                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Department</th>
-                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Assigned</th>
-                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Priority</th>
-                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Progress</th>
-                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Due</th>
-                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Issue</th>
-                  </tr></thead>
-                  <tbody>
-                    {underperforming.map(g => {
-                      const overdue = g.target_date && new Date(g.target_date) < new Date();
-                      const stalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
-                      return (
-                        <tr key={g.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
-                          <td className="py-2 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 max-w-[200px] truncate">{g.title || g.statement}</td>
-                          <td className="py-2 px-3 text-xs text-slate-500">{g.scope || 'Individual'}</td>
-                          <td className="py-2 px-3 text-xs text-slate-500">{g.department || '\u2014'}</td>
-                          <td className="py-2 px-3 text-xs text-slate-500">{g.employee_name || g.delegation || '\u2014'}</td>
-                          <td className="py-2 px-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority)}`}>{g.priority || 'Medium'}</span></td>
-                          <td className="py-2 px-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-16 bg-slate-200 dark:bg-slate-700 rounded-full h-1.5"><div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${g.progress || 0}%` }}></div></div>
-                              <span className="text-[10px] font-bold text-red-500">{g.progress || 0}%</span>
-                            </div>
-                          </td>
-                          <td className={`py-2 px-3 text-xs font-medium ${overdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '\u2014'}</td>
-                          <td className="py-2 px-3">
-                            <div className="flex gap-1">
-                              {overdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
-                              {g.status === 'At Risk' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600">AT RISK</span>}
-                              {stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}
-                            </div>
-                          </td>
+
+            {/* Priority Heatmap + Department Breakdown side by side */}
+            <div className="grid grid-cols-2 gap-4">
+              <Card>
+                <p className="text-[10px] font-bold uppercase text-slate-500 mb-3">Priority vs Issue Heatmap</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-center border-collapse">
+                    <thead><tr>
+                      <th className="py-2 px-3 text-[10px] font-bold uppercase text-slate-400"></th>
+                      <th className="py-2 px-3 text-[10px] font-bold uppercase text-red-500">Overdue</th>
+                      <th className="py-2 px-3 text-[10px] font-bold uppercase text-orange-500">At Risk</th>
+                      <th className="py-2 px-3 text-[10px] font-bold uppercase text-amber-500">Stalled</th>
+                    </tr></thead>
+                    <tbody>
+                      {['Critical', 'High', 'Medium', 'Low'].map(p => (
+                        <tr key={p} className="border-t border-slate-100 dark:border-slate-800">
+                          <td className="py-2 px-3 text-[10px] font-bold text-slate-600 dark:text-slate-300 text-left">{p}</td>
+                          {['OVERDUE', 'AT RISK', 'STALLED'].map(issue => (
+                            <td key={issue} className="py-2 px-3">
+                              <span className={`inline-block w-10 h-8 rounded-lg flex items-center justify-center text-sm font-black ${heatColor(heatmapData[p]?.[issue] || 0)}`}>
+                                {heatmapData[p]?.[issue] || 0}
+                              </span>
+                            </td>
+                          ))}
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+              <Card>
+                <p className="text-[10px] font-bold uppercase text-slate-500 mb-3">By Department</p>
+                <div className="flex flex-wrap gap-2">
+                  {DEPARTMENTS.map(d => {
+                    const count = underperforming.filter(g => g.department === d).length;
+                    if (count === 0) return null;
+                    return <span key={d} className="px-2.5 py-1.5 text-xs font-bold rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">{d}: {count}</span>;
+                  })}
+                  {underperforming.filter(g => !g.department).length > 0 && <span className="px-2.5 py-1.5 text-xs font-bold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">No Dept: {underperforming.filter(g => !g.department).length}</span>}
+                </div>
+              </Card>
+            </div>
+
+            {/* View Tabs */}
+            <div className="flex gap-2 mb-4 mt-4">
+              <button onClick={() => setUnderperfView('list')} className={`px-3 py-2 rounded-lg text-sm font-bold ${underperfView === 'list' ? 'bg-white dark:bg-slate-900 text-teal-deep dark:text-teal-green shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>List</button>
+              <button onClick={() => setUnderperfView('employee')} className={`px-3 py-2 rounded-lg text-sm font-bold ${underperfView === 'employee' ? 'bg-white dark:bg-slate-900 text-teal-deep dark:text-teal-green shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>By Employee</button>
+              <button onClick={() => setUnderperfView('team')} className={`px-3 py-2 rounded-lg text-sm font-bold ${underperfView === 'team' ? 'bg-white dark:bg-slate-900 text-teal-deep dark:text-teal-green shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>By Team</button>
+              <button onClick={() => setUnderperfView('department')} className={`px-3 py-2 rounded-lg text-sm font-bold ${underperfView === 'department' ? 'bg-white dark:bg-slate-900 text-teal-deep dark:text-teal-green shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>By Department</button>
+            </div>
+
+            {underperfView === 'list' ? (
+              <>
+                {/* Employee filter */}
+                <div className="flex items-center gap-3">
+                  <Filter size={14} className="text-slate-400" />
+                  <select value={empFilter} onChange={e => setEmpFilter(e.target.value)} className="px-3 py-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 font-bold">
+                    <option value="All">All Employees ({underperforming.length})</option>
+                    {uniqueEmployees.map(n => <option key={n} value={n}>{n} ({underperforming.filter(g => (g.employee_name || g.delegation || '') === n).length})</option>)}
+                  </select>
+                  {empFilter !== 'All' && <button onClick={() => setEmpFilter('All')} className="text-xs font-bold text-slate-400 hover:text-red-500"><X size={14} /></button>}
+                </div>
+
+                {/* Table */}
+                <Card>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead><tr className="bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/50">
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Goal</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Level</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Department</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Owner</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Priority</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Progress</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Due</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Overdue</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Issue</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center">Quick Action</th>
+                      </tr></thead>
+                      <tbody>
+                        {displayGoals.map(g => {
+                          const isOverdue = g.target_date && new Date(g.target_date) < now;
+                          const stalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
+                          const days = isOverdue ? daysOverdue(g.target_date) : 0;
+                          const scopeLabel = g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual';
+                          const scopeIcon = g.scope === 'Department' ? '🏢' : g.scope === 'Team' ? '👥' : '👤';
+                          return (
+                            <tr key={g.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
+                              <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 max-w-[180px] truncate">{g.title || g.statement}</td>
+                              <td className="py-2.5 px-3"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeIcon} {scopeLabel}</span></td>
+                              <td className="py-2.5 px-3 text-xs text-slate-500">{g.department || '\u2014'}</td>
+                              <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium">{g.employee_name || g.delegation || '\u2014'}</td>
+                              <td className="py-2.5 px-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority)}`}>{g.priority || 'Medium'}</span></td>
+                              <td className="py-2.5 px-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-16 bg-slate-200 dark:bg-slate-700 rounded-full h-1.5"><div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${g.progress || 0}%` }}></div></div>
+                                  <span className="text-[10px] font-bold text-red-500">{g.progress || 0}%</span>
+                                </div>
+                              </td>
+                              <td className={`py-2.5 px-3 text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '\u2014'}</td>
+                              <td className="py-2.5 px-3">
+                                {isOverdue ? (
+                                  <span className="flex items-center gap-1 text-[10px] font-black text-red-600"><Clock size={11} /> +{days}d</span>
+                                ) : <span className="text-[10px] text-slate-400">\u2014</span>}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <div className="flex gap-1 flex-wrap">
+                                  {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
+                                  {g.status === 'At Risk' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600">AT RISK</span>}
+                                  {stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                {quickEdit === g.id ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <input type="range" min={0} max={100} step={5} value={editProgress} onChange={e => setEditProgress(Number(e.target.value))} className="w-16 accent-teal-600" title={`${editProgress}%`} />
+                                    <span className="text-[9px] font-bold text-slate-500 w-7">{editProgress}%</span>
+                                    <select value={editStatus} onChange={e => setEditStatus(e.target.value)} className="text-[9px] font-bold px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300">
+                                      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                    <button onClick={() => { updateGoal(g.id, { progress: editProgress, status: editStatus }); setQuickEdit(null); }} className="text-[9px] font-bold px-2 py-0.5 rounded bg-teal-deep text-white hover:bg-teal-green">Save</button>
+                                    <button onClick={() => setQuickEdit(null)} className="text-[9px] font-bold px-1.5 py-0.5 rounded text-slate-400 hover:text-red-500"><X size={11} /></button>
+                                  </div>
+                                ) : (
+                                  <button onClick={() => { setQuickEdit(g.id); setEditProgress(g.progress || 0); setEditStatus(g.status || 'In Progress'); }}
+                                    className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 transition-colors">
+                                    Update
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </>
+            ) : (
+              /* Aggregated views */
+              <>
+                {underperfView === 'employee' && (
+                  <Card>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-100 dark:border-slate-800">
+                            <th className="py-2 px-3 text-xs font-bold">Employee</th>
+                            <th className="py-2 px-3 text-xs font-bold">Total Goals</th>
+                            <th className="py-2 px-3 text-xs font-bold">Underperforming</th>
+                            <th className="py-2 px-3 text-xs font-bold">% Underperforming</th>
+                            <th className="py-2 px-3 text-xs font-bold">Avg Progress</th>
+                            <th className="py-2 px-3 text-xs font-bold">Avg Days Overdue</th>
+                            <th className="py-2 px-3 text-xs font-bold">Top Reason</th>
+                            <th className="py-2 px-3 text-xs font-bold text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {underperfAggregations.employees.map((e: any) => {
+                            const top = Object.entries(e.reasons || {}).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '';
+                            return (
+                              <tr key={e.name} className="border-b border-slate-100 dark:border-slate-800">
+                                <td className="py-2 px-3 text-sm font-medium">{e.name}</td>
+                                <td className="py-2 px-3">{e.total}</td>
+                                <td className="py-2 px-3">{e.under}</td>
+                                <td className="py-2 px-3">{e.pctUnder}%</td>
+                                <td className="py-2 px-3">{e.avgProgress}%</td>
+                                <td className="py-2 px-3">{e.avgDaysOverdue}</td>
+                                <td className="py-2 px-3 text-xs font-bold">{top}</td>
+                                <td className="py-2 px-3 text-right">
+                                  <button onClick={() => exportToCSV(goals.filter(g => (g.employee_name || g.delegation || 'Unassigned') === e.name).map(g => ({ title: g.title || g.statement, department: g.department, progress: g.progress, priority: g.priority, status: g.status, target_date: g.target_date })), `employee_${e.name.replace(/\s+/g,'_')}_underperforming`)} className="text-xs font-bold px-3 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200">Export</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                )}
+
+                {underperfView === 'team' && (
+                  <Card>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-100 dark:border-slate-800">
+                            <th className="py-2 px-3 text-xs font-bold">Team</th>
+                            <th className="py-2 px-3 text-xs font-bold">Total Goals</th>
+                            <th className="py-2 px-3 text-xs font-bold">Underperforming</th>
+                            <th className="py-2 px-3 text-xs font-bold">% Underperforming</th>
+                            <th className="py-2 px-3 text-xs font-bold">Avg Progress</th>
+                            <th className="py-2 px-3 text-xs font-bold">Avg Days Overdue</th>
+                            <th className="py-2 px-3 text-xs font-bold">Top Reason</th>
+                            <th className="py-2 px-3 text-xs font-bold text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {underperfAggregations.teams.map((t: any) => {
+                            const top = Object.entries(t.reasons || {}).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '';
+                            return (
+                              <tr key={t.name} className="border-b border-slate-100 dark:border-slate-800">
+                                <td className="py-2 px-3 text-sm font-medium">{t.name}</td>
+                                <td className="py-2 px-3">{t.total}</td>
+                                <td className="py-2 px-3">{t.under}</td>
+                                <td className="py-2 px-3">{t.pctUnder}%</td>
+                                <td className="py-2 px-3">{t.avgProgress}%</td>
+                                <td className="py-2 px-3">{t.avgDaysOverdue}</td>
+                                <td className="py-2 px-3 text-xs font-bold">{top}</td>
+                                <td className="py-2 px-3 text-right">
+                                  <button onClick={() => exportToCSV(goals.filter(g => (g.team_name || 'Unassigned') === t.name).map(g => ({ title: g.title || g.statement, department: g.department, employee: g.employee_name || g.delegation, progress: g.progress, priority: g.priority, status: g.status, target_date: g.target_date })), `team_${t.name.replace(/\s+/g,'_')}_underperforming`)} className="text-xs font-bold px-3 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200">Export</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                )}
+
+                {underperfView === 'department' && (
+                  <Card>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-100 dark:border-slate-800">
+                            <th className="py-2 px-3 text-xs font-bold">Department</th>
+                            <th className="py-2 px-3 text-xs font-bold">Total Goals</th>
+                            <th className="py-2 px-3 text-xs font-bold">Underperforming</th>
+                            <th className="py-2 px-3 text-xs font-bold">% Underperforming</th>
+                            <th className="py-2 px-3 text-xs font-bold">Avg Progress</th>
+                            <th className="py-2 px-3 text-xs font-bold">Avg Days Overdue</th>
+                            <th className="py-2 px-3 text-xs font-bold">Top Reason</th>
+                            <th className="py-2 px-3 text-xs font-bold text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {underperfAggregations.departments.map((d: any) => {
+                            const top = Object.entries(d.reasons || {}).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '';
+                            return (
+                              <tr key={d.name} className="border-b border-slate-100 dark:border-slate-800">
+                                <td className="py-2 px-3 text-sm font-medium">{d.name}</td>
+                                <td className="py-2 px-3">{d.total}</td>
+                                <td className="py-2 px-3">{d.under}</td>
+                                <td className="py-2 px-3">{d.pctUnder}%</td>
+                                <td className="py-2 px-3">{d.avgProgress}%</td>
+                                <td className="py-2 px-3">{d.avgDaysOverdue}</td>
+                                <td className="py-2 px-3 text-xs font-bold">{top}</td>
+                                <td className="py-2 px-3 text-right">
+                                  <button onClick={() => exportToCSV(goals.filter(g => (g.department || 'Unassigned') === d.name).map(g => ({ title: g.title || g.statement, team: g.team_name, employee: g.employee_name || g.delegation, progress: g.progress, priority: g.priority, status: g.status, target_date: g.target_date })), `dept_${d.name.replace(/\s+/g,'_')}_underperforming`)} className="text-xs font-bold px-3 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200">Export</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                )}
+              </>
+            )}
           </div>
         )}
       </motion.div>
@@ -325,10 +652,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             {/* Scope & Department */}
             <div className="grid grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Scope *</label>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Level *</label>
                 <select value={form.scope} onChange={e => setForm({ ...form, scope: e.target.value })} className={inp}>
-                  <option value="">Select Scope...</option>
-                  {SCOPES.map(s => <option key={s} value={s}>{s}</option>)}
+                  <option value="">Select Goal Level...</option>
+                  <option value="Department">Dept-wide — Entire department</option>
+                  <option value="Team">Team — Specific group/team</option>
+                  <option value="Individual">Individual — Single employee</option>
                 </select>
               </div>
               <div>
@@ -373,8 +702,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 </div>
               )}
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Delegation / Owner</label>
-                <input type="text" value={form.delegation} onChange={e => setForm({ ...form, delegation: e.target.value })} className={inp} placeholder="Person or role responsible" />
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Owner / Responsible</label>
+                <input type="text" value={form.delegation} onChange={e => setForm({ ...form, delegation: e.target.value })} className={inp} placeholder="Who is accountable for this goal" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Target Date</label>
@@ -421,12 +750,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <div className="flex justify-between items-end mb-4">
-        <SectionHeader title="Target & OKR Planner" subtitle="Goals and delegations \u2014 Department, Team & Individual" />
+        <SectionHeader title="Target & OKR Planner" subtitle="Set and track goals by level: Dept-wide, Team, or Individual" />
         <div className="flex gap-2">
           <button onClick={() => exportToCSV(goals.map(g => ({
-            scope: g.scope, department: g.department, team: g.team_name, employee: g.employee_name,
+            scope: g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual', department: g.department, team: g.team_name, employee: g.employee_name,
             title: g.title, statement: g.statement, metric: g.metric, status: g.status,
-            progress: g.progress, priority: g.priority, quarter: g.quarter, delegation: g.delegation, target_date: g.target_date
+            progress: g.progress, priority: g.priority, quarter: g.quarter, owner: g.delegation, target_date: g.target_date
           })), 'okr_goals')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> CSV</button>
           <button onClick={() => setShowUnderperforming(true)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50`}>
             <AlertTriangle size={16} /> Underperforming ({stats.underperformingCount})
@@ -525,13 +854,15 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       {/* SCOPE TABS & FILTERS */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 gap-1">
-          {SCOPES.map(s => {
-            const Icon = s === 'Department' ? Building2 : s === 'Team' ? Users : User;
+          {([{ scope: 'Department' as const, icon: Building2, label: 'Dept-wide', desc: 'Whole department goals' },
+            { scope: 'Team' as const, icon: Users, label: 'Team', desc: 'Group / team goals' },
+            { scope: 'Individual' as const, icon: User, label: 'Individual', desc: 'Personal employee goals' },
+          ]).map(({ scope: s, icon: Icon, label, desc }) => {
             const count = goals.filter(g => (g.scope || 'Individual') === s).length;
             return (
-              <button key={s} onClick={() => { setActiveTab(s); setExpandedGoal(null); }}
+              <button key={s} onClick={() => { setActiveTab(s); setExpandedGoal(null); }} title={desc}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === s ? 'bg-white dark:bg-slate-900 text-teal-deep dark:text-teal-green shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
-                <Icon size={14} /> {s} <span className="text-[10px] font-black ml-0.5 opacity-60">{count}</span>
+                <Icon size={14} /> {label} <span className="text-[10px] font-black ml-0.5 opacity-60">{count}</span>
               </button>
             );
           })}
@@ -563,7 +894,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Department</th>
               {activeTab === 'Team' && <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Team</th>}
               {activeTab === 'Individual' && <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Employee</th>}
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Delegation</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Owner</th>
               <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Priority</th>
               <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Progress</th>
               <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Status</th>
@@ -624,7 +955,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             <div className="bg-slate-50 dark:bg-slate-900/50 p-5 border-b border-slate-200 dark:border-slate-700 space-y-4">
                               {/* Info Grid */}
                               <div className="grid grid-cols-6 gap-3 text-xs">
-                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Scope</span><span className="text-slate-700 dark:text-slate-200">{g.scope || 'Individual'}</span></div>
+                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Goal Level</span><span className="text-slate-700 dark:text-slate-200">{g.scope === 'Department' ? '🏢 Dept-wide' : g.scope === 'Team' ? '👥 Team' : '👤 Individual'}</span></div>
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Department</span><span className="text-slate-700 dark:text-slate-200">{g.department || '\u2014'}</span></div>
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team</span><span className="text-slate-700 dark:text-slate-200">{g.team_name || '\u2014'}</span></div>
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Employee</span><span className="text-slate-700 dark:text-slate-200">{g.employee_name || '\u2014'}</span></div>
@@ -643,15 +974,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                   <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.metric || '\u2014'}</p>
                                 </div>
                                 <div>
-                                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Delegation / Owner</span>
+                                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Goal Owner / Responsible</span>
                                   <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.delegation || '\u2014'}</p>
                                 </div>
                                 <div>
                                   <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Progress</span>
                                   <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
                                     <div className="flex items-center gap-3">
-                                      <input type="range" min={0} max={100} step={5} value={g.progress || 0}
-                                        onChange={e => updateGoal(g.id, { progress: Number(e.target.value), status: Number(e.target.value) === 100 ? 'Completed' : Number(e.target.value) > 0 ? 'In Progress' : 'Not Started' })}
+                                      <input type="range" min={0} max={100} step={5} defaultValue={g.progress || 0}
+                                        onPointerUp={e => { const v = Number((e.target as HTMLInputElement).value); updateGoal(g.id, { progress: v, status: v === 100 ? 'Completed' : v > 0 ? 'In Progress' : 'Not Started' }); }}
+                                        onKeyUp={e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const v = Number((e.target as HTMLInputElement).value); updateGoal(g.id, { progress: v, status: v === 100 ? 'Completed' : v > 0 ? 'In Progress' : 'Not Started' }); } }}
                                         className="flex-1 accent-teal-600" />
                                       <span className="text-sm font-bold text-slate-700 dark:text-slate-200 w-10 text-right">{g.progress || 0}%</span>
                                     </div>

@@ -108,7 +108,7 @@ export const SignatureUpload = ({ label, value, onChange }: SignatureUploadProps
 
       {/* Saved state — show preview */}
       {value && !signing && mode === null && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 flex items-center justify-between gap-2">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 flex flex-col items-center gap-2">
           <img src={value} alt="signature" className="max-h-12 object-contain" />
           <button
             type="button"

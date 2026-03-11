@@ -140,13 +140,16 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
     const personRecords = records.filter(r => r.employee_id === record.employee_id);
     const w = window.open('', '_blank');
     if (!w) { (window as any).notify?.('Please allow popups to export PDF', 'error'); return; }
-    const sigBlock = (src: string | null, label: string, date: string | null) => `
-      <div style="flex:1;text-align:center;">
+    const sigBlock = (src: string | null, label: string, date: string | null, printedName?: string) => `
+      <div style="flex:1;min-width:0;text-align:center;padding:0 8px;">
         <p style="font-weight:bold;color:#555;font-size:11px;text-transform:uppercase;margin:0 0 8px;">${label}</p>
-        ${src
-          ? `<img src="${src}" style="max-height:60px;border:1px solid #ccc;border-radius:4px;display:block;margin:0 auto 6px;" />`
-          : `<div style="border-bottom:1px solid #999;width:80%;margin:30px auto 6px;"></div>`}
-        <p style="font-size:11px;color:#888;margin:0;">${date || '(no date)'}</p>
+        <div style="border:1px solid #ccc;border-radius:4px;min-height:60px;display:flex;align-items:center;justify-content:center;padding:4px;margin-bottom:6px;">
+          ${src
+            ? `<img src="${src}" style="max-height:56px;max-width:100%;width:auto;object-fit:contain;display:block;" />`
+            : `<div style="border-bottom:1px solid #999;width:80%;margin:20px auto;"></div>`}
+        </div>
+        <p style="font-size:12px;color:#333;margin:0;font-weight:600;">${printedName || ''}</p>
+        <p style="font-size:11px;color:#888;margin:4px 0 0;">${date || '(no date)'}</p>
       </div>`;
     const rows = personRecords.map((r: any) => `
       <div style="border:1px solid #ddd;border-radius:8px;padding:20px;margin-bottom:20px;page-break-inside:avoid;">
@@ -171,10 +174,10 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
         ${(r.prev_first_date || r.prev_second_date || r.prev_third_date) ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee;"><p style="font-weight:bold;color:#555;font-size:12px;text-transform:uppercase;margin-bottom:4px;">Previous Warnings</p><div style="display:flex;gap:12px;font-size:12px;">${r.prev_first_date ? '<div style="border:1px solid #ddd;padding:6px 10px;border-radius:6px;"><strong>1st</strong> — ' + r.prev_first_date + ' (' + (r.prev_first_type || '—') + ')</div>' : ''}${r.prev_second_date ? '<div style="border:1px solid #ddd;padding:6px 10px;border-radius:6px;"><strong>2nd</strong> — ' + r.prev_second_date + ' (' + (r.prev_second_type || '—') + ')</div>' : ''}${r.prev_third_date ? '<div style="border:1px solid #ddd;padding:6px 10px;border-radius:6px;"><strong>3rd</strong> — ' + r.prev_third_date + ' (' + (r.prev_third_type || '—') + ')</div>' : ''}</div></div>` : ''}
         <div style="margin-top:16px;padding-top:16px;border-top:1px solid #eee;">
           <p style="font-size:11px;color:#666;font-style:italic;margin:0 0 12px;">"I have read this warning decision. My signature does not necessarily indicate agreement."</p>
-          <div style="display:flex;gap:16px;">
-            ${sigBlock(r.employee_signature, 'Employee Signature', r.employee_signature_date)}
-            ${sigBlock(r.preparer_signature, 'Preparer Signature', r.preparer_signature_date)}
-            ${sigBlock(r.supervisor_signature, 'Supervisor Signature', r.supervisor_signature_date)}
+          <div style="display:flex;gap:8px;overflow:hidden;">
+            ${sigBlock(r.employee_signature, 'Employee Signature', r.employee_signature_date, r.employee_name || '')}
+            ${sigBlock(r.preparer_signature, 'Preparer Signature', r.preparer_signature_date, r.approved_by_name || '')}
+            ${sigBlock(r.supervisor_signature, 'Supervisor Signature', r.supervisor_signature_date, r.supervisor || '')}
           </div>
         </div>
       </div>
@@ -468,7 +471,7 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
           <p className="text-center text-slate-400 py-10">{search ? 'No records match your search.' : 'No disciplinary records found.'}</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm table-fixed">
               <thead>
                 <tr className="border-b dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   <th className="text-left py-2 pr-4">Employee</th>
@@ -498,7 +501,9 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                           <span className="font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">{d.employee_name || `#${d.employee_id}`}</span>
                         </div>
                       </td>
-                      <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{d.dept || '—'}</td>
+                      <td className="py-3 pr-4">
+                        <div className="max-w-[70px] truncate text-slate-500 dark:text-slate-400" title={d.dept || undefined}>{d.dept || '—'}</div>
+                      </td>
                       <td className="py-3 pr-4">
                         <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-bold ${
                           d.warning_level === 'Final' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
@@ -507,17 +512,27 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                                                         'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400'
                         }`}>{d.warning_level}</span>
                       </td>
-                      <td className="py-3 pr-4 text-slate-600 dark:text-slate-300 max-w-[160px] truncate">{d.violation_type || '—'}</td>
-                      <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{d.violation_date || '—'}</td>
-                      <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 max-w-[120px] truncate">{d.violation_place || '—'}</td>
-                      <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{d.supervisor || '—'}</td>
-                      <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : '—'}</td>
-                      <td className="py-3 pr-4 text-slate-600 dark:text-slate-300 max-w-[160px] truncate">{d.action_taken || '—'}</td>
                       <td className="py-3 pr-4">
-                        <div className="flex gap-1">
-                          {d.employee_signature && <img src={d.employee_signature} alt="emp" className="h-6 rounded border border-slate-200 dark:border-slate-700" title="Employee Signature" />}
-                          {d.preparer_signature && <img src={d.preparer_signature} alt="prep" className="h-6 rounded border border-slate-200 dark:border-slate-700" title="Preparer Signature" />}
-                          {d.supervisor_signature && <img src={d.supervisor_signature} alt="sup" className="h-6 rounded border border-slate-200 dark:border-slate-700" title="Supervisor Signature" />}
+                        <div className="max-w-[130px] truncate text-slate-600 dark:text-slate-300" title={d.violation_type || undefined}>{d.violation_type || '—'}</div>
+                      </td>
+                      <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{d.violation_date || '—'}</td>
+                      <td className="py-3 pr-4">
+                        <div className="max-w-[90px] truncate text-slate-500 dark:text-slate-400" title={d.violation_place || undefined}>{d.violation_place || '—'}</div>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <div className="max-w-[110px] truncate text-slate-500 dark:text-slate-400" title={d.supervisor || undefined}>{d.supervisor || '—'}</div>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <div className="max-w-[130px] truncate text-slate-500 dark:text-slate-400" title={d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : undefined}>{d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : '—'}</div>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <div className="max-w-[130px] truncate text-slate-600 dark:text-slate-300" title={d.action_taken || undefined}>{d.action_taken || '—'}</div>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <div className="flex flex-row gap-1">
+                          {d.employee_signature && <img src={d.employee_signature} alt="emp" className="h-6 w-10 object-contain rounded border border-slate-200 dark:border-slate-700" title="Employee Signature" />}
+                          {d.preparer_signature && <img src={d.preparer_signature} alt="prep" className="h-6 w-10 object-contain rounded border border-slate-200 dark:border-slate-700" title="Preparer Signature" />}
+                          {d.supervisor_signature && <img src={d.supervisor_signature} alt="sup" className="h-6 w-10 object-contain rounded border border-slate-200 dark:border-slate-700" title="Supervisor Signature" />}
                           {!d.employee_signature && !d.preparer_signature && !d.supervisor_signature && <span className="text-slate-400 text-xs">—</span>}
                         </div>
                       </td>

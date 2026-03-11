@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
-import { Plus, X, Users, FileText, Download, Trash2 } from 'lucide-react';
+import { Plus, X, Users, FileText, Download, Trash2, Printer, Pencil } from 'lucide-react';
 import { SignatureUpload } from '../../common/SignatureUpload';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 
 export const RecruitmentBoard = () => {
   const [activeForm, setActiveForm] = useState<'none' | 'requisition' | 'appraisal'>('none');
+  const [editingApplicantId, setEditingApplicantId] = useState<number | null>(null);
   const [applicants, setApplicants] = useState<any[]>([]);
   const [requisitions, setRequisitions] = useState<any[]>([]);
   const [reqForm, setReqForm] = useState({
@@ -25,21 +26,20 @@ export const RecruitmentBoard = () => {
     president_approval: '', president_approval_date: '', president_approval_sig: '',
     comments: ''
   });
-  const [appForm, setAppForm] = useState({
+  const emptyAppForm = {
     name: '', position: '', job_skills: '', asset_value: '',
     communication_skills: '', interview_impression: '',
     teamwork: '', dept_fit: '', previous_qualifications: '',
     overall_rating: 0, status: '',
-    // Interview Questions
     q_experience: '', q_why_interested: '', q_strengths: '', q_weakness: '',
     q_conflict: '', q_goals: '', q_teamwork: '', q_pressure: '',
     q_contribution: '', q_questions: '',
-    // Comments / Signatures
     additional_comments: '',
     interviewer_name: '', interviewer_title: '', interview_date: '', interviewer_signature: '',
     hr_reviewer_name: '', hr_reviewer_signature: '', hr_reviewer_date: '',
     recommendation: ''
-  });
+  };
+  const [appForm, setAppForm] = useState(emptyAppForm);
 
   useEffect(() => { fetchApplicants(); fetchRequisitions(); }, []);
 
@@ -78,25 +78,43 @@ export const RecruitmentBoard = () => {
   const submitAppraisal = async () => {
     if (!appForm.name || !appForm.position) { window.notify?.('Please enter applicant name and position', 'error'); return; }
     try {
-      const res = await fetch('/api/applicants', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ...appForm, score: appForm.overall_rating }) });
-      if (!res.ok) throw new Error('Failed');
-      window.notify?.('Applicant appraisal saved', 'success');
-      setAppForm({
-        name: '', position: '', job_skills: '', asset_value: '',
-        communication_skills: '', interview_impression: '',
-        teamwork: '', dept_fit: '', previous_qualifications: '',
-        overall_rating: 0, status: '',
-        q_experience: '', q_why_interested: '', q_strengths: '', q_weakness: '',
-        q_conflict: '', q_goals: '', q_teamwork: '', q_pressure: '',
-        q_contribution: '', q_questions: '',
-        additional_comments: '',
-        interviewer_name: '', interviewer_title: '', interview_date: '', interviewer_signature: '',
-        hr_reviewer_name: '', hr_reviewer_signature: '', hr_reviewer_date: '',
-        recommendation: ''
-      });
+      if (editingApplicantId !== null) {
+        const res = await fetch(`/api/applicants/${editingApplicantId}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ ...appForm, score: appForm.overall_rating }) });
+        if (!res.ok) throw new Error('Failed');
+        window.notify?.('Applicant updated', 'success');
+      } else {
+        const res = await fetch('/api/applicants', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ...appForm, score: appForm.overall_rating }) });
+        if (!res.ok) throw new Error('Failed');
+        window.notify?.('Applicant appraisal saved', 'success');
+      }
+      setAppForm(emptyAppForm);
+      setEditingApplicantId(null);
       setActiveForm('none');
       fetchApplicants();
     } catch { window.notify?.('Failed to save', 'error'); }
+  };
+
+  const startEditApplicant = (app: any) => {
+    setAppForm({
+      name: app.name || '', position: app.position || '',
+      job_skills: app.job_skills || '', asset_value: app.asset_value || '',
+      communication_skills: app.communication_skills || '', interview_impression: app.interview_impression || '',
+      teamwork: app.teamwork || '', dept_fit: app.dept_fit || '', previous_qualifications: app.previous_qualifications || '',
+      overall_rating: app.overall_rating || app.score || 0, status: app.status || '',
+      q_experience: app.q_experience || '', q_why_interested: app.q_why_interested || '',
+      q_strengths: app.q_strengths || '', q_weakness: app.q_weakness || '',
+      q_conflict: app.q_conflict || '', q_goals: app.q_goals || '',
+      q_teamwork: app.q_teamwork || '', q_pressure: app.q_pressure || '',
+      q_contribution: app.q_contribution || '', q_questions: app.q_questions || '',
+      additional_comments: app.additional_comments || '',
+      interviewer_name: app.interviewer_name || '', interviewer_title: app.interviewer_title || '',
+      interview_date: app.interview_date || '', interviewer_signature: app.interviewer_signature || '',
+      hr_reviewer_name: app.hr_reviewer_name || '', hr_reviewer_signature: app.hr_reviewer_signature || '',
+      hr_reviewer_date: app.hr_reviewer_date || '', recommendation: app.recommendation || app.status || ''
+    });
+    setEditingApplicantId(app.id);
+    setActiveForm('appraisal');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const deleteApplicant = async (id: number) => {
@@ -107,6 +125,106 @@ export const RecruitmentBoard = () => {
   const deleteRequisition = async (id: number) => {
     if (!confirm('Delete this requisition?')) return;
     try { await fetch(`/api/requisitions/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Deleted', 'success'); fetchRequisitions(); } catch { window.notify?.('Failed', 'error'); }
+  };
+
+  const exportRequisitionPDF = (r: any) => {
+    const row = (label: string, value: string) => value ? `
+      <tr>
+        <td style="padding:6px 10px;font-weight:600;color:#475569;width:220px;white-space:nowrap;">${label}</td>
+        <td style="padding:6px 10px;color:#1e293b;">${value}</td>
+      </tr>` : '';
+
+    const section = (title: string, content: string) => `
+      <div style="margin-bottom:18px;">
+        <div style="background:#0f766e;color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 10px;text-transform:uppercase;border-radius:4px 4px 0 0;">${title}</div>
+        <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 4px 4px;">${content}</table>
+      </div>`;
+
+    const sigRow = (label: string, name: string, date: string, sig: string) => `
+      <tr>
+        <td style="padding:8px 10px;font-weight:600;color:#475569;width:180px;">${label}</td>
+        <td style="padding:8px 10px;color:#1e293b;width:240px;">${name || '—'}</td>
+        <td style="padding:8px 10px;color:#64748b;width:120px;">${date || '—'}</td>
+        <td style="padding:8px 10px;width:160px;text-align:center;">${sig ? `<img src="${sig}" style="height:36px;max-width:140px;object-fit:contain;" />` : '—'}</td>
+      </tr>`;
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Staff Requisition — ${r.job_title}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #1e293b; margin: 0; padding: 24px 32px; }
+    h1 { font-size: 20px; color: #0f766e; margin: 0 0 2px 0; }
+    .subtitle { font-size: 11px; color: #64748b; margin-bottom: 18px; }
+    table tr:nth-child(even) { background: #f8fafc; }
+    @media print { body { padding: 0; } button { display: none; } }
+  </style>
+</head>
+<body>
+  <h1>Staff Requisition Form</h1>
+  <div class="subtitle">Maptech Information Solutions Inc. &mdash; Performance Management System &mdash; Generated ${new Date().toLocaleDateString()}</div>
+
+  ${section('Position Information', `
+    ${row('Job Title', r.job_title)}
+    ${row('Department / Office', r.department)}
+    ${row('Supervisor', r.supervisor)}
+    ${row('Hiring Contact', r.hiring_contact)}
+    ${row('Position Status', r.position_status)}
+    ${row('Months per Year', r.months_per_year)}
+    ${row('Hours per Week', r.hours_per_week)}
+    ${row('Desired Start Date', r.start_date)}
+    ${row('Office Assignment', r.office_assignment)}
+  `)}
+
+  ${section('Type of Position', `
+    ${row('Position Type', r.position_type)}
+    ${row('Reason / Justification', r.type_reason)}
+  `)}
+
+  ${section('Recruitment Plan', `
+    ${row('Web Sites', r.recruitment_web)}
+    ${row('Newspapers', r.recruitment_newspapers)}
+    ${row('List Server', r.recruitment_listserv)}
+    ${row('Other', r.recruitment_other)}
+  `)}
+
+  ${section('Classification & Compensation', `
+    ${row('Classification', r.classification)}
+    ${row('Hiring Range (Exempt)', r.hiring_range)}
+    ${row('Hourly Pay Rate (Non-Exempt)', r.hourly_rate)}
+  `)}
+
+  ${r.comments ? section('Comments', row('Comments', r.comments)) : ''}
+
+  <div style="margin-bottom:18px;">
+    <div style="background:#0f766e;color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 10px;text-transform:uppercase;border-radius:4px 4px 0 0;">Approvals</div>
+    <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none;table-layout:fixed;">
+      <thead><tr style="background:#f1f5f9;">
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:180px;">Role</th>
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:240px;">Name</th>
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:120px;">Date</th>
+        <th style="padding:6px 10px;text-align:center;font-size:11px;color:#64748b;width:160px;">Signature</th>
+      </tr></thead>
+      <tbody>
+        ${sigRow('Supervisor', r.supervisor_approval, r.supervisor_approval_date, r.supervisor_approval_sig)}
+        ${sigRow('Department Head', r.dept_head_approval, r.dept_head_approval_date, r.dept_head_approval_sig)}
+        ${sigRow('Cabinet Member', r.cabinet_approval, r.cabinet_approval_date, r.cabinet_approval_sig)}
+        ${sigRow('VP for Business & Finance', r.vp_approval, r.vp_approval_date, r.vp_approval_sig)}
+        ${sigRow('President', r.president_approval, r.president_approval_date, r.president_approval_sig)}
+      </tbody>
+    </table>
+  </div>
+
+</body>
+</html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) { window.notify?.('Please allow popups to export PDF', 'error'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 500);
   };
 
   const statusCounts = applicants.reduce((acc: any, curr) => { acc[curr.status] = (acc[curr.status] || 0) + 1; return acc; }, {});
@@ -121,7 +239,7 @@ export const RecruitmentBoard = () => {
           <button onClick={() => setActiveForm(activeForm === 'requisition' ? 'none' : 'requisition')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${activeForm === 'requisition' ? 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300' : 'bg-teal-deep text-white hover:bg-teal-green'}`}>
             {activeForm === 'requisition' ? <><X size={16} /> Close</> : <><FileText size={16} /> Staff Requisition</>}
           </button>
-          <button onClick={() => setActiveForm(activeForm === 'appraisal' ? 'none' : 'appraisal')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${activeForm === 'appraisal' ? 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300' : 'bg-teal-green text-white hover:bg-teal-deep'}`}>
+          <button onClick={() => { setActiveForm(activeForm === 'appraisal' ? 'none' : 'appraisal'); if (activeForm === 'appraisal') { setEditingApplicantId(null); setAppForm(emptyAppForm); } }} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${activeForm === 'appraisal' ? 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300' : 'bg-teal-green text-white hover:bg-teal-deep'}`}>
             {activeForm === 'appraisal' ? <><X size={16} /> Close</> : <><Users size={16} /> Applicant Appraisal</>}
           </button>
         </div>
@@ -261,7 +379,10 @@ export const RecruitmentBoard = () => {
       {activeForm === 'appraisal' && (
         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mb-4">
           <Card>
-            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">Applicant Appraisal Form</h3>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{editingApplicantId ? 'Edit Applicant Appraisal' : 'Applicant Appraisal Form'}</h3>
+              {editingApplicantId && <span className="text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-1 rounded-lg">Editing: {appForm.name}</span>}
+            </div>
             <p className="text-xs text-slate-400 dark:text-slate-500 mb-4 border-b dark:border-slate-800 pb-3">To be completed by each person interviewing an applicant for employment</p>
             <form className="space-y-4" onSubmit={e => { e.preventDefault(); submitAppraisal(); }}>
               {/* Applicant Info */}
@@ -407,7 +528,10 @@ export const RecruitmentBoard = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end pt-4"><button type="submit" className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green">Save Appraisal</button></div>
+              <div className="flex justify-end gap-3 pt-4">
+                {editingApplicantId && <button type="button" onClick={() => { setEditingApplicantId(null); setAppForm(emptyAppForm); setActiveForm('none'); }} className="px-6 py-2 rounded-xl text-sm font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>}
+                <button type="submit" className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green">{editingApplicantId ? 'Update Appraisal' : 'Save Appraisal'}</button>
+              </div>
             </form>
           </Card>
         </motion.div>
@@ -431,7 +555,11 @@ export const RecruitmentBoard = () => {
               <div key={app.id} className="p-3 border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                 <div className="flex justify-between items-start mb-1">
                   <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{app.name}</span>
-                  <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-teal-green">{app.score || app.overall_rating}/5</span><button onClick={() => deleteApplicant(app.id)} className="text-red-400 hover:text-red-600"><Trash2 size={12} /></button></div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-teal-green">{app.score || app.overall_rating}/5</span>
+                    <button onClick={() => startEditApplicant(app)} title="Edit" className="text-teal-500 hover:text-teal-700"><Pencil size={12} /></button>
+                    <button onClick={() => deleteApplicant(app.id)} className="text-red-400 hover:text-red-600"><Trash2 size={12} /></button>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">{app.position}</p>
                 <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mt-1">{app.status}</p>
@@ -460,7 +588,10 @@ export const RecruitmentBoard = () => {
                   <td className="py-3 text-slate-500 dark:text-slate-400">{r.department}</td>
                   <td className="py-3 text-xs font-bold text-teal-green uppercase">{r.position_status}</td>
                   <td className="py-3 text-xs text-slate-500">{r.start_date || 'TBD'}</td>
-                  <td className="py-3"><button onClick={() => deleteRequisition(r.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button></td>
+                  <td className="py-3 flex items-center gap-2">
+                    <button onClick={() => exportRequisitionPDF(r)} title="Export PDF" className="text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300"><Printer size={14} /></button>
+                    <button onClick={() => deleteRequisition(r.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
+                  </td>
                 </tr>
               ))}</tbody>
             </table>

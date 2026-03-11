@@ -194,10 +194,13 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
                 <div key={app.id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
                   <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-800/50 cursor-pointer" onClick={() => setExpandedApplicant(expandedApplicant === app.id ? null : app.id)}>
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center text-amber-600 font-bold text-sm">{app.name?.[0]}</div>
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center text-amber-600 font-bold text-sm">{app.name?.[0]}</div>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">{app.position}</p>
+                      </div>
                       <div>
                         <p className="font-bold text-slate-700 dark:text-slate-200 text-sm">{app.name}</p>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">{app.position} • Score: {app.score || app.overall_rating}/5</p>
+                        <p className="text-[10px] text-slate-400">Score: {app.score || app.overall_rating}/5</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
