@@ -171,7 +171,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged }: Setting
                 </button>
               </div>
               <div className="text-center">
-                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{user.employee_name || user.username}</p>
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{user.employee_name || user.email || user.username}</p>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">{user.role}</p>
                 {user.position && <p className="text-[10px] text-slate-400 dark:text-slate-500">{user.position}</p>}
                 {user.dept && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold">{user.dept}</p>}
@@ -217,8 +217,8 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged }: Setting
             <div className="flex items-center gap-3">
               <Shield size={16} className="text-slate-400 shrink-0" />
               <div className="min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Username</p>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.username || '—'}</p>
+                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Email</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.email || '—'}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">

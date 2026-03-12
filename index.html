@@ -4,6 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Maptech Performance Management System</title>
+    <script>
+      // If there's no saved theme preference, apply a non-persistent `dark` class
+      // so the login credentials UI renders dark on first paint. Do NOT write
+      // to localStorage here — persistence is handled after login by the app.
+      try {
+        var saved = null;
+        try { saved = localStorage.getItem('talentflow_theme'); } catch (e) { saved = null; }
+        if (saved === null) {
+          try { document.documentElement.classList.add('dark'); } catch (e) { }
+        }
+      } catch (e) {}
+    </script>
+    <style>
+      /* Critical CSS: ensure `.system-bg` renders dark immediately on first paint
+         This overrides utility-based background briefly until full CSS is loaded. */
+      html.dark .system-bg {
+        background-color: rgba(2,6,23,0.88) !important;
+        color: #e6eef0 !important;
+        border-color: rgba(255,255,255,0.06) !important;
+        box-shadow: 0 18px 36px rgba(0,0,0,0.6) !important;
+        transition: background-color 0.25s ease !important;
+      }
+      html.dark .system-bg input,
+      html.dark .system-bg textarea,
+      html.dark .system-bg select { color: #e6eef0 !important; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

@@ -147,7 +147,7 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
   const personOptions = useMemo(() => {
     const map = new Map<string, { value: string; label: string }>();
     (usersList || []).forEach(u => {
-      const base = u.full_name || u.employee_name || u.username || `ID ${u.id || ''}`;
+      const base = u.full_name || u.employee_name || u.email || u.username || `ID ${u.id || ''}`;
       const role = u.role || u.position || '';
       const label = role ? `${base} (${role})` : base;
       if (!map.has(base)) map.set(base, { value: base, label });

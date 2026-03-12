@@ -4,15 +4,15 @@ const bcrypt = require('bcryptjs');
 const db = new Database('talentflow_demo.db');
 
 const updates = [
-  { username: 'hr_admin', password: 'demo_hr_pass' },
-  { username: 'manager_bob', password: 'demo_manager_pass' },
-  { username: 'employee_john', password: 'demo_employee_pass' },
+  { email: 'hr_admin@example.com', password: 'demo_hr_pass' },
+  { email: 'manager.bob@example.com', password: 'demo_manager_pass' },
+  { email: 'john.doe@example.com', password: 'demo_employee_pass' },
 ];
 
 for (const u of updates) {
   const hash = bcrypt.hashSync(u.password, 10);
-  const info = db.prepare('UPDATE users SET password = ? WHERE username = ?').run(hash, u.username);
-  console.log(`Updated ${u.username}: changes=${info.changes}`);
+  const info = db.prepare('UPDATE users SET password = ? WHERE email = ?').run(hash, u.email);
+  console.log(`Updated ${u.email}: changes=${info.changes}`);
 }
 
 console.log('Done.');

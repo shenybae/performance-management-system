@@ -123,10 +123,12 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
   const printPropRecord = (rec: any) => {
     const items: PropertyRow[] = (() => { try { return JSON.parse(rec.items || '[]'); } catch { return []; } })();
     const sigBlock = (label: string, name: string, sig: string, date: string) => `
-      <div style="flex:1;text-align:center;">
-        <div style="font-weight:bold;text-align:left;margin-bottom:4px;">${label}</div>
-        ${sig ? `<img src="${sig}" style="max-height:50px;margin:0 auto;display:block;" />` : '<div style="height:50px;border-bottom:1px solid #000;margin-bottom:2px;"></div>'}
-        <div style="font-size:11px;border-top:1px solid #333;padding-top:2px;">${name || ''}${date ? ' — ' + date : ''}</div>
+      <div style="flex:1;text-align:center;min-width:160px;">
+        <div style="font-weight:bold;text-align:left;margin-bottom:6px;font-size:11px;">${label}</div>
+        <div style="min-height:56px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;">
+          ${sig ? `<img src="${sig}" style="max-height:52px;max-width:100%;object-fit:contain;display:block;margin:0 auto;" />` : '<div style="width:80%;height:1px;border-bottom:1px solid #000;"></div>'}
+        </div>
+        <div style="font-size:11px;padding-top:0px;font-weight:600;">${name || ''}${date ? ' — ' + date : ''}</div>
         <div style="font-size:9px;color:#666;">signature over printed name w/ date</div>
       </div>`;
     const w = window.open('', '_blank'); if (!w) return;
@@ -234,10 +236,12 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
       benefits: 'Benefits'
     };
     const sigBlock = (label: string, sig: string, printedName?: string) => `
-      <div style="flex:1;text-align:center;">
-        <div style="font-weight:bold;text-align:left;margin-bottom:4px;font-size:11px;">${label}</div>
-        ${sig ? `<img src="${sig}" style="max-height:50px;margin:0 auto;display:block;" />` : '<div style="height:50px;border-bottom:1px solid #000;margin-bottom:2px;"></div>'}
-        <div style="font-size:11px;border-top:1px solid #333;padding-top:4px;font-weight:600;">${printedName || ''}</div>
+      <div style="flex:1;text-align:center;min-width:160px;">
+        <div style="font-weight:bold;text-align:left;margin-bottom:6px;font-size:11px;">${label}</div>
+        <div style="min-height:56px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;">
+          ${sig ? `<img src="${sig}" style="max-height:52px;max-width:100%;object-fit:contain;display:block;margin:0 auto;" />` : '<div style="width:80%;height:1px;border-bottom:1px solid #000;"></div>'}
+        </div>
+        <div style="font-size:11px;padding-top:0px;font-weight:600;">${printedName || ''}</div>
         <div style="font-size:9px;color:#666;">signature over printed name w/ date</div>
       </div>`;
     const w = window.open('', '_blank'); if (!w) return;
@@ -248,7 +252,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
       th{background:#f0f0f0;font-weight:bold;}
       .hdr{text-align:center;margin-bottom:16px;}
       .section{font-weight:bold;font-size:12px;margin:12px 0 6px;text-decoration:underline;}
-      .sig-row{display:flex;gap:40px;margin-top:24px;}
+      .sig-row{display:flex;gap:40px;margin-top:24px;align-items:flex-start;}
       @media print{body{padding:0;}}
     </style></head><body>
     <div class="hdr"><h2 style="margin:0;">CONFIDENTIAL EMPLOYEE EXIT INTERVIEW FORM</h2>

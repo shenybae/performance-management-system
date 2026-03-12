@@ -120,7 +120,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
       socketRef.current.emit('chat:send', {
         employee_id: employeeId,
         sender_role: 'Employee',
-        sender_name: user.username || 'Employee',
+        sender_name: user.full_name || user.email || user.username || 'Employee',
         message: chatInput.trim(),
         reply_to: replyTo?.id || null
       });
@@ -130,7 +130,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
       try {
         await fetch('/api/coaching_chats', {
           method: 'POST', headers: getAuthHeaders(),
-          body: JSON.stringify({ employee_id: employeeId, sender_role: 'Employee', sender_name: user.username || 'Employee', message: chatInput.trim() }),
+          body: JSON.stringify({ employee_id: employeeId, sender_role: 'Employee', sender_name: user.full_name || user.email || user.username || 'Employee', message: chatInput.trim() }),
         });
         fetchChat();
       } catch { window.notify?.('Failed to send message', 'error'); return; }
@@ -141,7 +141,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
 
   const handleTyping = () => {
     if (!socketRef.current || !employeeId) return;
-    socketRef.current.emit('chat:typing', { employee_id: employeeId, sender_role: 'Employee', sender_name: user.username || 'Employee' });
+    socketRef.current.emit('chat:typing', { employee_id: employeeId, sender_role: 'Employee', sender_name: user.full_name || user.email || user.username || 'Employee' });
     clearTimeout(typingTimeout.current);
     typingTimeout.current = setTimeout(() => {
       socketRef.current?.emit('chat:stop_typing', { employee_id: employeeId, sender_role: 'Employee' });

@@ -64,7 +64,8 @@ import { Settings } from './components/screens/common/Settings';
 
 interface UserSession {
   id: number;
-  username: string;
+  username?: string;
+  email?: string;
   role: 'HR' | 'Manager' | 'Employee';
   employee_id: number | null;
   token?: string;
@@ -87,11 +88,20 @@ export default function App() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    const saved = localStorage.getItem('talentflow_theme');
-    return saved === 'dark';
+    try {
+      const saved = localStorage.getItem('talentflow_theme');
+      if (saved === 'dark') return true;
+      if (saved === 'light') return false;
+      // default to light when no saved preference
+      return false;
+    } catch (e) {
+      return false;
+    }
   });
 
   useEffect(() => {
+    // Only apply persistent theme when a user is logged in to avoid overriding the login screen.
+    if (!user) return;
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
       document.body.classList.add('dark');
@@ -101,7 +111,7 @@ export default function App() {
       document.body.classList.remove('dark');
       localStorage.setItem('talentflow_theme', 'light');
     }
-  }, [isDarkMode]);
+  }, [isDarkMode, user]);
 
   useEffect(() => {
     if (user) {
@@ -147,6 +157,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    // Force login UI to show dark theme on sign out (temporary flag)
+    try { localStorage.setItem('talentflow_login_dark', 'true'); } catch (e) {}
     setUser(null);
     localStorage.removeItem('talentflow_user');
     localStorage.removeItem('user');
@@ -355,11 +367,11 @@ export default function App() {
               <img src={user.profile_picture} alt="Profile" className="w-14 h-14 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700" />
             ) : (
               <div className="w-14 h-14 system-bg border-2 border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-teal-deep dark:text-teal-green font-bold text-lg">
-                {user.username[0].toUpperCase()}
+                {((user.employee_name || user.full_name || user.email || user.username || 'U')[0] || 'U').toUpperCase()}
               </div>
             )}
             <div className="text-center min-w-0 w-full">
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.employee_name || user.full_name || user.username}</p>
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.employee_name || user.full_name || user.email || user.username}</p>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">{user.role}</p>
               {user.position && <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{user.position}</p>}
               {user.dept && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold truncate">{user.dept}</p>}

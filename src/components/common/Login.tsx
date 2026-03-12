@@ -1,35 +1,51 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Lock, User, ShieldAlert, Sun, Moon } from 'lucide-react';
+import { Lock, User, ShieldAlert, Sun, Moon, Eye, EyeOff } from 'lucide-react';
 import { Card } from './Card';
 
 interface UserSession {
   id: number;
-  username: string;
+  username?: string;
+  email?: string;
   role: 'HR' | 'Manager' | 'Employee';
   employee_id: number | null;
 }
 
 export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    const saved = localStorage.getItem('talentflow_theme');
-    return saved === 'dark';
+    try {
+      const forced = localStorage.getItem('talentflow_login_dark');
+      if (forced === 'true') return true;
+      const saved = localStorage.getItem('talentflow_theme');
+      if (saved === 'dark') return true;
+      if (saved === 'light') return false;
+      // If there's no saved preference, initialize the login UI as dark
+      // so the credentials card appears dark on first open. Do NOT persist
+      // this here; persistence is handled by the app after login.
+      return true;
+    } catch (e) { return true; }
   });
 
+  // Clear the temporary login-only flag so it doesn't persist beyond showing
   React.useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      document.body.classList.add('dark');
-      localStorage.setItem('talentflow_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.body.classList.remove('dark');
-      localStorage.setItem('talentflow_theme', 'light');
-    }
+    try { localStorage.removeItem('talentflow_login_dark'); } catch (e) {}
+  }, []);
+
+  React.useEffect(() => {
+    try {
+      if (isDarkMode) {
+        document.documentElement.classList.add('dark');
+        document.body.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.body.classList.remove('dark');
+      }
+    } catch (e) {}
   }, [isDarkMode]);
 
   // Quick demo access removed — use seeded accounts and the main sign-in form.
@@ -42,15 +58,15 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ email, password })
       });
       if (res.ok) {
         const user = await res.json();
         onLogin(user);
         (window as any).notify('Signed in', 'success');
       } else {
-        setError('Invalid username or password');
-        (window as any).notify('Invalid username or password', 'error');
+        setError('Invalid credentials');
+        (window as any).notify('Invalid credentials', 'error');
       }
     } catch (err) {
       setError('Connection error');
@@ -60,10 +76,10 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
   };
 
   const handleForgot = async () => {
-    const uname = window.prompt('Enter your username for password reset');
-    if (!uname) return;
+    const mail = window.prompt('Enter your email for password reset');
+    if (!mail) return;
     try {
-      const res = await fetch('/api/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: uname }) });
+      const res = await fetch('/api/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: mail }) });
       const data = await res.json();
       if (res.ok) {
         (window as any).notify('Password reset requested. Check console or copy token shown.', 'info');
@@ -84,8 +100,15 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-transparent p-4 selection:bg-teal-green/30 selection:text-teal-deep transition-colors duration-300">
-      <div className="absolute top-4 right-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-transparent p-4 selection:bg-teal-green/30 selection:text-teal-deep transition-colors duration-300 overflow-hidden">
+      {/* Video background (public/loginBackground.mp4) */}
+      <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none" aria-hidden="true">
+        <source src="/loginBackground.mp4" type="video/mp4" />
+      </video>
+      {/* Dim overlay for contrast */}
+      <div className="absolute inset-0 bg-black/40 dark:bg-black/60 z-10 pointer-events-none" />
+
+      <div className="absolute top-4 right-4 z-30">
         <button 
           onClick={() => setIsDarkMode(!isDarkMode)}
           className="p-2 system-bg border border-slate-200 dark:border-slate-800 rounded-full text-slate-500 transition-all hover:border-teal-green"
@@ -93,7 +116,7 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
       </div>
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md relative z-20">
         <div className="text-center mb-8">
           <div className="flex flex-col items-center mb-2">
             <img src="/logo.png" alt="Maptech Logo" className="h-24 w-full object-contain mb-4" />
@@ -109,15 +132,15 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
               </div>
             )}
             <div>
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider mb-2">Username</label>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider mb-2">Email</label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-teal-green/50 text-slate-900 dark:text-white transition-all placeholder:text-slate-500 dark:placeholder:text-slate-400"
-                  placeholder="Enter your username"
+                  placeholder="you@company.com"
                   required
                 />
               </div>
@@ -127,13 +150,21 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-teal-green/50 text-slate-900 dark:text-white transition-all placeholder:text-slate-500 dark:placeholder:text-slate-400"
+                  className="w-full pl-10 pr-10 py-3 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-teal-green/50 text-slate-900 dark:text-white transition-all placeholder:text-slate-500 dark:placeholder:text-slate-400"
                   placeholder="••••••••"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 p-1"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
             <button

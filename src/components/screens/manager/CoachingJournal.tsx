@@ -161,7 +161,7 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
       const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
       await fetch('/api/coaching_logs', {
         method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ ...form, employee_id: parseInt(form.employee_id), is_positive: form.is_positive ? 1 : 0, logged_by: form.logged_by || user.username || 'Manager' }),
+        body: JSON.stringify({ ...form, employee_id: parseInt(form.employee_id), is_positive: form.is_positive ? 1 : 0, logged_by: form.logged_by || user.full_name || user.email || user.username || 'Manager' }),
       });
       window.notify?.('Coaching entry saved', 'success');
 
@@ -179,7 +179,7 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
                 course_title: matchedCourse.title,
                 reason: `Identified weakness in ${weakness} from coaching observation: "${form.notes.substring(0, 100)}..."`,
                 weakness,
-                recommended_by: user.username || 'Manager'
+                recommended_by: user.full_name || user.email || user.username || 'Manager'
               }),
             });
           }
@@ -201,11 +201,11 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
   const sendChat = async () => {
     if (!chatInput.trim() || !chatEmployee) return;
     const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
-    if (socketRef.current) {
+      if (socketRef.current) {
       socketRef.current.emit('chat:send', {
         employee_id: chatEmployee.id,
         sender_role: 'Manager',
-        sender_name: user.username || 'Manager',
+        sender_name: user.full_name || user.email || user.username || 'Manager',
         message: chatInput.trim(),
         reply_to: replyTo?.id || null
       });
@@ -214,7 +214,7 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
       try {
         await fetch('/api/coaching_chats', {
           method: 'POST', headers: getAuthHeaders(),
-          body: JSON.stringify({ employee_id: chatEmployee.id, sender_role: 'Manager', sender_name: user.username || 'Manager', message: chatInput.trim() }),
+          body: JSON.stringify({ employee_id: chatEmployee.id, sender_role: 'Manager', sender_name: user.full_name || user.email || user.username || 'Manager', message: chatInput.trim() }),
         });
         fetchChatMessages(chatEmployee.id);
       } catch { window.notify?.('Failed to send message', 'error'); return; }
@@ -226,7 +226,7 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
   const handleManagerTyping = () => {
     if (!socketRef.current || !chatEmployee) return;
     const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
-    socketRef.current.emit('chat:typing', { employee_id: chatEmployee.id, sender_role: 'Manager', sender_name: user.username || 'Manager' });
+    socketRef.current.emit('chat:typing', { employee_id: chatEmployee.id, sender_role: 'Manager', sender_name: user.full_name || user.email || user.username || 'Manager' });
     clearTimeout(typingTimeout.current);
     typingTimeout.current = setTimeout(() => {
       socketRef.current?.emit('chat:stop_typing', { employee_id: chatEmployee!.id, sender_role: 'Manager' });
@@ -252,7 +252,7 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
     try {
       await fetch('/api/elearning_recommendations', {
         method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ ...recForm, employee_id: parseInt(recForm.employee_id), recommended_by: user.username || 'Manager' }),
+        body: JSON.stringify({ ...recForm, employee_id: parseInt(recForm.employee_id), recommended_by: user.full_name || user.email || user.username || 'Manager' }),
       });
       window.notify?.('E-Learning recommended', 'success');
       setRecForm({ employee_id: '', course_title: '', reason: '', weakness: '' });

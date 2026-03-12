@@ -61,7 +61,7 @@ async function query(sql: string, params: any[] = []) {
 async function recordAudit(user: any, action: string, tableName: string, rowId: any = null, before: any = null, after: any = null, meta: any = null) {
   try {
     const user_id = user && (user.id || user.employee_id) ? (user.id || user.employee_id) : null;
-    const username = user && (user.username || user.full_name) ? (user.username || user.full_name) : null;
+    const username = user && (user.email || user.username || user.full_name) ? (user.email || user.username || user.full_name) : null;
     const source = meta && meta.source ? meta.source : null;
     const ip = meta && meta.ip ? meta.ip : null;
     const user_agent = meta && meta.user_agent ? meta.user_agent : null;
@@ -179,6 +179,7 @@ async function initDb() {
     `CREATE TABLE IF NOT EXISTS users (
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
       username TEXT UNIQUE NOT NULL,
+      email TEXT UNIQUE,
       password TEXT NOT NULL,
       role TEXT NOT NULL,
       employee_id INTEGER,
@@ -746,6 +747,7 @@ async function initDb() {
     // Safe migration: add profile_picture column to users
     const userMigrations = [
       'ALTER TABLE users ADD COLUMN profile_picture TEXT',
+      'ALTER TABLE users ADD COLUMN email TEXT',
       'ALTER TABLE users ADD COLUMN full_name TEXT',
       'ALTER TABLE users ADD COLUMN linked_user_id INTEGER',
       'ALTER TABLE coaching_chats ADD COLUMN status TEXT DEFAULT \'delivered\'',
@@ -801,11 +803,11 @@ async function initDb() {
       if (johnId) await query("UPDATE employees SET manager_id = 0 WHERE id = ?", [johnId]);
       if (janeId) await query("UPDATE employees SET manager_id = 0 WHERE id = ?", [janeId]);
 
-      // Create user accounts linked to employees
-      await query("INSERT INTO users (username, password, role, employee_id) VALUES (?, ?, 'Employee', ?)", ['employee_john', hash('demo123'), johnId]);
-      await query("INSERT INTO users (username, password, role, employee_id) VALUES (?, ?, 'Employee', ?)", ['employee_jane', hash('demo123'), janeId]);
-      await query("INSERT INTO users (username, password, role, employee_id) VALUES (?, ?, 'Manager', NULL)", ['manager_bob', hash('demo123')]);
-      await query("INSERT INTO users (username, password, role, employee_id) VALUES (?, ?, 'HR', NULL)", ['hr_admin', hash('demo123')]);
+      // Create user accounts linked to employees (demo passwords)
+      await query("INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, 'Employee', ?)", ['employee_john', 'john.doe@example.com', hash('demo_employee_pass'), johnId]);
+      await query("INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, 'Employee', ?)", ['employee_jane', 'jane.smith@example.com', hash('demo_employee_pass'), janeId]);
+      await query("INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, 'Manager', NULL)", ['manager_bob', 'manager.bob@example.com', hash('demo_manager_pass')]);
+      await query("INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, 'HR', NULL)", ['hr_admin', 'hr_admin@example.com', hash('demo_hr_pass')]);
 
       // Ensure demo accounts have human-friendly full_name values
       await query("UPDATE users SET full_name = ? WHERE username = ?", ['John Doe', 'employee_john']);
@@ -836,10 +838,10 @@ async function initDb() {
       }
 
       console.log("Demo accounts created:");
-      console.log("  employee_john / demo123  → Employee (John Doe)");
-      console.log("  employee_jane / demo123  → Employee (Jane Smith)");
-      console.log("  manager_bob  / demo123  → Manager");
-      console.log("  hr_admin     / demo123  → HR");
+      console.log("  john.doe@example.com / demo_employee_pass  → Employee (John Doe)");
+      console.log("  jane.smith@example.com / demo_employee_pass  → Employee (Jane Smith)");
+      console.log("  manager.bob@example.com / demo_manager_pass  → Manager");
+      console.log("  hr_admin@example.com / demo_hr_pass  → HR");
     }
     console.log(`Database Initialized Successfully in ${usePostgres ? 'PostgreSQL' : 'SQLite'} mode`);
   } catch (err) {
@@ -931,19 +933,26 @@ async function startServer() {
   // API Routes
   app.post("/api/login", async (req, res) => {
     try {
-      const { username, password } = req.body;
-      const rows = await query("SELECT * FROM users WHERE username = ?", [username]) as any;
+      const { email, username, password } = req.body;
+      if (!email && !username) return res.status(400).json({ error: 'Missing email or username' });
+      let rows: any = [];
+      if (email) {
+        rows = await query("SELECT * FROM users WHERE email = ?", [email]) as any;
+      }
+      if ((!rows || rows.length === 0) && username) {
+        rows = await query("SELECT * FROM users WHERE username = ?", [username]) as any;
+      }
       const user = rows[0];
       if (!user) return res.status(401).json({ error: "Invalid credentials" });
       const match = await bcrypt.compare(password, user.password);
       if (!match) return res.status(401).json({ error: "Invalid credentials" });
-      const token = jwt.sign({ id: user.id, username: user.username, role: user.role, employee_id: user.employee_id }, JWT_SECRET, { expiresIn: '8h' });
-      let employee_name: string | null = null, position: string | null = null, dept: string | null = null, email: string | null = null, phone: string | null = null, address: string | null = null, hire_date: string | null = null, status: string | null = null;
+      const token = jwt.sign({ id: user.id, email: user.email || user.username, role: user.role, employee_id: user.employee_id }, JWT_SECRET, { expiresIn: '8h' });
+      let employee_name: string | null = null, position: string | null = null, dept: string | null = null, user_email: string | null = null, phone: string | null = null, address: string | null = null, hire_date: string | null = null, status: string | null = null;
       if (user.employee_id) {
         const empRows = await query('SELECT name, position, dept, email, phone, address, hire_date, status FROM employees WHERE id = ?', [user.employee_id]) as any;
-        if (empRows[0]) { employee_name = empRows[0].name; position = empRows[0].position; dept = empRows[0].dept; email = empRows[0].email; phone = empRows[0].phone; address = empRows[0].address; hire_date = empRows[0].hire_date; status = empRows[0].status; }
+        if (empRows[0]) { employee_name = empRows[0].name; position = empRows[0].position; dept = empRows[0].dept; user_email = empRows[0].email; phone = empRows[0].phone; address = empRows[0].address; hire_date = empRows[0].hire_date; status = empRows[0].status; }
       }
-      res.json({ token, id: user.id, username: user.username, full_name: user.full_name || null, role: user.role, employee_id: user.employee_id, profile_picture: user.profile_picture || null, employee_name, position, dept, email, phone, address, hire_date, status });
+      res.json({ token, id: user.id, email: user.email || user.username, full_name: user.full_name || null, role: user.role, employee_id: user.employee_id, profile_picture: user.profile_picture || null, employee_name, position, dept, email: user_email || user.email || null, phone, address, hire_date, status });
     } catch (err) {
       res.status(500).json({ error: "Database error" });
     }
@@ -952,15 +961,17 @@ async function startServer() {
   // Forgot password: generates a reset token and (in dev) returns it in response
   app.post('/api/forgot-password', async (req, res) => {
     try {
-      const { username } = req.body;
-      if (!username) return res.status(400).json({ error: 'Missing username' });
-      const rows = await query('SELECT * FROM users WHERE username = ?', [username]) as any;
+      const { email, username } = req.body;
+      if (!email && !username) return res.status(400).json({ error: 'Missing email or username' });
+      let rows: any = [];
+      if (email) rows = await query('SELECT * FROM users WHERE email = ?', [email]) as any;
+      if ((!rows || rows.length === 0) && username) rows = await query('SELECT * FROM users WHERE username = ?', [username]) as any;
       const user = rows[0];
       if (!user) return res.status(404).json({ error: 'User not found' });
       const token = crypto.randomBytes(24).toString('hex');
       const expires = Date.now() + 1000 * 60 * 60; // 1 hour
       await query('INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)', [user.id, token, expires]);
-      console.log(`Password reset token for ${username}: ${token}`);
+      console.log(`Password reset token for ${user.email || user.username}: ${token}`);
       const returnToken = process.env.DEV_SHOW_RESET === 'true' || process.env.NODE_ENV !== 'production';
       res.json({ success: true, token: returnToken ? token : undefined });
     } catch (err) {
@@ -1026,6 +1037,7 @@ async function startServer() {
     try {
       const users = await query(`
         SELECT u.id, u.username, u.role, u.employee_id, e.name as employee_name, u.full_name, u.profile_picture, u.linked_user_id,
+               u.email,
                lu.username as linked_user_username, lu.full_name as linked_user_full_name, lu.role as linked_user_role
         FROM users u
         LEFT JOIN employees e ON u.employee_id = e.id
@@ -1054,16 +1066,17 @@ async function startServer() {
         return res.status(401).json({ error: 'Invalid token' });
       }
 
-      const { username, password, role, employee_id, full_name, linked_user_id } = req.body;
-      if (!username || !password) return res.status(400).json({ error: 'Missing username or password' });
+      const { email, username, password, role, employee_id, full_name, linked_user_id } = req.body;
+      if ((!email && !username) || !password) return res.status(400).json({ error: 'Missing email (or username) or password' });
       const allowedRoles = ['Employee', 'Manager', 'HR'];
       if (!role || typeof role !== 'string' || !allowedRoles.includes(role)) return res.status(400).json({ error: 'Invalid or missing role' });
       const hashed = bcrypt.hashSync(password, 10);
-      await query("INSERT INTO users (username, password, role, employee_id, full_name, linked_user_id) VALUES (?, ?, ?, ?, ?, ?)", 
-        [username, hashed, role, employee_id || null, full_name || null, linked_user_id || null]);
+      // Prefer email for new accounts; keep username as optional legacy field.
+      await query("INSERT INTO users (username, email, password, role, employee_id, full_name, linked_user_id) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+        [username || null, email || null, hashed, role, employee_id || null, full_name || null, linked_user_id || null]);
 
       try {
-        await recordAudit(creatorPayload, 'create', 'users', null, null, { username, role, employee_id: employee_id || null, full_name: full_name || null, linked_user_id: linked_user_id || null });
+        await recordAudit(creatorPayload, 'create', 'users', null, null, { email: email || null, username: username || null, role, employee_id: employee_id || null, full_name: full_name || null, linked_user_id: linked_user_id || null });
       } catch (e) { /* ignore audit errors */ }
 
       res.json({ success: true });
@@ -1127,7 +1140,7 @@ async function startServer() {
     try {
       const userId = (req as any).user?.id;
       const employeeId = (req as any).user?.employee_id;
-      const userRows = await query('SELECT id, username, role, employee_id, profile_picture, full_name FROM users WHERE id = ?', [userId]) as any;
+      const userRows = await query('SELECT id, username, email, role, employee_id, profile_picture, full_name FROM users WHERE id = ?', [userId]) as any;
       const u = userRows[0];
       if (!u) return res.status(404).json({ error: 'User not found' });
       let emp: any = null;
@@ -2161,7 +2174,7 @@ async function startServer() {
   // Socket connection audit: log connect/disconnect events
   io.on('connection', (socket) => {
     try {
-      const hs = socket.handshake || {};
+      const hs: any = (socket.handshake || {});
       const meta = { source: 'socket', socketId: socket.id, auth: hs.auth || null, address: hs.address || null };
       // record connection
       recordAudit(null, 'socket_connect', 'socket', null, null, null, meta).catch(() => {});

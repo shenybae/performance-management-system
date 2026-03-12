@@ -42,6 +42,7 @@ async function ensureTables() {
   const createUsers = `CREATE TABLE IF NOT EXISTS users (
     id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
     username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE,
     password TEXT NOT NULL,
     role TEXT NOT NULL,
     employee_id INTEGER
@@ -70,19 +71,27 @@ async function seed() {
   await ensureTables();
 
   const accounts = [
-    { username: 'hr_admin', password: 'demo_hr_pass', role: 'HR' },
-    { username: 'manager_bob', password: 'demo_manager_pass', role: 'Manager' },
-    { username: 'employee_john', password: 'demo_employee_pass', role: 'Employee' },
+    { username: 'hr_admin', email: 'hr_admin@example.com', password: 'demo_hr_pass', role: 'HR' },
+    { username: 'manager_bob', email: 'manager.bob@example.com', password: 'demo_manager_pass', role: 'Manager' },
+    { username: 'employee_john', email: 'john.doe@example.com', password: 'demo_employee_pass', role: 'Employee' },
   ];
 
   for (const acc of accounts) {
     const hash = bcrypt.hashSync(acc.password, 10);
     try {
-      await rawQuery('INSERT INTO users (username, password, role, employee_id) VALUES (?, ?, ?, NULL)', [acc.username, hash, acc.role]);
-      console.log(`Created ${acc.role} account: ${acc.username}`);
+      await rawQuery('INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, ?, NULL)', [acc.username, acc.email || null, hash, acc.role]);
+      console.log(`Created ${acc.role} account: ${acc.email || acc.username}`);
     } catch (err: any) {
       if (String(err).toLowerCase().includes('unique')) {
-        console.log(`Account ${acc.username} already exists — skipping.`);
+        // Account exists; update its password and ensure email is set for development convenience
+        try {
+          const existingHash = bcrypt.hashSync(acc.password, 10);
+          // Update password and set email if missing
+          await rawQuery('UPDATE users SET password = ?, email = COALESCE(email, ?) WHERE email = ? OR username = ?', [existingHash, acc.email || null, acc.email || null, acc.username || null]);
+          console.log(`Updated password/email for existing account: ${acc.email || acc.username}`);
+        } catch (uerr) {
+          console.log(`Account ${acc.username} already exists — failed to update password/email:`, uerr);
+        }
       } else {
         console.error('Error creating account', acc.username, err);
       }
@@ -90,7 +99,7 @@ async function seed() {
   }
 
   console.log('\nCredentials (use these to log in):');
-  accounts.forEach(a => console.log(`${a.username} / ${a.password}  → role: ${a.role}`));
+  accounts.forEach(a => console.log(`${a.email || a.username} / ${a.password}  → role: ${a.role}`));
   process.exit(0);
 }
 

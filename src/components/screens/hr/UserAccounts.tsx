@@ -30,13 +30,13 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     e.preventDefault();
     const form = e.currentTarget;
     const fd = new FormData(form);
-    const username = (fd.get('username') || '').toString().trim();
+    const email = (fd.get('email') || '').toString().trim();
     const password = (fd.get('password') || '').toString().trim();
     const full_name = (fd.get('full_name') || '').toString().trim();
     const role = (fd.get('role') || '').toString();
-    if (!username || !password || !role) { (window as any).notify('Missing required fields', 'error'); return; }
+    if ((!email && !username) || !password || !role) { (window as any).notify('Missing required fields', 'error'); return; }
 
-    const body: any = { username, password, role };
+    const body: any = { email, password, role };
     if (full_name) body.full_name = full_name;
 
     if (linkTarget === 'employee' && createRole !== 'HR' && createRole !== 'Manager') {
@@ -97,8 +97,8 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
           <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Create New Account</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Username</label>
-              <input name="username" type="text" className="w-full mt-1 p-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50" placeholder="e.g. jsmith" required />
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</label>
+              <input name="email" type="email" className="w-full mt-1 p-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50" placeholder="e.g. jane@company.com" required />
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Full name</label>
@@ -151,7 +151,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                 <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Link to User</label>
                 <input type="hidden" name="linked_user_id" value={selectedLinkedUserId} />
                 <SearchableSelect
-                  options={(users || []).filter((u: any) => (u.role || '').toLowerCase() === linkTarget.toLowerCase()).map((u: any) => ({ value: String(u.id), label: u.full_name || u.username }))}
+                  options={(users || []).filter((u: any) => (u.role || '').toLowerCase() === linkTarget.toLowerCase()).map((u: any) => ({ value: String(u.id), label: u.full_name || u.email || u.username }))}
                   value={selectedLinkedUserId}
                   onChange={v => setSelectedLinkedUserId(v)}
                   placeholder={`Select ${linkTarget.toUpperCase()}`}
@@ -170,7 +170,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800">
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Name</th>
-                  <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Username</th>
+                  <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</th>
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</th>
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Linked Employee</th>
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right">Action</th>
@@ -180,7 +180,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                 {users.map(u => (
                   <tr key={u.id} className="border-b border-slate-50 dark:border-slate-800/50">
                     <td className="py-3 font-medium text-slate-700 dark:text-slate-100">{u.full_name || u.employee_name || '-'}</td>
-                    <td className="py-3 font-medium text-slate-700 dark:text-slate-100">{u.username}</td>
+                    <td className="py-3 font-medium text-slate-700 dark:text-slate-100">{u.email || u.username}</td>
                     <td className="py-3">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                         u.role === 'HR' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 
@@ -284,7 +284,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
               <div className="mt-2">
                 <input type="hidden" name="linked_user_id" value={modalLinkedUserId} />
                 <SearchableSelect
-                  options={(users || []).filter((u: any) => (u.role || '').toLowerCase() === modalLinkTarget.toLowerCase()).map((u: any) => ({ value: String(u.id), label: u.full_name || u.username }))}
+                  options={(users || []).filter((u: any) => (u.role || '').toLowerCase() === modalLinkTarget.toLowerCase()).map((u: any) => ({ value: String(u.id), label: u.full_name || u.email || u.username }))}
                   value={modalLinkedUserId}
                   onChange={v => setModalLinkedUserId(v)}
                   placeholder={`Select ${modalLinkTarget.toUpperCase()}`}
