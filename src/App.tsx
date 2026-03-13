@@ -113,16 +113,132 @@ export default function App() {
     }
   }, [isDarkMode, user]);
 
+  // --- Routing helpers: map screens to role-based URL paths and vice-versa ---
+  const roleSlug = (r: string) => (r === 'HR' ? 'admin' : r.toLowerCase());
+
+  const screenRouteMap: Record<string, string> = {
+    // HR
+    A1: '/admin/employee-directory',
+    A2: '/admin/employee',
+    A3: '/admin/recruitmentboard',
+    A4: '/admin/offboarding',
+    A5: '/admin/user-accounts',
+    A6: '/admin/db-viewer',
+    A7: '/admin/onboarding',
+    A8: '/admin/feedback360',
+    A9: '/admin/audit-logs',
+    // Manager
+    B1: '/manager/okr-planner',
+    B2: '/manager/coaching-journal',
+    B3: '/manager/disciplinary-action',
+    B4: '/manager/evaluation-portal',
+    B5: '/manager/promotability',
+    B6: '/manager/pip-manager',
+    B7: '/manager/suggestion-review',
+    B8: '/manager/feedback360',
+    // Employee
+    C1: '/employee/career-dashboard',
+    C2: '/employee/suggestion-form',
+    C3: '/employee/self-assessment',
+    C4: '/employee/feedback',
+    C5: '/employee/verification-of-review',
+    C6: '/employee/idp',
+    C7: '/employee/coaching-chat',
+  };
+
+  const pathToScreenMap: Record<string, Record<string, string>> = {
+    admin: {
+      'employee-directory': 'A1',
+      'recruitmentboard': 'A3',
+      'onboarding': 'A7',
+      'offboarding': 'A4',
+      'user-accounts': 'A5',
+      'audit-logs': 'A9',
+      'db-viewer': 'A6',
+      'feedback360': 'A8',
+      'settings': 'S1',
+    },
+    manager: {
+      'okr-planner': 'B1',
+      'coaching-journal': 'B2',
+      'disciplinary-action': 'B3',
+      'evaluation-portal': 'B4',
+      'promotability': 'B5',
+      'pip-manager': 'B6',
+      'suggestion-review': 'B7',
+      'feedback360': 'B8',
+      'settings': 'S1',
+    },
+    employee: {
+      'career-dashboard': 'C1',
+      'suggestion-form': 'C2',
+      'self-assessment': 'C3',
+      'feedback': 'C4',
+      'verification-of-review': 'C5',
+      'idp': 'C6',
+      'coaching-chat': 'C7',
+      'settings': 'S1',
+    }
+  };
+
+  function routeForScreen(screenCode: string) {
+    if (screenCode === 'S1') {
+      // settings path is role-specific
+      const base = user ? roleSlug(user.role) : 'admin';
+      return `/${base}/settings`;
+    }
+    return screenRouteMap[screenCode] || null;
+  }
+
+  function setScreenFromPath() {
+    try {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      if (parts.length === 0) return null;
+      const role = parts[0];
+      const page = parts[1] || '';
+      if (!['admin','manager','employee'].includes(role)) return null;
+      const map = pathToScreenMap[role];
+      if (!map) return null;
+      const screen = map[page];
+      if (!screen) return null;
+      // If logged in, ensure role matches the URL role (e.g., HR => admin)
+      if (user) {
+        const expected = roleSlug(user.role);
+        if (expected !== role) return null;
+      }
+      setActiveScreen(screen);
+      return screen;
+    } catch (e) { return null; }
+  }
+
+  function goToScreen(screenCode: string, ctx?: any) {
+    setActiveScreen(screenCode);
+    if (user) {
+      const r = routeForScreen(screenCode);
+      if (r) {
+        try { if (window.location.pathname !== r) window.history.pushState({}, '', r); } catch (e) {}
+      }
+    }
+    if (ctx) setNavContext(ctx || null);
+  }
+
   useEffect(() => {
     if (user) {
-      if (user.role === 'HR') {
-        setActiveScreen('A1');
-        fetchUsers();
-      }
-      else if (user.role === 'Manager') { setActiveScreen('B1'); fetchUsers(); }
-      else if (user.role === 'Employee') setActiveScreen('C1');
-      
+      // Fetch required data
       fetchEmployees();
+      if (user.role === 'HR' || user.role === 'Manager') fetchUsers();
+
+      // If URL contains a role/page, honor it. Otherwise fall back to default
+      const fromPath = setScreenFromPath();
+      if (!fromPath) {
+        if (user.role === 'HR') goToScreen('A1');
+        else if (user.role === 'Manager') goToScreen('B1');
+        else if (user.role === 'Employee') goToScreen('C1');
+      }
+
+      const onPop = () => { setScreenFromPath(); };
+      window.addEventListener('popstate', onPop);
+      return () => window.removeEventListener('popstate', onPop);
     }
   }, [user]);
 
@@ -150,13 +266,29 @@ export default function App() {
   }, []);
 
   const handleLogin = (session: UserSession) => {
+    // Restore any pre-login requested path (e.g. /admin/recruitmentboard)
+    try {
+      const redirect = sessionStorage.getItem('pre_login_path');
+      if (redirect) {
+        window.history.replaceState({}, '', redirect);
+        sessionStorage.removeItem('pre_login_path');
+      }
+    } catch (e) {}
+
     setUser(session);
     localStorage.setItem('talentflow_user', JSON.stringify(session));
     localStorage.setItem('user', JSON.stringify(session));
     if ((session as any).token) localStorage.setItem('talentflow_token', (session as any).token);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Notify server of logout for audit recording (best-effort)
+    try {
+      const token = localStorage.getItem('talentflow_token');
+      if (token) {
+        await fetch('/api/logout', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } }).catch(() => {});
+      }
+    } catch (e) {}
     // Force login UI to show dark theme on sign out (temporary flag)
     try { localStorage.setItem('talentflow_login_dark', 'true'); } catch (e) {}
     setUser(null);
@@ -165,17 +297,40 @@ export default function App() {
     localStorage.removeItem('talentflow_token');
   };
 
+  // When unauthenticated, ensure the URL shows /login and remember the
+  // originally requested path so we can redirect after successful login.
+  useEffect(() => {
+    try {
+      if (!user) {
+        const pathname = window.location.pathname || '/';
+        if (pathname !== '/login') {
+          // Store the intended destination so we can restore after login
+          sessionStorage.setItem('pre_login_path', pathname + (window.location.search || '') + (window.location.hash || ''));
+          // Replace the URL with /login (no reload)
+          window.history.replaceState({}, '', '/login');
+        }
+      }
+    } catch (e) {}
+  }, [user]);
+
   const fetchEmployees = async () => {
+    setLoading(true);
     try {
       const headers: any = { 'Content-Type': 'application/json' };
       const token = localStorage.getItem('talentflow_token');
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch('/api/employees', { headers });
+      if (res.status === 401) {
+        // Token invalid or expired — force local sign-out
+        handleLogout();
+        return;
+      }
       const data = await res.json();
       setEmployees(data);
-      setLoading(false);
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -184,11 +339,15 @@ export default function App() {
       const headers: any = { 'Content-Type': 'application/json' };
       const token = localStorage.getItem('talentflow_token');
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch('/api/users', { headers });
+      const url = user && user.role === 'HR' ? '/api/users?include_deleted=1' : '/api/users';
+      const res = await fetch(url, { headers });
       const data = await res.json();
       setUsers(data);
     } catch (err) {
       console.error(err);
+    } finally {
+      // Ensure any UI loading state is cleared if this was part of initial load
+      try { setLoading(false); } catch (e) {}
     }
   };
 
@@ -237,8 +396,8 @@ export default function App() {
           {(() => {
             switch (activeScreen) {
               // HR Screens (The Architect)
-              case 'A1': return <EmployeeDirectory employees={employees} onSelectEmployee={(id) => { fetchEmployeeDetails(id); setActiveScreen('A2'); }} onCreateEmployee={fetchEmployees} />;
-              case 'A2': return <EmployeeJacket employee={selectedEmployee} onBack={() => { setActiveScreen('A1'); fetchEmployees(); }} />;
+              case 'A1': return <EmployeeDirectory employees={employees} onSelectEmployee={(id) => { fetchEmployeeDetails(id); goToScreen('A2', { employee_id: id }); }} onCreateEmployee={fetchEmployees} />;
+              case 'A2': return <EmployeeJacket employee={selectedEmployee} onBack={() => { goToScreen('A1'); fetchEmployees(); }} />;
               case 'A3': return <RecruitmentBoard />;
               case 'A7': return <OnboardingHub employees={employees} onRefresh={fetchEmployees} />;
               case 'A4': return <OffboardingHub employees={employees} />;
@@ -319,44 +478,44 @@ export default function App() {
           {user.role === 'HR' && (
             <>
               <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">HR Command Center</div>
-              <SidebarItem icon={UserPlus} label="Recruitment Board" active={activeScreen === 'A3'} onClick={() => setActiveScreen('A3')} />
-              <SidebarItem icon={Users} label="360° Feedback" active={activeScreen === 'A8'} onClick={() => setActiveScreen('A8')} />
-              <SidebarItem icon={Briefcase} label="Onboarding Hub" active={activeScreen === 'A7'} onClick={() => setActiveScreen('A7')} />
-              <SidebarItem icon={Users} label="Employee Directory" active={activeScreen === 'A1' || activeScreen === 'A2'} onClick={() => setActiveScreen('A1')} />
-              <SidebarItem icon={LogOut} label="Offboarding Hub" active={activeScreen === 'A4'} onClick={() => setActiveScreen('A4')} />
-              <SidebarItem icon={ShieldCheck} label="User Accounts" active={activeScreen === 'A5'} onClick={() => setActiveScreen('A5')} />
-              <SidebarItem icon={ShieldCheck} label="Audit Logs" active={activeScreen === 'A9'} onClick={() => setActiveScreen('A9')} />
-              <SidebarItem icon={TrendingUp} label="DB Viewer" active={activeScreen === 'A6'} onClick={() => setActiveScreen('A6')} />
-              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => setActiveScreen('S1')} />
+              <SidebarItem icon={UserPlus} label="Recruitment Board" active={activeScreen === 'A3'} onClick={() => goToScreen('A3')} />
+              <SidebarItem icon={Users} label="360° Feedback" active={activeScreen === 'A8'} onClick={() => goToScreen('A8')} />
+              <SidebarItem icon={Briefcase} label="Onboarding Hub" active={activeScreen === 'A7'} onClick={() => goToScreen('A7')} />
+              <SidebarItem icon={Users} label="Employee Directory" active={activeScreen === 'A1' || activeScreen === 'A2'} onClick={() => goToScreen('A1')} />
+              <SidebarItem icon={LogOut} label="Offboarding Hub" active={activeScreen === 'A4'} onClick={() => goToScreen('A4')} />
+              <SidebarItem icon={ShieldCheck} label="User Accounts" active={activeScreen === 'A5'} onClick={() => goToScreen('A5')} />
+              <SidebarItem icon={ShieldCheck} label="Audit Logs" active={activeScreen === 'A9'} onClick={() => goToScreen('A9')} />
+              <SidebarItem icon={TrendingUp} label="DB Viewer" active={activeScreen === 'A6'} onClick={() => goToScreen('A6')} />
+              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
             </>
           )}
 
           {user.role === 'Manager' && (
             <>
               <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Performance Dashboard</div>
-              <SidebarItem icon={Users} label="360° Feedback" active={activeScreen === 'B8'} onClick={() => setActiveScreen('B8')} />
-              <SidebarItem icon={Target} label="Target & OKR Planner" active={activeScreen === 'B1'} onClick={() => setActiveScreen('B1')} />
-              <SidebarItem icon={MessageSquare} label="Coaching Journal" active={activeScreen === 'B2'} onClick={() => setActiveScreen('B2')} />
-              <SidebarItem icon={ShieldAlert} label="Disciplinary Action" active={activeScreen === 'B3'} onClick={() => setActiveScreen('B3')} />
-              <SidebarItem icon={ClipboardCheck} label="Evaluation Portal" active={activeScreen === 'B4'} onClick={() => setActiveScreen('B4')} />
-              <SidebarItem icon={Award} label="Promotability" active={activeScreen === 'B5'} onClick={() => setActiveScreen('B5')} />
-              <SidebarItem icon={TrendingUp} label="IDP / PIP Manager" active={activeScreen === 'B6'} onClick={() => setActiveScreen('B6')} />
-              <SidebarItem icon={Lightbulb} label="Suggestion Review" active={activeScreen === 'B7'} onClick={() => setActiveScreen('B7')} />
-              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => setActiveScreen('S1')} />
+              <SidebarItem icon={Users} label="360° Feedback" active={activeScreen === 'B8'} onClick={() => goToScreen('B8')} />
+              <SidebarItem icon={Target} label="Target & OKR Planner" active={activeScreen === 'B1'} onClick={() => goToScreen('B1')} />
+              <SidebarItem icon={MessageSquare} label="Coaching Journal" active={activeScreen === 'B2'} onClick={() => goToScreen('B2')} />
+              <SidebarItem icon={ShieldAlert} label="Disciplinary Action" active={activeScreen === 'B3'} onClick={() => goToScreen('B3')} />
+              <SidebarItem icon={ClipboardCheck} label="Evaluation Portal" active={activeScreen === 'B4'} onClick={() => goToScreen('B4')} />
+              <SidebarItem icon={Award} label="Promotability" active={activeScreen === 'B5'} onClick={() => goToScreen('B5')} />
+              <SidebarItem icon={TrendingUp} label="IDP / PIP Manager" active={activeScreen === 'B6'} onClick={() => goToScreen('B6')} />
+              <SidebarItem icon={Lightbulb} label="Suggestion Review" active={activeScreen === 'B7'} onClick={() => goToScreen('B7')} />
+              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
             </>
           )}
 
           {user.role === 'Employee' && (
             <>
               <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Self-Service & Growth</div>
-              <SidebarItem icon={LayoutDashboard} label="My Career Dashboard" active={activeScreen === 'C1'} onClick={() => setActiveScreen('C1')} />
-              <SidebarItem icon={Lightbulb} label="Suggestion Form" active={activeScreen === 'C2'} onClick={() => setActiveScreen('C2')} />
-              <SidebarItem icon={ClipboardCheck} label="Self-Assessment" active={activeScreen === 'C3'} onClick={() => setActiveScreen('C3')} />
-              <SidebarItem icon={MessageSquare} label="360° Feedback" active={activeScreen === 'C4'} onClick={() => setActiveScreen('C4')} />
-              <SidebarItem icon={ShieldCheck} label="Verification of Review" active={activeScreen === 'C5'} onClick={() => setActiveScreen('C5')} />
-              <SidebarItem icon={Briefcase} label="Development Plan" active={activeScreen === 'C6'} onClick={() => setActiveScreen('C6')} />
-              <SidebarItem icon={GraduationCap} label="Coaching & E-Learning" active={activeScreen === 'C7'} onClick={() => setActiveScreen('C7')} />
-              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => setActiveScreen('S1')} />
+              <SidebarItem icon={LayoutDashboard} label="My Career Dashboard" active={activeScreen === 'C1'} onClick={() => goToScreen('C1')} />
+              <SidebarItem icon={Lightbulb} label="Suggestion Form" active={activeScreen === 'C2'} onClick={() => goToScreen('C2')} />
+              <SidebarItem icon={ClipboardCheck} label="Self-Assessment" active={activeScreen === 'C3'} onClick={() => goToScreen('C3')} />
+              <SidebarItem icon={MessageSquare} label="360° Feedback" active={activeScreen === 'C4'} onClick={() => goToScreen('C4')} />
+              <SidebarItem icon={ShieldCheck} label="Verification of Review" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
+              <SidebarItem icon={Briefcase} label="Development Plan" active={activeScreen === 'C6'} onClick={() => goToScreen('C6')} />
+              <SidebarItem icon={GraduationCap} label="Coaching & E-Learning" active={activeScreen === 'C7'} onClick={() => goToScreen('C7')} />
+              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
             </>
           )}
         </nav>
@@ -389,7 +548,7 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-transparent transition-colors duration-500 relative">
         <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-40">
-          <NotificationBell onNavigate={(screen, ctx) => { setActiveScreen(screen); setNavContext(ctx || null); }} />
+          <NotificationBell onNavigate={(screen, ctx) => { goToScreen(screen); setNavContext(ctx || null); }} />
         </div>
         <div className="max-w-6xl mx-auto min-h-full">
           {renderScreen()}

@@ -7,6 +7,7 @@ import { SearchableSelect } from '../../common/SearchableSelect';
 import { Plus, X, Box, LogOut, Download, Trash2, ChevronDown, ChevronUp, Printer, Package, FileText, Search } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { sigBlockHtml } from '../../../utils/print';
 import { Employee } from '../../../types';
 
 interface PropertyRow {
@@ -122,15 +123,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
 
   const printPropRecord = (rec: any) => {
     const items: PropertyRow[] = (() => { try { return JSON.parse(rec.items || '[]'); } catch { return []; } })();
-    const sigBlock = (label: string, name: string, sig: string, date: string) => `
-      <div style="flex:1;text-align:center;min-width:160px;">
-        <div style="font-weight:bold;text-align:left;margin-bottom:6px;font-size:11px;">${label}</div>
-        <div style="min-height:56px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;">
-          ${sig ? `<img src="${sig}" style="max-height:52px;max-width:100%;object-fit:contain;display:block;margin:0 auto;" />` : '<div style="width:80%;height:1px;border-bottom:1px solid #000;"></div>'}
-        </div>
-        <div style="font-size:11px;padding-top:0px;font-weight:600;">${name || ''}${date ? ' — ' + date : ''}</div>
-        <div style="font-size:9px;color:#666;">signature over printed name w/ date</div>
-      </div>`;
+    const sigBlock = (label: string, name: string, sig: string, date: string) => sigBlockHtml(sig, label, date, name);
     const w = window.open('', '_blank'); if (!w) return;
     w.document.write(`<html><head><title>Property Accountability Form</title><style>
       body{font-family:Arial,sans-serif;padding:20px;color:#000;}
@@ -157,7 +150,10 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
     <div class="sig-row" style="margin-top:16px;">${sigBlock('Received by:', rec.received_by_name, rec.received_by_sig, rec.received_by_date)}${sigBlock('Audited by:', rec.audited_by_name, rec.audited_by_sig, rec.audited_by_date)}</div>
     <div style="text-align:right;font-size:10px;margin-top:16px;color:#666;">CC: 201 File / Audit / Employee</div>
     </body></html>`);
-    w.document.close(); setTimeout(() => w.print(), 300);
+    w.document.close(); setTimeout(() => {
+      w.print();
+      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'print', description: `Property Accountability Form — ${rec.employee_name || ''}`, entity: 'property_accountability', entity_id: rec.id || null, meta: { source: 'OffboardingHub', printType: 'property_accountability' } }) }).catch(() => {}); } catch {};
+    }, 300);
   };
 
   const addPropRow = () => setPropForm(f => ({ ...f, items: [...f.items, { ...emptyPropRow }] }));
@@ -235,15 +231,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
       physical_conditions: 'Physical working conditions',
       benefits: 'Benefits'
     };
-    const sigBlock = (label: string, sig: string, printedName?: string) => `
-      <div style="flex:1;text-align:center;min-width:160px;">
-        <div style="font-weight:bold;text-align:left;margin-bottom:6px;font-size:11px;">${label}</div>
-        <div style="min-height:56px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;">
-          ${sig ? `<img src="${sig}" style="max-height:52px;max-width:100%;object-fit:contain;display:block;margin:0 auto;" />` : '<div style="width:80%;height:1px;border-bottom:1px solid #000;"></div>'}
-        </div>
-        <div style="font-size:11px;padding-top:0px;font-weight:600;">${printedName || ''}</div>
-        <div style="font-size:9px;color:#666;">signature over printed name w/ date</div>
-      </div>`;
+    const sigBlock = (label: string, sig: string, printedName?: string) => sigBlockHtml(sig, label, null, printedName);
     const w = window.open('', '_blank'); if (!w) return;
     w.document.write(`<html><head><title>Exit Interview — ${rec.employee_name}</title><style>
       body{font-family:Arial,sans-serif;padding:20px;color:#000;font-size:12px;}
@@ -291,7 +279,10 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
       ${sigBlock(`Interviewer (${rec.interviewer_name || ''})${rec.interviewer_date ? ' — ' + rec.interviewer_date : ''}:`, rec.interviewer_sig, rec.interviewer_name)}
     </div>
     </body></html>`);
-    w.document.close(); setTimeout(() => w.print(), 300);
+    w.document.close(); setTimeout(() => {
+      w.print();
+      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'print', description: `Exit Interview — ${rec.employee_name || ''}`, entity: 'exit_interview', entity_id: rec.id || null, meta: { source: 'OffboardingHub' } }) }).catch(() => {}); } catch {};
+    }, 300);
   };
 
   const reasonCounts = offboardingData.reduce((acc: any, curr) => { const r = curr.reason || 'Other'; acc[r] = (acc[r] || 0) + 1; return acc; }, {});
@@ -846,9 +837,14 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                     <tr className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors cursor-pointer"
                       onClick={() => setExpandedProp(isExpanded ? null : rec.id)}>
                       <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-100 flex items-center gap-2">
-                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />} {rec.employee_name}
+                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        <div className="min-w-0">
+                          <span className="truncate max-w-[220px]" title={rec.employee_name}>{rec.employee_name}</span>
+                        </div>
                       </td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{rec.position_dept}</td>
+                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
+                        <div className="min-w-0"><span className="truncate max-w-[220px]" title={rec.position_dept}>{rec.position_dept}</span></div>
+                      </td>
                       <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{rec.date_prepared}</td>
                       <td className="py-3 px-4 text-center"><span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full text-[10px] font-bold">{items.length}</span></td>
                       <td className="py-3 px-4 text-right font-mono text-sm text-slate-700 dark:text-slate-200">₱{total.toLocaleString('en', { minimumFractionDigits: 2 })}</td>
@@ -875,12 +871,16 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                                     <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.property_number}</td>
                                     <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.asset_category}</td>
                                     <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.brand}</td>
-                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.description}</td>
+                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">
+                                      <div className="min-w-0"><span className="truncate max-w-[240px]" title={it.description}>{it.description}</span></div>
+                                    </td>
                                     <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.serial_no}</td>
                                     <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.uom_qty}</td>
                                     <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.dr_si_no}</td>
                                     <td className="py-1 px-2 border border-slate-200 dark:border-slate-700 text-right font-mono">{parseFloat(it.amount) ? `₱${parseFloat(it.amount).toLocaleString('en', { minimumFractionDigits: 2 })}` : ''}</td>
-                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.remarks}</td>
+                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">
+                                      <div className="min-w-0"><span className="truncate max-w-[220px]" title={it.remarks}>{it.remarks}</span></div>
+                                    </td>
                                   </tr>
                                 ))}</tbody>
                               </table>

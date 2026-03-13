@@ -1011,7 +1011,11 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
             <tbody>
               {(filterEmployee ? suggestions.filter(s => String(s.employee_id) === filterEmployee) : suggestions).map(s => (
                 <tr key={s.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer" onClick={() => openDetail(s)}>
-                  <td className="py-3 font-medium text-slate-700 dark:text-slate-200">{s.employee_name || s.title || '—'}</td>
+                  <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
+                    <div className="min-w-0">
+                      <span className="truncate max-w-[220px]" title={s.employee_name || s.title || '—'}>{s.employee_name || s.title || '—'}</span>
+                    </div>
+                  </td>
                   <td className="py-3 text-slate-500 dark:text-slate-400 max-w-xs truncate">{s.concern || '—'}</td>
                   <td className="py-3 text-slate-500 dark:text-slate-400">{s.estimated_cost || '—'}</td>
                   <td className="py-3 text-slate-500 dark:text-slate-400">{s.total_financial_benefit || s.estimated_financial_benefit || '—'}</td>

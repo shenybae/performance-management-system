@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { RotateCcw, Check, PenLine, Upload } from 'lucide-react';
+import { getAuthHeaders } from '../../utils/csv';
 
 interface SignatureUploadProps {
   label: string;
@@ -49,8 +50,39 @@ export const SignatureUpload = ({ label, value, onChange }: SignatureUploadProps
   const handleSave = () => {
     if (!padRef.current || !hasDrawn) return;
     try {
-      const dataUrl = padRef.current.getCanvas().toDataURL('image/png');
-      onChange(dataUrl);
+      // Export a higher-resolution PNG so printed/scaled signatures remain crisp.
+      const orig = padRef.current.getCanvas();
+      const scale = Math.max(2, Math.round(window.devicePixelRatio || 1));
+      const tmp = document.createElement('canvas');
+      tmp.width = orig.width * scale;
+      tmp.height = orig.height * scale;
+      const tctx = tmp.getContext('2d');
+        if (tctx) {
+        // white background
+        tctx.fillStyle = '#ffffff';
+        tctx.fillRect(0, 0, tmp.width, tmp.height);
+        // draw scaled
+        tctx.scale(scale, scale);
+        tctx.drawImage(orig, 0, 0);
+        const dataUrl = tmp.toDataURL('image/png');
+        onChange(dataUrl);
+        // Log activity: signature saved
+        try {
+          const headers = getAuthHeaders();
+          if (headers['Authorization']) {
+            fetch('/api/activity', { method: 'POST', headers, body: JSON.stringify({ action: 'signature_saved', description: label, entity: 'signature', meta: { source: 'SignatureUpload', label } }) }).catch(() => {});
+          }
+        } catch {}
+      } else {
+        const dataUrl = padRef.current.getCanvas().toDataURL('image/png');
+        onChange(dataUrl);
+        try {
+          const headers = getAuthHeaders();
+          if (headers['Authorization']) {
+            fetch('/api/activity', { method: 'POST', headers, body: JSON.stringify({ action: 'signature_saved', description: label, entity: 'signature', meta: { source: 'SignatureUpload', label } }) }).catch(() => {});
+          }
+        } catch {}
+      }
     } catch {
       // Fallback
       try { onChange(padRef.current.toDataURL('image/png')); } catch {}

@@ -764,7 +764,11 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
                     const sigCount = [a.supervisor_signature, a.reviewer_signature, a.employee_signature, a.hr_signature].filter(Boolean).length;
                     return (
                       <tr key={a.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                        <td className="py-3 font-medium text-slate-700 dark:text-slate-200">{a.employee_name || `#${a.employee_id}`}</td>
+                        <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
+                          <div className="min-w-0">
+                            <span className="truncate max-w-[220px]" title={a.employee_name || `#${a.employee_id}`}>{a.employee_name || `#${a.employee_id}`}</span>
+                          </div>
+                        </td>
                         <td className="py-3 text-[10px] font-bold uppercase text-slate-500">{a.form_type || a.eval_type || '—'}</td>
                         <td className="py-3 text-slate-600 dark:text-slate-300">{a.job_knowledge}/5</td>
                         <td className="py-3 text-slate-600 dark:text-slate-300">{a.productivity}/5</td>

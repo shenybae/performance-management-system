@@ -34,6 +34,14 @@ export function exportToCSV(data: any[], filename: string) {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
   window.notify?.('CSV exported successfully', 'success');
+
+  // Fire-and-forget: report user activity to server if authenticated
+  try {
+    const headers = getAuthHeaders();
+    if (headers['Authorization']) {
+      fetch('/api/activity', { method: 'POST', headers, body: JSON.stringify({ action: 'export_csv', description: filename, entity: 'export', meta: { rows: data.length } }) }).catch(() => {});
+    }
+  } catch (e) {}
 }
 
 /**

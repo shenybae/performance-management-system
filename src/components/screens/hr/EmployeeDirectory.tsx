@@ -55,7 +55,9 @@ export const EmployeeDirectory = ({ employees, onSelectEmployee }: EmployeeDirec
                   className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer group" 
                   onClick={() => onSelectEmployee(emp.id)}
                 >
-                  <td className="py-4 px-4 font-medium text-slate-700 dark:text-slate-100 group-hover:text-teal-deep dark:group-hover:text-teal-green">{emp.name}</td>
+                  <td className="py-4 px-4 font-medium text-slate-700 dark:text-slate-100 group-hover:text-teal-deep dark:group-hover:text-teal-green">
+                    <div className="min-w-0 truncate max-w-[220px]" title={emp.name}>{emp.name}</div>
+                  </td>
                   <td className="py-4 px-4 text-slate-600 dark:text-slate-200">{emp.position}</td>
                   <td className="py-4 px-4 text-slate-600 dark:text-slate-200">{emp.dept}</td>
                   <td className="py-4 px-4">

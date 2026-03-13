@@ -118,16 +118,28 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     const token = localStorage.getItem('talentflow_token');
     if (!token) return;
 
-    const socket = io({ path: '/socket.io', autoConnect: true });
-    socket.on('connect', () => socket.emit('auth', { token }));
+    const socket = io({ path: '/socket.io', autoConnect: true, auth: { token } });
+    // still emit an explicit 'auth' as a safe fallback after connect
+    socket.on('connect', () => { try { socket.emit('auth', { token }); } catch (e) {} });
     socket.on('notification', (n: { type?: string; message: string; source?: string; employee_id?: number }) => {
       const id = `sock_${Math.random().toString(36).slice(2, 9)}`;
       const type = (n.type || 'info') as NotificationType;
       setList(s => [...s, { id, type, message: n.message }]);
       setHistory(h => [{ id, type, message: n.message, timestamp: Date.now(), read: false, source: n.source, employee_id: n.employee_id }, ...h].slice(0, 100));
     });
+    socket.on('auth_error', (err: any) => {
+      notify('Authentication failed — please login again', 'error');
+      localStorage.removeItem('talentflow_token');
+      setTimeout(() => { window.location.href = '/login'; }, 600);
+    });
+    socket.on('force_logout', (info: any) => {
+      notify(info?.message || 'Your session was ended because you signed in elsewhere', 'info');
+      localStorage.removeItem('talentflow_token');
+      localStorage.removeItem('talentflow_user');
+      setTimeout(() => { window.location.href = '/login'; }, 900);
+    });
     return () => { socket.disconnect(); };
-  }, []);
+  }, [notify]);
 
   useEffect(() => {
     if (list.length === 0) return;

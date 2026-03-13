@@ -13,6 +13,14 @@ interface UserAccountsProps {
 }
 
 export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps) => {
+  // Detect current user role from localStorage so we can show HR-only controls
+  const currentUser = (() => {
+    try {
+      const s = localStorage.getItem('talentflow_user') || localStorage.getItem('user');
+      return s ? JSON.parse(s) : null;
+    } catch (e) { return null; }
+  })();
+  const isHR = currentUser && currentUser.role === 'HR';
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [linkTarget, setLinkTarget] = useState('employee');
   const [selectedLinkedUserId, setSelectedLinkedUserId] = useState('');
@@ -25,6 +33,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [modalEmployeeId, setModalEmployeeId] = useState('');
   const [modalLinkTarget, setModalLinkTarget] = useState('');
   const [modalLinkedUserId, setModalLinkedUserId] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -164,7 +173,14 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
         </Card>
 
         <Card className="lg:col-span-2">
-          <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Existing Accounts</h3>
+          <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-2 tracking-widest">Existing Accounts</h3>
+          <div className="flex justify-between items-center mb-3">
+            <div />
+            <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-300">
+              <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="w-4 h-4" />
+              <span>Show archived accounts</span>
+            </label>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
@@ -177,9 +193,11 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                 </tr>
               </thead>
               <tbody>
-                {users.map(u => (
+                {((users || []).filter((u: any) => !u.deleted_at)).map(u => (
                   <tr key={u.id} className="border-b border-slate-50 dark:border-slate-800/50">
-                    <td className="py-3 font-medium text-slate-700 dark:text-slate-100">{u.full_name || u.employee_name || '-'}</td>
+                    <td className="py-3 font-medium text-slate-700 dark:text-slate-100">
+                      <div className="min-w-0 truncate max-w-[220px]" title={u.full_name || u.employee_name || '-'}>{u.full_name || u.employee_name || '-'}</div>
+                    </td>
                     <td className="py-3 font-medium text-slate-700 dark:text-slate-100">{u.email || u.username}</td>
                     <td className="py-3">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
@@ -190,26 +208,30 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                         {u.role}
                       </span>
                     </td>
-                    <td className="py-3 text-slate-600 dark:text-slate-200">{u.employee_name || u.linked_user_full_name || 'N/A'}</td>
+                    <td className="py-3 text-slate-600 dark:text-slate-200">
+                      <div className="min-w-0 truncate max-w-[180px]" title={u.employee_name || u.linked_user_full_name || 'N/A'}>{u.employee_name || u.linked_user_full_name || 'N/A'}</div>
+                    </td>
                     <td className="py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => {
-                          setEditingUser(u);
-                          setModalName(u.full_name || u.employee_name || '');
-                          setModalRole(u.role || '');
-                          setModalEmployeeId(u.employee_id ? String(u.employee_id) : '');
-                          setModalLinkedUserId(u.linked_user_id ? String(u.linked_user_id) : '');
-                          setModalLinkTarget(u.employee_id ? 'employee' : (u.linked_user_id ? (u.linked_user_role ? u.linked_user_role.toLowerCase() : 'user') : ''));
-                          setModalOpen(true);
-                        }} className="text-xs text-amber-600 font-bold">Edit</button>
-                        <button onClick={async () => {
-                          if (!confirm('Delete user?')) return;
-                          const token = localStorage.getItem('talentflow_token');
-                          try {
-                            const res = await fetch(`/api/users/${u.id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-                            if (res.ok) { (window as any).notify('User deleted', 'success'); onRefresh(); } else { const err = await res.json(); (window as any).notify(err.error || 'Failed', 'error'); }
-                          } catch (err) { (window as any).notify('Server error', 'error'); }
-                        }} className="text-xs text-red-500 font-bold">Delete</button>
+                        <>
+                          <button onClick={() => {
+                            setEditingUser(u);
+                            setModalName(u.full_name || u.employee_name || '');
+                            setModalRole(u.role || '');
+                            setModalEmployeeId(u.employee_id ? String(u.employee_id) : '');
+                            setModalLinkedUserId(u.linked_user_id ? String(u.linked_user_id) : '');
+                            setModalLinkTarget(u.employee_id ? 'employee' : (u.linked_user_id ? (u.linked_user_role ? u.linked_user_role.toLowerCase() : 'user') : ''));
+                            setModalOpen(true);
+                          }} className="text-xs text-amber-600 font-bold">Edit</button>
+                          <button onClick={async () => {
+                            if (!confirm('Delete user?')) return;
+                            const token = localStorage.getItem('talentflow_token');
+                            try {
+                              const res = await fetch(`/api/users/${u.id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+                              if (res.ok) { (window as any).notify('User deleted', 'success'); onRefresh(); } else { const err = await res.json(); (window as any).notify(err.error || 'Failed', 'error'); }
+                            } catch (err) { (window as any).notify('Server error', 'error'); }
+                          }} className="text-xs text-red-500 font-bold">Delete</button>
+                        </>
                       </div>
                     </td>
                   </tr>
@@ -218,6 +240,63 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
             </table>
           </div>
         </Card>
+
+        {showArchived && (
+          <Card className="lg:col-span-2 lg:col-start-2">
+            <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Archived Accounts</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 dark:border-slate-800">
+                    <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Name</th>
+                    <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</th>
+                    <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</th>
+                    <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Linked Employee</th>
+                    <th className="pb-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {((users || []).filter((u: any) => u.deleted_at)).map(u => (
+                    <tr key={u.id} className={`border-b border-slate-50 dark:border-slate-800/50 opacity-80 italic`}>
+                      <td className="py-3 font-medium text-slate-700 dark:text-slate-100">
+                        <div className="min-w-0 truncate max-w-[220px]" title={u.full_name || u.employee_name || '-'}>{u.full_name || u.employee_name || '-'}</div>
+                      </td>
+                      <td className="py-3 font-medium text-slate-700 dark:text-slate-100">{u.email || u.username}</td>
+                      <td className="py-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                          u.role === 'HR' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 
+                          u.role === 'Manager' ? 'bg-teal-green/10 dark:bg-teal-green/20 text-teal-green' : 
+                          'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200'
+                        }`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="py-3 text-slate-600 dark:text-slate-200">
+                        <div className="min-w-0 truncate max-w-[180px]" title={u.employee_name || u.linked_user_full_name || 'N/A'}>{u.employee_name || u.linked_user_full_name || 'N/A'}</div>
+                      </td>
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {isHR ? (
+                            <button onClick={async () => {
+                              if (!confirm('Restore user?')) return;
+                              const token = localStorage.getItem('talentflow_token');
+                              try {
+                                const res = await fetch(`/api/users/${u.id}/restore`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+                                if (res.ok) { (window as any).notify('User restored', 'success'); onRefresh(); } else { const err = await res.json(); (window as any).notify(err.error || 'Failed', 'error'); }
+                              } catch (err) { (window as any).notify('Server error', 'error'); }
+                            }} className="text-xs text-green-600 font-bold">Restore</button>
+                          ) : (
+                            <span className="text-xs text-slate-400">Archived</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
       </div>
 
       <Modal open={modalOpen} title={editingUser ? 'Edit User' : 'Edit User'} onClose={() => setModalOpen(false)}>

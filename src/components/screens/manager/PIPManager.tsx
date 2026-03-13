@@ -258,8 +258,12 @@ export const PIPManager = ({ employees }: PIPManagerProps) => {
             <th className="pb-3"></th>
           </tr></thead><tbody>
             {plans.map(p => (
-              <tr key={p.id} className="border-b border-slate-50 dark:border-slate-800/50">
-                <td className="py-3 font-medium text-slate-700 dark:text-slate-200">{getEmployeeName(p.employee_id)}</td>
+                <tr key={p.id} className="border-b border-slate-50 dark:border-slate-800/50">
+                <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
+                  <div className="min-w-0">
+                    <span className="truncate max-w-[220px]" title={getEmployeeName(p.employee_id)}>{getEmployeeName(p.employee_id)}</span>
+                  </div>
+                </td>
                 <td className="py-3 text-slate-500 dark:text-slate-400 max-w-xs truncate">{p.deficiency}</td>
                 <td className="py-3 text-xs text-slate-400">{p.start_date || '—'} → {p.end_date || '—'}</td>
                 <td className="py-3">
@@ -292,9 +296,17 @@ export const PIPManager = ({ employees }: PIPManagerProps) => {
             </tr></thead><tbody>
               {devPlans.map(p => (
                 <tr key={p.id} className="border-b border-slate-50 dark:border-slate-800/50">
-                  <td className="py-3 font-medium text-slate-700 dark:text-slate-200">{getEmployeeName(p.employee_id)}</td>
-                  <td className="py-3 text-slate-500 dark:text-slate-400">{p.skill_gap}</td>
-                  <td className="py-3 text-slate-500 dark:text-slate-400">{p.growth_step}</td>
+                  <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
+                    <div className="min-w-0">
+                      <span className="truncate max-w-[220px]" title={getEmployeeName(p.employee_id)}>{getEmployeeName(p.employee_id)}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 text-slate-500 dark:text-slate-400">
+                    <div className="min-w-0"><span className="truncate max-w-[260px]" title={p.skill_gap}>{p.skill_gap}</span></div>
+                  </td>
+                  <td className="py-3 text-slate-500 dark:text-slate-400">
+                    <div className="min-w-0"><span className="truncate max-w-[260px]" title={p.growth_step}>{p.growth_step}</span></div>
+                  </td>
                   <td className="py-3">
                     <select value={p.status || 'Not Started'} onChange={e => updateIDPStatus(p.id, e.target.value)} className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border-0 cursor-pointer ${p.status === 'Completed' ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30' : p.status === 'In Progress' ? 'text-amber-600 bg-amber-50 dark:bg-amber-900/30' : 'text-slate-500 bg-slate-100 dark:bg-slate-800'}`}>
                       <option value="Not Started">Not Started</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option>

@@ -6,6 +6,7 @@ import { Plus, X, Users, FileText, Download, Trash2, Printer, Pencil } from 'luc
 import { SignatureUpload } from '../../common/SignatureUpload';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { sigBlockHtml } from '../../../utils/print';
 
 export const RecruitmentBoard = () => {
   const [activeForm, setActiveForm] = useState<'none' | 'requisition' | 'appraisal'>('none');
@@ -145,7 +146,7 @@ export const RecruitmentBoard = () => {
         <td style="padding:8px 10px;font-weight:600;color:#475569;width:180px;">${label}</td>
         <td style="padding:8px 10px;color:#1e293b;width:240px;">${name || '—'}</td>
         <td style="padding:8px 10px;color:#64748b;width:120px;">${date || '—'}</td>
-        <td style="padding:8px 10px;width:160px;text-align:center;">${sig ? `<img src="${sig}" style="height:36px;max-width:140px;object-fit:contain;" />` : '—'}</td>
+        <td style="padding:8px 10px;width:160px;text-align:center;">${sig ? sigBlockHtml(sig, '', date, name, 140) : '—'}</td>
       </tr>`;
 
     const html = `<!DOCTYPE html>
@@ -224,7 +225,10 @@ export const RecruitmentBoard = () => {
     win.document.write(html);
     win.document.close();
     win.focus();
-    setTimeout(() => { win.print(); }, 500);
+    setTimeout(() => {
+      win.print();
+      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'print', description: `Applicant / Requisition — ${r?.name || r?.job_title || 'Export'}`, entity: 'recruitment', entity_id: r?.id || null, meta: { source: 'RecruitmentBoard' } }) }).catch(() => {}); } catch {};
+    }, 500);
   };
 
   const statusCounts = applicants.reduce((acc: any, curr) => { acc[curr.status] = (acc[curr.status] || 0) + 1; return acc; }, {});

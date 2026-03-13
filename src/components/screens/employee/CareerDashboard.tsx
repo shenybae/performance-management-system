@@ -166,7 +166,9 @@ export const CareerDashboard = () => {
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Action</th></tr></thead>
               <tbody>{goals.map(g => (
                 <tr key={g.id} className="border-b border-slate-50 dark:border-slate-800/50">
-                  <td className="py-3 font-medium text-slate-700 dark:text-slate-200">{g.title || g.statement}</td>
+                  <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
+                    <div className="min-w-0"><span className="truncate max-w-[260px]" title={g.title || g.statement}>{g.title || g.statement}</span></div>
+                  </td>
                   <td className="py-3 text-sm text-slate-500 dark:text-slate-400">{g.target_date}</td>
                   <td className="py-3"><span className={`text-[10px] font-bold uppercase ${g.status === 'Completed' ? 'text-emerald-600' : g.status === 'In Progress' ? 'text-amber-500' : 'text-slate-400'}`}>{g.status || 'Not Started'}</span></td>
                   <td className="py-3"><div className="w-24 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-teal-500 rounded-full" style={{ width: `${g.progress || 0}%` }}></div></div></td>

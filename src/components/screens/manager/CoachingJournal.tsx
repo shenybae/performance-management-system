@@ -685,8 +685,18 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
                 {recommendations.length === 0 && <tr><td colSpan={8} className="py-8 text-center text-sm text-slate-400 italic">No recommendations yet.</td></tr>}
                 {recommendations.map((r: any) => (
                   <tr key={r.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900">
-                    <td className="py-2 px-3 text-xs font-medium text-slate-700 dark:text-slate-200">{r.employee_name || `#${r.employee_id}`}</td>
-                    <td className="py-2 px-3 text-xs text-slate-600 dark:text-slate-300">{r.course_title}</td>
+                    <td className="py-2 px-3 text-xs font-medium text-slate-700 dark:text-slate-200">
+                      <div className="min-w-0">
+                        <span className="truncate max-w-[220px]" title={r.employee_name || `#${r.employee_id}`}>
+                          {r.employee_name || `#${r.employee_id}`}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-600 dark:text-slate-300">
+                      <div className="min-w-0">
+                        <span className="truncate max-w-[220px]" title={r.course_title}>{r.course_title}</span>
+                      </div>
+                    </td>
                     <td className="py-2 px-3"><span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600">{r.weakness || '—'}</span></td>
                     <td className="py-2 px-3 text-xs text-slate-500 max-w-[200px] truncate">{r.reason || '—'}</td>
                     <td className="py-2 px-3">
@@ -821,7 +831,13 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
                 {employeeRecs.length === 0 && <tr><td colSpan={4} className="py-6 text-center text-sm text-slate-400 italic">No recommendations</td></tr>}
                 {employeeRecs.map((r: any) => (
                   <tr key={r.id} className="border-b border-slate-50 dark:border-slate-800/50">
-                    <td className="py-2 px-3 text-xs font-medium text-slate-700 dark:text-slate-200">{r.employee_name || `#${r.employee_id}`}</td>
+                    <td className="py-2 px-3 text-xs font-medium text-slate-700 dark:text-slate-200">
+                      <div className="min-w-0">
+                        <span className="truncate max-w-[220px]" title={r.employee_name || `#${r.employee_id}`}>
+                          {r.employee_name || `#${r.employee_id}`}
+                        </span>
+                      </div>
+                    </td>
                     <td className="py-2 px-3 text-xs text-slate-600 dark:text-slate-300">{r.course_title}</td>
                     <td className="py-2 px-3"><span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600">{r.weakness || '—'}</span></td>
                     <td className="py-2 px-3">
@@ -925,7 +941,9 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
               <div className="pb-6 flex-1">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-800 dark:text-slate-100">{l.employee_name || `Employee #${l.employee_id}`}</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-100 truncate max-w-[220px]" title={l.employee_name || `Employee #${l.employee_id}`}>
+                      {l.employee_name || `Employee #${l.employee_id}`}
+                    </span>
                     <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">{l.created_at ? new Date(l.created_at).toLocaleDateString() : ''}</span>
                     {!l.is_positive && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600">CONSTRUCTIVE</span>}
                   </div>

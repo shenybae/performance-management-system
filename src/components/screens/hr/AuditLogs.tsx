@@ -9,6 +9,8 @@ interface AuditRecord {
   id: number;
   user_id?: number;
   username?: string;
+  user_role?: string;
+  display_action?: string;
   action: string;
   table_name: string;
   row_id?: number;
@@ -99,33 +101,37 @@ export const AuditLogs = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-100 dark:border-slate-800">
-                <th className="py-2 font-bold text-slate-500 uppercase">When</th>
-                <th className="py-2 font-bold text-slate-500 uppercase">User</th>
-                <th className="py-2 font-bold text-slate-500 uppercase">Action</th>
-                <th className="py-2 font-bold text-slate-500 uppercase">Table</th>
-                <th className="py-2 font-bold text-slate-500 uppercase">Source</th>
-                <th className="py-2 font-bold text-slate-500 uppercase">Row</th>
-                <th className="py-2 font-bold text-slate-500 uppercase">Details</th>
+              <tr className="bg-teal-deep text-white">
+                <th className="py-2 font-bold uppercase">When</th>
+                <th className="py-2 font-bold uppercase">User</th>
+                <th className="py-2 font-bold uppercase">Role</th>
+                <th className="py-2 font-bold uppercase">Action</th>
+                <th className="py-2 font-bold uppercase">Description</th>
+                <th className="py-2 font-bold uppercase">Table</th>
+                <th className="py-2 font-bold uppercase">Source</th>
+                <th className="py-2 font-bold uppercase">Row</th>
+                <th className="py-2 font-bold uppercase">Details</th>
               </tr>
             </thead>
             <tbody>
               {logs.length === 0 && !loading ? (
-                <tr><td colSpan={6} className="py-6 text-center text-slate-500">No audit entries found — try different filters or toggle Employee activities.</td></tr>
+                <tr><td colSpan={9} className="py-6 text-center text-slate-500">No audit entries found — try different filters or toggle Employee activities.</td></tr>
               ) : (
                 logs.map(l => (
-                  <tr key={l.id} className="border-b border-slate-50 dark:border-slate-800/50">
+                  <tr key={l.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-teal-50 dark:hover:bg-teal-900/10 transition-colors">
                     <td className="py-2">{l.created_at ? new Date(l.created_at).toLocaleString() : '-'}</td>
                     <td className="py-2">{l.username || (l.user_id ? `#${l.user_id}` : '-')}</td>
-                    <td className="py-2 font-bold">{l.action}</td>
+                    <td className="py-2">{l.user_role || '-'}</td>
+                    <td className="py-2 font-bold">{(l as any).display_action || l.action}</td>
+                    <td className="py-2 text-slate-600">{(l as any).display_description || '-'}</td>
                     <td className="py-2">{l.table_name}</td>
                     <td className="py-2">{l.source || '-'}</td>
                     <td className="py-2">{l.row_id || '-'}</td>
                     <td className="py-2">
                       <div className="flex gap-2">
-                        <button onClick={() => openJsonModal('Before', l.before_json)} className="px-2 py-1 rounded bg-slate-100 text-xs">Before</button>
-                        <button onClick={() => openJsonModal('After', l.after_json)} className="px-2 py-1 rounded bg-slate-100 text-xs">After</button>
-                      <button onClick={() => openJsonModal('Meta', l.meta_json)} className="px-2 py-1 rounded bg-slate-100 text-xs">Meta</button>
+                        <button onClick={() => openJsonModal('Before', l.before_json)} className="px-2 py-1 rounded bg-teal-50 text-teal-700 text-xs">Before</button>
+                        <button onClick={() => openJsonModal('After', l.after_json)} className="px-2 py-1 rounded bg-teal-50 text-teal-700 text-xs">After</button>
+                      <button onClick={() => openJsonModal('Meta', l.meta_json)} className="px-2 py-1 rounded bg-teal-50 text-teal-700 text-xs">Meta</button>
                       </div>
                     </td>
                   </tr>

@@ -78,6 +78,14 @@ async function recordAudit(user: any, action: string, tableName: string, rowId: 
   }
 }
 
+// Tables/resources that are considered important enough to auto-audit when mutated.
+// Use this list to avoid logging every incidental HTTP request and reduce noise.
+const auditInterestTables = [
+  'employees','goals','coaching_logs','coaching_chats','appraisals','discipline_records','property_accountability',
+  'users','suggestions','feedback_360','applicants','requisitions','offboarding','exit_interviews','development_plans',
+  'self_assessments','onboarding','notifications','elearning_courses','elearning_recommendations','pip_plans'
+];
+
 async function initDb() {
   const createTables = [
     `CREATE TABLE IF NOT EXISTS employees (
@@ -750,6 +758,8 @@ async function initDb() {
       'ALTER TABLE users ADD COLUMN email TEXT',
       'ALTER TABLE users ADD COLUMN full_name TEXT',
       'ALTER TABLE users ADD COLUMN linked_user_id INTEGER',
+      'ALTER TABLE users ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 0',
       'ALTER TABLE coaching_chats ADD COLUMN status TEXT DEFAULT \'delivered\'',
       'ALTER TABLE coaching_chats ADD COLUMN reply_to INTEGER',
       'ALTER TABLE coaching_chats ADD COLUMN action_type TEXT',
@@ -861,14 +871,34 @@ async function startServer() {
 
   const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
 
-  function authenticateToken(req: any, res: any, next: any) {
+  // Verify token and ensure token_version matches DB to support single-active-session invalidation
+  async function verifyTokenWithVersion(token: string) {
+    try {
+      const payload = jwt.verify(token, JWT_SECRET) as any;
+      if (!payload || !payload.id) throw new Error('Invalid token payload');
+      const rows: any = await query('SELECT token_version FROM users WHERE id = ?', [payload.id]);
+      const row = Array.isArray(rows) ? rows[0] : rows;
+      const dbVersion = row ? (row.token_version || 0) : 0;
+      const tokenVersion = (payload.token_version || 0);
+      console.log(`[auth] verifyToken user=${payload.id} tokenVersion=${tokenVersion} dbVersion=${dbVersion}`);
+      if ((tokenVersion || 0) !== (dbVersion || 0)) {
+        console.log(`[auth] token version mismatch for user=${payload.id} -> invalidated`);
+        throw new Error('Token invalidated');
+      }
+      return payload;
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  async function authenticateToken(req: any, res: any, next: any) {
     const auth = req.headers['authorization'];
     if (!auth) return res.status(401).json({ error: 'Missing Authorization header' });
     const parts = auth.split(' ');
     if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Invalid Authorization header' });
     const token = parts[1];
     try {
-      const payload = jwt.verify(token, JWT_SECRET) as any;
+      const payload = await verifyTokenWithVersion(token);
       req.user = payload;
       next();
     } catch (err) {
@@ -905,15 +935,40 @@ async function startServer() {
     return out;
   }
 
-  // Audit middleware: log all modifying HTTP requests (POST/PUT/PATCH/DELETE)
+  // Audit middleware: record only meaningful authenticated actions to avoid
+  // overwhelming the audit trail with low-value HTTP requests. We record when
+  // the client explicitly requests an audit (`_audit_action` / header), or
+  // when a mutating HTTP method touches a resource in `auditInterestTables`.
   app.use(async (req: any, res: any, next: any) => {
     try {
-      const method = (req.method || '').toUpperCase();
-      if (!['POST','PUT','PATCH','DELETE'].includes(method)) return next();
-      // Avoid logging the audit listing itself to prevent recursion
-      if (req.path && req.path.startsWith('/api/audit_logs')) return next();
+      if (!req.path || !req.path.startsWith('/api')) return next();
+      if (req.path.startsWith('/api/audit_logs') || req.path === '/api/activity') return next();
 
       const user = (req as any).user || extractUserFromAuthHeader(req) || null;
+      if (!user) return next();
+
+      const method = (req.method || '').toUpperCase();
+      const pathSegments = (req.path || '').split('/').filter(Boolean);
+      const resource = pathSegments[1] || pathSegments[0] || null; // /api/<resource>
+      const idSeg = pathSegments[2] || null;
+      const rowId = idSeg && /^\d+$/.test(idSeg) ? parseInt(idSeg) : null;
+
+      const explicitAction = (req && req.body && typeof req.body === 'object' && req.body._audit_action) ? req.body._audit_action :
+        (req && req.headers && (req.headers['x-audit-action'] || req.headers['x-audit-description']) ? (req.headers['x-audit-action'] || req.headers['x-audit-description']) : null);
+
+      // Decide whether to record: explicit action OR mutating method on an important resource
+      let shouldAudit = false;
+      if (explicitAction) shouldAudit = true;
+      else if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+        const candidate = resource ? resource.toString() : null;
+        if (candidate && auditInterestTables.includes(candidate)) shouldAudit = true;
+      }
+
+      if (!shouldAudit) return next();
+
+      const normalizedAction = explicitAction || (method === 'POST' ? 'create' : (method === 'PUT' || method === 'PATCH' ? 'update' : (method === 'DELETE' ? 'delete' : `${method} ${req.path}`)));
+      const tableName = resource || 'http';
+
       const meta = {
         source: 'http',
         ip: req.headers['x-forwarded-for'] || req.ip || (req.connection && (req.connection as any).remoteAddress) || null,
@@ -924,8 +979,8 @@ async function startServer() {
         query: req.query || null,
       };
 
-      // Fire-and-forget — we don't wait for DB write to avoid slowing requests
-      recordAudit(user, 'request', req.path || 'unknown', null, null, null, meta).catch(() => {});
+      const after = (['create', 'update', 'submit', 'review'].includes(normalizedAction) ? sanitizeRequestBody(req.body) : null);
+      recordAudit(user, normalizedAction, tableName, rowId, null, after, meta).catch(() => {});
     } catch (e) { console.error('audit middleware error:', e); }
     next();
   });
@@ -937,24 +992,142 @@ async function startServer() {
       if (!email && !username) return res.status(400).json({ error: 'Missing email or username' });
       let rows: any = [];
       if (email) {
-        rows = await query("SELECT * FROM users WHERE email = ?", [email]) as any;
+        rows = await query("SELECT * FROM users WHERE email = ? AND deleted_at IS NULL", [email]) as any;
       }
       if ((!rows || rows.length === 0) && username) {
-        rows = await query("SELECT * FROM users WHERE username = ?", [username]) as any;
+        rows = await query("SELECT * FROM users WHERE username = ? AND deleted_at IS NULL", [username]) as any;
       }
       const user = rows[0];
       if (!user) return res.status(401).json({ error: "Invalid credentials" });
       const match = await bcrypt.compare(password, user.password);
       if (!match) return res.status(401).json({ error: "Invalid credentials" });
-      const token = jwt.sign({ id: user.id, email: user.email || user.username, role: user.role, employee_id: user.employee_id }, JWT_SECRET, { expiresIn: '8h' });
+      // Increment token_version to invalidate prior sessions for this user (single-active-session)
+      try {
+        const prevTvRows: any = await query('SELECT token_version FROM users WHERE id = ?', [user.id]);
+        const prevTv = Array.isArray(prevTvRows) && prevTvRows[0] ? (prevTvRows[0].token_version || 0) : (prevTvRows.token_version || 0);
+        console.log(`Login: user ${user.id} previous token_version=${prevTv}`);
+        await query('UPDATE users SET token_version = COALESCE(token_version, 0) + 1 WHERE id = ?', [user.id]);
+      } catch (e) { console.error('token_version update error:', e); }
+      const tvRows: any = await query('SELECT token_version FROM users WHERE id = ?', [user.id]);
+      const tokenVersion = Array.isArray(tvRows) && tvRows[0] ? (tvRows[0].token_version || 0) : (tvRows.token_version || 0);
+      console.log(`Login: user ${user.id} new token_version=${tokenVersion}`);
+      // Notify existing sockets for this user to force logout, then disconnect them.
+      // Strategy: compute the union of socket ids from the Socket.IO room and the
+      // server-side `userSocketMap`, then disconnect each socket id found. Clean
+      // up stale entries from `userSocketMap` and `onlineUsers` as we go.
+      try {
+        if (typeof io !== 'undefined' && io) {
+          const roomName = `user_${user.id}`;
+          // Ask clients in the room to handle graceful logout first
+          try { io.to(roomName).emit('force_logout', { reason: 'logged_in_elsewhere' }); } catch (e) { console.error('emit force_logout error', e); }
+
+          // Gather socket ids from the room (if any)
+          let roomSockets: string[] = [];
+          try {
+            const sockets = await io.in(roomName).fetchSockets();
+            roomSockets = sockets.map(s => s.id);
+          } catch (e) {
+            console.error('fetchSockets error:', e);
+          }
+
+          // Gather socket ids from authoritative server-side map
+          const mapSet = userSocketMap.get(user.id) || new Set<string>();
+          const mapSockets = Array.from(mapSet);
+
+          // Union the ids
+          const unionIds = new Set<string>([...roomSockets, ...mapSockets]);
+          // Also sweep all connected sockets and add any whose socket.data.userId matches
+          try {
+            io.sockets.sockets.forEach((s: any) => {
+              try {
+                const sid = s.id;
+                const sd = (s as any).data || {};
+                if (sd && sd.userId === user.id) unionIds.add(sid);
+              } catch (e) {}
+            });
+          } catch (e) { console.error('sweep sockets error', e); }
+
+          console.log(`Login: user ${user.id} disconnect candidate sockets: ${Array.from(unionIds).join(', ') || '(none)'}`);
+
+          let disconnected = 0;
+          for (const sid of unionIds) {
+            try {
+              const s = io.sockets.sockets.get(sid);
+              if (s) {
+                // If the socket reports the same tokenVersion as the new token, skip to avoid disconnecting the freshly logged-in client
+                const sData = (s as any).data || {};
+                if (sData.tokenVersion !== undefined && sData.tokenVersion === tokenVersion) {
+                  console.log(`Login: skipping disconnect for socket ${sid} (tokenVersion matches new ${tokenVersion})`);
+                } else {
+                  console.log(`Login: disconnecting socket ${sid} for user ${user.id} (socket tokenVersion=${sData.tokenVersion ?? 'unknown'})`);
+                  try { s.disconnect(true); disconnected++; } catch (e) { console.error('socket disconnect error', e); }
+                }
+              } else {
+                console.log(`Login: candidate socket ${sid} not found in io.sockets (stale). Cleaning up.`);
+              }
+            } catch (e) {
+              console.error('Login disconnect loop error', e);
+            } finally {
+              // Clean up server-side references for this socket id
+              try { onlineUsers.delete(sid); } catch (e) {}
+              try {
+                const set = userSocketMap.get(user.id);
+                if (set) { set.delete(sid); if (set.size === 0) userSocketMap.delete(user.id); }
+              } catch (e) { console.error('userSocketMap cleanup error', e); }
+            }
+          }
+
+          if (disconnected) console.log(`Login: user ${user.id} disconnected ${disconnected} socket(s)`);
+          else console.log(`Login: user ${user.id} had no active sockets to disconnect`);
+        }
+      } catch (e) { console.error('Error forcing logout sockets:', e); }
+      const token = jwt.sign({
+        id: user.id,
+        username: user.username || user.email || user.full_name || null,
+        email: user.email || user.username,
+        role: user.role,
+        employee_id: user.employee_id,
+        token_version: tokenVersion
+      }, JWT_SECRET, { expiresIn: '8h' });
       let employee_name: string | null = null, position: string | null = null, dept: string | null = null, user_email: string | null = null, phone: string | null = null, address: string | null = null, hire_date: string | null = null, status: string | null = null;
       if (user.employee_id) {
         const empRows = await query('SELECT name, position, dept, email, phone, address, hire_date, status FROM employees WHERE id = ?', [user.employee_id]) as any;
         if (empRows[0]) { employee_name = empRows[0].name; position = empRows[0].position; dept = empRows[0].dept; user_email = empRows[0].email; phone = empRows[0].phone; address = empRows[0].address; hire_date = empRows[0].hire_date; status = empRows[0].status; }
       }
+      try {
+        const meta = {
+          source: 'http',
+          ip: req.headers['x-forwarded-for'] || req.ip || (req.connection && (req.connection as any).remoteAddress) || null,
+          user_agent: req.headers['user-agent'] || null,
+          route: req.originalUrl || req.url || req.path,
+          method: 'POST',
+          body: sanitizeRequestBody(req.body),
+        };
+        // Record login event
+        recordAudit(user, 'login', 'users', user.id, null, { token_version: tokenVersion }, meta).catch(() => {});
+      } catch (e) { /* ignore audit errors */ }
       res.json({ token, id: user.id, email: user.email || user.username, full_name: user.full_name || null, role: user.role, employee_id: user.employee_id, profile_picture: user.profile_picture || null, employee_name, position, dept, email: user_email || user.email || null, phone, address, hire_date, status });
     } catch (err) {
       res.status(500).json({ error: "Database error" });
+    }
+  });
+
+  // Logout endpoint — records a logout audit entry for the authenticated user
+  app.post('/api/logout', authenticateToken, async (req: any, res: any) => {
+    try {
+      const user = (req as any).user || null;
+      const meta = {
+        source: 'http',
+        ip: req.headers['x-forwarded-for'] || req.ip || (req.connection && (req.connection as any).remoteAddress) || null,
+        user_agent: req.headers['user-agent'] || null,
+        route: req.originalUrl || req.url || req.path,
+        method: req.method || 'POST'
+      };
+      await recordAudit(user, 'logout', 'users', user?.id || null, null, null, meta);
+      res.json({ success: true });
+    } catch (err) {
+      console.error('POST /api/logout error:', err);
+      res.status(500).json({ error: 'Server error' });
     }
   });
 
@@ -964,8 +1137,8 @@ async function startServer() {
       const { email, username } = req.body;
       if (!email && !username) return res.status(400).json({ error: 'Missing email or username' });
       let rows: any = [];
-      if (email) rows = await query('SELECT * FROM users WHERE email = ?', [email]) as any;
-      if ((!rows || rows.length === 0) && username) rows = await query('SELECT * FROM users WHERE username = ?', [username]) as any;
+      if (email) rows = await query('SELECT * FROM users WHERE email = ? AND deleted_at IS NULL', [email]) as any;
+      if ((!rows || rows.length === 0) && username) rows = await query('SELECT * FROM users WHERE username = ? AND deleted_at IS NULL', [username]) as any;
       const user = rows[0];
       if (!user) return res.status(404).json({ error: 'User not found' });
       const token = crypto.randomBytes(24).toString('hex');
@@ -988,7 +1161,7 @@ async function startServer() {
       const pr = rows[0];
       if (!pr) return res.status(400).json({ error: 'Invalid token' });
       if (pr.expires_at < Date.now()) return res.status(400).json({ error: 'Token expired' });
-      const userRows = await query('SELECT * FROM users WHERE id = ?', [pr.user_id]) as any;
+      const userRows = await query('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [pr.user_id]) as any;
       const user = userRows[0];
       if (!user) return res.status(404).json({ error: 'User not found' });
       const hashed = bcrypt.hashSync(newPassword, 10);
@@ -1008,10 +1181,10 @@ async function startServer() {
       const parts = auth.split(' ');
       if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Invalid Authorization header' });
       let payload: any;
-      try { payload = jwt.verify(parts[1], JWT_SECRET) as any; } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+      try { payload = await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
       const { currentPassword, newPassword } = req.body;
       if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Missing passwords' });
-      const rows = await query('SELECT * FROM users WHERE id = ?', [payload.id]) as any;
+      const rows = await query('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [payload.id]) as any;
       const user = rows[0];
       if (!user) return res.status(404).json({ error: 'User not found' });
       const match = await bcrypt.compare(currentPassword, user.password);
@@ -1021,31 +1194,6 @@ async function startServer() {
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: 'Server error' });
-    }
-  });
-
-  app.get("/api/employees", async (req, res) => {
-    try {
-      const employees = await query("SELECT * FROM employees");
-      res.json(employees);
-    } catch (err) {
-      res.status(500).json({ error: "Database error" });
-    }
-  });
-
-  app.get("/api/users", async (req, res) => {
-    try {
-      const users = await query(`
-        SELECT u.id, u.username, u.role, u.employee_id, e.name as employee_name, u.full_name, u.profile_picture, u.linked_user_id,
-               u.email,
-               lu.username as linked_user_username, lu.full_name as linked_user_full_name, lu.role as linked_user_role
-        FROM users u
-        LEFT JOIN employees e ON u.employee_id = e.id
-        LEFT JOIN users lu ON u.linked_user_id = lu.id
-      `);
-      res.json(users);
-    } catch (err) {
-      res.status(500).json({ error: "Database error" });
     }
   });
 
@@ -1059,8 +1207,8 @@ async function startServer() {
       const parts = authHeader.split(' ');
       if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
       let creatorPayload: any = null;
-      try {
-        creatorPayload = jwt.verify(parts[1], JWT_SECRET) as any;
+        try {
+        creatorPayload = await verifyTokenWithVersion(parts[1]);
         if (creatorPayload.role !== 'HR' && creatorPayload.role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
       } catch (err) {
         return res.status(401).json({ error: 'Invalid token' });
@@ -1094,7 +1242,7 @@ async function startServer() {
       const parts = authHeader.split(' ');
       if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
       let payload: any;
-      try { payload = jwt.verify(parts[1], JWT_SECRET) as any; } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+      try { payload = await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
       if (payload.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
 
       const id = req.params.id;
@@ -1210,15 +1358,41 @@ async function startServer() {
       const parts = authHeader.split(' ');
       if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
       let payload: any;
-      try { payload = jwt.verify(parts[1], JWT_SECRET) as any; } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+      try { payload = await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
       if (payload.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
 
       const id = req.params.id;
       // capture before state
       let before: any = null;
       try { const br: any = await query('SELECT * FROM users WHERE id = ?', [id]); before = Array.isArray(br) ? br[0] : br; } catch (e) { before = null; }
-      await query('DELETE FROM users WHERE id = ?', [id]);
-      try { await recordAudit(payload, 'delete', 'users', id, before, null); } catch (e) {}
+      // Soft-delete: set deleted_at timestamp instead of hard deleting
+      await query('UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [id]);
+      // capture after state
+      let after: any = null;
+      try { const ar: any = await query('SELECT * FROM users WHERE id = ?', [id]); after = Array.isArray(ar) ? ar[0] : ar; } catch (e) { after = null; }
+      try { await recordAudit(payload, 'delete', 'users', id, before, after); } catch (e) {}
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  // Restore user (HR only) — clears deleted_at timestamp
+  app.put('/api/users/:id/restore', async (req, res) => {
+    try {
+      const authHeader = req.headers['authorization'];
+      if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+      const parts = authHeader.split(' ');
+      if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
+      let payload: any;
+      try { payload = await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+      if (payload.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
+
+      const id = req.params.id;
+      let before: any = null;
+      try { const br: any = await query('SELECT * FROM users WHERE id = ?', [id]); before = Array.isArray(br) ? br[0] : br; } catch (e) { before = null; }
+      await query('UPDATE users SET deleted_at = NULL WHERE id = ?', [id]);
+      let after: any = null;
+      try { const ar: any = await query('SELECT * FROM users WHERE id = ?', [id]); after = Array.isArray(ar) ? ar[0] : ar; } catch (e) { after = null; }
+      try { await recordAudit(payload, 'restore', 'users', id, before, after); } catch (e) {}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
@@ -1231,7 +1405,7 @@ async function startServer() {
       const parts = auth.split(' ');
       if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
       try {
-        jwt.verify(parts[1], JWT_SECRET);
+        await verifyTokenWithVersion(parts[1]);
       } catch (err) {
         return res.status(401).json({ error: 'Invalid token' });
       }
@@ -1248,6 +1422,20 @@ async function startServer() {
     }
   });
 
+  // List employees (authenticated)
+  app.get('/api/employees', async (req, res) => {
+    try {
+      const auth = req.headers['authorization'];
+      if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+      const parts = auth.split(' ');
+      if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
+      try { await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+
+      const rows: any = await query('SELECT * FROM employees ORDER BY name');
+      res.json(Array.isArray(rows) ? rows : []);
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
   // Update employee
   app.put("/api/employees/:id", async (req, res) => {
     try {
@@ -1255,7 +1443,7 @@ async function startServer() {
       if (!auth) return res.status(401).json({ error: 'Unauthorized' });
       const parts = auth.split(' ');
       if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
-      try { jwt.verify(parts[1], JWT_SECRET); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+      try { await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
 
       const id = req.params.id;
       const { name, status, position, dept, manager_id, hire_date, salary_base, ssn } = req.body;
@@ -1272,7 +1460,7 @@ async function startServer() {
       if (!auth) return res.status(401).json({ error: 'Unauthorized' });
       const parts = auth.split(' ');
       if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
-      try { jwt.verify(parts[1], JWT_SECRET); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+      try { await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
 
       const id = req.params.id;
       await query('DELETE FROM employees WHERE id = ?', [id]);
@@ -1306,6 +1494,30 @@ async function startServer() {
       res.status(500).json({ error: "Database error" });
     }
   });
+
+    // List users (authenticated). HR may request include_deleted=1 to see archived accounts.
+    app.get('/api/users', async (req, res) => {
+      try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+        const parts = authHeader.split(' ');
+        if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
+        let payload: any;
+        try { payload = await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+
+        const includeDeleted = (req.query && (req.query.include_deleted === '1' || req.query.include_deleted === 'true'));
+        if (includeDeleted && payload.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
+
+        const q = `SELECT u.*, e.name AS employee_name, lu.full_name AS linked_user_full_name, lu.role AS linked_user_role
+                   FROM users u
+                   LEFT JOIN employees e ON u.employee_id = e.id
+                   LEFT JOIN users lu ON u.linked_user_id = lu.id
+                   ${includeDeleted ? '' : 'WHERE u.deleted_at IS NULL'}
+                   ORDER BY u.full_name IS NULL, u.full_name, u.email`;
+        const users: any = await query(q);
+        res.json(Array.isArray(users) ? users : []);
+      } catch (err) { res.status(500).json({ error: 'Database error' }); }
+    });
 
   app.post("/api/goals", async (req, res) => {
     try {
@@ -2130,15 +2342,15 @@ async function startServer() {
       const employeeOnly = (req.query.employee === '1' || req.query.employee_activity === '1' || req.query.employee === 'true' || req.query.employee_activity === 'true');
       const limit = Math.min(1000, parseInt((req.query.limit || '200').toString() || '200'));
 
-      const employeeTables = ['employees','appraisals','offboarding','property_accountability','self_assessments','development_plans','pip_plans','coaching_chats','discipline_records','goals','feedback_360','requisitions','onboarding','notifications'];
+      // (Use global `auditInterestTables` to decide which resources are employee-related)
 
       let sql = 'SELECT * FROM audit_logs WHERE 1=1';
       const params: any[] = [];
 
       if (employeeOnly) {
-        const placeholders = employeeTables.map(() => '?').join(',');
+        const placeholders = auditInterestTables.map(() => '?').join(',');
         sql += ` AND table_name IN (${placeholders})`;
-        params.push(...employeeTables);
+        params.push(...auditInterestTables);
       } else if (qTableRaw) {
         const parts = qTableRaw.split(',').map((t: any) => t.trim()).filter(Boolean);
         if (parts.length > 1) {
@@ -2157,9 +2369,129 @@ async function startServer() {
       sql += ' ORDER BY created_at DESC LIMIT ?'; params.push(limit);
 
       const rows: any = await query(sql, params);
-      res.json(Array.isArray(rows) ? rows : []);
+      const mapped = Array.isArray(rows) ? rows : [];
+
+      // Enrich results with user role and a human-friendly action label.
+      try {
+        const userIds = Array.from(new Set(mapped.map((r: any) => r.user_id).filter(Boolean)));
+        const userMap: any = {};
+        if (userIds.length > 0) {
+          const placeholders = userIds.map(() => '?').join(',');
+          const urows: any = await query(`SELECT id, role, full_name, username, email FROM users WHERE id IN (${placeholders})`, userIds);
+          for (const u of (Array.isArray(urows) ? urows : [urows].filter(Boolean))) userMap[u.id] = u;
+        }
+
+        function titleCase(s: string) {
+          if (!s) return s;
+          return s.split(/\s+/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+        }
+
+        function humanizeAction(r: any) {
+          try {
+            // Prefer explicit activity descriptions stored in after_json (from /api/activity)
+            if (r.after_json) {
+              try {
+                const aj = JSON.parse(r.after_json);
+                if (aj && (aj.description || aj.desc || aj.label)) return aj.description || aj.desc || aj.label;
+              } catch (e) { /* ignore */ }
+            }
+            // Common literal actions
+            if (r.action === 'login') return 'Logged in';
+            if (r.action === 'logout') return 'Logged out';
+            if (r.action === 'time_in') return 'Clocked in';
+            if (r.action === 'time_out') return 'Clocked out';
+            if (r.action === 'socket_connect') return 'Socket connected';
+            if (r.action === 'socket_disconnect') return 'Socket disconnected';
+
+            // Server-side recordAudit calls sometimes use verbs like 'create','update','delete'
+            // with `table_name` populated; present these as human-friendly messages.
+            if (r.action && ['create','update','delete','restore'].includes(r.action)) {
+              const namestr = (r.table_name || '').toString().replace(/[_-]/g, ' ');
+              let resource = namestr;
+              if (resource.endsWith('s')) resource = resource.slice(0, -1);
+              resource = titleCase(resource || r.table_name || 'record');
+              const vmap: any = { create: 'Created', update: 'Updated', delete: 'Deleted', restore: 'Restored' };
+              return `${vmap[r.action] || 'Changed'} ${resource}`;
+            }
+
+            // Parse HTTP-style actions like "POST /api/offboarding"
+            const parts = (r.action || '').toString().split(/\s+/).filter(Boolean);
+            if (parts.length >= 2 && parts[1].startsWith('/api')) {
+              const method = parts[0];
+              const path = parts[1];
+              const segments = path.split('/').filter(Boolean); // ['api','resource', ...]
+              const base = segments[1] || segments[0] || '';
+              let verb = 'Performed';
+              if (method === 'POST') verb = (auditInterestTables.includes(base) ? 'Submitted' : 'Created');
+              else if (method === 'PUT' || method === 'PATCH') verb = 'Updated';
+              else if (method === 'DELETE') verb = 'Deleted';
+              else if (method === 'GET') verb = 'Viewed';
+              if (path.includes('approve') || path.includes('review')) verb = 'Reviewed';
+              if (path.includes('restore')) verb = 'Restored';
+              let resource = base.replace(/[_-]/g, ' ');
+              if (resource.endsWith('s')) resource = resource.slice(0, -1);
+              resource = titleCase(resource || base);
+              return `${verb} ${resource}`;
+            }
+            return r.action || '';
+          } catch (e) { return r.action || ''; }
+        }
+
+        const out = mapped.map((r: any) => {
+          const u = r.user_id ? userMap[r.user_id] : null;
+          // derive a short description if available in after_json or meta_json
+          let display_description: string | null = null;
+          try {
+            if (r.after_json) {
+              const aj = JSON.parse(r.after_json);
+              if (aj && (aj.description || aj.desc || aj.label)) display_description = aj.description || aj.desc || aj.label;
+              else {
+                const keys = ['full_name','employee_name','email','username','message','title','label'];
+                const parts: string[] = [];
+                for (const k of keys) if (aj[k]) parts.push(aj[k]);
+                if (parts.length) display_description = parts.slice(0,3).join(' — ');
+              }
+            }
+            if (!display_description && r.meta_json) {
+              try {
+                const mj = JSON.parse(r.meta_json);
+                if (mj && mj.description) display_description = mj.description;
+              } catch (e) { /* ignore */ }
+            }
+          } catch (e) { display_description = null; }
+
+          return { ...r,
+            username: (u && (u.full_name || u.username || u.email)) || r.username,
+            user_role: u ? u.role : null,
+            display_action: humanizeAction(r),
+            display_description: display_description || null
+          };
+        });
+        res.json(out);
+        return;
+      } catch (e) {
+        console.error('audit logs enrich error:', e);
+      }
+
+      // Fallback
+      res.json(mapped);
     } catch (err) {
       console.error('GET /api/audit_logs error:', err);
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  // POST /api/activity — record a user activity or action (human-friendly)
+  app.post('/api/activity', authenticateToken, async (req: any, res) => {
+    try {
+      const user = (req as any).user || null;
+      const { action, description, entity, entity_id, meta } = req.body || {};
+      const tableName = entity || 'activity';
+      const after = description ? { description } : null;
+      await recordAudit(user, action || 'activity', tableName, entity_id || null, null, after, meta || null);
+      res.json({ success: true });
+    } catch (err) {
+      console.error('POST /api/activity error:', err);
       res.status(500).json({ error: 'Database error' });
     }
   });
@@ -2172,15 +2504,36 @@ async function startServer() {
   });
 
   // Socket connection audit: log connect/disconnect events
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     try {
       const hs: any = (socket.handshake || {});
-      const meta = { source: 'socket', socketId: socket.id, auth: hs.auth || null, address: hs.address || null };
-      // record connection
-      recordAudit(null, 'socket_connect', 'socket', null, null, null, meta).catch(() => {});
+      const metaBase = { source: 'socket', socketId: socket.id, auth: hs.auth || null, address: hs.address || null };
+      // Try to resolve a user from the handshake (if client sent a token)
+      let auditUser: any = null;
+      try {
+        const hsAuth = hs.auth || hs.query || {};
+        const raw = hsAuth && (hsAuth.token || hsAuth.authorization || hsAuth.Authorization) ? (hsAuth.token || hsAuth.authorization || hsAuth.Authorization) : null;
+        if (raw && typeof raw === 'string') {
+          const token = raw.startsWith('Bearer ') ? raw.split(' ')[1] : raw;
+          try { auditUser = await verifyTokenWithVersion(token); } catch (e) { /* ignore invalid token */ }
+        }
+      } catch (e) { /* ignore handshake parsing errors */ }
+
+      const meta = { ...metaBase, user: auditUser ? { id: auditUser.id, username: auditUser.username || auditUser.email || null } : null };
+      // Record connection (associate with user when available)
+      recordAudit(auditUser, 'socket_connect', 'socket', null, null, null, meta).catch(() => {});
+      // Also record an explicit time-in for authenticated users so audit logs
+      // clearly show when a user became active (clock in / session start)
+      if (auditUser) {
+        try { recordAudit(auditUser, 'time_in', 'users', auditUser.id, null, null, meta).catch(() => {}); } catch (e) {}
+      }
       socket.on('disconnect', (reason: any) => {
         const dmeta = { ...meta, reason };
-        recordAudit(null, 'socket_disconnect', 'socket', null, null, null, dmeta).catch(() => {});
+        recordAudit(auditUser, 'socket_disconnect', 'socket', null, null, null, dmeta).catch(() => {});
+        // Record time-out / clock out on disconnect when user context available
+        if (auditUser) {
+          try { recordAudit(auditUser, 'time_out', 'users', auditUser.id, null, null, dmeta).catch(() => {}); } catch (e) {}
+        }
       });
     } catch (e) { console.error('socket audit error:', e); }
   });
@@ -2218,6 +2571,49 @@ async function startServer() {
   });
 
   // Vite middleware for development
+  // Role-based sidebar endpoints: map frontend sidebar navigation
+  // to explicit server endpoints and return 404 for unknown pages.
+  const sidebarRoutes: any = {
+    admin: ['recruitmentboard','feedback360','onboarding','employee-directory','offboarding','user-accounts','audit-logs','db-viewer','settings'],
+    manager: ['recruitmentboard','feedback360','okr-planner','coaching-journal','disciplinary-action','evaluation-portal','promotability','pip-manager','suggestion-review','settings'],
+    employee: ['career-dashboard','feedback','idp','self-assessment','suggestion-form','coaching-chat','verification-of-review','settings']
+  };
+
+  // Exact two-segment routes: /:role/:page
+  app.get('/:role/:page', (req, res, next) => {
+    try {
+      const role = (req.params.role || '').toString().toLowerCase();
+      const page = (req.params.page || '').toString().toLowerCase();
+      if (!['admin','manager','employee'].includes(role)) return next();
+      const valid = sidebarRoutes[role] || [];
+      if (!valid.includes(page)) return res.status(404).json({ error: 'Not Found' });
+      // For valid role/page, serve SPA index in production; in development
+      // fallthrough to Vite middleware so the client-side router can load correctly.
+      if (process.env.NODE_ENV === 'production') {
+        return res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
+      }
+      return next();
+    } catch (err) {
+      return res.status(500).json({ error: 'Server error' });
+    }
+  });
+
+  // Fallback for deeper paths under a role, e.g. /admin/something/else
+  app.get('/:role/*', (req, res, next) => {
+    try {
+      const role = (req.params.role || '').toString().toLowerCase();
+      if (!['admin','manager','employee'].includes(role)) return next();
+      const rest = (req.params[0] || '').toString().split('/').filter(Boolean);
+      const page = (rest[0] || '').toLowerCase();
+      const valid = sidebarRoutes[role] || [];
+      if (!page || !valid.includes(page)) return res.status(404).json({ error: 'Not Found' });
+      if (process.env.NODE_ENV === 'production') {
+        return res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
+      }
+      return next();
+    } catch (err) { return res.status(500).json({ error: 'Server error' }); }
+  });
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -2233,32 +2629,82 @@ async function startServer() {
 
   // Presence map: socketId → { userId, role, username, employeeId }
   const onlineUsers = new Map<string, { userId: number; role: string; username: string; employeeId: number | null }>();
+  // userId -> Set(socketId) for quick lookups when forcing disconnects
+  const userSocketMap = new Map<number, Set<string>>();
 
   function broadcastPresence() {
     const users = Array.from(onlineUsers.values());
     io.emit('presence', users);
   }
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     console.log(`Socket connected: ${socket.id}`);
 
+    // Auto-authenticate if client provided token during the initial socket handshake
+    try {
+      const hs: any = (socket.handshake || {});
+      const hsAuth = hs.auth || hs.query || {};
+      const hsToken = hsAuth && hsAuth.token ? hsAuth.token : null;
+      if (hsToken) {
+        try {
+          const decoded: any = await verifyTokenWithVersion(hsToken);
+          console.log(`Socket handshake auth OK: socket=${socket.id} user=${decoded.id} token_version=${decoded.token_version || 0}`);
+          onlineUsers.set(socket.id, {
+            userId: decoded.id,
+            role: decoded.role,
+            username: decoded.username,
+            employeeId: decoded.employee_id || null
+          });
+          try { (socket as any).data = (socket as any).data || {}; (socket as any).data.userId = decoded.id; (socket as any).data.tokenVersion = decoded.token_version || 0; } catch (e) {}
+          try {
+            let set = userSocketMap.get(decoded.id);
+            if (!set) { set = new Set<string>(); userSocketMap.set(decoded.id, set); }
+            set.add(socket.id);
+          } catch (e) { console.error('userSocketMap add error', e); }
+          socket.join(`user_${decoded.id}`);
+          if (decoded.employee_id) socket.join(`employee_${decoded.employee_id}`);
+          socket.join(`role_${decoded.role}`);
+          broadcastPresence();
+          try { socket.emit('auth_ok', { userId: decoded.id, role: decoded.role }); } catch (e) {}
+        } catch (err) {
+          console.log(`Socket handshake auth failed: socket=${socket.id} error=${err && err.message ? err.message : err}`);
+          try { socket.emit('auth_error', { message: 'Invalid token' }); } catch (e) {}
+        }
+      }
+    } catch (e) { console.error('handshake auth processing error', e); }
+
     // Client sends { token } on connect to authenticate
-    socket.on('auth', (data: { token: string }) => {
+    socket.on('auth', async (data: { token: string }) => {
       try {
-        const decoded: any = jwt.verify(data.token, JWT_SECRET);
+        const decoded: any = await verifyTokenWithVersion(data.token);
+        console.log(`Socket auth OK: socket=${socket.id} user=${decoded.id} token_version=${decoded.token_version || 0}`);
         onlineUsers.set(socket.id, {
           userId: decoded.id,
           role: decoded.role,
           username: decoded.username,
           employeeId: decoded.employee_id || null
         });
+        // Attach user id to socket.data for fallback disconnects, then join user room
+        try {
+          (socket as any).data = (socket as any).data || {};
+          (socket as any).data.userId = decoded.id;
+          // store token_version on the socket so forced-logout can avoid disconnecting the freshly-authenticated session
+          (socket as any).data.tokenVersion = decoded.token_version || 0;
+        } catch (e) {}
+        // Track socket id under the user's set for robust disconnects
+        try {
+          let set = userSocketMap.get(decoded.id);
+          if (!set) { set = new Set<string>(); userSocketMap.set(decoded.id, set); }
+          set.add(socket.id);
+        } catch (e) { console.error('userSocketMap add error', e); }
         // Join a room for their own userId for targeted messages
         socket.join(`user_${decoded.id}`);
         if (decoded.employee_id) socket.join(`employee_${decoded.employee_id}`);
         socket.join(`role_${decoded.role}`);
         broadcastPresence();
         socket.emit('auth_ok', { userId: decoded.id, role: decoded.role });
-      } catch {
+      } catch (err) {
+        console.log(`Socket auth failed: socket=${socket.id} error=${err && err.message ? err.message : err}`);
         socket.emit('auth_error', { message: 'Invalid token' });
       }
     });
@@ -2365,8 +2811,21 @@ async function startServer() {
       } catch (err) { console.error('Socket chat:action error:', err); }
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
+      console.log(`Socket disconnected: socket=${socket.id} reason=${reason}`);
+      // remove from presence map
+      const meta = onlineUsers.get(socket.id);
       onlineUsers.delete(socket.id);
+      // remove from userSocketMap if present
+      try {
+        if (meta && meta.userId) {
+          const set = userSocketMap.get(meta.userId);
+          if (set) {
+            set.delete(socket.id);
+            if (set.size === 0) userSocketMap.delete(meta.userId);
+          }
+        }
+      } catch (e) { console.error('userSocketMap remove error', e); }
       broadcastPresence();
     });
   });

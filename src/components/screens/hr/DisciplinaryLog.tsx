@@ -8,6 +8,7 @@ import { SearchableSelect } from '../../common/SearchableSelect';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { SignatureUpload } from '../../common/SignatureUpload';
+import { sigBlockHtml } from '../../../utils/print';
 
 interface DisciplinaryLogProps {
   employees: Employee[];
@@ -140,17 +141,7 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
     const personRecords = records.filter(r => r.employee_id === record.employee_id);
     const w = window.open('', '_blank');
     if (!w) { (window as any).notify?.('Please allow popups to export PDF', 'error'); return; }
-    const sigBlock = (src: string | null, label: string, date: string | null, printedName?: string) => `
-      <div style="flex:1;min-width:0;text-align:center;padding:0 8px;">
-        <p style="font-weight:bold;color:#555;font-size:11px;text-transform:uppercase;margin:0 0 8px;">${label}</p>
-        <div style="border:1px solid #ccc;border-radius:4px;min-height:60px;display:flex;align-items:center;justify-content:center;padding:4px;margin-bottom:6px;">
-          ${src
-            ? `<img src="${src}" style="max-height:56px;max-width:100%;width:auto;object-fit:contain;display:block;" />`
-            : `<div style="border-bottom:1px solid #999;width:80%;margin:20px auto;"></div>`}
-        </div>
-        <p style="font-size:12px;color:#333;margin:0;font-weight:600;">${printedName || ''}</p>
-        <p style="font-size:11px;color:#888;margin:4px 0 0;">${date || '(no date)'}</p>
-      </div>`;
+    const sigBlock = (src: string | null, label: string, date: string | null, printedName?: string) => sigBlockHtml(src, label, date, printedName, 0);
     const rows = personRecords.map((r: any) => `
       <div style="border:1px solid #ddd;border-radius:8px;padding:20px;margin-bottom:20px;page-break-inside:avoid;">
         <table style="width:100%;font-size:13px;border-collapse:collapse;">
@@ -195,7 +186,10 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
       <div style="text-align:center;margin-top:30px;font-size:11px;color:#94a3b8;">Generated on ${new Date().toLocaleDateString()} — Performance Management System</div>
     </body></html>`);
     w.document.close();
-    setTimeout(() => w.print(), 400);
+    setTimeout(() => {
+      w.print();
+      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'print', description: `Disciplinary Report — ${empName}`, entity: 'discipline_record', entity_id: record.employee_id || null, meta: { source: 'DisciplinaryLog', rows: personRecords.length } }) }).catch(() => {}); } catch {};
+    }, 400);
   };
 
   return (
@@ -496,9 +490,14 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                       onClick={() => setExpandedRecord(expandedRecord === d.id ? null : d.id)}
                     >
                       <td className="py-3 pr-4">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <ShieldAlert size={14} className="text-red-400 shrink-0" />
-                          <span className="font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">{d.employee_name || `#${d.employee_id}`}</span>
+                          <span
+                            className="font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[180px]"
+                            title={d.employee_name || `#${d.employee_id}`}
+                          >
+                            {d.employee_name || `#${d.employee_id}`}
+                          </span>
                         </div>
                       </td>
                       <td className="py-3 pr-4">

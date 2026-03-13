@@ -291,7 +291,10 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     <div class="field"><span class="label">Progress</span><div class="bar"><div class="fill" style="width:${g.progress || 0}%"></div></div><span style="font-size:11px;color:#64748b">${g.progress || 0}%</span></div>
     </body></html>`);
     w.document.close();
-    setTimeout(() => w.print(), 300);
+    setTimeout(() => {
+      w.print();
+      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'print', description: `OKR — ${g.title || g.statement}`, entity: 'goal', entity_id: g.id || null, meta: { source: 'OKRPlanner' } }) }).catch(() => {}); } catch {};
+    }, 300);
   };
 
   const inp = "w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-black rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/50";
@@ -456,7 +459,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 max-w-[180px] truncate">{g.title || g.statement}</td>
                               <td className="py-2.5 px-3"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeIcon} {scopeLabel}</span></td>
                               <td className="py-2.5 px-3 text-xs text-slate-500">{g.department || '\u2014'}</td>
-                              <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium">{g.employee_name || g.delegation || '\u2014'}</td>
+                              <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                <div className="min-w-0">
+                                  <span className="truncate max-w-[220px]" title={g.employee_name || g.delegation || '\u2014'}>{g.employee_name || g.delegation || '\u2014'}</span>
+                                </div>
+                              </td>
                               <td className="py-2.5 px-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority)}`}>{g.priority || 'Medium'}</span></td>
                               <td className="py-2.5 px-3">
                                 <div className="flex items-center gap-2">
@@ -527,7 +534,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             const top = Object.entries(e.reasons || {}).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '';
                             return (
                               <tr key={e.name} className="border-b border-slate-100 dark:border-slate-800">
-                                <td className="py-2 px-3 text-sm font-medium">{e.name}</td>
+                                <td className="py-2 px-3 text-sm font-medium">
+                                  <div className="min-w-0"><span className="truncate max-w-[220px]" title={e.name}>{e.name}</span></div>
+                                </td>
                                 <td className="py-2 px-3">{e.total}</td>
                                 <td className="py-2 px-3">{e.under}</td>
                                 <td className="py-2 px-3">{e.pctUnder}%</td>
@@ -567,7 +576,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             const top = Object.entries(t.reasons || {}).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '';
                             return (
                               <tr key={t.name} className="border-b border-slate-100 dark:border-slate-800">
-                                <td className="py-2 px-3 text-sm font-medium">{t.name}</td>
+                                <td className="py-2 px-3 text-sm font-medium">
+                                  <div className="min-w-0"><span className="truncate max-w-[220px]" title={t.name}>{t.name}</span></div>
+                                </td>
                                 <td className="py-2 px-3">{t.total}</td>
                                 <td className="py-2 px-3">{t.under}</td>
                                 <td className="py-2 px-3">{t.pctUnder}%</td>
@@ -607,7 +618,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             const top = Object.entries(d.reasons || {}).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '';
                             return (
                               <tr key={d.name} className="border-b border-slate-100 dark:border-slate-800">
-                                <td className="py-2 px-3 text-sm font-medium">{d.name}</td>
+                                  <td className="py-2 px-3 text-sm font-medium">
+                                    <div className="min-w-0"><span className="truncate max-w-[220px]" title={d.name}>{d.name}</span></div>
+                                  </td>
                                 <td className="py-2 px-3">{d.total}</td>
                                 <td className="py-2 px-3">{d.under}</td>
                                 <td className="py-2 px-3">{d.pctUnder}%</td>
@@ -922,7 +935,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       </td>
                       <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{g.department || '\u2014'}</td>
                       {activeTab === 'Team' && <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{g.team_name || '\u2014'}</td>}
-                      {activeTab === 'Individual' && <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{g.employee_name || '\u2014'}</td>}
+                      {activeTab === 'Individual' && <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">
+                        <div className="min-w-0"><span className="truncate max-w-[220px]" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div>
+                      </td>}
                       <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{g.delegation || '\u2014'}</td>
                       <td className="py-3 px-4"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority || 'Medium')}`}>{g.priority || 'Medium'}</span></td>
                       <td className="py-3 px-4">
@@ -958,7 +973,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Goal Level</span><span className="text-slate-700 dark:text-slate-200">{g.scope === 'Department' ? '🏢 Dept-wide' : g.scope === 'Team' ? '👥 Team' : '👤 Individual'}</span></div>
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Department</span><span className="text-slate-700 dark:text-slate-200">{g.department || '\u2014'}</span></div>
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team</span><span className="text-slate-700 dark:text-slate-200">{g.team_name || '\u2014'}</span></div>
-                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Employee</span><span className="text-slate-700 dark:text-slate-200">{g.employee_name || '\u2014'}</span></div>
+                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Employee</span>
+                                  <div className="min-w-0"><span className="text-slate-700 dark:text-slate-200 truncate max-w-[220px]" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div>
+                                </div>
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Quarter</span><span className="text-slate-700 dark:text-slate-200">{g.quarter || '\u2014'}</span></div>
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Target Date</span><span className={`${overdue ? 'text-red-600 font-bold' : 'text-slate-700 dark:text-slate-200'}`}>{g.target_date || '\u2014'}</span></div>
                               </div>

@@ -118,10 +118,14 @@ export const IDP = () => {
             <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
             <th className="pb-3"></th></tr></thead>
             <tbody>{plans.map((p, i) => (
-              <tr key={p.id} className="border-b border-slate-50 dark:border-slate-800/50">
+                <tr key={p.id} className="border-b border-slate-50 dark:border-slate-800/50">
                 <td className="py-3 text-sm text-slate-400">{i + 1}</td>
-                <td className="py-3 font-medium text-slate-700 dark:text-slate-200">{p.skill_gap}</td>
-                <td className="py-3 text-sm text-slate-500 dark:text-slate-400">{p.growth_step}</td>
+                <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
+                  <div className="min-w-0"><span className="truncate max-w-[260px]" title={p.skill_gap}>{p.skill_gap}</span></div>
+                </td>
+                <td className="py-3 text-sm text-slate-500 dark:text-slate-400">
+                  <div className="min-w-0"><span className="truncate max-w-[260px]" title={p.growth_step}>{p.growth_step}</span></div>
+                </td>
                 <td className="py-3">
                   <select value={p.status} onChange={e => updateStatus(p.id, e.target.value)} className="text-xs font-bold uppercase px-2 py-1 rounded-lg border-0 bg-slate-50 dark:bg-slate-800 dark:text-slate-200" style={{ color: p.status === 'Completed' ? '#10b981' : p.status === 'In Progress' ? '#f59e0b' : '#94a3b8' }}>
                     <option>Not Started</option><option>In Progress</option><option>Completed</option>
