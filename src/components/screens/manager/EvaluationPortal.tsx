@@ -761,7 +761,11 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
                 </tr></thead>
                 <tbody>
                   {appraisals.map(a => {
-                    const sigCount = [a.supervisor_signature, a.reviewer_signature, a.employee_signature, a.hr_signature].filter(Boolean).length;
+                    const isAchievement = a.form_type === 'Achievement Measure';
+                    const sigCount = isAchievement
+                      ? [a.supervisor_signature, a.employee_signature].filter(Boolean).length
+                      : [a.supervisor_signature, a.reviewer_signature, a.employee_signature, a.hr_signature].filter(Boolean).length;
+                    const sigTotal = isAchievement ? 2 : 4;
                     return (
                       <tr key={a.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                         <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
@@ -773,7 +777,7 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
                         <td className="py-3 text-slate-600 dark:text-slate-300">{a.job_knowledge}/5</td>
                         <td className="py-3 text-slate-600 dark:text-slate-300">{a.productivity}/5</td>
                         <td className="py-3 font-bold text-teal-green">{a.overall}</td>
-                        <td className="py-3"><span className={`text-[10px] font-bold ${sigCount >= 3 ? 'text-emerald-600' : sigCount > 0 ? 'text-amber-500' : 'text-slate-400'}`}>{sigCount}/4</span></td>
+                        <td className="py-3"><span className={`text-[10px] font-bold ${sigCount >= sigTotal ? 'text-emerald-600' : sigCount > 0 ? 'text-amber-500' : 'text-slate-400'}`}>{sigCount}/{sigTotal}</span></td>
                         <td className="py-3">
                           {a.verified ? (
                             <span className="text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-1"><CheckCircle size={12} /> Verified</span>

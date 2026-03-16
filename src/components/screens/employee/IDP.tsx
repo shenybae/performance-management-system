@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
-import { Plus, X, Download, Trash2, CheckCircle } from 'lucide-react';
+import { Plus, X, Download, Trash2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 
 export const IDP = () => {
   const [showForm, setShowForm] = useState(false);
   const [plans, setPlans] = useState<any[]>([]);
+  const [pips, setPips] = useState<any[]>([]);
   const [form, setForm] = useState({ skill_gap: '', growth_step: '', status: '' });
   const user = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
 
@@ -21,6 +22,12 @@ export const IDP = () => {
       const mine = Array.isArray(data) ? data.filter((p: any) => p.employee_id === (user.employee_id || user.id) || user.role === 'HR' || user.role === 'Manager') : [];
       setPlans(mine);
     } catch { setPlans([]); }
+    try {
+      const pipRes = await fetch('/api/pip_plans', { headers: getAuthHeaders() });
+      const pipData = await pipRes.json();
+      const myPips = Array.isArray(pipData) ? pipData.filter((p: any) => p.employee_id === (user.employee_id || user.id)) : [];
+      setPips(myPips);
+    } catch { setPips([]); }
   };
 
   const submitPlan = async () => {
@@ -142,6 +149,47 @@ export const IDP = () => {
           </table>
         </div>
       </Card>
+
+      {pips.length > 0 && (
+        <Card className="mt-4">
+          <div className="flex items-center gap-2 mb-4">
+            <AlertTriangle size={16} className="text-amber-500" />
+            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">Performance Improvement Plans ({pips.length})</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-800">
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Start Date</th>
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">End Date</th>
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Deficiency</th>
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Improvement Objective</th>
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Outcome</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pips.map(p => (
+                  <tr key={p.id} className="border-b border-slate-50 dark:border-slate-800/50">
+                    <td className="py-3 text-slate-600 dark:text-slate-400">{p.start_date || '—'}</td>
+                    <td className="py-3 text-slate-600 dark:text-slate-400">{p.end_date || '—'}</td>
+                    <td className="py-3 text-slate-700 dark:text-slate-300 max-w-xs">
+                      <div className="truncate" title={p.deficiency}>{p.deficiency || '—'}</div>
+                    </td>
+                    <td className="py-3 text-slate-700 dark:text-slate-300 max-w-xs">
+                      <div className="truncate" title={p.improvement_objective}>{p.improvement_objective || '—'}</div>
+                    </td>
+                    <td className="py-3">
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${p.outcome === 'Completed' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700' : p.outcome === 'Terminated' ? 'bg-red-100 dark:bg-red-900/30 text-red-700' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700'}`}>
+                        {p.outcome || 'In Progress'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </motion.div>
   );
 };
