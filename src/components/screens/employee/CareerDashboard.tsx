@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
-import { Download, Target, TrendingUp, Award, BarChart3, SendHorizonal } from 'lucide-react';
+import { Download, Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTriangle } from 'lucide-react';
 import { LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 
 export const CareerDashboard = () => {
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
+  const [pips, setPips] = useState<any[]>([]);
   const [requesting, setRequesting] = useState<number | null>(null);
   const [selfAssessments, setSelfAssessments] = useState<any[]>([]);
   const user = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
@@ -18,6 +19,7 @@ export const CareerDashboard = () => {
   const fetchData = async () => {
     try { const r = await fetch('/api/appraisals', { headers: getAuthHeaders() }); const d = await r.json(); setAppraisals(Array.isArray(d) ? d.filter((a: any) => a.employee_id === (user.employee_id || user.id)) : []); } catch { setAppraisals([]); }
     try { const r = await fetch('/api/goals', { headers: getAuthHeaders() }); const d = await r.json(); setGoals(Array.isArray(d) ? d.filter((g: any) => g.employee_id === (user.employee_id || user.id)) : []); } catch { setGoals([]); }
+    try { const r = await fetch('/api/pip_plans', { headers: getAuthHeaders() }); const d = await r.json(); setPips(Array.isArray(d) ? d.filter((p: any) => p.employee_id === (user.employee_id || user.id)) : []); } catch { setPips([]); }
     try { const r = await fetch('/api/self_assessments', { headers: getAuthHeaders() }); const d = await r.json(); setSelfAssessments(Array.isArray(d) ? d.filter((s: any) => s.employee_id === (user.employee_id || user.id)) : []); } catch { setSelfAssessments([]); }
   };
 
@@ -75,7 +77,7 @@ export const CareerDashboard = () => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="Career Dashboard" subtitle="Your performance overview and career trajectory" />
-        <button onClick={() => exportToCSV([...appraisals.map(a => ({ ...a, type: 'Appraisal' })), ...goals.map(g => ({ ...g, type: 'Goal' }))], 'career_data')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> CSV</button>
+        <button onClick={() => exportToCSV([...appraisals.map(a => ({ ...a, type: 'Appraisal' })), ...goals.map(g => ({ ...g, type: 'Goal' })), ...pips.map(p => ({ ...p, type: 'PIP' }))], 'career_data')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> CSV</button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
@@ -202,6 +204,41 @@ export const CareerDashboard = () => {
           </div>
         </Card>
       )}
+
+      <Card className="mt-4">
+        <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">My Performance Improvement Plans ({pips.length})</h3>
+        {pips.length === 0 ? (
+          <div className="py-8 text-center text-slate-400">
+            <AlertTriangle size={20} className="mx-auto mb-2 opacity-40" />
+            No active PIP records.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-800">
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Deficiency</th>
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Improvement Objective</th>
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Period</th>
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Outcome</th>
+                  <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Supervisor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pips.map((p) => (
+                  <tr key={p.id} className="border-b border-slate-50 dark:border-slate-800/50">
+                    <td className="py-3 text-sm text-slate-700 dark:text-slate-200">{p.deficiency || '—'}</td>
+                    <td className="py-3 text-sm text-slate-600 dark:text-slate-300">{p.improvement_objective || '—'}</td>
+                    <td className="py-3 text-sm text-slate-500 dark:text-slate-400">{p.start_date || '—'} to {p.end_date || '—'}</td>
+                    <td className="py-3 text-sm font-bold text-amber-600 dark:text-amber-400">{p.outcome || 'In Progress'}</td>
+                    <td className="py-3 text-sm text-slate-500 dark:text-slate-400">{p.supervisor_name || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </motion.div>
   );
 };

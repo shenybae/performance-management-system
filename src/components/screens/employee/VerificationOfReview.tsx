@@ -19,7 +19,7 @@ export const VerificationOfReview = () => {
     try {
       const res = await fetch('/api/appraisals', { headers: getAuthHeaders() });
       const data = await res.json();
-      const mine = Array.isArray(data) ? data.filter((a: any) => a.employee_id === (user.employee_id || user.id)) : [];
+      const mine = Array.isArray(data) ? data : [];
       setAppraisals(mine);
     } catch { setAppraisals([]); }
   };
@@ -32,8 +32,7 @@ export const VerificationOfReview = () => {
         body: JSON.stringify({
           employee_signature: signature,
           employee_signature_date: new Date().toISOString().split('T')[0],
-          employee_acknowledgement: rebuttal || 'Acknowledged',
-          verified: 1
+          employee_acknowledgement: rebuttal || 'Acknowledged'
         })
       });
       if (res.ok) {
@@ -64,29 +63,36 @@ export const VerificationOfReview = () => {
         <Card>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-500"><CheckCircle size={18} className="text-white" /></div>
-            <div><p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Verified</p><p className="text-2xl font-bold text-emerald-600">{appraisals.filter(a => a.employee_signature).length}</p></div>
+            <div><p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Verified</p><p className="text-2xl font-bold text-emerald-600">{appraisals.filter(a => !!a.verified).length}</p></div>
           </div>
         </Card>
         <Card>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-amber-500"><XCircle size={18} className="text-white" /></div>
-            <div><p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Pending</p><p className="text-2xl font-bold text-amber-600">{appraisals.filter(a => !a.employee_signature).length}</p></div>
+            <div><p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Pending</p><p className="text-2xl font-bold text-amber-600">{appraisals.filter(a => !a.verified).length}</p></div>
           </div>
         </Card>
       </div>
 
       {/* Reviews List */}
       <div className="space-y-4">
-        {appraisals.map(a => (
+        {appraisals.map(a => {
+          const managerSigned = !!a.supervisor_signature;
+          const employeeSigned = !!a.employee_signature;
+          const canEmployeeSign = managerSigned && !employeeSigned;
+
+          return (
           <Card key={a.id}>
             <div className="flex justify-between items-start">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
                   <h3 className="font-bold text-slate-800 dark:text-slate-100">{a.form_type || a.eval_type || 'Performance Evaluation'}</h3>
-                  {a.employee_signature ? (
+                  {a.verified ? (
                     <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full uppercase flex items-center gap-1"><CheckCircle size={10} /> Verified</span>
+                  ) : managerSigned ? (
+                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full uppercase">Pending Employee Signature</span>
                   ) : (
-                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full uppercase">Pending Verification</span>
+                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full uppercase">Pending Manager Signature</span>
                   )}
                 </div>
                 <div className="flex gap-6 text-xs text-slate-500 dark:text-slate-400">
@@ -127,7 +133,7 @@ export const VerificationOfReview = () => {
             )}
 
             {/* Verification Section */}
-            {!a.employee_signature && (
+            {canEmployeeSign && (
               <div className="mt-4">
                 {expandedId === a.id ? (
                   <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="border-t dark:border-slate-700 pt-4 space-y-4">
@@ -154,6 +160,12 @@ export const VerificationOfReview = () => {
               </div>
             )}
 
+            {!managerSigned && !employeeSigned && (
+              <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-100 dark:border-amber-800">
+                <p className="text-xs text-amber-700 dark:text-amber-400">Awaiting manager signature before you can verify this review.</p>
+              </div>
+            )}
+
             {/* Already verified */}
             {a.employee_signature && a.employee_acknowledgement && (
               <div className="mt-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800">
@@ -162,7 +174,7 @@ export const VerificationOfReview = () => {
               </div>
             )}
           </Card>
-        ))}
+        )})}
 
         {appraisals.length === 0 && (
           <Card>

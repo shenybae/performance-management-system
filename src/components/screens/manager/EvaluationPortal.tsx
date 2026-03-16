@@ -600,7 +600,8 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
   /* ════════════════════════════════════════════════════════════════ */
   if (view === 'detail' && detailRecord) {
     const a = detailRecord;
-    const isPerf = a.form_type === 'Performance Evaluation';
+    const recordType = (a.form_type || a.eval_type || '').toString().toLowerCase();
+    const isPerf = !recordType.includes('achievement');
     const ratingFields = isPerf
       ? [
           { key: 'work_quality', label: 'Quality of Work' },
@@ -761,7 +762,7 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
                 </tr></thead>
                 <tbody>
                   {appraisals.map(a => {
-                    const isAchievement = a.form_type === 'Achievement Measure';
+                    const isAchievement = (a.form_type || a.eval_type || '').toString().toLowerCase().includes('achievement');
                     const sigCount = isAchievement
                       ? [a.supervisor_signature, a.employee_signature].filter(Boolean).length
                       : [a.supervisor_signature, a.reviewer_signature, a.employee_signature, a.hr_signature].filter(Boolean).length;
@@ -782,12 +783,7 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
                           {a.verified ? (
                             <span className="text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-1"><CheckCircle size={12} /> Verified</span>
                           ) : (
-                            <button onClick={async () => {
-                              try {
-                                const res = await fetch(`/api/appraisals/${a.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ verified: 1, supervisor_signature_date: new Date().toISOString().split('T')[0] }) });
-                                if (res.ok) { window.notify?.('Appraisal verified', 'success'); fetchAppraisals(); }
-                              } catch { window.notify?.('Failed to verify', 'error'); }
-                            }} className="text-[10px] font-bold text-amber-500 hover:text-emerald-600 uppercase transition-colors">Click to Verify</button>
+                            <span className="text-[10px] font-bold text-amber-500 uppercase">Pending</span>
                           )}
                         </td>
                         <td className="py-3 flex items-center gap-2">
