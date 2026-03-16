@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Users, 
-  Target, 
-  ClipboardCheck, 
-  ShieldAlert, 
-  UserPlus, 
-  LogOut, 
+import {
+  Users,
+  Target,
+  ClipboardCheck,
+  ShieldAlert,
+  UserPlus,
+  LogOut,
   TrendingUp,
   Award,
   MessageSquare,
@@ -22,7 +22,10 @@ import {
   X,
   CheckCircle,
   AlertTriangle,
-  Info
+  Info,
+  DollarSign,
+  Wallet,
+  WifiOff
 } from 'lucide-react';
 
 // --- Types ---
@@ -44,6 +47,8 @@ import { OffboardingHub } from './components/screens/hr/OffboardingHub';
 import { OnboardingHub } from './components/screens/hr/OnboardingHub';
 import { UserAccounts } from './components/screens/hr/UserAccounts';
 import { AuditLogs } from './components/screens/hr/AuditLogs';
+import { PayrollAnalytics } from './components/screens/hr/PayrollAnalytics';
+import { PayrollManagement } from './components/screens/hr/PayrollManagement';
 
 // --- Manager Screens ---
 import { OKRPlanner } from './components/screens/manager/OKRPlanner';
@@ -61,6 +66,7 @@ import { VerificationOfReview } from './components/screens/employee/Verification
 import { IDP } from './components/screens/employee/IDP';
 import { CoachingChat } from './components/screens/employee/CoachingChat';
 import { Settings } from './components/screens/common/Settings';
+import { NotFound } from './components/common/NotFound';
 
 interface UserSession {
   id: number;
@@ -87,6 +93,8 @@ export default function App() {
   const [users, setUsers] = useState<any[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     try {
       const saved = localStorage.getItem('talentflow_theme');
@@ -113,6 +121,15 @@ export default function App() {
     }
   }, [isDarkMode, user]);
 
+  // Online/Offline detection
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    window.addEventListener('offline', goOffline);
+    window.addEventListener('online', goOnline);
+    return () => { window.removeEventListener('offline', goOffline); window.removeEventListener('online', goOnline); };
+  }, []);
+
   // --- Routing helpers: map screens to role-based URL paths and vice-versa ---
   const roleSlug = (r: string) => (r === 'HR' ? 'admin' : r.toLowerCase());
 
@@ -127,6 +144,8 @@ export default function App() {
     A7: '/admin/onboarding',
     A8: '/admin/feedback360',
     A9: '/admin/audit-logs',
+    A10: '/admin/payroll-analytics',
+    A11: '/admin/payroll-management',
     // Manager
     B1: '/manager/okr-planner',
     B2: '/manager/coaching-journal',
@@ -154,6 +173,8 @@ export default function App() {
       'offboarding': 'A4',
       'user-accounts': 'A5',
       'audit-logs': 'A9',
+      'payroll-analytics': 'A10',
+      'payroll-management': 'A11',
       'db-viewer': 'A6',
       'feedback360': 'A8',
       'settings': 'S1',
@@ -196,15 +217,18 @@ export default function App() {
       if (parts.length === 0) return null;
       const role = parts[0];
       const page = parts[1] || '';
-      if (!['admin','manager','employee'].includes(role)) return null;
+      if (!['admin','manager','employee'].includes(role)) {
+        if (parts[0] !== 'login') { setActiveScreen('404'); return '404'; }
+        return null;
+      }
       const map = pathToScreenMap[role];
-      if (!map) return null;
+      if (!map) { setActiveScreen('404'); return '404'; }
       const screen = map[page];
-      if (!screen) return null;
+      if (!screen) { setActiveScreen('404'); return '404'; }
       // If logged in, ensure role matches the URL role (e.g., HR => admin)
       if (user) {
         const expected = roleSlug(user.role);
-        if (expected !== role) return null;
+        if (expected !== role) return null; // role mismatch — don't 404, just ignore stale URL
       }
       setActiveScreen(screen);
       return screen;
@@ -266,15 +290,19 @@ export default function App() {
   }, []);
 
   const handleLogin = (session: UserSession) => {
-    // Restore any pre-login requested path (e.g. /admin/recruitmentboard)
+    const slug = session.role === 'HR' ? 'admin' : session.role.toLowerCase();
+    const homeRoute = session.role === 'HR' ? '/admin/employee-directory' : session.role === 'Manager' ? '/manager/okr-planner' : '/employee/career-dashboard';
+    const homeScreen = session.role === 'HR' ? 'A1' : session.role === 'Manager' ? 'B1' : 'C1';
+
+    // Only restore pre-login path if it belongs to the same role
     try {
       const redirect = sessionStorage.getItem('pre_login_path');
-      if (redirect) {
-        window.history.replaceState({}, '', redirect);
-        sessionStorage.removeItem('pre_login_path');
-      }
+      sessionStorage.removeItem('pre_login_path');
+      const validRedirect = redirect && redirect.startsWith(`/${slug}/`) ? redirect : null;
+      window.history.replaceState({}, '', validRedirect || homeRoute);
     } catch (e) {}
 
+    setActiveScreen(homeScreen);
     setUser(session);
     localStorage.setItem('talentflow_user', JSON.stringify(session));
     localStorage.setItem('user', JSON.stringify(session));
@@ -372,6 +400,17 @@ export default function App() {
     );
   }
 
+  if (activeScreen === '404') {
+    return (
+      <NotFound onGoHome={() => {
+        const home = user.role === 'HR' ? 'A1' : user.role === 'Manager' ? 'B1' : 'C1';
+        setActiveScreen(home);
+        const route = user.role === 'HR' ? '/admin/employee-directory' : user.role === 'Manager' ? '/manager/okr-planner' : '/employee/career-dashboard';
+        try { window.history.pushState({}, '', route); } catch (e) {}
+      }} />
+    );
+  }
+
   const renderScreen = () => {
     if (loading && employees.length === 0) return (
       <motion.div 
@@ -405,13 +444,15 @@ export default function App() {
               case 'A9': return <AuditLogs />;
               case 'A6': return <DBViewer />;
               case 'A8': return <FeedbackBox employees={employees} users={users} />;
+              case 'A10': return <PayrollAnalytics />;
+              case 'A11': return <PayrollManagement employees={employees} />;
 
               // Manager Screens (The Coach & Evaluator)
               case 'B1': return <OKRPlanner employees={employees} />;
               case 'B2': return <CoachingJournal employees={employees} navContext={navContext} onNavContextClear={() => setNavContext(null)} />;
               case 'B3': return <DisciplinaryLog employees={employees} />;
               case 'B4': return <EvaluationPortal employees={employees} />;
-              case 'B5': return <Promotability />;
+              case 'B5': return <Promotability employees={employees} />;
               case 'B6': return <PIPManager employees={employees} />;
               case 'B7': return <SuggestionForm employees={employees} />;
               case 'B8': return <FeedbackBox employees={employees} users={users} />;
@@ -429,9 +470,14 @@ export default function App() {
                 setUser(updated);
                 localStorage.setItem('talentflow_user', JSON.stringify(updated));
                 localStorage.setItem('user', JSON.stringify(updated));
+              }} onAccountInfoChanged={(info) => {
+                const updated = { ...user, ...info };
+                setUser(updated);
+                localStorage.setItem('talentflow_user', JSON.stringify(updated));
+                localStorage.setItem('user', JSON.stringify(updated));
               }} />;
               
-              default: return <div className="p-10 text-slate-500 italic">Screen not found.</div>;
+              default: return null;
             }
           })()}
         </motion.div>
@@ -485,6 +531,8 @@ export default function App() {
               <SidebarItem icon={LogOut} label="Offboarding Hub" active={activeScreen === 'A4'} onClick={() => goToScreen('A4')} />
               <SidebarItem icon={ShieldCheck} label="User Accounts" active={activeScreen === 'A5'} onClick={() => goToScreen('A5')} />
               <SidebarItem icon={ShieldCheck} label="Audit Logs" active={activeScreen === 'A9'} onClick={() => goToScreen('A9')} />
+              <SidebarItem icon={DollarSign} label="Payroll Analytics" active={activeScreen === 'A10'} onClick={() => goToScreen('A10')} />
+              <SidebarItem icon={Wallet} label="Payroll Management" active={activeScreen === 'A11'} onClick={() => goToScreen('A11')} />
               <SidebarItem icon={TrendingUp} label="DB Viewer" active={activeScreen === 'A6'} onClick={() => goToScreen('A6')} />
               <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
             </>
@@ -526,18 +574,18 @@ export default function App() {
               <img src={user.profile_picture} alt="Profile" className="w-14 h-14 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700" />
             ) : (
               <div className="w-14 h-14 system-bg border-2 border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-teal-deep dark:text-teal-green font-bold text-lg">
-                {((user.employee_name || user.full_name || user.email || user.username || 'U')[0] || 'U').toUpperCase()}
+                {((user.employee_name || user.full_name || user.username || user.email || 'U')[0] || 'U').toUpperCase()}
               </div>
             )}
             <div className="text-center min-w-0 w-full">
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.employee_name || user.full_name || user.email || user.username}</p>
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.employee_name || user.full_name || user.username || user.email}</p>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">{user.role}</p>
               {user.position && <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{user.position}</p>}
               {user.dept && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold truncate">{user.dept}</p>}
             </div>
           </div>
-          <button 
-            onClick={handleLogout}
+          <button
+            onClick={() => setShowLogoutConfirm(true)}
             className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
           >
             <LogOut size={14} /> Sign Out
@@ -547,6 +595,18 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-transparent transition-colors duration-500 relative">
+        <AnimatePresence>
+          {isOffline && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="sticky top-0 z-50 mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-sm rounded-xl flex items-center gap-2 font-medium"
+            >
+              <WifiOff size={16} className="shrink-0" /> You are offline. Some features may not work until your connection is restored.
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-40">
           <NotificationBell onNavigate={(screen, ctx) => { goToScreen(screen); setNavContext(ctx || null); }} />
         </div>
@@ -554,6 +614,48 @@ export default function App() {
           {renderScreen()}
         </div>
       </main>
+
+      {/* Sign Out Confirmation Modal */}
+      <AnimatePresence>
+        {showLogoutConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center"
+          >
+            <div className="absolute inset-0 bg-black/40" onClick={() => setShowLogoutConfirm(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-sm mx-4"
+            >
+              <div className="glass-card p-6 text-center">
+                <div className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4">
+                  <LogOut size={24} className="text-red-500" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">Sign Out</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Are you sure you want to sign out of your account?</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowLogoutConfirm(false)}
+                    className="flex-1 px-4 py-2.5 text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => { setShowLogoutConfirm(false); handleLogout(); }}
+                    className="flex-1 px-4 py-2.5 text-sm font-bold text-white bg-red-500 rounded-xl hover:bg-red-600 transition-colors"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
     </NotificationProvider>
   );

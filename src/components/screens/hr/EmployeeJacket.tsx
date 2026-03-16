@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Users, Package, History, ChevronRight, Edit3, Save, X, ShieldAlert } from 'lucide-react';
+import { Users, Package, History, ChevronRight, Edit3, Save, X, ShieldAlert, FileCheck } from 'lucide-react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
+import { SignatureUpload } from '../../common/SignatureUpload';
+import { getAuthHeaders } from '../../../utils/csv';
 
 interface EmployeeJacketProps {
   employee: Employee | null;
@@ -16,6 +18,8 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
     name: '', position: '', dept: '', hire_date: '', salary_base: 0, ssn: '', status: ''
   });
   const [fallbackPropertyRows, setFallbackPropertyRows] = useState<any[] | null>(null);
+  const [hrSignatures, setHrSignatures] = useState<Record<number, string>>({});
+  const [signingId, setSigningId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +62,29 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
       } else {
         const err = await res.json();
         (window as any).notify?.(err.error || 'Failed to update', 'error');
+      }
+    } catch { (window as any).notify?.('Server error', 'error'); }
+  };
+
+  const signAsHR = async (appraisalId: number) => {
+    const sig = hrSignatures[appraisalId];
+    if (!sig) { (window as any).notify?.('Please provide your signature', 'error'); return; }
+    try {
+      const res = await fetch(`/api/appraisals/${appraisalId}`, {
+        method: 'PUT', headers: getAuthHeaders(),
+        body: JSON.stringify({
+          hr_signature: sig,
+          hr_signature_date: new Date().toISOString().split('T')[0],
+        })
+      });
+      if (res.ok) {
+        (window as any).notify?.('HR signature saved', 'success');
+        setHrSignatures(prev => { const n = { ...prev }; delete n[appraisalId]; return n; });
+        setSigningId(null);
+        onBack(); // refresh data
+      } else {
+        const err = await res.json();
+        (window as any).notify?.(err.error || 'Failed to sign', 'error');
       }
     } catch { (window as any).notify?.('Server error', 'error'); }
   };
@@ -255,19 +282,48 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px]">Overall Rating</th>
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px]">Status</th>
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px]">Verified</th>
+                  <th className="pb-2 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px]">HR Signature</th>
                 </tr>
               </thead>
               <tbody>
-                {employee.appraisals?.map(a => (
-                  <tr key={a.id} className="border-b border-slate-50 dark:border-slate-800/50">
+                {employee.appraisals?.map(a => {
+                  const isPerf = ((a as any).form_type || '').toLowerCase().includes('performance');
+                  const hasHrSig = !!(a as any).hr_signature;
+                  const canHrSign = isPerf && !hasHrSig;
+                  return (
+                  <React.Fragment key={a.id}>
+                  <tr className="border-b border-slate-50 dark:border-slate-800/50">
                     <td className="py-2 text-slate-600 dark:text-slate-400">{a.sign_off_date}</td>
                     <td className="py-2 text-xs text-slate-500">{(a as any).form_type || (a as any).eval_type || '—'}</td>
                     <td className="py-2 font-bold text-teal-green">{a.overall}/5.0</td>
                     <td className="py-2 text-slate-600 dark:text-slate-400">{a.promotability_status}</td>
-                    <td className="py-2">{(a as any).verified ? <span className="text-[10px] font-bold text-emerald-600">VERIFIED</span> : <span className="text-[10px] font-bold text-amber-500">PENDING</span>}</td>
+                    <td className="py-2">{((a as any).supervisor_signature && (a as any).employee_signature) ? <span className="text-[10px] font-bold text-emerald-600">VERIFIED</span> : <span className="text-[10px] font-bold text-amber-500">PENDING</span>}</td>
+                    <td className="py-2">
+                      {hasHrSig ? (
+                        <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><FileCheck size={12} /> Signed</span>
+                      ) : canHrSign ? (
+                        <button onClick={() => setSigningId(signingId === a.id ? null : a.id)} className="text-[10px] font-bold text-teal-deep dark:text-teal-green hover:underline">Sign Now</button>
+                      ) : (
+                        <span className="text-[10px] text-slate-400">—</span>
+                      )}
+                    </td>
                   </tr>
-                ))}
-                {(!employee.appraisals || employee.appraisals.length === 0) && <tr><td colSpan={5} className="py-6 text-center text-sm text-slate-400">No appraisals on record.</td></tr>}
+                  {signingId === a.id && (
+                    <tr><td colSpan={6} className="py-3 px-2">
+                      <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3 bg-slate-50 dark:bg-slate-800/50">
+                        <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase">HR Officer Signature</h4>
+                        <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">I have reviewed the supervisor's evaluation, reviewer's comments, and the employee's statement (if any). This form shall be made part of the employee's official Personnel File.</p>
+                        <SignatureUpload label="HR Signature" value={hrSignatures[a.id] || ''} onChange={v => setHrSignatures(prev => ({ ...prev, [a.id]: v }))} />
+                        <div className="flex gap-2 justify-end">
+                          <button onClick={() => { setSigningId(null); setHrSignatures(prev => { const n = { ...prev }; delete n[a.id]; return n; }); }} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700">Cancel</button>
+                          <button onClick={() => signAsHR(a.id)} className="flex items-center gap-2 bg-teal-deep text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors"><FileCheck size={14} /> Submit HR Signature</button>
+                        </div>
+                      </div>
+                    </td></tr>
+                  )}
+                  </React.Fragment>
+                )})}
+                {(!employee.appraisals || employee.appraisals.length === 0) && <tr><td colSpan={6} className="py-6 text-center text-sm text-slate-400">No appraisals on record.</td></tr>}
               </tbody>
             </table>
           </div>

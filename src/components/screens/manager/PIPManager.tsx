@@ -110,7 +110,7 @@ export const PIPManager = ({ employees }: PIPManagerProps) => {
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="IDP & PIP Manager" subtitle="Create development plans (IDP) for growth or improvement plans (PIP) for correction" />
         <div className="flex gap-2">
-          <button onClick={() => exportToCSV([...plans.map(p => ({ ...p, type: 'PIP' })), ...devPlans.map(d => ({ ...d, type: 'IDP' }))], 'idp_pip')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> CSV</button>
+          <button onClick={() => exportToCSV([...plans.map(p => ({ ...p, type: 'PIP' })), ...devPlans.map(d => ({ ...d, type: 'IDP' }))], 'idp_pip')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
           <button onClick={() => { setShowForm(showForm === 'idp' ? 'none' : 'idp'); setEditingId(null); }} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${showForm === 'idp' ? 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300' : 'bg-teal-deep text-white hover:bg-teal-green'}`}>
             {showForm === 'idp' ? <><X size={16} /> Close</> : <><TrendingUp size={16} /> New IDP</>}
           </button>
@@ -163,7 +163,10 @@ export const PIPManager = ({ employees }: PIPManagerProps) => {
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <Input label="Progress Check Date" type="date" value={pipForm.progress_check_date} onChange={(e: any) => setPipForm({ ...pipForm, progress_check_date: e.target.value })} />
-                <Input label="Supervisor Name" value={pipForm.supervisor_name} onChange={(e: any) => setPipForm({ ...pipForm, supervisor_name: e.target.value })} />
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Supervisor</label>
+                  <SearchableSelect options={employees.map(e => ({ value: e.id, label: e.name }))} value={employees.find(e => e.name === pipForm.supervisor_name)?.id || ''} onChange={(id: any) => setPipForm({ ...pipForm, supervisor_name: employees.find(e => e.id === id)?.name || '' })} placeholder="Select supervisor..." />
+                </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Outcome</label>
                   <select value={pipForm.outcome} onChange={e => setPipForm({ ...pipForm, outcome: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100">
@@ -206,7 +209,13 @@ export const PIPManager = ({ employees }: PIPManagerProps) => {
                   </select>
                 </div>
               </div>
-              <Input label="Skill Gap" value={idpForm.skill_gap} onChange={(e: any) => setIdpForm({ ...idpForm, skill_gap: e.target.value })} placeholder="e.g. Leadership, Communication, Technical..." />
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Skill Gap</label>
+                <select value={idpForm.skill_gap} onChange={e => setIdpForm({ ...idpForm, skill_gap: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100">
+                  <option value="">Select skill gap...</option>
+                  {['Communication','Time Management','Technical Skills','Leadership','Teamwork','Problem Solving','Attendance','Work Quality','Customer Service','Adaptability','Initiative','Productivity'].map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
               <Input label="Growth Step / Action Plan" value={idpForm.growth_step} onChange={(e: any) => setIdpForm({ ...idpForm, growth_step: e.target.value })} placeholder="Training, mentoring, course, certification..." />
               <div className="flex justify-end">
                 <button type="submit" className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green">Create IDP</button>

@@ -19,7 +19,7 @@ export const RecruitmentBoard = () => {
     start_date: '', position_type: '', type_reason: '',
     office_assignment: '',
     recruitment_web: '', recruitment_newspapers: '', recruitment_listserv: '', recruitment_other: '',
-    classification: 'Exempt', hiring_range: '', hourly_rate: '',
+    classification: '', hiring_range: '', hourly_rate: '',
     supervisor_approval: '', supervisor_approval_date: '', supervisor_approval_sig: '',
     dept_head_approval: '', dept_head_approval_date: '', dept_head_approval_sig: '',
     cabinet_approval: '', cabinet_approval_date: '', cabinet_approval_sig: '',
@@ -239,7 +239,7 @@ export const RecruitmentBoard = () => {
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="Recruitment & Hiring Board" subtitle="Track applicants and pre-employment appraisals" />
         <div className="flex gap-2">
-          <button onClick={() => exportToCSV([...applicants.map(a => ({ ...a, type: 'Applicant' })), ...requisitions.map(r => ({ ...r, type: 'Requisition' }))], 'recruitment')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> CSV</button>
+          <button onClick={() => exportToCSV([...applicants.map(a => ({ ...a, type: 'Applicant' })), ...requisitions.map(r => ({ ...r, type: 'Requisition' }))], 'recruitment')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
           <button onClick={() => setActiveForm(activeForm === 'requisition' ? 'none' : 'requisition')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${activeForm === 'requisition' ? 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300' : 'bg-teal-deep text-white hover:bg-teal-green'}`}>
             {activeForm === 'requisition' ? <><X size={16} /> Close</> : <><FileText size={16} /> Staff Requisition</>}
           </button>
@@ -258,7 +258,7 @@ export const RecruitmentBoard = () => {
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Job Title</label><input type="text" value={reqForm.job_title} onChange={e => setReqForm({ ...reqForm, job_title: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="e.g. Office Coordinator I" /></div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department / Office</label><input type="text" value={reqForm.department} onChange={e => setReqForm({ ...reqForm, department: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department / Office</label><select value={reqForm.department} onChange={e => setReqForm({ ...reqForm, department: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"><option value="">Select department...</option>{['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => <option key={d}>{d}</option>)}</select></div>
                 <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Supervisor</label><input type="text" value={reqForm.supervisor} onChange={e => setReqForm({ ...reqForm, supervisor: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
                 <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Hiring Contact (if other than supervisor)</label><input type="text" value={reqForm.hiring_contact} onChange={e => setReqForm({ ...reqForm, hiring_contact: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
               </div>
@@ -363,7 +363,7 @@ export const RecruitmentBoard = () => {
                     <input type="radio" name="classification" checked={reqForm.classification === 'Non-Exempt'} onChange={() => setReqForm({ ...reqForm, classification: 'Non-Exempt' })} />
                     <span className="font-bold w-28">Non-Exempt:</span>
                     <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mr-1">Hourly Pay Rate</span>
-                    <input type="text" value={reqForm.hourly_rate} onChange={e => setReqForm({ ...reqForm, hourly_rate: e.target.value })} disabled={reqForm.classification !== 'Non-Exempt'} className="flex-1 p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100 disabled:opacity-40" placeholder="e.g. $18.50/hr" />
+                    <input type="number" min="0" step="0.01" value={reqForm.hourly_rate} onChange={e => setReqForm({ ...reqForm, hourly_rate: e.target.value })} disabled={reqForm.classification !== 'Non-Exempt'} className="flex-1 p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100 disabled:opacity-40" placeholder="18.50" />
                   </label>
                 </div>
               </div>

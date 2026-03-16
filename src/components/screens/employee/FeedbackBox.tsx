@@ -267,7 +267,7 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
         <h2 className="text-lg font-bold">360° Feedback</h2>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowForm(s => !s)} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Plus size={14} /> New</button>
-          <button onClick={() => exportToCSV(feedback360, 'feedback_360')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={14} /> CSV</button>
+          <button onClick={() => exportToCSV(feedback360, 'feedback_360')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={14} /> XLSX</button>
         </div>
       </div>
 

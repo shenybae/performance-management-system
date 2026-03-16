@@ -5,7 +5,7 @@ import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { SignatureUpload } from '../../common/SignatureUpload';
-import { Star, FileText, X, Download, Trash2, ArrowLeft, Eye, CheckCircle } from 'lucide-react';
+import { Star, FileText, X, Download, Trash2, ArrowLeft, Eye, CheckCircle, Printer } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 
@@ -123,8 +123,8 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
     job_knowledge: 0, work_quality: 0, attendance: 0, productivity: 0, communication: 0, dependability: 0,
     job_knowledge_comment: '', work_quality_comment: '', attendance_comment: '', productivity_comment: '', communication_comment: '', dependability_comment: '',
     additional_comments: '', employee_goals: '',
+    supervisor_print_name: '',
     supervisor_signature: '', supervisor_signature_date: '',
-    employee_signature: '', employee_signature_date: '',
   });
   const [achForm, setAchForm] = useState(freshAch());
 
@@ -150,6 +150,7 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
     reviewer_signature: '', reviewer_signature_date: '',
     // Section III — Employee
     employee_acknowledgement: '',
+    employee_print_name: '',
     employee_signature: '', employee_signature_date: '',
     // Section IV — HR Officer
     hr_print_name: '',
@@ -227,6 +228,89 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
     } catch { window.notify?.('Failed to delete', 'error'); }
   };
 
+  /* ── PDF export ─────────────────────────────────────────────────── */
+  const exportPDF = (rec: any) => {
+    const formType = (rec.form_type || rec.eval_type || '').toString();
+    const isAch = formType.toLowerCase().includes('achievement');
+    const verified = isAch
+      ? !!(rec.supervisor_signature && rec.employee_signature)
+      : !!(rec.supervisor_signature && rec.reviewer_signature && rec.employee_signature && rec.hr_signature);
+    const ratingLabel = (v: number) => (['', 'Poor', 'Fair', 'Satisfactory', 'Good', 'Excellent'][v] || '');
+    const ratingRows: [string, number][] = isAch
+      ? [['Job Knowledge', rec.job_knowledge], ['Work Quality', rec.work_quality], ['Attendance', rec.attendance], ['Productivity', rec.productivity], ['Communication', rec.communication], ['Dependability', rec.dependability]]
+      : [['Quality of Work', rec.work_quality], ['Quantity of Work', rec.quantity_of_work], ['Relationship w/ Others', rec.relationship_with_others], ['Work Habits', rec.work_habits], ['Job Knowledge', rec.job_knowledge], ['Attendance', rec.attendance], ['Promotability', rec.promotability_score || rec.promotability]];
+    const sigCell = (label: string, name: string, sig: string, date: string) =>
+      '<td style="text-align:center;padding:0 10px;min-width:120px;">'
+      + '<div style="font-size:9px;font-weight:bold;text-transform:uppercase;color:#64748b;letter-spacing:1px;">' + label + '</div>'
+      + (name ? '<div style="font-size:9px;color:#475569;margin-bottom:2px;">' + name + '</div>' : '')
+      + '<div style="border:1px solid #cbd5e1;border-radius:4px;height:52px;display:flex;align-items:center;justify-content:center;background:#fff;margin:4px 0;">'
+      + (sig ? '<img src="' + sig + '" style="max-height:46px;max-width:110px;object-fit:contain;"/>' : '<span style="font-size:9px;color:#94a3b8;">Not signed</span>')
+      + '</div><div style="font-size:9px;color:#64748b;">' + (date || '—') + '</div></td>';
+    const sigsHtml = isAch
+      ? sigCell('Manager', rec.supervisor_print_name || '', rec.supervisor_signature || '', rec.supervisor_signature_date || '')
+        + sigCell('Employee', rec.employee_name || '', rec.employee_signature || '', rec.employee_signature_date || '')
+      : sigCell('Supervisor', rec.supervisor_print_name || '', rec.supervisor_signature || '', rec.supervisor_signature_date || '')
+        + sigCell('Reviewer', rec.reviewer_print_name || '', rec.reviewer_signature || '', rec.reviewer_signature_date || '')
+        + sigCell('Employee', rec.employee_print_name || rec.employee_name || '', rec.employee_signature || '', rec.employee_signature_date || '')
+        + sigCell('HR Officer', rec.hr_print_name || '', rec.hr_signature || '', rec.hr_signature_date || '');
+    const css = '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11px;color:#1e293b;padding:24px 32px}'
+      + 'h2{font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#0f766e;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin:14px 0 8px}'
+      + '.sec{border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;margin-bottom:12px}'
+      + '.fl{font-size:9px;font-weight:bold;text-transform:uppercase;color:#64748b}.fv{font-size:11px}'
+      + '.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px}'
+      + '.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}'
+      + '.rr{display:flex;align-items:center;padding:3px 6px;border-bottom:1px solid #f1f5f9}'
+      + '.cb{background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:5px 8px;font-size:10px;color:#334155;margin-top:3px;white-space:pre-wrap}'
+      + '@media print{body{padding:12px 20px}}';
+    const pFrom = rec.eval_period_from || rec.review_period_from || '—';
+    const pTo = rec.eval_period_to || rec.review_period_to || '—';
+    const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>' + formType + '</title><style>' + css + '</style></head><body>'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">'
+      + '<div><div style="font-size:16px;font-weight:bold;margin-bottom:2px;">' + formType + '</div>'
+      + '<div style="font-size:10px;color:#64748b;">' + (rec.employee_name || '') + ' &nbsp;&middot;&nbsp; Period: ' + pFrom + ' to ' + pTo + '</div></div>'
+      + '<span style="font-size:10px;font-weight:bold;text-transform:uppercase;padding:2px 10px;border-radius:20px;' + (verified ? 'background:#d1fae5;color:#065f46' : 'background:#fef3c7;color:#92400e') + '">' + (verified ? 'Verified' : 'Pending') + '</span></div>'
+      + '<div class="sec"><h2 style="margin-top:0">Employee Information</h2><div class="g3">'
+      + '<div><div class="fl">Employee</div><div class="fv">' + (rec.employee_name || '—') + '</div></div>'
+      + (!isAch
+          ? '<div><div class="fl">Department</div><div class="fv">' + (rec.employee_department || '—') + '</div></div>'
+            + '<div><div class="fl">Title</div><div class="fv">' + (rec.employee_title || '—') + '</div></div>'
+            + '<div><div class="fl">Status</div><div class="fv">' + (rec.status || '—') + '</div></div>'
+            + '<div><div class="fl">Eval Type</div><div class="fv">' + (rec.eval_type || '—') + '</div></div>'
+          : '')
+      + '<div><div class="fl">Period</div><div class="fv">' + pFrom + ' – ' + pTo + '</div></div>'
+      + '</div></div>'
+      + '<div class="sec"><h2 style="margin-top:0">Performance Ratings</h2>'
+      + ratingRows.map(([label, val]) =>
+          '<div class="rr"><span style="flex:1">' + label + '</span>'
+          + '<div style="width:90px;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin:0 8px"><div style="width:' + ((val || 0) / 5 * 100) + '%;height:6px;background:#0f766e;border-radius:3px"></div></div>'
+          + '<span style="font-weight:bold;width:30px;text-align:right">' + (val || 0) + '/5</span>'
+          + '<span style="font-size:9px;color:#64748b;width:80px;text-align:right">' + ratingLabel(val || 0) + '</span></div>'
+        ).join('')
+      + '<div class="rr" style="background:#f0fdf4;border-radius:4px;margin-top:4px;font-weight:bold"><span style="flex:1">Overall</span><span style="color:#0f766e">' + (rec.overall || '—') + '</span></div></div>'
+      + (rec.additional_comments ? '<div class="sec"><h2 style="margin-top:0">Comments</h2><div class="cb">' + rec.additional_comments + '</div></div>' : '')
+      + (rec.employee_goals ? '<div class="sec"><h2 style="margin-top:0">Employee Goals</h2><div class="cb">' + rec.employee_goals + '</div></div>' : '')
+      + (!isAch && rec.overall_rating
+          ? '<div class="sec"><h2 style="margin-top:0">Supervisor Overall Rating</h2><div class="g2">'
+            + '<div><div class="fl">Overall Rating</div><div class="fv">' + rec.overall_rating + '</div></div>'
+            + '<div><div class="fl">Recommendation</div><div class="fv">' + (rec.recommendation || '—') + '</div></div></div>'
+            + (rec.supervisors_overall_comment ? '<div class="fl">Comments</div><div class="cb">' + rec.supervisors_overall_comment + '</div>' : '') + '</div>'
+          : '')
+      + (!isAch && rec.reviewer_agree
+          ? '<div class="sec"><h2 style="margin-top:0">Reviewer Comments</h2>'
+            + '<div><div class="fl">Agreement</div><div class="fv">' + (rec.reviewer_agree === 'agree' ? 'Agrees with overall rating' : 'Disagrees' + (rec.revised_rating ? ' — Revised: ' + rec.revised_rating : '')) + '</div></div>'
+            + (rec.reviewers_comment ? '<div class="fl" style="margin-top:4px">Comments</div><div class="cb">' + rec.reviewers_comment + '</div>' : '') + '</div>'
+          : '')
+      + (!isAch && rec.employee_acknowledgement ? '<div class="sec"><h2 style="margin-top:0">Employee Acknowledgement</h2><div class="cb">' + rec.employee_acknowledgement + '</div></div>' : '')
+      + '<div class="sec"><h2 style="margin-top:0">Signatures</h2><table style="width:100%;border-collapse:collapse"><tr>' + sigsHtml + '</tr></table></div>'
+      + '<div style="margin-top:16px;text-align:center;font-size:9px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;">Printed on ' + new Date().toLocaleDateString() + ' &nbsp;&middot;&nbsp; Performance Management System</div>'
+      + '</body></html>';
+    const win = window.open('', '_blank');
+    if (!win) { window.notify?.('Please allow popups to export as PDF', 'error'); return; }
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => { win.print(); }, 600);
+  };
+
   /* ── radar data ─────────────────────────────────────────────────── */
   const avgScores: Record<string, number> = { 'Quality': 0, 'Quantity': 0, 'Job Knowledge': 0, 'Attendance': 0, 'Work Habits': 0, 'Relationships': 0, 'Promotability': 0 };
   if (appraisals.length > 0) {
@@ -273,10 +357,10 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
                 />
               </div>
               <div><label className={lbl}>Employee ID</label><input type="text" value={achForm.employee_id ? `#${achForm.employee_id}` : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
-              <div><label className={lbl}>Job Title</label><input type="text" value={achForm.employee_id ? (employees.find(e => String(e.id) === achForm.employee_id)?.title || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
+              <div><label className={lbl}>Job Title</label><input type="text" value={achForm.employee_id ? (employees.find(e => String(e.id) === achForm.employee_id)?.position || employees.find(e => String(e.id) === achForm.employee_id)?.title || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
               <div><label className={lbl}>Date</label><input type="date" value={achForm.date} onChange={e => setAchForm({ ...achForm, date: e.target.value })} className={inp} /></div>
               <div><label className={lbl}>Department</label><input type="text" value={achForm.employee_id ? (employees.find(e => String(e.id) === achForm.employee_id)?.dept || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
-              <div><label className={lbl}>Manager</label><input type="text" value={achForm.employee_id ? (employees.find(e => String(e.id) === achForm.employee_id)?.manager || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
+              <div><label className={lbl}>Manager</label><input type="text" value={(() => { if (!achForm.employee_id) return ''; const emp = employees.find(e => String(e.id) === achForm.employee_id); if (emp?.manager) return emp.manager; if (emp?.manager_id) { const mgr = employees.find(e => e.id === emp.manager_id); return mgr?.name || ''; } return ''; })()} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4">
               <div><label className={lbl}>Review Period From</label><input type="date" value={achForm.review_period_from} onChange={e => setAchForm({ ...achForm, review_period_from: e.target.value })} className={inp} /></div>
@@ -338,16 +422,14 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
             <p className="text-xs text-slate-500 dark:text-slate-400 italic">
               Signing this form confirms that you have discussed this review in detail with your supervisor. Signing this form does not necessarily indicate that you agree with this evaluation.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-3">
-                <SignatureUpload label="Employee Signature" value={achForm.employee_signature} onChange={v => setAchForm({ ...achForm, employee_signature: v })} />
-                <div><label className={lbl}>Employee Signature Date</label><input type="date" value={achForm.employee_signature_date} onChange={e => setAchForm({ ...achForm, employee_signature_date: e.target.value })} className={inp} /></div>
-              </div>
-              <div className="space-y-3">
-                <SignatureUpload label="Manager Signature" value={achForm.supervisor_signature} onChange={v => setAchForm({ ...achForm, supervisor_signature: v })} />
-                <div><label className={lbl}>Manager Signature Date</label><input type="date" value={achForm.supervisor_signature_date} onChange={e => setAchForm({ ...achForm, supervisor_signature_date: e.target.value })} className={inp} /></div>
-              </div>
+            <div className="space-y-3">
+              <div><label className={lbl}>Manager Print Name / Title</label><input type="text" value={achForm.supervisor_print_name} onChange={e => setAchForm({ ...achForm, supervisor_print_name: e.target.value })} className={inp} placeholder="e.g. John Doe / Senior Manager" /></div>
+              <SignatureUpload label="Manager Signature" value={achForm.supervisor_signature} onChange={v => setAchForm({ ...achForm, supervisor_signature: v })} />
+              <div><label className={lbl}>Manager Signature Date</label><input type="date" value={achForm.supervisor_signature_date} onChange={e => setAchForm({ ...achForm, supervisor_signature_date: e.target.value })} className={inp} /></div>
             </div>
+            <p className="text-xs text-slate-400 dark:text-slate-500 italic mt-2">
+              The employee will sign this evaluation through their Verification of Review screen.
+            </p>
           </div>
 
           <div className="flex justify-end pt-4">
@@ -562,12 +644,12 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
               I have reviewed this report on the date indicated and have had the opportunity to discuss it with my rating supervisor(s).
               My signature does not necessarily signify agreement. I understand that I may submit a written rebuttal, which will be attached to this evaluation and placed in my personnel file.
             </p>
-
-            <div><label className={lbl}>Employee Statement (optional rebuttal)</label><textarea rows={2} value={perfForm.employee_acknowledgement} onChange={e => setPerfForm({ ...perfForm, employee_acknowledgement: e.target.value })} className={inp} placeholder="Optional: write a rebuttal or statement..." /></div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <SignatureUpload label="Employee Signature" value={perfForm.employee_signature} onChange={v => setPerfForm({ ...perfForm, employee_signature: v })} />
-              <div><label className={lbl}>Signature Date</label><input type="date" value={perfForm.employee_signature_date} onChange={e => setPerfForm({ ...perfForm, employee_signature_date: e.target.value })} className={inp} /></div>
+            <div className="space-y-3">
+              <div><label className={lbl}>Employee Print Name</label><input type="text" value={perfForm.employee_print_name} onChange={e => setPerfForm({ ...perfForm, employee_print_name: e.target.value })} className={inp} placeholder="Employee's full name" /></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <SignatureUpload label="Employee Signature" value={perfForm.employee_signature} onChange={v => setPerfForm({ ...perfForm, employee_signature: v })} />
+                <div><label className={lbl}>Signature Date</label><input type="date" value={perfForm.employee_signature_date} onChange={e => setPerfForm({ ...perfForm, employee_signature_date: e.target.value })} className={inp} /></div>
+              </div>
             </div>
           </div>
 
@@ -577,12 +659,12 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
             <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
               I have reviewed the supervisor's evaluation, reviewer's comments, and the employee's statement (if any). I believe this form to be complete and in accordance with the guidelines provided for evaluations of employees serving in this title. This form shall be made part of the employee's official Personnel File.
             </p>
-
-            <div><label className={lbl}>Print Name / Title</label><input type="text" value={perfForm.hr_print_name} onChange={e => setPerfForm({ ...perfForm, hr_print_name: e.target.value })} className={inp} placeholder="e.g. Maria Cruz / HR Director" /></div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <SignatureUpload label="HR Officer Signature" value={perfForm.hr_signature} onChange={v => setPerfForm({ ...perfForm, hr_signature: v })} />
-              <div><label className={lbl}>Signature Date</label><input type="date" value={perfForm.hr_signature_date} onChange={e => setPerfForm({ ...perfForm, hr_signature_date: e.target.value })} className={inp} /></div>
+            <div className="space-y-3">
+              <div><label className={lbl}>HR Officer Print Name / Title</label><input type="text" value={perfForm.hr_print_name} onChange={e => setPerfForm({ ...perfForm, hr_print_name: e.target.value })} className={inp} placeholder="e.g. Maria Santos / HR Officer" /></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <SignatureUpload label="HR Officer Signature" value={perfForm.hr_signature} onChange={v => setPerfForm({ ...perfForm, hr_signature: v })} />
+                <div><label className={lbl}>Certification Date</label><input type="date" value={perfForm.hr_signature_date} onChange={e => setPerfForm({ ...perfForm, hr_signature_date: e.target.value })} className={inp} /></div>
+              </div>
             </div>
           </div>
 
@@ -602,6 +684,9 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
     const a = detailRecord;
     const recordType = (a.form_type || a.eval_type || '').toString().toLowerCase();
     const isPerf = !recordType.includes('achievement');
+    const allSigned = isPerf
+      ? !!(a.supervisor_signature && a.reviewer_signature && a.employee_signature && a.hr_signature)
+      : !!(a.supervisor_signature && a.employee_signature);
     const ratingFields = isPerf
       ? [
           { key: 'work_quality', label: 'Quality of Work' },
@@ -623,17 +708,22 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
 
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <button onClick={() => { setView('dashboard'); setDetailRecord(null); }} className="flex items-center gap-2 text-sm text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors mb-4">
-          <ArrowLeft size={16} /> Back to Dashboard
-        </button>
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => { setView('dashboard'); setDetailRecord(null); }} className="flex items-center gap-2 text-sm text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors">
+            <ArrowLeft size={16} /> Back to Dashboard
+          </button>
+          <button onClick={() => exportPDF(a)} className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">
+            <Printer size={16} /> Export PDF
+          </button>
+        </div>
         <Card>
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{a.form_type || 'Appraisal'}</h2>
               <p className="text-xs text-slate-400">{a.employee_name || `Employee #${a.employee_id}`} · {a.eval_period_from || '—'} to {a.eval_period_to || '—'}</p>
             </div>
-            <span className={`text-xs font-bold uppercase px-3 py-1 rounded-full ${a.verified ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
-              {a.verified ? 'Verified' : 'Pending'}
+            <span className={`text-xs font-bold uppercase px-3 py-1 rounded-full ${allSigned ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
+              {allSigned ? 'Verified' : 'Pending'}
             </span>
           </div>
 
@@ -681,15 +771,15 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
               {(isPerf ? [
                 { label: 'Supervisor', sig: a.supervisor_signature, date: a.supervisor_signature_date, printName: a.supervisor_print_name },
                 { label: 'Reviewer', sig: a.reviewer_signature, date: a.reviewer_signature_date, printName: a.reviewer_print_name },
-                { label: 'Employee', sig: a.employee_signature, date: a.employee_signature_date },
+                { label: 'Employee', sig: a.employee_signature, date: a.employee_signature_date, printName: a.employee_print_name || a.employee_name },
                 { label: 'HR Officer', sig: a.hr_signature, date: a.hr_signature_date, printName: a.hr_print_name },
               ] : [
-                { label: 'Employee', sig: a.employee_signature, date: a.employee_signature_date },
-                { label: 'Manager', sig: a.supervisor_signature, date: a.supervisor_signature_date },
+                { label: 'Employee', sig: a.employee_signature, date: a.employee_signature_date, printName: a.employee_name },
+                { label: 'Manager', sig: a.supervisor_signature, date: a.supervisor_signature_date, printName: a.supervisor_print_name },
               ]).map(s => (
                 <div key={s.label} className="text-center">
                   <span className="text-[10px] font-bold text-slate-400 uppercase">{s.label}</span>
-                  {s.printName && <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{s.printName}</span>}
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{s.printName || '—'}</span>
                   {s.sig ? (
                     <div className="mt-1 border border-slate-200 dark:border-slate-700 rounded-lg p-1 bg-white dark:bg-slate-800">
                       <img src={s.sig} alt={`${s.label} signature`} className="h-10 mx-auto object-contain" />
@@ -724,7 +814,7 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
       <div className="flex justify-between items-end mb-6">
         <SectionHeader title="Evaluation Portal" subtitle="Formal performance appraisal forms" />
         <div className="flex gap-2">
-          <button onClick={() => exportToCSV(appraisals, 'appraisals')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> Export CSV</button>
+          <button onClick={() => exportToCSV(appraisals, 'appraisals')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> Export XLSX</button>
           <button onClick={() => setView('achievement')} className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors"><Star size={16} /> Achievement Measure</button>
           <button onClick={() => setView('performance')} className="flex items-center gap-2 bg-teal-green text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-deep transition-colors"><FileText size={16} /> Performance Evaluation</button>
         </div>
@@ -762,11 +852,12 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
                 </tr></thead>
                 <tbody>
                   {appraisals.map(a => {
-                    const isAchievement = (a.form_type || a.eval_type || '').toString().toLowerCase().includes('achievement');
-                    const sigCount = isAchievement
-                      ? [a.supervisor_signature, a.employee_signature].filter(Boolean).length
-                      : [a.supervisor_signature, a.reviewer_signature, a.employee_signature, a.hr_signature].filter(Boolean).length;
-                    const sigTotal = isAchievement ? 2 : 4;
+                    const formTypeStr = (a.form_type || a.eval_type || '').toString().toLowerCase();
+                    const isPerformanceEval = formTypeStr.includes('performance');
+                    const sigCount = isPerformanceEval
+                      ? [a.supervisor_signature, a.reviewer_signature, a.employee_signature, a.hr_signature].filter(Boolean).length
+                      : [a.supervisor_signature, a.employee_signature].filter(Boolean).length;
+                    const sigTotal = isPerformanceEval ? 4 : 2;
                     return (
                       <tr key={a.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                         <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
@@ -780,11 +871,16 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
                         <td className="py-3 font-bold text-teal-green">{a.overall}</td>
                         <td className="py-3"><span className={`text-[10px] font-bold ${sigCount >= sigTotal ? 'text-emerald-600' : sigCount > 0 ? 'text-amber-500' : 'text-slate-400'}`}>{sigCount}/{sigTotal}</span></td>
                         <td className="py-3">
-                          {a.verified ? (
-                            <span className="text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-1"><CheckCircle size={12} /> Verified</span>
-                          ) : (
-                            <span className="text-[10px] font-bold text-amber-500 uppercase">Pending</span>
-                          )}
+                          {(() => {
+                            const ft = (a.form_type || a.eval_type || '').toString().toLowerCase();
+                            const ip = ft.includes('performance');
+                            const v = ip
+                              ? !!(a.supervisor_signature && a.reviewer_signature && a.employee_signature && a.hr_signature)
+                              : !!(a.supervisor_signature && a.employee_signature);
+                            return v
+                              ? <span className="text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-1"><CheckCircle size={12} /> Verified</span>
+                              : <span className="text-[10px] font-bold text-amber-500 uppercase">Pending</span>;
+                          })()}
                         </td>
                         <td className="py-3 flex items-center gap-2">
                           <button onClick={() => { setDetailRecord(a); setView('detail'); }} className="text-slate-400 hover:text-teal-deep dark:hover:text-teal-green transition-colors"><Eye size={14} /></button>

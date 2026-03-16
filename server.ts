@@ -83,7 +83,8 @@ async function recordAudit(user: any, action: string, tableName: string, rowId: 
 const auditInterestTables = [
   'employees','goals','coaching_logs','coaching_chats','appraisals','discipline_records','property_accountability',
   'users','suggestions','feedback_360','applicants','requisitions','offboarding','exit_interviews','development_plans',
-  'self_assessments','onboarding','notifications','elearning_courses','elearning_recommendations','pip_plans'
+  'self_assessments','onboarding','notifications','elearning_courses','elearning_recommendations','pip_plans',
+  'promotion_recommendations','promotions'
 ];
 
 async function initDb() {
@@ -107,7 +108,19 @@ async function initDb() {
       target_date TEXT,
       FOREIGN KEY(employee_id) REFERENCES employees(id)
     )`,
-    `CREATE TABLE IF NOT EXISTS coaching_logs (
+    `CREATE TABLE IF NOT EXISTS goal_assignees (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      goal_id INTEGER NOT NULL,
+      employee_id INTEGER NOT NULL,
+      UNIQUE(goal_id, employee_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS team_leaders (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      leader_id INTEGER NOT NULL,
+      member_id INTEGER NOT NULL,
+      UNIQUE(leader_id, member_id)
+    )`,
+      `CREATE TABLE IF NOT EXISTS coaching_logs (
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
       employee_id INTEGER,
       category TEXT,
@@ -423,7 +436,7 @@ async function initDb() {
       }
     }
 
-    // Safe migrations — ignored if column already exists
+    // Safe migrations â€” ignored if column already exists
     const disciplineMigrations = [
       'ALTER TABLE discipline_records ADD COLUMN date_of_warning TEXT',
       'ALTER TABLE discipline_records ADD COLUMN violation_date TEXT',
@@ -496,7 +509,7 @@ async function initDb() {
       } catch {}
     }
 
-    // Safe migrations for appraisals — add all missing evaluation fields
+    // Safe migrations for appraisals â€” add all missing evaluation fields
     const appraisalMigrations = [
       'ALTER TABLE appraisals ADD COLUMN form_type TEXT',
       'ALTER TABLE appraisals ADD COLUMN eval_type TEXT',
@@ -534,6 +547,7 @@ async function initDb() {
       'ALTER TABLE appraisals ADD COLUMN supervisor_print_name TEXT',
       'ALTER TABLE appraisals ADD COLUMN reviewer_print_name TEXT',
       'ALTER TABLE appraisals ADD COLUMN hr_print_name TEXT',
+      'ALTER TABLE appraisals ADD COLUMN employee_print_name TEXT',
       'ALTER TABLE appraisals ADD COLUMN job_knowledge_comment TEXT',
       'ALTER TABLE appraisals ADD COLUMN work_quality_comment TEXT',
       'ALTER TABLE appraisals ADD COLUMN attendance_comment TEXT',
@@ -563,7 +577,7 @@ async function initDb() {
       } catch {}
     }
 
-    // Safe migrations for goals — add status, progress, scope, department, team, delegation, priority
+    // Safe migrations for goals â€” add status, progress, scope, department, team, delegation, priority
     const goalMigrations = [
       'ALTER TABLE goals ADD COLUMN title TEXT',
       'ALTER TABLE goals ADD COLUMN status TEXT DEFAULT \'Not Started\'',
@@ -574,6 +588,11 @@ async function initDb() {
       'ALTER TABLE goals ADD COLUMN delegation TEXT',
       'ALTER TABLE goals ADD COLUMN priority TEXT DEFAULT \'Medium\'',
       'ALTER TABLE goals ADD COLUMN quarter TEXT',
+      'ALTER TABLE goals ADD COLUMN frequency TEXT DEFAULT \'One-time\'',
+      'ALTER TABLE goals ADD COLUMN leader_id INTEGER',
+      'ALTER TABLE goal_assignees ADD COLUMN assigned_by INTEGER',
+      'ALTER TABLE goal_assignees ADD COLUMN assigned_by_role TEXT',
+      'ALTER TABLE goal_assignees ADD COLUMN assigned_at TEXT',
     ];
     for (const sql of goalMigrations) {
       try {
@@ -584,7 +603,7 @@ async function initDb() {
       } catch {}
     }
 
-    // Safe migrations for exit_interviews — add all missing fields
+    // Safe migrations for exit_interviews â€” add all missing fields
     const exitInterviewMigrations = [
       'ALTER TABLE exit_interviews ADD COLUMN ssn TEXT',
       'ALTER TABLE exit_interviews ADD COLUMN hire_date TEXT',
@@ -612,7 +631,7 @@ async function initDb() {
       } catch {}
     }
 
-    // Safe migrations for suggestions — add missing fields
+    // Safe migrations for suggestions â€” add missing fields
     const suggestionMigrations = [
       'ALTER TABLE suggestions ADD COLUMN title TEXT',
       'ALTER TABLE suggestions ADD COLUMN other_resource_needed TEXT',
@@ -680,7 +699,7 @@ async function initDb() {
       } catch {}
     }
 
-    // Employee profile migrations — email, phone, address
+    // Employee profile migrations â€” email, phone, address
     const employeeProfileMigrations = [
       'ALTER TABLE employees ADD COLUMN email TEXT',
       'ALTER TABLE employees ADD COLUMN phone TEXT',
@@ -752,6 +771,109 @@ async function initDb() {
       } else { sqliteDb.exec(pipTable); }
     } catch {}
 
+    // Create promotion_recommendations table
+    const promoRecTable = `CREATE TABLE IF NOT EXISTS promotion_recommendations (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      employee_id INTEGER NOT NULL,
+      recommended_by INTEGER NOT NULL,
+      recommended_position TEXT,
+      current_position TEXT,
+      current_dept TEXT,
+      readiness_score REAL,
+      justification TEXT,
+      status TEXT DEFAULT 'Proposed',
+      reviewed_by INTEGER,
+      review_notes TEXT,
+      review_date TEXT,
+      effective_date TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(employee_id) REFERENCES employees(id)
+    )`;
+    try {
+      if (usePostgres && pgPool) {
+        const c = await pgPool.connect();
+        try { await c.query(promoRecTable); } finally { c.release(); }
+      } else { sqliteDb.exec(promoRecTable); }
+    } catch {}
+
+    // Create promotions history table
+    const promotionsTable = `CREATE TABLE IF NOT EXISTS promotions (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      employee_id INTEGER NOT NULL,
+      recommendation_id INTEGER,
+      previous_position TEXT,
+      new_position TEXT,
+      previous_dept TEXT,
+      new_dept TEXT,
+      previous_salary REAL,
+      new_salary REAL,
+      effective_date TEXT NOT NULL,
+      promoted_by INTEGER,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(employee_id) REFERENCES employees(id)
+    )`;
+    try {
+      if (usePostgres && pgPool) {
+        const c = await pgPool.connect();
+        try { await c.query(promotionsTable); } finally { c.release(); }
+      } else { sqliteDb.exec(promotionsTable); }
+    } catch {}
+
+    // Create career_paths table
+    const careerPathsTable = `CREATE TABLE IF NOT EXISTS career_paths (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      current_role TEXT NOT NULL,
+      next_role TEXT NOT NULL,
+      department TEXT,
+      min_tenure_months INTEGER DEFAULT 12,
+      min_readiness_score INTEGER DEFAULT 60,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`;
+    try {
+      if (usePostgres && pgPool) {
+        const c = await pgPool.connect();
+        try { await c.query(careerPathsTable); } finally { c.release(); }
+      } else { sqliteDb.exec(careerPathsTable); }
+    } catch {}
+
+    // Create promotion_comments table
+    const promoCommentsTable = `CREATE TABLE IF NOT EXISTS promotion_comments (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      recommendation_id INTEGER NOT NULL,
+      user_id INTEGER,
+      user_name TEXT,
+      comment TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(recommendation_id) REFERENCES promotion_recommendations(id)
+    )`;
+    try {
+      if (usePostgres && pgPool) {
+        const c = await pgPool.connect();
+        try { await c.query(promoCommentsTable); } finally { c.release(); }
+      } else { sqliteDb.exec(promoCommentsTable); }
+    } catch {}
+
+    // Rubric columns for promotion_recommendations
+    const promoRecMigrations = [
+      'ALTER TABLE promotion_recommendations ADD COLUMN rubric_technical INTEGER',
+      'ALTER TABLE promotion_recommendations ADD COLUMN rubric_leadership INTEGER',
+      'ALTER TABLE promotion_recommendations ADD COLUMN rubric_teamwork INTEGER',
+      'ALTER TABLE promotion_recommendations ADD COLUMN rubric_initiative INTEGER',
+      'ALTER TABLE promotion_recommendations ADD COLUMN rubric_reliability INTEGER',
+      'ALTER TABLE promotion_recommendations ADD COLUMN rubric_avg REAL',
+      'ALTER TABLE goals ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+    ];
+    for (const sql of promoRecMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
     // Safe migration: add profile_picture column to users
     const userMigrations = [
       'ALTER TABLE users ADD COLUMN profile_picture TEXT',
@@ -775,7 +897,7 @@ async function initDb() {
       } catch {}
     }
 
-    // Safe migrations for audit_logs — add metadata columns if missing
+    // Safe migrations for audit_logs â€” add metadata columns if missing
     const auditMigrations = [
       'ALTER TABLE audit_logs ADD COLUMN source TEXT',
       'ALTER TABLE audit_logs ADD COLUMN ip TEXT',
@@ -793,11 +915,34 @@ async function initDb() {
       } catch {}
     }
 
+    // Payroll adjustments table
+    const payrollAdjTable = `CREATE TABLE IF NOT EXISTS payroll_adjustments (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      employee_id INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      category TEXT,
+      description TEXT,
+      amount REAL NOT NULL DEFAULT 0,
+      effective_date TEXT,
+      pay_period TEXT,
+      status TEXT DEFAULT 'pending',
+      approved_by INTEGER,
+      approved_at TEXT,
+      created_by INTEGER,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`;
+    try {
+      if (usePostgres && pgPool) {
+        const c = await pgPool.connect();
+        try { await c.query(payrollAdjTable); } finally { c.release(); }
+      } else { sqliteDb.exec(payrollAdjTable); }
+    } catch {}
+
     const userCountResult = await query("SELECT COUNT(*) as count FROM users") as any;
     const userCount = parseInt(userCountResult[0].count);
 
     if (userCount === 0) {
-      console.log("No users found — creating demo accounts...");
+      console.log("No users found â€” creating demo accounts...");
       const bcrypt = await import('bcryptjs');
       const hash = (pw: string) => bcrypt.default.hashSync(pw, 10);
 
@@ -822,8 +967,8 @@ async function initDb() {
       // Ensure demo accounts have human-friendly full_name values
       await query("UPDATE users SET full_name = ? WHERE username = ?", ['John Doe', 'employee_john']);
       await query("UPDATE users SET full_name = ? WHERE username = ?", ['Jane Smith', 'employee_jane']);
-      await query("UPDATE users SET full_name = ? WHERE username = ?", ['Manager Bob', 'manager_bob']);
-      await query("UPDATE users SET full_name = ? WHERE username = ?", ['HR Admin', 'hr_admin']);
+      await query("UPDATE users SET full_name = ? WHERE username = ?", ['Bob Johnson', 'manager_bob']);
+      await query("UPDATE users SET full_name = ? WHERE username = ?", ['Maria Cruz', 'hr_admin']);
 
       // Update manager_id to the manager's user id after creation  
       const mgrUser = (await query("SELECT id FROM users WHERE username = 'manager_bob'") as any[])[0];
@@ -835,7 +980,7 @@ async function initDb() {
         await query("INSERT INTO goals (employee_id, title, statement, metric, target_date, status, progress, scope, priority, quarter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           [johnId, 'Complete API Refactor', 'Refactor all legacy REST endpoints to use the new service layer', 'All endpoints migrated and tested', '2026-06-30', 'In Progress', 45, 'Individual', 'High', 'Q2 2026']);
         await query("INSERT INTO goals (employee_id, title, statement, metric, target_date, status, progress, scope, priority, quarter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          [johnId, 'Improve Test Coverage', 'Increase unit test coverage from 40% to 80%', 'Coverage report shows ≥80%', '2026-03-31', 'In Progress', 60, 'Individual', 'Medium', 'Q1 2026']);
+          [johnId, 'Improve Test Coverage', 'Increase unit test coverage from 40% to 80%', 'Coverage report shows â‰¥80%', '2026-03-31', 'In Progress', 60, 'Individual', 'Medium', 'Q1 2026']);
         await query("INSERT INTO goals (employee_id, title, statement, metric, target_date, status, progress, scope, priority, quarter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           [johnId, 'Complete Onboarding Docs', 'Write developer onboarding documentation for the team', 'Document published and reviewed', '2026-02-28', 'Completed', 100, 'Team', 'Low', 'Q1 2026']);
       }
@@ -848,11 +993,29 @@ async function initDb() {
       }
 
       console.log("Demo accounts created:");
-      console.log("  john.doe@example.com / demo_employee_pass  → Employee (John Doe)");
-      console.log("  jane.smith@example.com / demo_employee_pass  → Employee (Jane Smith)");
-      console.log("  manager.bob@example.com / demo_manager_pass  → Manager");
-      console.log("  hr_admin@example.com / demo_hr_pass  → HR");
+      console.log("  john.doe@example.com / demo_employee_pass  â†’ Employee (John Doe)");
+      console.log("  jane.smith@example.com / demo_employee_pass  â†’ Employee (Jane Smith)");
+      console.log("  manager.bob@example.com / demo_manager_pass  â†’ Manager");
+      console.log("  hr_admin@example.com / demo_hr_pass  â†’ HR");
     }
+
+    // Ensure demo accounts always have full_name set (handles databases created before full_name migration)
+    try {
+      await query("UPDATE users SET full_name = 'Manager Bob' WHERE username = 'manager_bob' AND (full_name IS NULL OR full_name = '')");
+      await query("UPDATE users SET full_name = 'HR Admin' WHERE username = 'hr_admin' AND (full_name IS NULL OR full_name = '')");
+      await query("UPDATE users SET full_name = 'John Doe' WHERE username = 'employee_john' AND (full_name IS NULL OR full_name = '')");
+      await query("UPDATE users SET full_name = 'Jane Smith' WHERE username = 'employee_jane' AND (full_name IS NULL OR full_name = '')");
+    } catch (e) { console.error('full_name migration fallback error:', e); }
+
+    // Backfill full_name for any users still missing it â€” format username into display name
+    try {
+      const nameless = await query("SELECT id, username FROM users WHERE (full_name IS NULL OR full_name = '') AND username IS NOT NULL") as any[];
+      for (const u of (Array.isArray(nameless) ? nameless : [])) {
+        const display = (u.username || '').replace(/[._]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()).trim();
+        if (display) await query("UPDATE users SET full_name = ? WHERE id = ?", [display, u.id]);
+      }
+    } catch (e) { console.error('full_name backfill error:', e); }
+
     console.log(`Database Initialized Successfully in ${usePostgres ? 'PostgreSQL' : 'SQLite'} mode`);
   } catch (err) {
     console.error("Database initialization failed:", err);
@@ -927,6 +1090,15 @@ async function startServer() {
     const rows: any = await query('SELECT id FROM employees WHERE id = ? AND manager_id = ?', [employeeId, managerUserId]);
     const arr = Array.isArray(rows) ? rows : [rows].filter(Boolean);
     return arr.length > 0;
+  }
+
+  async function isLeaderOf(leaderUserId: number, memberEmployeeId: number | null) {
+    if (!leaderUserId || !memberEmployeeId) return false;
+    try {
+      const rows: any = await query('SELECT id FROM team_leaders WHERE leader_id = ? AND member_id = ?', [leaderUserId, memberEmployeeId]);
+        const arr = Array.isArray(rows) ? rows : (rows ? [rows] : []);
+      return arr.length > 0;
+    } catch (e) { return false; }
   }
 
   // Utility: extract JWT payload without failing the request
@@ -1129,13 +1301,13 @@ async function startServer() {
         // Record login event
         recordAudit(user, 'login', 'users', user.id, null, { token_version: tokenVersion }, meta).catch(() => {});
       } catch (e) { /* ignore audit errors */ }
-      res.json({ token, id: user.id, email: user.email || user.username, full_name: user.full_name || null, role: user.role, employee_id: user.employee_id, profile_picture: user.profile_picture || null, employee_name, position, dept, email: user_email || user.email || null, phone, address, hire_date, status });
+      res.json({ token, id: user.id, username: user.username || null, email: user_email || user.email || null, full_name: user.full_name || (user.username ? user.username.replace(/[._]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()).trim() : null), role: user.role, employee_id: user.employee_id, profile_picture: user.profile_picture || null, employee_name, position, dept, phone, address, hire_date, status });
     } catch (err) {
       res.status(500).json({ error: "Database error" });
     }
   });
 
-  // Logout endpoint — records a logout audit entry for the authenticated user
+  // Logout endpoint â€” records a logout audit entry for the authenticated user
   app.post('/api/logout', authenticateToken, async (req: any, res: any) => {
     try {
       const user = (req as any).user || null;
@@ -1239,6 +1411,11 @@ async function startServer() {
 
       const { email, username, password, role, employee_id, full_name, linked_user_id } = req.body;
       if ((!email && !username) || !password) return res.status(400).json({ error: 'Missing email (or username) or password' });
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return res.status(400).json({ error: 'Invalid email format' });
+      if (typeof password !== 'string' || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+      if (!/[A-Z]/.test(password)) return res.status(400).json({ error: 'Password must contain an uppercase letter' });
+      if (!/[0-9]/.test(password)) return res.status(400).json({ error: 'Password must contain a number' });
+      if (!/[^A-Za-z0-9]/.test(password)) return res.status(400).json({ error: 'Password must contain a special character' });
       const allowedRoles = ['Employee', 'Manager', 'HR'];
       if (!role || typeof role !== 'string' || !allowedRoles.includes(role)) return res.status(400).json({ error: 'Invalid or missing role' });
       const hashed = bcrypt.hashSync(password, 10);
@@ -1319,17 +1496,31 @@ async function startServer() {
         const empRows = await query('SELECT name, position, dept, email, phone, address, hire_date, status FROM employees WHERE id = ?', [employeeId]) as any;
         emp = empRows[0] || null;
       }
-      res.json({ ...u, ...(emp || {}) });
+      if (!emp) {
+        return res.json({ ...u, name: u.full_name || u.username || null });
+      }
+      res.json({ ...u, ...emp });
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
 
   // Update own account info (email, phone, address)
   app.put('/api/account-info', authenticateToken, async (req, res) => {
     try {
+      const userId = (req as any).user?.id;
       const employeeId = (req as any).user?.employee_id;
-      if (!employeeId) return res.status(400).json({ error: 'No linked employee' });
+      const { email, phone, address, employee_name, full_name, position, dept } = req.body;
+
+      // Users without a linked employee can still update full_name on users table
+      if (!employeeId) {
+        const nameToSet = full_name || employee_name;
+        if (nameToSet !== undefined) {
+          await query('UPDATE users SET full_name = ? WHERE id = ?', [nameToSet || null, userId]);
+        }
+        const userRows = await query('SELECT id, username, email, role, full_name, profile_picture FROM users WHERE id = ?', [userId]) as any;
+        return res.json({ success: true, ...(userRows[0] || {}) });
+      }
+
       // Accept updates for contact info and basic profile fields
-      const { email, phone, address, employee_name, position, dept } = req.body;
       const sets: string[] = [];
       const vals: any[] = [];
       if (employee_name !== undefined) { sets.push('name = ?'); vals.push(employee_name || null); }
@@ -1398,7 +1589,7 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
 
-  // Restore user (HR only) — clears deleted_at timestamp
+  // Restore user (HR only) â€” clears deleted_at timestamp
   app.put('/api/users/:id/restore', async (req, res) => {
     try {
       const authHeader = req.headers['authorization'];
@@ -1445,6 +1636,144 @@ async function startServer() {
     }
   });
 
+  // ---- Payroll Analytics ----
+  app.get('/api/payroll-analytics', authenticateToken, async (req, res) => {
+    try {
+      const rows: any = await query('SELECT id, name, position, dept, salary_base, status, hire_date FROM employees ORDER BY dept, name');
+      const employees = Array.isArray(rows) ? rows : [];
+      const withSalary = employees.filter((e: any) => e.salary_base && e.salary_base > 0);
+      const totalPayroll = withSalary.reduce((s: number, e: any) => s + (e.salary_base || 0), 0);
+      const avgSalary = withSalary.length > 0 ? totalPayroll / withSalary.length : 0;
+
+      // By department
+      const deptMap: Record<string, { count: number; total: number; employees: any[] }> = {};
+      employees.forEach((e: any) => {
+        const d = e.dept || 'Unassigned';
+        if (!deptMap[d]) deptMap[d] = { count: 0, total: 0, employees: [] };
+        deptMap[d].count++;
+        deptMap[d].total += e.salary_base || 0;
+        deptMap[d].employees.push({ id: e.id, name: e.name, position: e.position, salary_base: e.salary_base || 0, status: e.status });
+      });
+      const byDepartment = Object.entries(deptMap).map(([dept, d]) => ({
+        dept, headcount: d.count, totalSalary: d.total,
+        avgSalary: d.count > 0 ? Math.round(d.total / d.count) : 0,
+        employees: d.employees,
+      }));
+
+      // Salary distribution ranges
+      const ranges = [
+        { label: '$0 - $30k', min: 0, max: 30000, count: 0 },
+        { label: '$30k - $50k', min: 30000, max: 50000, count: 0 },
+        { label: '$50k - $80k', min: 50000, max: 80000, count: 0 },
+        { label: '$80k - $120k', min: 80000, max: 120000, count: 0 },
+        { label: '$120k+', min: 120000, max: Infinity, count: 0 },
+      ];
+      withSalary.forEach((e: any) => {
+        const r = ranges.find(r => e.salary_base >= r.min && e.salary_base < r.max);
+        if (r) r.count++;
+      });
+
+      res.json({
+        totalPayroll: Math.round(totalPayroll),
+        avgSalary: Math.round(avgSalary),
+        headcount: employees.length,
+        departmentCount: Object.keys(deptMap).length,
+        byDepartment,
+        salaryDistribution: ranges.map(r => ({ label: r.label, count: r.count })),
+      });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  // ---- Payroll Adjustments CRUD ----
+  // GET all adjustments (optionally filtered by employee_id)
+  app.get('/api/payroll-adjustments', authenticateToken, async (req, res) => {
+    try {
+      const { employee_id } = req.query;
+      let sql = 'SELECT pa.*, e.name as employee_name, e.dept as employee_dept, e.position as employee_position FROM payroll_adjustments pa LEFT JOIN employees e ON pa.employee_id = e.id';
+      const params: any[] = [];
+      if (employee_id) { sql += ' WHERE pa.employee_id = ?'; params.push(employee_id); }
+      sql += ' ORDER BY pa.created_at DESC';
+      const rows = await query(sql, params);
+      res.json(Array.isArray(rows) ? rows : []);
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  // POST create adjustment
+  app.post('/api/payroll-adjustments', authenticateToken, async (req, res) => {
+    try {
+      const userId = (req as any).user?.id;
+      const { employee_id, type, category, description, amount, effective_date, pay_period, status } = req.body;
+      if (!employee_id || !type || amount === undefined) return res.status(400).json({ error: 'employee_id, type, and amount are required' });
+      await query(
+        'INSERT INTO payroll_adjustments (employee_id, type, category, description, amount, effective_date, pay_period, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [employee_id, type, category || null, description || null, amount, effective_date || null, pay_period || null, status || 'pending', userId]
+      );
+      const rows = await query('SELECT pa.*, e.name as employee_name, e.dept as employee_dept FROM payroll_adjustments pa LEFT JOIN employees e ON pa.employee_id = e.id ORDER BY pa.id DESC LIMIT 1') as any[];
+      res.json(rows[0] || { success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  // PUT update adjustment
+  app.put('/api/payroll-adjustments/:id', authenticateToken, async (req, res) => {
+    try {
+      const userId = (req as any).user?.id;
+      const { id } = req.params;
+      const { type, category, description, amount, effective_date, pay_period, status } = req.body;
+      const sets: string[] = [];
+      const vals: any[] = [];
+      if (type !== undefined) { sets.push('type = ?'); vals.push(type); }
+      if (category !== undefined) { sets.push('category = ?'); vals.push(category); }
+      if (description !== undefined) { sets.push('description = ?'); vals.push(description); }
+      if (amount !== undefined) { sets.push('amount = ?'); vals.push(amount); }
+      if (effective_date !== undefined) { sets.push('effective_date = ?'); vals.push(effective_date); }
+      if (pay_period !== undefined) { sets.push('pay_period = ?'); vals.push(pay_period); }
+      if (status !== undefined) {
+        sets.push('status = ?'); vals.push(status);
+        if (status === 'approved') {
+          sets.push('approved_by = ?'); vals.push(userId);
+          sets.push('approved_at = ?'); vals.push(new Date().toISOString());
+        }
+      }
+      if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+      vals.push(id);
+      await query(`UPDATE payroll_adjustments SET ${sets.join(', ')} WHERE id = ?`, vals);
+      const rows = await query('SELECT pa.*, e.name as employee_name, e.dept as employee_dept FROM payroll_adjustments pa LEFT JOIN employees e ON pa.employee_id = e.id WHERE pa.id = ?', [id]) as any[];
+      res.json(rows[0] || { success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  // DELETE adjustment
+  app.delete('/api/payroll-adjustments/:id', authenticateToken, async (req, res) => {
+    try {
+      await query('DELETE FROM payroll_adjustments WHERE id = ?', [req.params.id]);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  // Payroll summary per employee (base + adjustments)
+  app.get('/api/payroll-summary', authenticateToken, async (req, res) => {
+    try {
+      const employees: any = await query('SELECT id, name, position, dept, salary_base, status FROM employees ORDER BY dept, name');
+      const adjustments: any = await query("SELECT * FROM payroll_adjustments WHERE status = 'approved'");
+      const adjMap: Record<number, any[]> = {};
+      (Array.isArray(adjustments) ? adjustments : []).forEach((a: any) => {
+        if (!adjMap[a.employee_id]) adjMap[a.employee_id] = [];
+        adjMap[a.employee_id].push(a);
+      });
+      const results = (Array.isArray(employees) ? employees : []).map((e: any) => {
+        const empAdj = adjMap[e.id] || [];
+        const bonuses = empAdj.filter((a: any) => a.type === 'bonus').reduce((s: number, a: any) => s + (a.amount || 0), 0);
+        const deductions = empAdj.filter((a: any) => a.type === 'deduction').reduce((s: number, a: any) => s + (a.amount || 0), 0);
+        const allowances = empAdj.filter((a: any) => a.type === 'allowance').reduce((s: number, a: any) => s + (a.amount || 0), 0);
+        const overtime = empAdj.filter((a: any) => a.type === 'overtime').reduce((s: number, a: any) => s + (a.amount || 0), 0);
+        const grossPay = (e.salary_base || 0) + bonuses + allowances + overtime;
+        const netPay = grossPay - deductions;
+        return { ...e, bonuses, deductions, allowances, overtime, grossPay, netPay, adjustments: empAdj };
+      });
+      res.json(results);
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
   // List employees (authenticated)
   app.get('/api/employees', async (req, res) => {
     try {
@@ -1454,8 +1783,9 @@ async function startServer() {
       if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
       try { await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
 
-      const rows: any = await query('SELECT * FROM employees ORDER BY name');
-      res.json(Array.isArray(rows) ? rows : []);
+      const rows: any = await query('SELECT e.*, u.full_name as manager, u.username as manager_username FROM employees e LEFT JOIN users u ON e.manager_id = u.id ORDER BY e.name');
+      const result = (Array.isArray(rows) ? rows : []).map((r: any) => ({ ...r, manager: r.manager || r.manager_username || '' }));
+      res.json(result);
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
 
@@ -1548,22 +1878,41 @@ async function startServer() {
       const role = actor.role;
       if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
 
-      const { employee_id, statement, metric, target_date, title, status, progress, scope, department, team_name, delegation, priority, quarter } = req.body;
+      const { employee_id, statement, metric, target_date, title, status, progress, scope, department, team_name, delegation, priority, quarter, frequency, leader_id } = req.body;
       const targetEmployeeId = normalizeEmployeeId(employee_id);
       if (role === 'Manager' && targetEmployeeId) {
         const allowed = await canManagerAccessEmployee(actor.id, targetEmployeeId);
         if (!allowed) return res.status(403).json({ error: 'Forbidden' });
       }
 
-      await query("INSERT INTO goals (employee_id, statement, metric, target_date, title, status, progress, scope, department, team_name, delegation, priority, quarter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-        [targetEmployeeId, statement, metric, target_date, title || statement, status || 'Not Started', progress || 0, scope || 'Individual', department || null, team_name || null, delegation || null, priority || 'Medium', quarter || null]);
+      const { assignee_ids } = req.body;
+      const insertResult: any = await query(
+        "INSERT INTO goals (employee_id, statement, metric, target_date, title, status, progress, scope, department, team_name, delegation, priority, quarter, frequency, leader_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        [targetEmployeeId, statement, metric, target_date, title || statement, status || 'Not Started', progress || 0, scope || 'Individual', department || null, team_name || null, delegation || null, priority || 'Medium', quarter || null, frequency || 'One-time', leader_id ? parseInt(String(leader_id)) : null]
+      );
+      const newGoalId = insertResult?.insertId;
+      if (newGoalId && Array.isArray(assignee_ids) && assignee_ids.length > 0) {
+        const now = new Date().toISOString();
+        for (const empId of assignee_ids) {
+          const eid = parseInt(String(empId));
+          if (!isNaN(eid)) {
+            await query("INSERT INTO goal_assignees (goal_id, employee_id, assigned_by, assigned_by_role, assigned_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (goal_id, employee_id) DO NOTHING", [newGoalId, eid, actor.id || null, role || null, now]);
+            try { await createNotification({ user_id: (await query('SELECT id FROM users WHERE employee_id = ?', [eid]))?.[0]?.id || null, type: 'info', message: `You were assigned a goal`, source: 'goals' }); } catch (e) {}
+          }
+        }
+      }
+      if (newGoalId && leader_id) {
+        const lid = parseInt(String(leader_id));
+        if (!isNaN(lid)) { try { await createNotification({ user_id: lid, type: 'info', message: 'You have been assigned as team leader for a goal', source: 'goals' }); } catch (e) {} }
+      }
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: "Database error" });
     }
   });
 
-  // PUT /api/goals/:id — update goal status/progress
+  // PUT /api/goals/:id â€” update goal status/progress
+
   app.put("/api/goals/:id", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
@@ -1585,12 +1934,21 @@ async function startServer() {
       const b = req.body;
       const sets: string[] = [];
       const vals: any[] = [];
-      for (const k of ['statement','metric','target_date','title','status','progress','scope','department','team_name','delegation','priority','quarter']) {
+      for (const k of ['statement','metric','target_date','title','status','progress','scope','department','team_name','delegation','priority','quarter','frequency','leader_id']) {
         if (b[k] !== undefined) { sets.push(`${k} = ?`); vals.push(b[k]); }
       }
       if (sets.length === 0) return res.status(400).json({ error: "No fields to update" });
       vals.push(req.params.id);
       await query(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, vals);
+      if (b.assignee_ids !== undefined) {
+        await query("DELETE FROM goal_assignees WHERE goal_id = ?", [req.params.id]);
+        if (Array.isArray(b.assignee_ids) && b.assignee_ids.length > 0) {
+          for (const empId of b.assignee_ids) {
+            const eid = parseInt(String(empId));
+            if (!isNaN(eid)) await query("INSERT INTO goal_assignees (goal_id, employee_id) VALUES (?, ?) ON CONFLICT (goal_id, employee_id) DO NOTHING", [req.params.id, eid]);
+          }
+        }
+      }
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -1604,7 +1962,7 @@ async function startServer() {
       const empUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employee_id]);
       const empUser = Array.isArray(empUsers) ? empUsers[0] : empUsers;
       if (empUser) {
-        await createNotification({ user_id: empUser.id, type: is_positive ? 'success' : 'info', message: `New coaching entry: ${category || 'General'} — ${is_positive ? 'Positive' : 'Constructive'}`, source: 'coaching_log' });
+        await createNotification({ user_id: empUser.id, type: is_positive ? 'success' : 'info', message: `New coaching entry: ${category || 'General'} â€” ${is_positive ? 'Positive' : 'Constructive'}`, source: 'coaching_log' });
       }
       res.json({ success: true });
     } catch (err) {
@@ -1627,10 +1985,10 @@ async function startServer() {
       }
 
       const formType = (b.form_type || '').toString().toLowerCase();
-      const isAchievement = formType.includes('achievement');
-      const requiredSignatures = isAchievement
-        ? ['supervisor_signature', 'employee_signature']
-        : ['supervisor_signature', 'reviewer_signature', 'employee_signature', 'hr_signature'];
+      const isPerformanceEval = formType.includes('performance');
+      const requiredSignatures = isPerformanceEval
+        ? ['supervisor_signature', 'reviewer_signature', 'employee_signature', 'hr_signature']
+        : ['supervisor_signature', 'employee_signature'];
       const computedVerified = requiredSignatures.every((k) => !!(b[k] && `${b[k]}`.trim())) ? 1 : 0;
 
       await query(`
@@ -1642,9 +2000,9 @@ async function startServer() {
           employee_signature, employee_signature_date, verified,
           hr_signature, hr_signature_date, overall_rating, recommendation, reviewer_agree, revised_rating,
           status, employee_department, employee_title, probationary_period,
-          supervisor_print_name, reviewer_print_name, hr_print_name,
+          supervisor_print_name, reviewer_print_name, hr_print_name, employee_print_name,
           job_knowledge_comment, work_quality_comment, attendance_comment, productivity_comment, communication_comment, dependability_comment)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [employeeId, b.job_knowledge, b.productivity, b.attendance, b.overall, b.promotability_status, b.sign_off_date,
           b.form_type || null, b.eval_type || null, b.eval_period_from || null, b.eval_period_to || null,
           b.work_quality || null, b.communication || null, b.dependability || null,
@@ -1657,7 +2015,7 @@ async function startServer() {
           b.hr_signature || null, b.hr_signature_date || null,
           b.overall_rating || null, b.recommendation || null, b.reviewer_agree || null, b.revised_rating || null,
           b.status || null, b.employee_department || null, b.employee_title || null, b.probationary_period || null,
-          b.supervisor_print_name || null, b.reviewer_print_name || null, b.hr_print_name || null,
+          b.supervisor_print_name || null, b.reviewer_print_name || null, b.hr_print_name || null, b.employee_print_name || null,
           b.job_knowledge_comment || null, b.work_quality_comment || null, b.attendance_comment || null, b.productivity_comment || null, b.communication_comment || null, b.dependability_comment || null]);
       // Notify the employee about their new evaluation
       const eUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employeeId]);
@@ -1671,7 +2029,7 @@ async function startServer() {
     }
   });
 
-  // PUT /api/appraisals/:id — update verification signatures
+  // PUT /api/appraisals/:id â€” update verification signatures
   app.put("/api/appraisals/:id", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
@@ -1695,12 +2053,12 @@ async function startServer() {
       const b = req.body;
       const sets: string[] = [];
       const vals: any[] = [];
-      const employeeUpdatable = ['employee_signature','employee_signature_date','employee_acknowledgement'];
+      const employeeUpdatable = ['employee_signature','employee_signature_date','employee_acknowledgement','employee_print_name'];
       const managerHrUpdatable = ['supervisor_signature','supervisor_signature_date','reviewer_signature','reviewer_signature_date',
         'employee_signature','employee_signature_date','verified','promotability_status',
         'hr_signature','hr_signature_date','overall_rating','recommendation','reviewer_agree','revised_rating',
         'reviewers_comment','employee_acknowledgement','supervisors_overall_comment','status',
-        'supervisor_print_name','reviewer_print_name','hr_print_name'];
+        'supervisor_print_name','reviewer_print_name','hr_print_name','employee_print_name'];
 
       const updatable = role === 'Employee' ? employeeUpdatable : managerHrUpdatable;
       if (role === 'Employee') {
@@ -1716,10 +2074,10 @@ async function startServer() {
 
       const merged: any = { ...appraisal, ...b };
       const mergedFormType = (merged.form_type || '').toString().toLowerCase();
-      const isAchievement = mergedFormType.includes('achievement');
-      const requiredSignatures = isAchievement
-        ? ['supervisor_signature', 'employee_signature']
-        : ['supervisor_signature', 'reviewer_signature', 'employee_signature', 'hr_signature'];
+      const isPerformanceEval = mergedFormType.includes('performance');
+      const requiredSignatures = isPerformanceEval
+        ? ['supervisor_signature', 'reviewer_signature', 'employee_signature', 'hr_signature']
+        : ['supervisor_signature', 'employee_signature'];
       const computedVerified = requiredSignatures.every((k) => !!(merged[k] && `${merged[k]}`.trim())) ? 1 : 0;
       sets.push('verified = ?');
       vals.push(computedVerified);
@@ -1731,6 +2089,37 @@ async function startServer() {
   });
 
   // ---- Goals CRUD ----
+  // Helper: enrich goals with assignees from goal_assignees table
+  const enrichGoalsWithAssignees = async (goals: any[]): Promise<any[]> => {
+    if (!Array.isArray(goals) || goals.length === 0) return goals;
+    const goalIds = goals.map((g: any) => g.id).filter(Boolean);
+    if (goalIds.length === 0) return goals;
+    const aRows: any = await query(
+      `SELECT ga.goal_id, ga.employee_id, e.name,
+              ga.assigned_by, ga.assigned_by_role, ga.assigned_at,
+              u.full_name as assigned_by_name, u.username as assigned_by_username
+       FROM goal_assignees ga
+       LEFT JOIN employees e ON ga.employee_id = e.id
+       LEFT JOIN users u ON ga.assigned_by = u.id
+       WHERE ga.goal_id IN (${goalIds.map(() => '?').join(',')})`,
+      goalIds
+    );
+    const map: Record<number, { employee_id: number; name: string; assigned_by?: any; assigned_by_role?: string; assigned_at?: string; assigned_by_name?: string }[]> = {};
+    for (const r of (Array.isArray(aRows) ? aRows : [])) {
+      if (!map[r.goal_id]) map[r.goal_id] = [];
+      map[r.goal_id].push({ employee_id: r.employee_id, name: r.name, assigned_by: r.assigned_by, assigned_by_role: r.assigned_by_role, assigned_at: r.assigned_at, assigned_by_name: r.assigned_by_name || r.assigned_by_username });
+    }
+    const withAssignees = goals.map((g: any) => ({ ...g, assignees: map[g.id] || [] }));
+    const leaderIds = [...new Set(withAssignees.map((g: any) => g.leader_id).filter(Boolean))];
+    if (leaderIds.length > 0) {
+      const lRows: any = await query(`SELECT id, full_name, username FROM users WHERE id IN (${leaderIds.map(() => '?').join(',')})`, leaderIds);
+      const lMap: Record<number, string> = {};
+      for (const r of (Array.isArray(lRows) ? lRows : [])) lMap[r.id] = r.full_name || r.username;
+      return withAssignees.map((g: any) => ({ ...g, leader_name: lMap[g.leader_id] || null }));
+    }
+    return withAssignees;
+  };
+
   app.get("/api/goals", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
@@ -1738,34 +2127,36 @@ async function startServer() {
       const queryEmployeeId = normalizeEmployeeId(req.query.employee_id);
 
       if (isPrivilegedRole(role)) {
-        const rows = queryEmployeeId
+        const rows: any = queryEmployeeId
           ? await query("SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ?", [queryEmployeeId])
           : await query("SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id");
-        return res.json(rows);
+        return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
       }
 
       if (role === 'Manager') {
         const managedIds = await getManagedEmployeeIds(actor.id);
         if (queryEmployeeId) {
           if (!managedIds.includes(queryEmployeeId)) return res.status(403).json({ error: 'Forbidden' });
-          const rows = await query("SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ?", [queryEmployeeId]);
-          return res.json(rows);
+          const rows: any = await query("SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ?", [queryEmployeeId]);
+          return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
         }
-
         if (managedIds.length === 0) {
-          const rows = await query("SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id IS NULL");
-          return res.json(rows);
+          const rows: any = await query("SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id IS NULL");
+          return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
         }
         const placeholders = managedIds.map(() => '?').join(',');
-        const rows = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id IN (${placeholders}) OR g.employee_id IS NULL`, managedIds);
-        return res.json(rows);
+        const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id IN (${placeholders}) OR g.employee_id IS NULL`, managedIds);
+        return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
       }
 
       if (role === 'Employee') {
         const employeeId = normalizeEmployeeId(actor.employee_id);
         if (!employeeId) return res.json([]);
-        const rows = await query("SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ?", [employeeId]);
-        return res.json(rows);
+        const rows: any = await query(
+          "SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ? OR g.id IN (SELECT goal_id FROM goal_assignees WHERE employee_id = ?)",
+          [employeeId, employeeId]
+        );
+        return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
       }
 
       return res.status(403).json({ error: 'Forbidden' });
@@ -1789,9 +2180,132 @@ async function startServer() {
         }
       }
 
+      await query("DELETE FROM goal_assignees WHERE goal_id = ?", [req.params.id]);
       await query("DELETE FROM goals WHERE id = ?", [req.params.id]);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  // Leader management: assign/unassign leaders to members
+  app.post('/api/leaders', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+      const leaderId = parseInt(String(req.body.leader_id));
+      const memberId = normalizeEmployeeId(req.body.member_id);
+      if (!leaderId || !memberId) return res.status(400).json({ error: 'Invalid parameters' });
+      if (role === 'Manager') {
+        const allowed = await canManagerAccessEmployee(actor.id, memberId);
+        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+      }
+      await query('INSERT INTO team_leaders (leader_id, member_id) VALUES (?, ?) ON CONFLICT (leader_id, member_id) DO NOTHING', [leaderId, memberId]);
+      await recordAudit(actor, 'add_leader_mapping', 'team_leaders', null, null, { leader_id: leaderId, member_id: memberId }, { route: req.originalUrl });
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.delete('/api/leaders', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+      const leaderId = parseInt(String(req.body.leader_id));
+      const memberId = normalizeEmployeeId(req.body.member_id);
+      if (!leaderId || !memberId) return res.status(400).json({ error: 'Invalid parameters' });
+      if (role === 'Manager') {
+        const allowed = await canManagerAccessEmployee(actor.id, memberId);
+        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+      }
+      await query('DELETE FROM team_leaders WHERE leader_id = ? AND member_id = ?', [leaderId, memberId]);
+      await recordAudit(actor, 'remove_leader_mapping', 'team_leaders', null, null, { leader_id: leaderId, member_id: memberId }, { route: req.originalUrl });
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.get('/api/leaders/:leaderId/members', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      const leaderId = parseInt(String(req.params.leaderId));
+      if (!leaderId) return res.status(400).json({ error: 'Invalid leader id' });
+      if (!isPrivilegedRole(role) && actor.id !== leaderId && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+      const rows: any = await query('SELECT l.*, e.name as member_name FROM team_leaders l LEFT JOIN employees e ON l.member_id = e.id WHERE l.leader_id = ?', [leaderId]);
+      res.json(Array.isArray(rows) ? rows : []);
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  // Assign an existing goal to a member (supports Manager/Admin/Leader)
+  app.post('/api/goals/:id/assign', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      const goalId = parseInt(String(req.params.id));
+      const memberId = normalizeEmployeeId(req.body.employee_id);
+      if (!goalId || !memberId) return res.status(400).json({ error: 'Invalid parameters' });
+      const goalRows: any = await query('SELECT id, employee_id FROM goals WHERE id = ?', [goalId]);
+      const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
+      if (!goal) return res.status(404).json({ error: 'Goal not found' });
+
+      let allowed = false;
+      if (isPrivilegedRole(role)) allowed = true;
+      else if (role === 'Manager') {
+        const allowedMgr = await canManagerAccessEmployee(actor.id, memberId);
+        if (allowedMgr) allowed = true;
+      } else if (role === 'Employee') {
+        const allowedLeader = await isLeaderOf(actor.id, memberId);
+        if (allowedLeader) allowed = true;
+      }
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      const now = new Date().toISOString();
+      await query('INSERT INTO goal_assignees (goal_id, employee_id, assigned_by, assigned_by_role, assigned_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (goal_id, employee_id) DO NOTHING', [goalId, memberId, actor.id || null, role || null, now]);
+      try { const uRows: any = await query('SELECT id FROM users WHERE employee_id = ?', [memberId]); const u = Array.isArray(uRows) ? uRows[0] : uRows; if (u && u.id) await createNotification({ user_id: u.id, type: 'info', message: 'A goal was assigned to you', source: 'goals' }); } catch (e) {}
+      await recordAudit(actor, 'assign_goal', 'goal_assignees', goalId, null, { employee_id: memberId, assigned_by: actor.id }, { route: req.originalUrl });
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.post('/api/goals/:id/unassign', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      const goalId = parseInt(String(req.params.id));
+      const memberId = normalizeEmployeeId(req.body.employee_id);
+      if (!goalId || !memberId) return res.status(400).json({ error: 'Invalid parameters' });
+
+      let allowed = false;
+      if (isPrivilegedRole(role)) allowed = true;
+      else if (role === 'Manager') {
+        const allowedMgr = await canManagerAccessEmployee(actor.id, memberId);
+        if (allowedMgr) allowed = true;
+      } else if (role === 'Employee') {
+        const allowedLeader = await isLeaderOf(actor.id, memberId);
+        if (allowedLeader) allowed = true;
+      }
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      await query('DELETE FROM goal_assignees WHERE goal_id = ? AND employee_id = ?', [goalId, memberId]);
+      await recordAudit(actor, 'unassign_goal', 'goal_assignees', goalId, null, { employee_id: memberId }, { route: req.originalUrl });
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  // ---- Leader Goals ----
+  app.get('/api/leader-goals', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const goalRows: any = await query(
+        'SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.leader_id = ?',
+        [actor.id]
+      );
+      const goals = await enrichGoalsWithAssignees(Array.isArray(goalRows) ? goalRows : []);
+      const memberRows: any = await query(
+        'SELECT l.member_id, e.name as member_name FROM team_leaders l LEFT JOIN employees e ON l.member_id = e.id WHERE l.leader_id = ?',
+        [actor.id]
+      );
+      res.json({ goals, teamMembers: Array.isArray(memberRows) ? memberRows : [] });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
 
   // ---- Coaching Logs CRUD ----
@@ -1829,7 +2343,7 @@ async function startServer() {
           }
         }
       } else {
-        // Manager sent — notify the employee
+        // Manager sent â€” notify the employee
         const empUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employee_id]);
         const empUser = Array.isArray(empUsers) ? empUsers[0] : empUsers;
         if (empUser) {
@@ -2489,6 +3003,355 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
+  // ---- Promotability Readiness (Computed) ----
+  app.get("/api/promotability/readiness", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      const role = actor?.role;
+
+      let employeeRows: any[];
+      if (isPrivilegedRole(role)) {
+        employeeRows = await query("SELECT id, name, position, dept, hire_date, status, salary_base FROM employees ORDER BY name");
+      } else if ((role || '').toLowerCase() === 'manager') {
+        const ids = await getManagedEmployeeIds(actor.id);
+        if (ids.length === 0) return res.json([]);
+        const ph = ids.map((_: any, i: number) => `$${i + 1}`).join(',');
+        employeeRows = await query(`SELECT id, name, position, dept, hire_date, status, salary_base FROM employees WHERE id IN (${ph})`, ids);
+      } else {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      if (employeeRows.length === 0) return res.json([]);
+      const empIds = employeeRows.map((e: any) => e.id);
+      const ph = empIds.map((_: any, i: number) => `$${i + 1}`).join(',');
+
+      const [appraisals, goals, elearning, activePips] = await Promise.all([
+        query(`SELECT * FROM appraisals WHERE employee_id IN (${ph}) ORDER BY sign_off_date DESC`, empIds),
+        query(`SELECT * FROM goals WHERE employee_id IN (${ph})`, empIds),
+        query(`SELECT * FROM elearning_recommendations WHERE employee_id IN (${ph})`, empIds),
+        query(`SELECT DISTINCT employee_id FROM pip_plans WHERE employee_id IN (${ph}) AND outcome = 'In Progress'`, empIds),
+      ]);
+
+      // Group appraisals by employee â€” take latest
+      const appraisalMap: Record<number, any> = {};
+      for (const a of (appraisals as any[])) {
+        if (!appraisalMap[a.employee_id]) appraisalMap[a.employee_id] = a;
+      }
+      // Group goals by employee
+      const goalMap: Record<number, { total: number; completed: number; avgProgress: number }> = {};
+      for (const g of (goals as any[])) {
+        if (!goalMap[g.employee_id]) goalMap[g.employee_id] = { total: 0, completed: 0, avgProgress: 0 };
+        goalMap[g.employee_id].total++;
+        if ((g.status || '').toLowerCase() === 'completed') goalMap[g.employee_id].completed++;
+      }
+      for (const eid of Object.keys(goalMap)) {
+        const empGoals = (goals as any[]).filter((g: any) => g.employee_id === Number(eid));
+        goalMap[Number(eid)].avgProgress = empGoals.length > 0 ? Math.round(empGoals.reduce((s: number, g: any) => s + (g.progress || 0), 0) / empGoals.length) : 0;
+      }
+      // Group training by employee
+      const trainingMap: Record<number, { total: number; completed: number }> = {};
+      for (const t of (elearning as any[])) {
+        if (!trainingMap[t.employee_id]) trainingMap[t.employee_id] = { total: 0, completed: 0 };
+        trainingMap[t.employee_id].total++;
+        if ((t.status || '').toLowerCase() === 'completed') trainingMap[t.employee_id].completed++;
+      }
+      // Active PIPs set
+      const pipSet = new Set((activePips as any[]).map((p: any) => p.employee_id));
+
+      const now = Date.now();
+      const results = employeeRows.map((emp: any) => {
+        const latest = appraisalMap[emp.id];
+        const appraisalScore = latest ? Math.min(100, ((latest.overall || 0) / 5) * 100) : 0;
+        const gd = goalMap[emp.id] || { total: 0, completed: 0, avgProgress: 0 };
+        const goalScore = gd.total > 0 ? gd.avgProgress : 0;
+        const td = trainingMap[emp.id] || { total: 0, completed: 0 };
+        const trainingScore = td.total > 0 ? Math.round((td.completed / td.total) * 100) : 50;
+        const hireDate = emp.hire_date ? new Date(emp.hire_date) : null;
+        const tenureMonths = hireDate ? Math.floor((now - hireDate.getTime()) / (30.44 * 24 * 60 * 60 * 1000)) : 0;
+        const tenureScore = tenureMonths >= 48 ? 100 : tenureMonths >= 24 ? 80 : tenureMonths >= 12 ? 60 : tenureMonths >= 6 ? 40 : 20;
+        const readinessScore = Math.round((appraisalScore * 0.40) + (goalScore * 0.30) + (trainingScore * 0.15) + (tenureScore * 0.15));
+        const successionTier = readinessScore >= 80 ? 'Ready Now' : readinessScore >= 60 ? 'Ready in 1-2 Years' : readinessScore >= 40 ? 'High Potential' : 'Developing';
+        return {
+          employee_id: emp.id, employee_name: emp.name, position: emp.position, dept: emp.dept,
+          hire_date: emp.hire_date, status: emp.status, salary_base: emp.salary_base,
+          readiness_score: readinessScore,
+          appraisal_score: Math.round(appraisalScore), goal_score: goalScore,
+          training_score: trainingScore, tenure_score: tenureScore,
+          latest_appraisal: latest ? { overall: latest.overall, promotability_score: latest.promotability_score, promotability_status: latest.promotability_status, sign_off_date: latest.sign_off_date } : null,
+          goal_summary: gd, training_summary: td,
+          tenure_months: tenureMonths, has_active_pip: pipSet.has(emp.id), succession_tier: successionTier,
+        };
+      });
+      res.json(results);
+    } catch (err) { console.error(err); res.status(500).json({ error: "Database error" }); }
+  });
+
+  // ---- Promotion Recommendations CRUD ----
+  app.get("/api/promotion_recommendations", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      const role = actor?.role;
+      if (isPrivilegedRole(role)) {
+        const rows = await query("SELECT pr.*, e.name as employee_name, u.full_name as recommended_by_name FROM promotion_recommendations pr LEFT JOIN employees e ON pr.employee_id = e.id LEFT JOIN users u ON pr.recommended_by = u.id ORDER BY pr.created_at DESC");
+        return res.json(rows);
+      }
+      if ((role || '').toLowerCase() === 'manager') {
+        const ids = await getManagedEmployeeIds(actor.id);
+        if (ids.length === 0) return res.json([]);
+        const ph = ids.map((_: any, i: number) => `$${i + 1}`).join(',');
+        const rows = await query(`SELECT pr.*, e.name as employee_name, u.full_name as recommended_by_name FROM promotion_recommendations pr LEFT JOIN employees e ON pr.employee_id = e.id LEFT JOIN users u ON pr.recommended_by = u.id WHERE pr.employee_id IN (${ph}) ORDER BY pr.created_at DESC`, ids);
+        return res.json(rows);
+      }
+      return res.status(403).json({ error: 'Forbidden' });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.post("/api/promotion_recommendations", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      const role = actor?.role;
+      if (!isPrivilegedRole(role) && (role || '').toLowerCase() !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      const { employee_id, recommended_position, justification } = req.body;
+      if (!employee_id) return res.status(400).json({ error: "employee_id is required" });
+      if ((role || '').toLowerCase() === 'manager') {
+        const allowed = await canManagerAccessEmployee(actor.id, employee_id);
+        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+      }
+      // Lookup employee current info
+      const empRows: any = await query("SELECT position, dept FROM employees WHERE id = ?", [employee_id]);
+      const emp = Array.isArray(empRows) && empRows.length > 0 ? empRows[0] : {};
+      const result: any = await query(
+        "INSERT INTO promotion_recommendations (employee_id, recommended_by, recommended_position, current_position, current_dept, justification, status) VALUES (?, ?, ?, ?, ?, ?, 'Proposed') RETURNING id",
+        [employee_id, actor.id, recommended_position || null, emp.position || null, emp.dept || null, justification || null]
+      );
+      // Notify HR
+      await createNotification({ role: 'HR', type: 'info', message: `New promotion recommendation submitted for review`, source: 'promotability' });
+      res.json({ success: true, id: result?.id || result?.insertId });
+    } catch (err) { console.error(err); res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.put("/api/promotion_recommendations/:id", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      const role = actor?.role;
+      if (!isPrivilegedRole(role) && (role || '').toLowerCase() !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      const { status, review_notes, effective_date, recommended_position, justification } = req.body;
+      const fields: string[] = [];
+      const vals: any[] = [];
+      let pIdx = 1;
+      if (status !== undefined) { fields.push(`status = $${pIdx++}`); vals.push(status); }
+      if (review_notes !== undefined) { fields.push(`review_notes = $${pIdx++}`); vals.push(review_notes); }
+      if (effective_date !== undefined) { fields.push(`effective_date = $${pIdx++}`); vals.push(effective_date); }
+      if (recommended_position !== undefined) { fields.push(`recommended_position = $${pIdx++}`); vals.push(recommended_position); }
+      if (justification !== undefined) { fields.push(`justification = $${pIdx++}`); vals.push(justification); }
+      if (isPrivilegedRole(role) && status) {
+        fields.push(`reviewed_by = $${pIdx++}`); vals.push(actor.id);
+        fields.push(`review_date = $${pIdx++}`); vals.push(new Date().toISOString().split('T')[0]);
+      }
+      if (fields.length === 0) return res.status(400).json({ error: "No fields to update" });
+      vals.push(req.params.id);
+      await query(`UPDATE promotion_recommendations SET ${fields.join(', ')} WHERE id = $${pIdx}`, vals);
+
+      // If approved, create promotion record and update employee position
+      if (status === 'Approved') {
+        const recRows: any = await query("SELECT * FROM promotion_recommendations WHERE id = ?", [req.params.id]);
+        const rec = Array.isArray(recRows) && recRows.length > 0 ? recRows[0] : null;
+        if (rec) {
+          const empRows: any = await query("SELECT position, dept, salary_base FROM employees WHERE id = ?", [rec.employee_id]);
+          const emp = Array.isArray(empRows) && empRows.length > 0 ? empRows[0] : {};
+          await query(
+            "INSERT INTO promotions (employee_id, recommendation_id, previous_position, new_position, previous_dept, new_dept, previous_salary, effective_date, promoted_by, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+            [rec.employee_id, rec.id, emp.position || null, rec.recommended_position || emp.position, emp.dept || null, rec.current_dept || emp.dept, emp.salary_base || null, effective_date || new Date().toISOString().split('T')[0], actor.id, rec.justification || null]
+          );
+          if (rec.recommended_position) {
+            await query("UPDATE employees SET position = ? WHERE id = ?", [rec.recommended_position, rec.employee_id]);
+          }
+          // Notify recommender and employee
+          await createNotification({ user_id: rec.recommended_by, type: 'success', message: `Promotion recommendation approved`, source: 'promotability' });
+          const empUser: any = await query("SELECT id FROM users WHERE employee_id = ?", [rec.employee_id]);
+          if (Array.isArray(empUser) && empUser.length > 0) {
+            await createNotification({ user_id: empUser[0].id, type: 'success', message: `Congratulations! You have been approved for promotion`, source: 'promotability' });
+          }
+        }
+      }
+      res.json({ success: true });
+    } catch (err) { console.error(err); res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.delete("/api/promotion_recommendations/:id", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      if (!isPrivilegedRole(actor?.role)) return res.status(403).json({ error: 'Forbidden' });
+      await query("DELETE FROM promotion_recommendations WHERE id = ?", [req.params.id]);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  // ---- Promotions History CRUD ----
+  app.get("/api/promotions", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      const role = actor?.role;
+      if (isPrivilegedRole(role)) {
+        const rows = await query("SELECT p.*, e.name as employee_name FROM promotions p LEFT JOIN employees e ON p.employee_id = e.id ORDER BY p.effective_date DESC");
+        return res.json(rows);
+      }
+      if ((role || '').toLowerCase() === 'manager') {
+        const ids = await getManagedEmployeeIds(actor.id);
+        if (ids.length === 0) return res.json([]);
+        const ph = ids.map((_: any, i: number) => `$${i + 1}`).join(',');
+        const rows = await query(`SELECT p.*, e.name as employee_name FROM promotions p LEFT JOIN employees e ON p.employee_id = e.id WHERE p.employee_id IN (${ph}) ORDER BY p.effective_date DESC`, ids);
+        return res.json(rows);
+      }
+      return res.status(403).json({ error: 'Forbidden' });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.post("/api/promotions", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      if (!isPrivilegedRole(actor?.role)) return res.status(403).json({ error: 'Forbidden' });
+      const { employee_id, previous_position, new_position, previous_dept, new_dept, previous_salary, new_salary, effective_date, notes } = req.body;
+      if (!employee_id || !effective_date) return res.status(400).json({ error: "employee_id and effective_date are required" });
+      await query(
+        "INSERT INTO promotions (employee_id, previous_position, new_position, previous_dept, new_dept, previous_salary, new_salary, effective_date, promoted_by, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        [employee_id, previous_position || null, new_position || null, previous_dept || null, new_dept || null, previous_salary || null, new_salary || null, effective_date, actor.id, notes || null]
+      );
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.delete("/api/promotions/:id", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      if (!isPrivilegedRole(actor?.role)) return res.status(403).json({ error: 'Forbidden' });
+      await query("DELETE FROM promotions WHERE id = ?", [req.params.id]);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  // ---- Career Paths CRUD ----
+  app.get("/api/career_paths", authenticateToken, async (req, res) => {
+    try {
+      const rows = await query("SELECT * FROM career_paths ORDER BY department, current_role");
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.post("/api/career_paths", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      if (!isPrivilegedRole(actor?.role)) return res.status(403).json({ error: 'Forbidden' });
+      const { current_role, next_role, department, min_tenure_months, min_readiness_score, notes } = req.body;
+      if (!current_role || !next_role) return res.status(400).json({ error: 'current_role and next_role are required' });
+      const result: any = await query(
+        "INSERT INTO career_paths (current_role, next_role, department, min_tenure_months, min_readiness_score, notes) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+        [current_role, next_role, department || null, min_tenure_months || 12, min_readiness_score || 60, notes || null]
+      );
+      res.json({ success: true, id: result?.id || result?.insertId });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.delete("/api/career_paths/:id", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      if (!isPrivilegedRole(actor?.role)) return res.status(403).json({ error: 'Forbidden' });
+      await query("DELETE FROM career_paths WHERE id = ?", [req.params.id]);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  // ---- Promotion Comments ----
+  app.get("/api/promotion_recommendations/:id/comments", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      const role = actor?.role;
+      // Verify access: HR/Manager only, or the employee themselves via their recommendation
+      if (!isPrivilegedRole(role) && (role || '').toLowerCase() !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      const rows = await query("SELECT * FROM promotion_comments WHERE recommendation_id = ? ORDER BY created_at ASC", [req.params.id]);
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.post("/api/promotion_recommendations/:id/comments", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      const role = actor?.role;
+      if (!isPrivilegedRole(role) && (role || '').toLowerCase() !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      const { comment } = req.body;
+      if (!comment || !comment.trim()) return res.status(400).json({ error: 'comment is required' });
+      const userName = actor.full_name || actor.email || actor.username || 'Unknown';
+      await query(
+        "INSERT INTO promotion_comments (recommendation_id, user_id, user_name, comment) VALUES (?, ?, ?, ?)",
+        [req.params.id, actor.id, userName, comment.trim()]
+      );
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  // ---- Promotion Analytics ----
+  app.get("/api/promotability/analytics", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      const role = actor?.role;
+      if (!isPrivilegedRole(role) && (role || '').toLowerCase() !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+
+      const promotions: any[] = await query("SELECT p.*, e.name as employee_name, e.hire_date, e.dept FROM promotions p LEFT JOIN employees e ON p.employee_id = e.id ORDER BY p.effective_date DESC") as any[];
+      const recommendations: any[] = await query("SELECT * FROM promotion_recommendations") as any[];
+      const employees: any[] = await query("SELECT id, name, dept, hire_date FROM employees WHERE status != 'Resigned'") as any[];
+
+      // Promotions by year
+      const byYear: Record<string, number> = {};
+      for (const p of promotions) {
+        const yr = (p.effective_date || '').slice(0, 4);
+        if (yr) byYear[yr] = (byYear[yr] || 0) + 1;
+      }
+
+      // Promotions by department
+      const byDept: Record<string, number> = {};
+      for (const p of promotions) {
+        const d = p.new_dept || p.previous_dept || 'Unknown';
+        byDept[d] = (byDept[d] || 0) + 1;
+      }
+
+      // Time-to-first-promotion (months from hire_date to first promotion effective_date)
+      const ttpArr: number[] = [];
+      for (const p of promotions) {
+        if (p.hire_date && p.effective_date) {
+          const hd = new Date(p.hire_date);
+          const ed = new Date(p.effective_date);
+          const months = Math.round((ed.getTime() - hd.getTime()) / (30.44 * 24 * 60 * 60 * 1000));
+          if (months >= 0) ttpArr.push(months);
+        }
+      }
+      const avgTTP = ttpArr.length > 0 ? Math.round(ttpArr.reduce((a, b) => a + b, 0) / ttpArr.length) : null;
+
+      // Recommendation status breakdown
+      const recStatus: Record<string, number> = {};
+      for (const r of recommendations) {
+        recStatus[r.status] = (recStatus[r.status] || 0) + 1;
+      }
+
+      // Dept promotion rate (promoted employees / total employees per dept)
+      const deptTotal: Record<string, number> = {};
+      for (const e of employees) { const d = e.dept || 'Unknown'; deptTotal[d] = (deptTotal[d] || 0) + 1; }
+      const deptPromotionRate = Object.entries(byDept).map(([dept, count]) => ({
+        dept, promoted: count, total: deptTotal[dept] || 0,
+        rate: deptTotal[dept] ? Math.round((count / deptTotal[dept]) * 100) : 0
+      })).sort((a, b) => b.rate - a.rate);
+
+      res.json({
+        promotions_by_year: Object.entries(byYear).map(([year, count]) => ({ year, count })).sort((a, b) => a.year.localeCompare(b.year)),
+        dept_promotion_rate: deptPromotionRate,
+        avg_time_to_promotion_months: avgTTP,
+        recommendation_status: Object.entries(recStatus).map(([status, count]) => ({ status, count })),
+        total_promotions: promotions.length,
+        total_recommendations: recommendations.length,
+        success_rate: recommendations.length > 0 ? Math.round(((recStatus['Approved'] || 0) / recommendations.length) * 100) : 0,
+      });
+    } catch (err) { console.error(err); res.status(500).json({ error: "Database error" }); }
+  });
+
   // ---- Onboarding CRUD ----
   app.get("/api/onboarding", async (req, res) => {
     try { const rows = await query("SELECT * FROM onboarding ORDER BY created_at DESC"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
@@ -2722,7 +3585,7 @@ async function startServer() {
                 const keys = ['full_name','employee_name','email','username','message','title','label'];
                 const parts: string[] = [];
                 for (const k of keys) if (aj[k]) parts.push(aj[k]);
-                if (parts.length) display_description = parts.slice(0,3).join(' — ');
+                if (parts.length) display_description = parts.slice(0,3).join(' â€” ');
               }
             }
             if (!display_description && r.meta_json) {
@@ -2754,7 +3617,7 @@ async function startServer() {
     }
   });
 
-  // POST /api/activity — record a user activity or action (human-friendly)
+  // POST /api/activity â€” record a user activity or action (human-friendly)
   app.post('/api/activity', authenticateToken, async (req: any, res) => {
     try {
       const user = (req as any).user || null;
@@ -2769,7 +3632,7 @@ async function startServer() {
     }
   });
 
-  // ─── Socket.io Real-Time Chat ───
+  // â”€â”€â”€ Socket.io Real-Time Chat â”€â”€â”€
   const httpServer = createHttpServer(app);
   const io = new SocketIOServer(httpServer, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
@@ -2811,13 +3674,13 @@ async function startServer() {
     } catch (e) { console.error('socket audit error:', e); }
   });
 
-  // ─── Goal Update Request API (creates actionable system message) ───
+  // â”€â”€â”€ Goal Update Request API (creates actionable system message) â”€â”€â”€
   app.post("/api/goal_update_request", authenticateToken, async (req: any, res) => {
     try {
       const { employee_id, goal_id, goal_title, proposed_status, proposed_progress, reason } = req.body;
       const user = req.user;
       const actionPayload = JSON.stringify({ goal_id, goal_title, proposed_status, proposed_progress, reason });
-      const sysMessage = `📋 Goal Update Request: "${goal_title}" → ${proposed_status || ''}${proposed_progress !== undefined ? ` (${proposed_progress}%)` : ''}${reason ? ` — ${reason}` : ''}`;
+      const sysMessage = `ðŸ“‹ Goal Update Request: "${goal_title}" â†’ ${proposed_status || ''}${proposed_progress !== undefined ? ` (${proposed_progress}%)` : ''}${reason ? ` â€” ${reason}` : ''}`;
       await query(
         "INSERT INTO coaching_chats (employee_id, sender_role, sender_name, message, status, action_type, action_payload, action_status) VALUES (?, 'System', 'System', ?, 'delivered', 'goal_update', ?, 'pending')",
         [employee_id, sysMessage, actionPayload]
@@ -2852,16 +3715,11 @@ async function startServer() {
     employee: ['career-dashboard','feedback','idp','self-assessment','suggestion-form','coaching-chat','verification-of-review','settings']
   };
 
-  // Exact two-segment routes: /:role/:page
+  // Exact two-segment routes: /:role/:page â€” always serve SPA so React handles 404s
   app.get('/:role/:page', (req, res, next) => {
     try {
       const role = (req.params.role || '').toString().toLowerCase();
-      const page = (req.params.page || '').toString().toLowerCase();
       if (!['admin','manager','employee'].includes(role)) return next();
-      const valid = sidebarRoutes[role] || [];
-      if (!valid.includes(page)) return res.status(404).json({ error: 'Not Found' });
-      // For valid role/page, serve SPA index in production; in development
-      // fallthrough to Vite middleware so the client-side router can load correctly.
       if (process.env.NODE_ENV === 'production') {
         return res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
       }
@@ -2876,10 +3734,6 @@ async function startServer() {
     try {
       const role = (req.params.role || '').toString().toLowerCase();
       if (!['admin','manager','employee'].includes(role)) return next();
-      const rest = (req.params[0] || '').toString().split('/').filter(Boolean);
-      const page = (rest[0] || '').toLowerCase();
-      const valid = sidebarRoutes[role] || [];
-      if (!page || !valid.includes(page)) return res.status(404).json({ error: 'Not Found' });
       if (process.env.NODE_ENV === 'production') {
         return res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
       }
@@ -2900,7 +3754,7 @@ async function startServer() {
     });
   }
 
-  // Presence map: socketId → { userId, role, username, employeeId }
+  // Presence map: socketId â†’ { userId, role, username, employeeId }
   const onlineUsers = new Map<string, { userId: number; role: string; username: string; employeeId: number | null }>();
   // userId -> Set(socketId) for quick lookups when forcing disconnects
   const userSocketMap = new Map<number, Set<string>>();

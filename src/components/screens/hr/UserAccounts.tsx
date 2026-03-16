@@ -5,6 +5,21 @@ import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { Modal } from '../../common/Modal';
+import { Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
+
+const pwStrength = (pw: string) => {
+  if (!pw) return null;
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (score <= 1) return { label: 'Weak', color: 'bg-red-500', width: '20%', text: 'text-red-500' };
+  if (score === 2) return { label: 'Fair', color: 'bg-amber-500', width: '50%', text: 'text-amber-500' };
+  if (score === 3) return { label: 'Good', color: 'bg-blue-500', width: '75%', text: 'text-blue-500' };
+  return { label: 'Strong', color: 'bg-emerald-500', width: '100%', text: 'text-emerald-500' };
+};
 
 interface UserAccountsProps {
   employees: Employee[];
@@ -26,6 +41,13 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [selectedLinkedUserId, setSelectedLinkedUserId] = useState('');
   const [createRole, setCreateRole] = useState('');
 
+  // Controlled password state for create form
+  const [createPassword, setCreatePassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCreatePw, setShowCreatePw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
+
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalName, setModalName] = useState('');
@@ -35,17 +57,36 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [modalLinkedUserId, setModalLinkedUserId] = useState('');
   const [showArchived, setShowArchived] = useState(false);
 
+  const strength = pwStrength(createPassword);
+
+  const validateCreateForm = (email: string, fullName: string, role: string): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    if (!email) errs.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'Enter a valid email address';
+    if (!createPassword) errs.password = 'Password is required';
+    else if (createPassword.length < 8) errs.password = 'Minimum 8 characters';
+    else if (!/[A-Z]/.test(createPassword)) errs.password = 'Must contain an uppercase letter';
+    else if (!/[0-9]/.test(createPassword)) errs.password = 'Must contain a number';
+    else if (!/[^A-Za-z0-9]/.test(createPassword)) errs.password = 'Must contain a special character';
+    if (!confirmPassword) errs.confirm = 'Confirm password is required';
+    else if (confirmPassword !== createPassword) errs.confirm = 'Passwords do not match';
+    if (!role) errs.role = 'Role is required';
+    return errs;
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
     const fd = new FormData(form);
     const email = (fd.get('email') || '').toString().trim();
-    const password = (fd.get('password') || '').toString().trim();
     const full_name = (fd.get('full_name') || '').toString().trim();
-    const role = (fd.get('role') || '').toString();
-    if ((!email && !username) || !password || !role) { (window as any).notify('Missing required fields', 'error'); return; }
+    const role = createRole;
 
-    const body: any = { email, password, role };
+    const errs = validateCreateForm(email, full_name, role);
+    setCreateErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    const body: any = { email, password: createPassword, role };
     if (full_name) body.full_name = full_name;
 
     if (linkTarget === 'employee' && createRole !== 'HR' && createRole !== 'Manager') {
@@ -69,6 +110,9 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
         setSelectedLinkedUserId('');
         setCreateRole('');
         setLinkTarget('employee');
+        setCreatePassword('');
+        setConfirmPassword('');
+        setCreateErrors({});
       } else {
         const err = await res.json();
         (window as any).notify(err.error || 'Failed to create user', 'error');
@@ -107,7 +151,8 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</label>
-              <input name="email" type="email" className="w-full mt-1 p-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50" placeholder="e.g. jane@company.com" required />
+              <input name="email" type="email" className={`w-full mt-1 p-2 bg-white dark:bg-black border ${createErrors.email ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} placeholder="e.g. jane@company.com" maxLength={254} autoComplete="email" required />
+              {createErrors.email && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{createErrors.email}</p>}
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Full name</label>
@@ -115,16 +160,68 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Password</label>
-              <input name="password" type="password" className="w-full mt-1 p-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50" required />
+              <div className="relative">
+                <input
+                  type={showCreatePw ? 'text' : 'password'}
+                  value={createPassword}
+                  onChange={e => { setCreatePassword(e.target.value); if (createErrors.password) setCreateErrors(p => ({ ...p, password: '' })); }}
+                  className={`w-full mt-1 p-2 pr-9 bg-white dark:bg-black border ${createErrors.password ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
+                  placeholder="Min 8 chars, uppercase, number, special"
+                  maxLength={128}
+                  autoComplete="new-password"
+                  required
+                />
+                <button type="button" onClick={() => setShowCreatePw(!showCreatePw)} className="absolute right-2 top-1/2 -translate-y-1/2 mt-0.5 text-slate-400 p-0.5">
+                  {showCreatePw ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              {createErrors.password && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{createErrors.password}</p>}
+              {strength && (
+                <div className="mt-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div className={`h-full ${strength.color} rounded-full transition-all duration-300`} style={{ width: strength.width }} />
+                    </div>
+                    <span className={`text-[10px] font-bold ${strength.text}`}>{strength.label}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
+                    <span className={createPassword.length >= 8 ? 'text-emerald-500' : 'text-slate-400'}>{createPassword.length >= 8 ? <CheckCircle size={10} className="inline mr-0.5" /> : null}8+ chars</span>
+                    <span className={/[A-Z]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[A-Z]/.test(createPassword) ? <CheckCircle size={10} className="inline mr-0.5" /> : null}Uppercase</span>
+                    <span className={/[0-9]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[0-9]/.test(createPassword) ? <CheckCircle size={10} className="inline mr-0.5" /> : null}Number</span>
+                    <span className={/[^A-Za-z0-9]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[^A-Za-z0-9]/.test(createPassword) ? <CheckCircle size={10} className="inline mr-0.5" /> : null}Special</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Confirm Password</label>
+              <div className="relative">
+                <input
+                  type={showConfirmPw ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={e => { setConfirmPassword(e.target.value); if (createErrors.confirm) setCreateErrors(p => ({ ...p, confirm: '' })); }}
+                  className={`w-full mt-1 p-2 pr-9 bg-white dark:bg-black border ${createErrors.confirm ? 'border-red-400 dark:border-red-500' : confirmPassword && confirmPassword === createPassword ? 'border-emerald-400 dark:border-emerald-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
+                  placeholder="Re-enter password"
+                  maxLength={128}
+                  autoComplete="new-password"
+                  required
+                />
+                <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-2 top-1/2 -translate-y-1/2 mt-0.5 text-slate-400 p-0.5">
+                  {showConfirmPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              {createErrors.confirm && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{createErrors.confirm}</p>}
+              {confirmPassword && confirmPassword === createPassword && <p className="mt-1 text-xs text-emerald-500 flex items-center gap-1"><CheckCircle size={11} />Passwords match</p>}
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</label>
-              <select name="role" value={createRole} onChange={e => setCreateRole(e.target.value)} className="w-full mt-1 p-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50" required>
+              <select name="role" value={createRole} onChange={e => { setCreateRole(e.target.value); if (createErrors.role) setCreateErrors(p => ({ ...p, role: '' })); }} className={`w-full mt-1 p-2 bg-white dark:bg-black border ${createErrors.role ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} required>
                 <option value="">Select Role...</option>
                 <option value="Employee">Employee</option>
                 <option value="Manager">Manager</option>
                 <option value="HR">HR</option>
               </select>
+              {createErrors.role && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{createErrors.role}</p>}
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Link</label>

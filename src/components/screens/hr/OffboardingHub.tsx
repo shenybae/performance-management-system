@@ -294,7 +294,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="Offboarding & Exit Hub" subtitle="Process final clearances and exit interviews" />
         <div className="flex gap-2">
-          <button onClick={() => exportToCSV(offboardingData, 'offboarding')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> CSV</button>
+          <button onClick={() => exportToCSV(offboardingData, 'offboarding')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
           <button onClick={() => setActiveForm(activeForm === 'offboard' ? 'none' : 'offboard')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${activeForm === 'offboard' ? 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300' : 'bg-red-500 text-white hover:bg-red-600'}`}>
             {activeForm === 'offboard' ? <><X size={16} /> Close</> : <><Plus size={16} /> New Offboarding</>}
           </button>
@@ -386,7 +386,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                       {propForm.items.map((item, idx) => (
                         <tr key={idx} className="border-b border-slate-100 dark:border-slate-800">
                           <td className="p-1"><input type="text" value={item.property_number} onChange={e => updatePropRow(idx, 'property_number', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="PN-001" /></td>
-                          <td className="p-1"><input type="text" value={item.asset_category} onChange={e => updatePropRow(idx, 'asset_category', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="IT Equipment" /></td>
+                          <td className="p-1"><select value={item.asset_category} onChange={e => updatePropRow(idx, 'asset_category', e.target.value)} className={inputCls + ' !p-1 !text-xs'}><option value="">Category...</option>{['IT Equipment','Office Furniture','Vehicle','Tools','Supplies','Other'].map(c => <option key={c}>{c}</option>)}</select></td>
                           <td className="p-1"><input type="text" value={item.brand} onChange={e => updatePropRow(idx, 'brand', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="Brand" /></td>
                           <td className="p-1"><input type="text" value={item.description} onChange={e => updatePropRow(idx, 'description', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="Description" /></td>
                           <td className="p-1"><input type="text" value={item.serial_no} onChange={e => updatePropRow(idx, 'serial_no', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="SN-XXX" /></td>
@@ -482,8 +482,8 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                   <div><label className={labelCls}>Interview Date</label><input type="date" value={exitForm.interview_date} onChange={e => setExitForm({ ...exitForm, interview_date: e.target.value })} className={inputCls} /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4 mt-3">
-                  <div><label className={labelCls}>Department</label><input type="text" value={exitForm.department} onChange={e => setExitForm({ ...exitForm, department: e.target.value })} className={inputCls} /></div>
-                  <div><label className={labelCls}>Supervisor</label><input type="text" value={exitForm.supervisor} onChange={e => setExitForm({ ...exitForm, supervisor: e.target.value })} className={inputCls} /></div>
+                  <div><label className={labelCls}>Department</label><select value={exitForm.department} onChange={e => setExitForm({ ...exitForm, department: e.target.value })} className={inputCls}><option value="">Select department...</option>{['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => <option key={d}>{d}</option>)}</select></div>
+                  <div><label className={labelCls}>Supervisor</label><SearchableSelect options={employees.map(e => ({ value: e.id, label: e.name }))} value={employees.find(e => e.name === exitForm.supervisor)?.id || ''} onChange={(id: any) => setExitForm({ ...exitForm, supervisor: employees.find(e => e.id === id)?.name || '' })} placeholder="Select supervisor..." /></div>
                 </div>
                 <div className="grid grid-cols-4 gap-4 mt-3">
                   <div><label className={labelCls}>Hire Date</label><input type="date" value={exitForm.hire_date} onChange={e => setExitForm({ ...exitForm, hire_date: e.target.value })} className={inputCls} /></div>
@@ -492,7 +492,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                   <div><label className={labelCls}>Ending Position</label><input type="text" value={exitForm.ending_position} onChange={e => setExitForm({ ...exitForm, ending_position: e.target.value })} className={inputCls} /></div>
                 </div>
                 <div className="grid grid-cols-4 gap-4 mt-3">
-                  <div><label className={labelCls}>Salary</label><input type="text" value={exitForm.salary} onChange={e => setExitForm({ ...exitForm, salary: e.target.value })} className={inputCls} /></div>
+                  <div><label className={labelCls}>Salary</label><input type="number" min="0" step="0.01" value={exitForm.salary} onChange={e => setExitForm({ ...exitForm, salary: e.target.value })} className={inputCls} placeholder="0.00" /></div>
                 </div>
               </div>
 
@@ -691,7 +691,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                 termination_date: ei.termination_date, would_recommend: ei.would_recommend
               })), 'exit_interviews')}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
-                <Download size={13} /> CSV
+                <Download size={13} /> XLSX
               </button>
             </div>
           </div>
@@ -809,7 +809,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                 return { employee: r.employee_name, position_dept: r.position_dept, date: r.date_prepared, items_count: items.length, total_amount: items.reduce((s: number, it: PropertyRow) => s + (parseFloat(it.amount) || 0), 0) };
               }), 'property_accountability')}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
-                <Download size={13} /> CSV
+                <Download size={13} /> XLSX
               </button>
             )}
           </div>

@@ -198,7 +198,7 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
         <SectionHeader title="Disciplinary & Warning Log" subtitle="Track behavioral issues and corrective actions" />
         <div className="flex gap-2">
           <button onClick={() => exportToCSV(records, 'discipline_records')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-            <Download size={16} /> Export CSV
+            <Download size={16} /> Export XLSX
           </button>
           <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">
             {showForm ? <><X size={16} /> Close Form</> : <><Plus size={16} /> New Action Form</>}
@@ -232,7 +232,7 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Supervisor</label>
-                  <input type="text" value={form.supervisor} onChange={e => setForm({ ...form, supervisor: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" placeholder="Supervisor name" />
+                  <SearchableSelect options={employees.map(e => ({ value: e.id, label: e.name }))} value={employees.find(e => e.name === form.supervisor)?.id || ''} onChange={(id: any) => setForm({ ...form, supervisor: employees.find(e => e.id === id)?.name || '' })} placeholder="Select supervisor..." />
                 </div>
               </div>
 

@@ -160,7 +160,7 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="Onboarding Hub" subtitle="Initialize 201 Employee Files and manage new hire onboarding" />
         <div className="flex gap-2">
-          <button onClick={() => exportToCSV(onboardingRecords, 'onboarding')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> CSV</button>
+          <button onClick={() => exportToCSV(onboardingRecords, 'onboarding')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
           <button onClick={() => { setActiveOnboard(null); setForm(emptyForm); setShowManualForm(!showManualForm); }} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${showManualForm ? 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300' : 'bg-teal-deep text-white hover:bg-teal-green'}`}>
             {showManualForm ? <>✕ Close</> : <><UserPlus size={16} /> Manual Onboard</>}
           </button>
@@ -247,11 +247,11 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Position / Job Title</label>
                     <input type="text" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department</label>
-                    <input type="text" value={form.dept} onChange={e => setForm({ ...form, dept: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                    <select value={form.dept} onChange={e => setForm({ ...form, dept: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"><option value="">Select department...</option>{['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => <option key={d}>{d}</option>)}</select></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Hire Date</label>
                     <input type="date" value={form.hire_date} onChange={e => setForm({ ...form, hire_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Base Salary</label>
-                    <input type="text" value={form.salary_base} onChange={e => setForm({ ...form, salary_base: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="e.g. 50000" /></div>
+                    <input type="number" min="0" step="0.01" value={form.salary_base} onChange={e => setForm({ ...form, salary_base: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="50000" /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">SSN / ID Number</label>
                     <input type="text" value={form.ssn} onChange={e => setForm({ ...form, ssn: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Reporting Manager</label>
@@ -264,7 +264,7 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Emergency Contact Name</label>
                     <input type="text" value={form.emergency_contact} onChange={e => setForm({ ...form, emergency_contact: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Emergency Phone</label>
-                    <input type="text" value={form.emergency_phone} onChange={e => setForm({ ...form, emergency_phone: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                    <input type="tel" value={form.emergency_phone} onChange={e => setForm({ ...form, emergency_phone: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
                 </div>
                 <div className="mt-4">
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Address</label>

@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Card } from '../../common/Card';
-import { Camera, Trash2, Upload, Save, Mail, Phone, MapPin, Briefcase, Building2, Calendar, Shield } from 'lucide-react';
+import { Camera, Trash2, Upload, Save, Mail, Phone, MapPin, Briefcase, Building2, Calendar, Shield, Edit3, X } from 'lucide-react';
 
 interface SettingsProps {
   onPasswordChanged?: () => void;
   onProfilePictureChanged?: (pic: string | null) => void;
+  onAccountInfoChanged?: (info: { full_name?: string; employee_name?: string; email?: string; position?: string; dept?: string }) => void;
 }
 
-export const Settings = ({ onPasswordChanged, onProfilePictureChanged }: SettingsProps) => {
+export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccountInfoChanged }: SettingsProps) => {
   const [current, setCurrent] = useState('');
   const [newPass, setNewPass] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,6 +24,8 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged }: Setting
     employee_name: '', position: '', dept: '', hire_date: '', status: '', role: '', username: ''
   });
   const [savingInfo, setSavingInfo] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const hasEmployee = !!user.employee_id;
 
   useEffect(() => {
     const fetchAccountInfo = async () => {
@@ -64,10 +67,19 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged }: Setting
         // Update localStorage cache for user profile
         const cached = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
         cached.email = data.email || cached.email; cached.phone = data.phone || cached.phone; cached.address = data.address || cached.address;
-        if (data.name) { cached.employee_name = data.name; }
+        if (data.name) { cached.employee_name = data.name; cached.full_name = data.name; }
         if (data.position) { cached.position = data.position; }
         if (data.dept) { cached.dept = data.dept; }
+        if (data.full_name) { cached.full_name = data.full_name; }
         localStorage.setItem('talentflow_user', JSON.stringify(cached));
+        localStorage.setItem('user', JSON.stringify(cached));
+        onAccountInfoChanged?.({
+          full_name: data.name || data.full_name || cached.full_name,
+          employee_name: data.name || cached.employee_name,
+          email: data.email || cached.email,
+          position: data.position || cached.position,
+          dept: data.dept || cached.dept,
+        });
         // refresh UI state from server response
         setAccountInfo({
           ...accountInfo,
@@ -171,7 +183,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged }: Setting
                 </button>
               </div>
               <div className="text-center">
-                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{user.employee_name || user.email || user.username}</p>
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{user.employee_name || user.full_name || user.username || user.email}</p>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">{user.role}</p>
                 {user.position && <p className="text-[10px] text-slate-400 dark:text-slate-500">{user.position}</p>}
                 {user.dept && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold">{user.dept}</p>}
@@ -204,35 +216,57 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged }: Setting
 
         {/* Account Information */}
         <Card>
-          <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-4">Account Information</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">Account Information</h3>
+            {!editing && (
+              <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-teal-deep dark:hover:text-teal-green bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                <Edit3 size={12} /> Edit
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-            {/* Read-only fields */}
             <div className="flex items-center gap-3">
               <Briefcase size={16} className="text-slate-400 shrink-0" />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Full Name</p>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.employee_name || '—'}</p>
+                {editing ? (
+                  <input value={accountInfo.employee_name} onChange={e => setAccountInfo({ ...accountInfo, employee_name: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
+                ) : (
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.employee_name || '—'}</p>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Shield size={16} className="text-slate-400 shrink-0" />
-              <div className="min-w-0">
+              <Mail size={16} className="text-slate-400 shrink-0" />
+              <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Email</p>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.email || '—'}</p>
+                {editing ? (
+                  <input value={accountInfo.email} onChange={e => setAccountInfo({ ...accountInfo, email: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
+                ) : (
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.email || '—'}</p>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3">
               <Building2 size={16} className="text-slate-400 shrink-0" />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Department</p>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.dept || '—'}</p>
+                {editing && hasEmployee ? (
+                  <input value={accountInfo.dept} onChange={e => setAccountInfo({ ...accountInfo, dept: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
+                ) : (
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.dept || '—'}</p>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3">
               <Briefcase size={16} className="text-slate-400 shrink-0" />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Position</p>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.position || '—'}</p>
+                {editing && hasEmployee ? (
+                  <input value={accountInfo.position} onChange={e => setAccountInfo({ ...accountInfo, position: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
+                ) : (
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.position || '—'}</p>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -249,63 +283,57 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged }: Setting
                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.hire_date || '—'}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Shield size={16} className="text-slate-400 shrink-0" />
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Employment Status</p>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.status || '—'}</p>
-              </div>
-            </div>
           </div>
 
-          {/* Account & Contact (managed by HR) */}
-          <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-3">Contact Details</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-              <div className="flex items-center gap-3">
-                <Briefcase size={16} className="text-slate-400 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Full Name</p>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.employee_name || '—'}</p>
+          {/* Contact Details */}
+          {hasEmployee && (
+            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-3">Contact Details</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                <div className="flex items-center gap-3">
+                  <Phone size={16} className="text-slate-400 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Phone</p>
+                    {editing ? (
+                      <input value={accountInfo.phone} onChange={e => setAccountInfo({ ...accountInfo, phone: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
+                    ) : (
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.phone || '—'}</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Building2 size={16} className="text-slate-400 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Department</p>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.dept || '—'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Briefcase size={16} className="text-slate-400 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Position</p>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.position || '—'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Mail size={16} className="text-slate-400 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Email</p>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.email || '—'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Phone size={16} className="text-slate-400 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Phone</p>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.phone || '—'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 md:col-span-2">
-                <MapPin size={16} className="text-slate-400 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Address</p>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.address || '—'}</p>
+                <div className="flex items-center gap-3 md:col-span-2">
+                  <MapPin size={16} className="text-slate-400 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Address</p>
+                    {editing ? (
+                      <input value={accountInfo.address} onChange={e => setAccountInfo({ ...accountInfo, address: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
+                    ) : (
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.address || '—'}</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* Edit/Save/Cancel buttons */}
+          {editing && (
+            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+              <button
+                onClick={() => { saveAccountInfo(); setEditing(false); }}
+                disabled={savingInfo}
+                className="flex items-center gap-2 px-4 py-2.5 bg-teal-deep text-white rounded-xl text-sm font-bold hover:bg-teal-green transition-colors disabled:opacity-50"
+              >
+                <Save size={14} /> {savingInfo ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => setEditing(false)}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              >
+                <X size={14} /> Cancel
+              </button>
+            </div>
+          )}
         </Card>
 
         {/* Change Password */}
