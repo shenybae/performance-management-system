@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DollarSign, Plus, Edit3, Trash2, Check, X, Search, Download, Filter, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Award, Clock } from 'lucide-react';
+import { DollarSign, Plus, Edit3, Check, X, Search, Download, Filter, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Award, Clock, Archive } from 'lucide-react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Modal } from '../../common/Modal';
+import { ChoicePills } from '../../common/ChoicePills';
 import { getAuthHeaders, exportToCSV } from '../../../utils/csv';
 
 interface Adjustment {
@@ -109,7 +110,7 @@ export const PayrollManagement = ({ employees = [] }: { employees?: Employee[] }
   const deleteAdjustment = async (id: number) => {
     try {
       const res = await fetch(`/api/payroll-adjustments/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-      if (res.ok) { fetchAdjustments(); setDeleteConfirm(null); (window as any).notify?.('Adjustment deleted', 'success'); }
+      if (res.ok) { fetchAdjustments(); setDeleteConfirm(null); (window as any).notify?.('Adjustment archived', 'success'); }
     } catch { (window as any).notify?.('Error deleting adjustment', 'error'); }
   };
 
@@ -184,48 +185,60 @@ export const PayrollManagement = ({ employees = [] }: { employees?: Employee[] }
             <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
             <input value={search} onChange={e => setSearch(e.target.value)} className={inp + ' pl-9'} placeholder="Search employee, description..." />
           </div>
-          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className={inp + ' w-40'}>
-            <option value="">All Types</option>
-            <option value="bonus">Bonus</option>
-            <option value="deduction">Deduction</option>
-            <option value="allowance">Allowance</option>
-            <option value="overtime">Overtime</option>
-          </select>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={inp + ' w-40'}>
-            <option value="">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
+          <ChoicePills
+            value={typeFilter}
+            onChange={setTypeFilter}
+            options={[
+              { value: '', label: 'All Types' },
+              { value: 'bonus', label: 'Bonus' },
+              { value: 'deduction', label: 'Deduction' },
+              { value: 'allowance', label: 'Allowance' },
+              { value: 'overtime', label: 'Overtime' },
+            ]}
+          />
+          <ChoicePills
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: '', label: 'All Statuses' },
+              { value: 'pending', label: 'Pending' },
+              { value: 'approved', label: 'Approved' },
+              { value: 'rejected', label: 'Rejected' },
+            ]}
+          />
         </div>
 
         {/* Table */}
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-pulse text-slate-400 text-sm">Loading payroll data...</div>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-12">
-            <DollarSign size={40} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-            <p className="text-sm text-slate-500 dark:text-slate-400">No payroll adjustments found</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Click "New Adjustment" to create one</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b-2 border-slate-200 dark:border-slate-700">
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Employee</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Category</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Amount</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Period</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Actions</th>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b-2 border-slate-200 dark:border-slate-700">
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Employee</th>
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Category</th>
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Amount</th>
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Period</th>
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center">
+                    <div className="animate-pulse text-slate-400 text-sm">Loading payroll data...</div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((a, idx) => {
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center">
+                    <DollarSign size={40} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+                    <p className="text-sm text-slate-500 dark:text-slate-400">No payroll adjustments found</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Click "New Adjustment" to create one</p>
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((a, idx) => {
                   const tc = TYPE_CONFIG[a.type] || TYPE_CONFIG.bonus;
                   const sc = STATUS_CONFIG[a.status] || STATUS_CONFIG.pending;
                   const TypeIcon = tc.icon;
@@ -276,8 +289,8 @@ export const PayrollManagement = ({ employees = [] }: { employees?: Employee[] }
                                 <button onClick={() => setDeleteConfirm(null)} className="p-1.5 rounded-lg text-slate-500 text-[10px] font-bold">No</button>
                               </div>
                             ) : (
-                              <button onClick={() => setDeleteConfirm(a.id)} className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors" title="Delete">
-                                <Trash2 size={14} />
+                              <button onClick={() => setDeleteConfirm(a.id)} className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors" title="Archive">
+                                <Archive size={14} />
                               </button>
                             )}
                           </div>
@@ -285,11 +298,11 @@ export const PayrollManagement = ({ employees = [] }: { employees?: Employee[] }
                       </motion.tr>
                     </React.Fragment>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       {/* Create/Edit Modal */}

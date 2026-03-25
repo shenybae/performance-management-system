@@ -5,12 +5,13 @@ import { SectionHeader } from '../../common/SectionHeader';
 import { SignatureUpload } from '../../common/SignatureUpload';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import {
-  Plus, X, Download, Trash2, Lightbulb, ArrowLeft, Eye, Star, FileText,
+  Plus, X, Download, Lightbulb, ArrowLeft, Eye, Star, FileText, Archive,
   ChevronDown, ChevronUp, CheckCircle2, Clock, AlertTriangle, Send
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { Employee } from '../../../types';
+import { appConfirm } from '../../../utils/appDialog';
 
 type ViewMode = 'dashboard' | 'newForm' | 'viewDetail' | 'newReview';
 
@@ -48,6 +49,52 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
   };
   const [mgmtForm, setMgmtForm] = useState(emptyMgmt);
 
+  const parseISODate = (value: string) => {
+    if (!value) return null;
+    const dt = new Date(value);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  };
+
+  const isValidMoneyInput = (value: string) => {
+    const v = (value || '').toString().trim();
+    if (!v) return true;
+    return /^\d+(\.\d{1,2})?$/.test(v);
+  };
+
+  const validateSuggestionForm = () => {
+    const concern = form.concern.trim();
+    if (!concern) return 'Please describe your concern/suggestion';
+    if (concern.length < 20) return 'Suggestion details must be at least 20 characters';
+    if (concern.length > 2000) return 'Suggestion details must be 2000 characters or less';
+    if (!isValidMoneyInput(form.estimated_cost)) return 'Estimated cost must be a valid amount (up to 2 decimals)';
+    if (!isValidMoneyInput(form.total_financial_benefit)) return 'Estimated financial benefit must be a valid amount (up to 2 decimals)';
+    return null;
+  };
+
+  const validateManagementForm = (data: typeof emptyMgmt) => {
+    if (data.suggestion_priority && (data.suggestion_priority < 1 || data.suggestion_priority > 5)) {
+      return 'Suggestion priority must be between 1 and 5';
+    }
+    const received = parseISODate(data.date_received);
+    const followUp = parseISODate(data.follow_up_date);
+    if (received && followUp && followUp < received) {
+      return 'Follow-up date cannot be earlier than date received';
+    }
+    if ((data.suggestion_merit || '').trim().length > 2000) return 'Suggestion merit is too long';
+    if ((data.action_to_be_taken || '').trim().length > 1000) return 'Action to be taken is too long';
+    if ((data.suggested_reward || '').trim().length > 500) return 'Suggested reward is too long';
+    return null;
+  };
+
+  const isEmployeeFormValid = () => !validateSuggestionForm();
+  
+  const isNewReviewFormValid = () => {
+    const concern = form.concern.trim();
+    if (!concern || concern.length < 20) return false;
+    if (!isValidMoneyInput(form.estimated_cost) || !isValidMoneyInput(form.total_financial_benefit)) return false;
+    return true;
+  };
+
   useEffect(() => { fetchSuggestions(); }, []);
 
   const fetchSuggestions = async () => {
@@ -59,7 +106,10 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
   };
 
   const submitSuggestion = async () => {
-    if (!form.concern.trim()) { window.notify?.('Please describe your concern/suggestion', 'error'); return; }
+    const formErr = validateSuggestionForm();
+    if (formErr) { window.notify?.(formErr, 'error'); return; }
+    const managementErr = isManagement ? validateManagementForm(mgmtForm) : null;
+    if (managementErr) { window.notify?.(managementErr, 'error'); return; }
     try {
       const payload: any = { ...form, employee_id: user.employee_id || user.id };
       // Include management fields if manager/HR filled them
@@ -81,6 +131,8 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
 
   const submitManagementReview = async () => {
     if (!selectedSuggestion) return;
+    const managementErr = validateManagementForm(mgmtForm);
+    if (managementErr) { window.notify?.(managementErr, 'error'); return; }
     try {
       const res = await fetch(`/api/suggestions/${selectedSuggestion.id}/management`, {
         method: 'PUT', headers: getAuthHeaders(),
@@ -98,6 +150,8 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
   const [reviewEmployee, setReviewEmployee] = useState('');
   const submitNewReview = async () => {
     if (!reviewEmployee) { window.notify?.('Please select an employee', 'error'); return; }
+    const managementErr = validateManagementForm(mgmtForm);
+    if (managementErr) { window.notify?.(managementErr, 'error'); return; }
     try {
       const emp = employees.find(e => String(e.id) === reviewEmployee);
       const payload = {
@@ -122,13 +176,13 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
   };
 
   const deleteSuggestion = async (id: number) => {
-    if (!confirm('Delete this suggestion?')) return;
+    if (!(await appConfirm('Archive this suggestion?', { title: 'Archive Suggestion', confirmText: 'Archive' }))) return;
     try {
       await fetch(`/api/suggestions/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-      window.notify?.('Suggestion deleted', 'success');
+      window.notify?.('Suggestion archived', 'success');
       fetchSuggestions();
       if (selectedSuggestion?.id === id) setView('dashboard');
-    } catch { window.notify?.('Failed to delete', 'error'); }
+    } catch { window.notify?.('Failed to archive', 'error'); }
   };
 
   const openDetail = (s: any) => {
@@ -164,6 +218,23 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
 
   const inputClass = "w-full p-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40 transition-all";
   const labelClass = "block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5";
+  const normalizedSupervisorCandidates = employees.filter(e => String(e?.position || '').toLowerCase().includes('supervisor'));
+  const supervisorCandidates = normalizedSupervisorCandidates.length > 0 ? normalizedSupervisorCandidates : employees;
+  const supervisorOptions = supervisorCandidates.map(e => ({
+    value: e.name,
+    label: e.name,
+    avatarUrl: (e as any).profile_picture || null,
+  }));
+
+  const applySupervisorSelection = (supervisorName: any) => {
+    const selectedName = String(supervisorName || '');
+    const selected = supervisorCandidates.find(e => e.name === selectedName);
+    setMgmtForm({
+      ...mgmtForm,
+      supervisor_name: selectedName,
+      supervisor_title: selected?.position || mgmtForm.supervisor_title,
+    });
+  };
 
   /* ──────────────────── NEW MANAGEMENT REVIEW (managers only) ──────────────────── */
   if (view === 'newReview' && isManagement) {
@@ -190,10 +261,11 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
           <div className="max-w-sm">
             <label className={labelClass}>Select Employee</label>
             <SearchableSelect
-              options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+              options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
               value={reviewEmployee}
-              onChange={v => setReviewEmployee(v)}
+              onChange={v => setReviewEmployee(String(v))}
               placeholder="Select Employee..."
+              dropdownVariant="pills-horizontal"
             />
           </div>
         </Card>
@@ -203,7 +275,13 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className={labelClass}>Supervisor Name</label>
-              <input type="text" value={mgmtForm.supervisor_name} onChange={e => setMgmtForm({ ...mgmtForm, supervisor_name: e.target.value })} className={inputClass} />
+              <SearchableSelect
+                options={supervisorOptions}
+                value={mgmtForm.supervisor_name}
+                onChange={applySupervisorSelection}
+                placeholder="Select Supervisor..."
+                dropdownVariant="pills-horizontal"
+              />
             </div>
             <div>
               <label className={labelClass}>Title</label>
@@ -217,7 +295,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
             </div>
             <div>
               <label className={labelClass}>Follow-up Date</label>
-              <input type="date" value={mgmtForm.follow_up_date} onChange={e => setMgmtForm({ ...mgmtForm, follow_up_date: e.target.value })} className={inputClass} />
+              <input type="date" value={mgmtForm.follow_up_date} onChange={e => setMgmtForm({ ...mgmtForm, follow_up_date: e.target.value })} className={inputClass} min={mgmtForm.date_received || undefined} />
             </div>
           </div>
           <div className="mb-4">
@@ -279,7 +357,13 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <label className={labelClass}>Supervisor Name</label>
-                <input type="text" value={mgmtForm.supervisor_name} onChange={e => setMgmtForm({ ...mgmtForm, supervisor_name: e.target.value })} className={inputClass} />
+                <SearchableSelect
+                  options={supervisorOptions}
+                  value={mgmtForm.supervisor_name}
+                  onChange={applySupervisorSelection}
+                  placeholder="Select Supervisor..."
+                  dropdownVariant="pills-horizontal"
+                />
               </div>
               <div>
                 <label className={labelClass}>Date</label>
@@ -331,13 +415,15 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                 <div>
                   <label className={labelClass}>Employee</label>
                   <SearchableSelect
-                    options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+                    options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                     value={form.employee_name}
                     onChange={v => {
-                      const emp = employees.find(e => String(e.id) === v);
-                      setForm({ ...form, employee_name: emp?.name || v, position: emp?.position || form.position, dept: emp?.dept || form.dept });
+                      const selectedValue = String(v);
+                      const emp = employees.find(e => String(e.id) === selectedValue);
+                      setForm({ ...form, employee_name: emp?.name || selectedValue, position: emp?.position || form.position, dept: emp?.dept || form.dept });
                     }}
                     placeholder="Select Employee..."
+                    dropdownVariant="pills-horizontal"
                   />
                 </div>
               ) : (
@@ -368,8 +454,9 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
               <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">Concern</h3>
             </div>
             <p className="text-xs text-slate-400 mb-3">What is the nature of the suggestion? How does the suggestion improve the job, add value to the customers, and/or what is the concern being addressed?</p>
+            <label className={labelClass}>Description <span className="text-red-500 font-black">*</span></label>
             <textarea rows={4} value={form.concern} onChange={e => setForm({ ...form, concern: e.target.value })}
-              className={inputClass} placeholder="Describe your suggestion or concern in detail..." />
+              className={inputClass} placeholder="Describe your suggestion or concern in detail..." minLength={20} maxLength={2000} required />
           </Card>
 
           {/* RESOURCES NEEDED */}
@@ -401,8 +488,8 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                 <textarea rows={2} value={form.other_resource_needed} onChange={e => setForm({ ...form, other_resource_needed: e.target.value })} className={inputClass} placeholder="Other resources..." />
               </div>
               <div>
-                <label className={labelClass}>Total Estimated Cost</label>
-                <input type="text" value={form.estimated_cost} onChange={e => setForm({ ...form, estimated_cost: e.target.value })} className={inputClass} placeholder="$0.00" />
+                <label className={labelClass}>Total Estimated Cost <span className="text-red-500 font-black">*</span></label>
+                <input type="number" value={form.estimated_cost} onChange={e => setForm({ ...form, estimated_cost: e.target.value })} className={inputClass} placeholder="0.00" min={0} step="0.01" required />
               </div>
             </div>
           </Card>
@@ -420,8 +507,8 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                 <textarea rows={3} value={form.desired_benefit} onChange={e => setForm({ ...form, desired_benefit: e.target.value })} className={inputClass} placeholder="Describe the anticipated benefit..." />
               </div>
               <div>
-                <label className={labelClass}>Total Estimated Financial Benefit</label>
-                <input type="text" value={form.total_financial_benefit} onChange={e => setForm({ ...form, total_financial_benefit: e.target.value })} className={inputClass} placeholder="$0.00" />
+                <label className={labelClass}>Total Estimated Financial Benefit <span className="text-red-500 font-black">*</span></label>
+                <input type="number" value={form.total_financial_benefit} onChange={e => setForm({ ...form, total_financial_benefit: e.target.value })} className={inputClass} placeholder="0.00" min={0} step="0.01" required />
               </div>
             </div>
           </Card>
@@ -439,7 +526,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                   <span className="flex-shrink-0 w-7 h-7 rounded-full bg-teal-deep text-white flex items-center justify-center text-xs font-bold mt-1">{n}</span>
                   <textarea rows={2} value={(form as any)[`planning_step_${n}`]}
                     onChange={e => setForm({ ...form, [`planning_step_${n}`]: e.target.value })}
-                    className={inputClass} placeholder={`Step ${n}: Describe this planning step...`} />
+                    className={inputClass} placeholder={`Step ${n}: Describe this planning step...`} maxLength={500} />
                 </div>
               ))}
             </div>
@@ -482,7 +569,13 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className={labelClass}>Supervisor Name</label>
-                    <input type="text" value={mgmtForm.supervisor_name} onChange={e => setMgmtForm({ ...mgmtForm, supervisor_name: e.target.value })} className={inputClass} />
+                    <SearchableSelect
+                      options={supervisorOptions}
+                      value={mgmtForm.supervisor_name}
+                      onChange={applySupervisorSelection}
+                      placeholder="Select Supervisor..."
+                      dropdownVariant="pills-horizontal"
+                    />
                   </div>
                   <div>
                     <label className={labelClass}>Title</label>
@@ -498,7 +591,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                   </div>
                   <div>
                     <label className={labelClass}>Follow-up Date</label>
-                    <input type="date" value={mgmtForm.follow_up_date} onChange={e => setMgmtForm({ ...mgmtForm, follow_up_date: e.target.value })} className={inputClass} />
+                    <input type="date" value={mgmtForm.follow_up_date} onChange={e => setMgmtForm({ ...mgmtForm, follow_up_date: e.target.value })} className={inputClass} min={mgmtForm.date_received || undefined} />
                   </div>
                 </div>
 
@@ -574,7 +667,13 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                       <label className={labelClass}>Supervisor Name</label>
-                      <input type="text" value={mgmtForm.supervisor_name} onChange={e => setMgmtForm({ ...mgmtForm, supervisor_name: e.target.value })} className={inputClass} />
+                      <SearchableSelect
+                        options={supervisorOptions}
+                        value={mgmtForm.supervisor_name}
+                        onChange={applySupervisorSelection}
+                        placeholder="Select Supervisor..."
+                        dropdownVariant="pills-horizontal"
+                      />
                     </div>
                     <div>
                       <label className={labelClass}>Date</label>
@@ -591,7 +690,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
             <button type="button" onClick={() => setView('dashboard')} className="px-6 py-2.5 rounded-xl text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
               Cancel
             </button>
-            <button type="submit" className="flex items-center gap-2 bg-teal-deep text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">
+            <button type="submit" disabled={!isNewReviewFormValid()} className="flex items-center gap-2 bg-teal-deep text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               <Send size={16} /> Submit Suggestion
             </button>
           </div>
@@ -726,7 +825,13 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className={labelClass}>Supervisor Name</label>
-                    <input type="text" value={mgmtForm.supervisor_name} onChange={e => setMgmtForm({ ...mgmtForm, supervisor_name: e.target.value })} className={inputClass} />
+                    <SearchableSelect
+                      options={supervisorOptions}
+                      value={mgmtForm.supervisor_name}
+                      onChange={applySupervisorSelection}
+                      placeholder="Select Supervisor..."
+                      dropdownVariant="pills-horizontal"
+                    />
                   </div>
                   <div>
                     <label className={labelClass}>Title</label>
@@ -742,7 +847,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                   </div>
                   <div>
                     <label className={labelClass}>Follow-up Date</label>
-                    <input type="date" value={mgmtForm.follow_up_date} onChange={e => setMgmtForm({ ...mgmtForm, follow_up_date: e.target.value })} className={inputClass} />
+                    <input type="date" value={mgmtForm.follow_up_date} onChange={e => setMgmtForm({ ...mgmtForm, follow_up_date: e.target.value })} className={inputClass} min={mgmtForm.date_received || undefined} />
                   </div>
                 </div>
 
@@ -818,7 +923,13 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                       <label className={labelClass}>Supervisor Name</label>
-                      <input type="text" value={mgmtForm.supervisor_name} onChange={e => setMgmtForm({ ...mgmtForm, supervisor_name: e.target.value })} className={inputClass} />
+                      <SearchableSelect
+                        options={supervisorOptions}
+                        value={mgmtForm.supervisor_name}
+                        onChange={applySupervisorSelection}
+                        placeholder="Select Supervisor..."
+                        dropdownVariant="pills-horizontal"
+                      />
                     </div>
                     <div>
                       <label className={labelClass}>Date</label>
@@ -933,9 +1044,9 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
             <div className="flex items-center gap-4 min-w-0">
               <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase shrink-0">Filter by Employee</label>
               <SearchableSelect
-                options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+                options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                 value={filterEmployee}
-                onChange={v => setFilterEmployee(v)}
+                onChange={v => setFilterEmployee(String(v))}
                 placeholder="All Employees"
                 allowEmpty
                 emptyLabel="All Employees"
@@ -1023,7 +1134,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                   <td className="py-3 text-xs text-slate-400">{s.created_at ? new Date(s.created_at).toLocaleDateString() : '—'}</td>
                   <td className="py-3 flex items-center gap-2">
                     <button onClick={e => { e.stopPropagation(); openDetail(s); }} className="text-teal-500 hover:text-teal-700"><Eye size={14} /></button>
-                    <button onClick={e => { e.stopPropagation(); deleteSuggestion(s.id); }} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
+                    <button onClick={e => { e.stopPropagation(); deleteSuggestion(s.id); }} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                   </td>
                 </tr>
               ))}

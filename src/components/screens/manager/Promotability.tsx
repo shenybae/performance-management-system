@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Award, Download, TrendingUp, AlertTriangle, CheckCircle, Users, Clock, FileText, Search, Filter, Plus, XCircle, ArrowRight, Briefcase, BarChart3, Target, BookOpen, Calendar, Star, ChevronRight, X, MessageSquare, Trash2, TrendingDown, Send, PieChart as PieChartIcon, Layers } from 'lucide-react';
+import { Award, Download, TrendingUp, AlertTriangle, CheckCircle, Users, Clock, FileText, Search, Filter, Plus, XCircle, ArrowRight, Briefcase, BarChart3, Target, BookOpen, Calendar, Star, ChevronRight, X, MessageSquare, TrendingDown, Send, PieChart as PieChartIcon, Layers, Archive } from 'lucide-react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { CircularProgress } from '../../common/CircularProgress';
 import { Modal } from '../../common/Modal';
+import { SearchableSelect } from '../../common/SearchableSelect';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { appConfirm } from '../../../utils/appDialog';
 
 interface Props { employees: any[]; }
 
@@ -55,12 +57,24 @@ export const Promotability = ({ employees }: Props) => {
   const [sortBy, setSortBy] = useState<'readiness' | 'name' | 'tenure'>('readiness');
   const [recForm, setRecForm] = useState({ recommended_position: '', justification: '',
     rubric_technical: 0, rubric_leadership: 0, rubric_teamwork: 0, rubric_initiative: 0, rubric_reliability: 0 });
-  // Career path form (HR)
+  // Career path form
   const [showCpModal, setShowCpModal] = useState(false);
   const [cpForm, setCpForm] = useState({ current_role: '', next_role: '', department: '', min_tenure_months: 0, min_readiness_score: 0, notes: '' });
-  // Review modal for HR
+  // Review modal (hidden in employee-centered mode)
   const [reviewModal, setReviewModal] = useState<any>(null);
   const [reviewForm, setReviewForm] = useState({ status: '', review_notes: '', effective_date: '' });
+  const actorRole = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}';
+      const parsed = JSON.parse(raw);
+      return (parsed?.role || '').toString().toLowerCase();
+    } catch {
+      return '';
+    }
+  }, []);
+  const canManageCareerPaths = actorRole === 'manager';
+  const canRecommendRecommendations = actorRole === 'manager';
+  const canApproveRecommendations = actorRole === 'hr';
 
   const fetchAll = async () => {
     setLoading(true);
@@ -128,12 +142,21 @@ export const Promotability = ({ employees }: Props) => {
   }, [readinessData, searchTerm, filterDept, sortBy]);
 
   const handleRecommend = async () => {
-    if (!selectedEmpId) return;
+    if (!canRecommendRecommendations) return;
+    const targetEmployeeId = selectedEmpId;
+    if (!targetEmployeeId) return;
+    const recommendedPosition = recForm.recommended_position.trim();
+    const justification = recForm.justification.trim();
+    if (!recommendedPosition) { window.notify?.('Please enter the recommended position', 'error'); return; }
+    if (recommendedPosition.length > 120) { window.notify?.('Recommended position must be 120 characters or less', 'error'); return; }
+    if (justification.length < 20) { window.notify?.('Justification must be at least 20 characters', 'error'); return; }
+    const rubricValues = [recForm.rubric_technical, recForm.rubric_leadership, recForm.rubric_teamwork, recForm.rubric_initiative, recForm.rubric_reliability];
+    if (rubricValues.some((v) => v < 1 || v > 5)) { window.notify?.('Please rate all rubric items from 1 to 5', 'error'); return; }
     const rubricAvg = Math.round(((recForm.rubric_technical + recForm.rubric_leadership + recForm.rubric_teamwork + recForm.rubric_initiative + recForm.rubric_reliability) / 5) * 10) / 10;
     try {
       await fetch('/api/promotion_recommendations', {
         method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employee_id: selectedEmpId, recommended_position: recForm.recommended_position, justification: recForm.justification,
+        body: JSON.stringify({ employee_id: targetEmployeeId, recommended_position: recommendedPosition, justification,
           rubric_technical: recForm.rubric_technical, rubric_leadership: recForm.rubric_leadership, rubric_teamwork: recForm.rubric_teamwork,
           rubric_initiative: recForm.rubric_initiative, rubric_reliability: recForm.rubric_reliability, rubric_avg: rubricAvg }),
       });
@@ -144,10 +167,29 @@ export const Promotability = ({ employees }: Props) => {
 
   const handleReview = async () => {
     if (!reviewModal) return;
+    if (!canApproveRecommendations) return;
+    if (!reviewForm.status) { window.notify?.('Please select a decision', 'error'); return; }
+    if (reviewForm.status === 'Approved' && !reviewForm.effective_date) {
+      window.notify?.('Effective date is required when approving', 'error');
+      return;
+    }
+    if (reviewForm.effective_date) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const effectiveDate = new Date(reviewForm.effective_date);
+      if (!Number.isNaN(effectiveDate.getTime()) && effectiveDate < today) {
+        window.notify?.('Effective date cannot be in the past', 'error');
+        return;
+      }
+    }
+    if (reviewForm.review_notes.trim().length > 1000) {
+      window.notify?.('Review notes must be 1000 characters or less', 'error');
+      return;
+    }
     try {
       await fetch(`/api/promotion_recommendations/${reviewModal.id}`, {
         method: 'PUT', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(reviewForm),
+        body: JSON.stringify({ ...reviewForm, review_notes: reviewForm.review_notes.trim() }),
       });
       setReviewModal(null); setReviewForm({ status: '', review_notes: '', effective_date: '' });
       fetchAll();
@@ -179,11 +221,19 @@ export const Promotability = ({ employees }: Props) => {
   };
 
   const handleAddCareerPath = async () => {
-    if (!cpForm.current_role || !cpForm.next_role) return;
+    if (!canManageCareerPaths) return;
+    const currentRole = cpForm.current_role.trim();
+    const nextRole = cpForm.next_role.trim();
+    if (!currentRole || !nextRole) { window.notify?.('Current and next role are required', 'error'); return; }
+    if (currentRole.length > 100 || nextRole.length > 100) { window.notify?.('Role names must be 100 characters or less', 'error'); return; }
+    if (cpForm.department.trim().length > 100) { window.notify?.('Department must be 100 characters or less', 'error'); return; }
+    if (cpForm.min_tenure_months < 0 || cpForm.min_tenure_months > 600) { window.notify?.('Minimum tenure must be between 0 and 600 months', 'error'); return; }
+    if (cpForm.min_readiness_score < 0 || cpForm.min_readiness_score > 100) { window.notify?.('Minimum readiness score must be between 0 and 100', 'error'); return; }
+    if (cpForm.notes.trim().length > 1000) { window.notify?.('Notes must be 1000 characters or less', 'error'); return; }
     try {
       await fetch('/api/career_paths', {
         method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(cpForm),
+        body: JSON.stringify({ ...cpForm, current_role: currentRole, next_role: nextRole, department: cpForm.department.trim(), notes: cpForm.notes.trim() }),
       });
       setShowCpModal(false); setCpForm({ current_role: '', next_role: '', department: '', min_tenure_months: 0, min_readiness_score: 0, notes: '' });
       fetchAll();
@@ -191,7 +241,8 @@ export const Promotability = ({ employees }: Props) => {
   };
 
   const handleDeleteCp = async (id: number) => {
-    if (!confirm('Delete this career path?')) return;
+    if (!canManageCareerPaths) return;
+    if (!(await appConfirm('Archive this career path?', { title: 'Archive Career Path', confirmText: 'Archive' }))) return;
     try { await fetch(`/api/career_paths/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); fetchAll(); } catch { /* ignore */ }
   };
 
@@ -204,7 +255,7 @@ export const Promotability = ({ employees }: Props) => {
     { key: 'history' as const, label: 'Promotion History', icon: Clock },
     { key: 'succession' as const, label: 'Succession Pipeline', icon: TrendingUp },
     { key: 'analytics' as const, label: 'Analytics', icon: TrendingDown },
-    { key: 'career_paths' as const, label: 'Career Paths', icon: Layers },
+    ...(canManageCareerPaths ? [{ key: 'career_paths' as const, label: 'Career Paths', icon: Layers }] : []),
   ];
 
   const selectedEmp = readinessData.find(e => e.employee_id === selectedEmpId);
@@ -331,18 +382,32 @@ export const Promotability = ({ employees }: Props) => {
               <input type="text" placeholder="Search employees..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
                 className={`${inp} pl-9`} />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 sm:min-w-[220px]">
               <Filter size={14} className="text-slate-400 shrink-0" />
-              <select value={filterDept} onChange={e => setFilterDept(e.target.value)} className={inp}>
-                <option value="All">All Departments</option>
-                {departments.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
+              <SearchableSelect
+                options={[
+                  { value: 'All', label: 'All Departments' },
+                  ...departments.map(d => ({ value: d, label: d })),
+                ]}
+                value={filterDept}
+                onChange={v => setFilterDept(String(v))}
+                placeholder="All Departments"
+                searchable
+                dropdownVariant="pills-horizontal"
+              />
             </div>
-            <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className={inp}>
-              <option value="readiness">Sort: Readiness ↓</option>
-              <option value="name">Sort: Name A-Z</option>
-              <option value="tenure">Sort: Tenure ↓</option>
-            </select>
+            <div className="sm:min-w-[200px]">
+            <SearchableSelect
+              options={[
+                { value: 'readiness', label: 'Readiness ↓' },
+                { value: 'name', label: 'Name A-Z' },
+                { value: 'tenure', label: 'Tenure ↓' },
+              ]}
+              value={sortBy}
+              onChange={v => setSortBy(v as any)}
+              dropdownVariant="pills-horizontal"
+            />
+            </div>
           </div>
 
           {/* Employee Cards */}
@@ -416,10 +481,12 @@ export const Promotability = ({ employees }: Props) => {
                         })()}
 
                         {/* Action */}
-                        <button onClick={() => { setSelectedEmpId(emp.employee_id); setShowRecModal(true); }}
-                          className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors flex items-center justify-center gap-1.5">
-                          <Star size={12} /> Recommend for Promotion
-                        </button>
+                        {canRecommendRecommendations && (
+                          <button onClick={() => { setSelectedEmpId(emp.employee_id); setShowRecModal(true); }}
+                            className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors flex items-center justify-center gap-1.5">
+                            <Star size={12} /> Recommend for Promotion
+                          </button>
+                        )}
                       </Card>
                     </motion.div>
                   );
@@ -434,10 +501,14 @@ export const Promotability = ({ employees }: Props) => {
       {activeTab === 'recommendations' && (
         <div className="space-y-4">
           <div className="flex justify-end">
-            <button onClick={() => { setSelectedEmpId(''); setShowRecModal(true); }}
-              className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">
-              <Plus size={16} /> New Recommendation
-            </button>
+            {canRecommendRecommendations ? (
+              <button onClick={() => { setSelectedEmpId(''); setShowRecModal(true); }}
+                className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">
+                <Plus size={16} /> New Recommendation
+              </button>
+            ) : (
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Only managers can create recommendations.</span>
+            )}
           </div>
           <Card>
             <div className="overflow-x-auto">
@@ -497,7 +568,7 @@ export const Promotability = ({ employees }: Props) => {
                           }} className={`text-[10px] font-bold px-2 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${
                             (recComments[r.id]?.length || 0) > 0 ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                           }`}><MessageSquare size={11} />{recComments[r.id]?.length || 0}</button>
-                          {r.status === 'Proposed' && (
+                          {r.status === 'Proposed' && canApproveRecommendations && (
                             <button onClick={() => { setReviewModal(r); setReviewForm({ status: 'Approved', review_notes: '', effective_date: '' }); }}
                               className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">
                               Review
@@ -539,7 +610,7 @@ export const Promotability = ({ employees }: Props) => {
                     </React.Fragment>
                   ))}
                   {recommendations.length === 0 && (
-                    <tr><td colSpan={8} className="py-10 text-center text-slate-400 font-medium">No recommendations yet. Start by recommending employees from the Readiness tab.</td></tr>
+                    <tr><td colSpan={8} className="py-10 text-center text-slate-400 font-medium">{canRecommendRecommendations ? 'No promotion requests yet. Start from the Readiness tab.' : 'No promotion requests available.'}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -779,7 +850,7 @@ export const Promotability = ({ employees }: Props) => {
       )}
 
       {/* ───── TAB 7: CAREER PATHS ───── */}
-      {activeTab === 'career_paths' && (
+      {activeTab === 'career_paths' && canManageCareerPaths && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <p className="text-sm text-slate-500">Define career ladder progressions to guide promotion pathways.</p>
@@ -820,7 +891,7 @@ export const Promotability = ({ employees }: Props) => {
                       </td>
                       <td className="py-3 px-3 text-xs text-slate-500 truncate max-w-[200px]">{cp.notes || '—'}</td>
                       <td className="py-3 px-3 text-right">
-                        <button onClick={() => handleDeleteCp(cp.id)} className="text-red-400 hover:text-red-600 p-1 transition-colors"><Trash2 size={13} /></button>
+                        <button onClick={() => handleDeleteCp(cp.id)} className="text-red-500 hover:text-red-600 p-1 rounded transition-colors" title="Archive"><Archive size={15} /></button>
                       </td>
                     </motion.tr>
                   ))}
@@ -835,7 +906,7 @@ export const Promotability = ({ employees }: Props) => {
       )}
 
       {/* ───── RECOMMEND MODAL ───── */}
-      <Modal open={showRecModal} title="Recommend for Promotion" onClose={() => { setShowRecModal(false); setSelectedEmpId(''); }}>
+      <Modal open={showRecModal && canRecommendRecommendations} title="Recommend for Promotion" onClose={() => { setShowRecModal(false); setSelectedEmpId(''); }}>
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Employee *</label>
@@ -862,12 +933,12 @@ export const Promotability = ({ employees }: Props) => {
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Recommended Position</label>
             <input type="text" value={recForm.recommended_position} onChange={e => setRecForm({ ...recForm, recommended_position: e.target.value })}
-              placeholder="e.g. Senior Software Engineer" className={inp} />
+              placeholder="e.g. Senior Software Engineer" className={inp} maxLength={120} required />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Justification *</label>
             <textarea value={recForm.justification} onChange={e => setRecForm({ ...recForm, justification: e.target.value })}
-              placeholder="Why should this employee be promoted?" rows={3} className={inp} />
+              placeholder="Why should this employee be promoted?" rows={3} className={inp} minLength={20} maxLength={1000} required />
           </div>
 
           {/* Rubric Scoring */}
@@ -914,8 +985,8 @@ export const Promotability = ({ employees }: Props) => {
         </div>
       </Modal>
 
-      {/* ───── REVIEW MODAL (HR) ───── */}
-      <Modal open={!!reviewModal} title="Review Recommendation" onClose={() => setReviewModal(null)}>
+      {/* ───── REVIEW MODAL ───── */}
+      <Modal open={!!reviewModal && canApproveRecommendations} title="Review Recommendation" onClose={() => setReviewModal(null)}>
         {reviewModal && (
           <div className="space-y-4">
             <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl text-xs space-y-1">
@@ -935,13 +1006,13 @@ export const Promotability = ({ employees }: Props) => {
             {reviewForm.status === 'Approved' && (
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Effective Date</label>
-                <input type="date" value={reviewForm.effective_date} onChange={e => setReviewForm({ ...reviewForm, effective_date: e.target.value })} className={inp} />
+                <input type="date" value={reviewForm.effective_date} onChange={e => setReviewForm({ ...reviewForm, effective_date: e.target.value })} className={inp} min={new Date().toISOString().split('T')[0]} />
               </div>
             )}
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Review Notes</label>
               <textarea value={reviewForm.review_notes} onChange={e => setReviewForm({ ...reviewForm, review_notes: e.target.value })}
-                placeholder="Add notes for this decision..." rows={3} className={inp} />
+                placeholder="Add notes for this decision..." rows={3} className={inp} maxLength={1000} />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setReviewModal(null)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancel</button>
@@ -955,26 +1026,26 @@ export const Promotability = ({ employees }: Props) => {
       </Modal>
 
       {/* ───── CAREER PATH MODAL ───── */}
-      <Modal open={showCpModal} title="New Career Path" onClose={() => setShowCpModal(false)}>
+      <Modal open={showCpModal && canManageCareerPaths} title="New Career Path" onClose={() => setShowCpModal(false)}>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Current Role *</label>
-              <input type="text" value={cpForm.current_role} onChange={e => setCpForm({ ...cpForm, current_role: e.target.value })} placeholder="e.g. Junior Developer" className={inp} />
+              <input type="text" value={cpForm.current_role} onChange={e => setCpForm({ ...cpForm, current_role: e.target.value })} placeholder="e.g. Junior Developer" className={inp} maxLength={100} required />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Next Role *</label>
-              <input type="text" value={cpForm.next_role} onChange={e => setCpForm({ ...cpForm, next_role: e.target.value })} placeholder="e.g. Senior Developer" className={inp} />
+              <input type="text" value={cpForm.next_role} onChange={e => setCpForm({ ...cpForm, next_role: e.target.value })} placeholder="e.g. Senior Developer" className={inp} maxLength={100} required />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Department</label>
-              <input type="text" value={cpForm.department} onChange={e => setCpForm({ ...cpForm, department: e.target.value })} className={inp} placeholder="Optional" />
+              <input type="text" value={cpForm.department} onChange={e => setCpForm({ ...cpForm, department: e.target.value })} className={inp} placeholder="Optional" maxLength={100} />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Min Tenure (months)</label>
-              <input type="number" value={cpForm.min_tenure_months} onChange={e => setCpForm({ ...cpForm, min_tenure_months: Number(e.target.value) })} className={inp} min={0} />
+              <input type="number" value={cpForm.min_tenure_months} onChange={e => setCpForm({ ...cpForm, min_tenure_months: Number(e.target.value) })} className={inp} min={0} max={600} />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Min Readiness Score (%)</label>
@@ -983,7 +1054,7 @@ export const Promotability = ({ employees }: Props) => {
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notes / Requirements</label>
-            <textarea value={cpForm.notes} onChange={e => setCpForm({ ...cpForm, notes: e.target.value })} rows={2} className={inp} placeholder="Additional requirements or notes" />
+            <textarea value={cpForm.notes} onChange={e => setCpForm({ ...cpForm, notes: e.target.value })} rows={2} className={inp} placeholder="Additional requirements or notes" maxLength={1000} />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={() => setShowCpModal(false)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancel</button>

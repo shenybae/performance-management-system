@@ -6,6 +6,7 @@ import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SignatureUpload } from '../../common/SignatureUpload';
 import { getAuthHeaders } from '../../../utils/csv';
+import { appConfirm } from '../../../utils/appDialog';
 
 interface EmployeeJacketProps {
   employee: Employee | null;
@@ -20,12 +21,19 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
   const [fallbackPropertyRows, setFallbackPropertyRows] = useState<any[] | null>(null);
   const [hrSignatures, setHrSignatures] = useState<Record<number, string>>({});
   const [signingId, setSigningId] = useState<number | null>(null);
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [hrReviewed, setHrReviewed] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     let cancelled = false;
+    if (!employee) {
+      setFallbackPropertyRows(null);
+      return () => { cancelled = true; };
+    }
     // If server didn't include property rows on the employee payload, try
     // fetching property_accountability by employee name as a fallback.
-    if ((!employee.property || employee.property.length === 0) && employee.name) {
+    const propertyRows = Array.isArray((employee as any).property) ? (employee as any).property : [];
+    if (propertyRows.length === 0 && employee.name) {
       fetch(`/api/property_accountability?employee_name=${encodeURIComponent(employee.name)}`)
         .then(r => r.json())
         .then(rows => { if (!cancelled && Array.isArray(rows) && rows.length > 0) setFallbackPropertyRows(rows); })
@@ -67,6 +75,10 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
   };
 
   const signAsHR = async (appraisalId: number) => {
+    if (!hrReviewed[appraisalId]) {
+      (window as any).notify?.('Please review this appraisal before signing as HR Admin', 'error');
+      return;
+    }
     const sig = hrSignatures[appraisalId];
     if (!sig) { (window as any).notify?.('Please provide your signature', 'error'); return; }
     try {
@@ -78,7 +90,7 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
         })
       });
       if (res.ok) {
-        (window as any).notify?.('HR signature saved', 'success');
+        (window as any).notify?.('HR Admin signature saved', 'success');
         setHrSignatures(prev => { const n = { ...prev }; delete n[appraisalId]; return n; });
         setSigningId(null);
         onBack(); // refresh data
@@ -118,14 +130,14 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
           <button onClick={startEdit} className="flex items-center gap-1 px-4 py-2 text-sm font-bold text-teal-deep dark:text-teal-green hover:bg-teal-deep/10 rounded-xl transition-colors"><Edit3 size={14} /> Edit Profile</button>
         )}
         <button onClick={async () => {
-          if (!confirm('Delete this employee? This action cannot be undone.')) return;
+          if (!(await appConfirm('Archive this employee? You can restore it from archive.', { title: 'Archive Employee', confirmText: 'Archive' }))) return;
           const token = localStorage.getItem('talentflow_token');
           try {
             const res = await fetch(`/api/employees/${employee.id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-            if (res.ok) { (window as any).notify('Employee deleted', 'success'); onBack(); }
-            else { const err = await res.json(); (window as any).notify(err.error || 'Failed to delete', 'error'); }
+            if (res.ok) { (window as any).notify('Employee archived', 'success'); onBack(); }
+            else { const err = await res.json(); (window as any).notify(err.error || 'Failed to archive', 'error'); }
           } catch { (window as any).notify('Server error', 'error'); }
-        }} className="px-3 py-2 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">Delete Employee</button>
+        }} className="px-3 py-2 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">Archive Employee</button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -241,35 +253,38 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
         </Card>
 
         {/* Discipline History */}
-        {employee.discipline && employee.discipline.length > 0 && (
-          <Card className="md:col-span-3">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-teal-deep dark:text-teal-green"><ShieldAlert size={18} className="text-amber-500" /> Disciplinary Records</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead><tr className="border-b border-slate-100 dark:border-slate-800">
-                  <th className="pb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Date</th>
-                  <th className="pb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Violation</th>
-                  <th className="pb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Warning Level</th>
-                  <th className="pb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Action</th>
-                </tr></thead>
-                <tbody>
-                  {employee.discipline.map(d => (
-                    <tr key={d.id} className="border-b border-slate-50 dark:border-slate-800/50">
-                      <td className="py-2 text-slate-600 dark:text-slate-400">{(d as any).date_of_warning || '—'}</td>
-                      <td className="py-2 text-slate-700 dark:text-slate-300">
-                        <div className="min-w-0"><span className="truncate max-w-[220px]" title={d.violation_type}>{d.violation_type}</span></div>
-                      </td>
-                      <td className="py-2"><span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${d.warning_level === 'Written Warning' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700' : d.warning_level === 'Final Warning' ? 'bg-red-100 dark:bg-red-900/30 text-red-700' : 'bg-slate-100 dark:bg-slate-800 text-slate-600'}`}>{d.warning_level}</span></td>
-                      <td className="py-2 text-xs text-slate-500 dark:text-slate-400">
-                        <div className="min-w-0"><span className="truncate max-w-[260px]" title={d.action_taken}>{d.action_taken}</span></div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        )}
+        <Card className="md:col-span-3">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-teal-deep dark:text-teal-green"><ShieldAlert size={18} className="text-amber-500" /> Disciplinary Records</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead><tr className="border-b border-slate-100 dark:border-slate-800">
+                <th className="pb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Date</th>
+                <th className="pb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Violation</th>
+                <th className="pb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Warning Level</th>
+                <th className="pb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Action</th>
+              </tr></thead>
+              <tbody>
+                {(employee.discipline || []).map(d => (
+                  <tr key={d.id} className="border-b border-slate-50 dark:border-slate-800/50">
+                    <td className="py-2 text-slate-600 dark:text-slate-400">{(d as any).date_of_warning || '—'}</td>
+                    <td className="py-2 text-slate-700 dark:text-slate-300">
+                      <div className="min-w-0"><span className="truncate max-w-[220px]" title={d.violation_type}>{d.violation_type}</span></div>
+                    </td>
+                    <td className="py-2"><span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${d.warning_level === 'Written Warning' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700' : d.warning_level === 'Final Warning' ? 'bg-red-100 dark:bg-red-900/30 text-red-700' : 'bg-slate-100 dark:bg-slate-800 text-slate-600'}`}>{d.warning_level}</span></td>
+                    <td className="py-2 text-xs text-slate-500 dark:text-slate-400">
+                      <div className="min-w-0"><span className="truncate max-w-[260px]" title={d.action_taken}>{d.action_taken}</span></div>
+                    </td>
+                  </tr>
+                ))}
+                {(!employee.discipline || employee.discipline.length === 0) && (
+                  <tr>
+                    <td colSpan={4} className="py-6 text-center text-sm text-slate-400">No disciplinary records on file.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
 
         <Card className="md:col-span-3">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-teal-deep dark:text-teal-green"><History size={18} className="text-teal-green" /> Career History & Appraisals</h3>
@@ -282,14 +297,17 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px]">Overall Rating</th>
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px]">Status</th>
                   <th className="pb-2 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px]">Verified</th>
-                  <th className="pb-2 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px]">HR Signature</th>
+                  <th className="pb-2 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px]">HR Admin Signature</th>
                 </tr>
               </thead>
               <tbody>
                 {employee.appraisals?.map(a => {
                   const isPerf = ((a as any).form_type || '').toLowerCase().includes('performance');
                   const hasHrSig = !!(a as any).hr_signature;
-                  const canHrSign = isPerf && !hasHrSig;
+                  const hasSupervisorSig = !!(a as any).supervisor_signature;
+                  const hasReviewerSig = !!(a as any).reviewer_signature;
+                  const hasEmployeeSig = !!(a as any).employee_signature;
+                  const canHrSign = isPerf && hasSupervisorSig && hasReviewerSig && hasEmployeeSig && !hasHrSig;
                   return (
                   <React.Fragment key={a.id}>
                   <tr className="border-b border-slate-50 dark:border-slate-800/50">
@@ -302,21 +320,77 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
                       {hasHrSig ? (
                         <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><FileCheck size={12} /> Signed</span>
                       ) : canHrSign ? (
-                        <button onClick={() => setSigningId(signingId === a.id ? null : a.id)} className="text-[10px] font-bold text-teal-deep dark:text-teal-green hover:underline">Sign Now</button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setReviewingId(reviewingId === a.id ? null : a.id)}
+                            className="text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:underline"
+                          >
+                            {reviewingId === a.id ? 'Hide Review' : 'Review'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (!hrReviewed[a.id]) {
+                                (window as any).notify?.('Review this appraisal first before HR signing', 'error');
+                                setReviewingId(a.id);
+                                return;
+                              }
+                              setSigningId(signingId === a.id ? null : a.id);
+                            }}
+                            className="text-[10px] font-bold text-teal-deep dark:text-teal-green hover:underline"
+                          >
+                            Sign Now
+                          </button>
+                        </div>
+                      ) : isPerf && !hasHrSig ? (
+                        <span className="text-[10px] text-amber-600">Waiting for supervisor/reviewer/employee signature</span>
                       ) : (
                         <span className="text-[10px] text-slate-400">—</span>
                       )}
                     </td>
                   </tr>
+                  {reviewingId === a.id && (
+                    <tr><td colSpan={6} className="py-3 px-2">
+                      <div className="border border-amber-200 dark:border-amber-900/50 rounded-lg p-4 space-y-3 bg-amber-50/70 dark:bg-amber-900/10">
+                        <h4 className="text-xs font-bold text-amber-700 dark:text-amber-300 uppercase">HR Review Before Signature</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <span className="font-bold text-slate-500 dark:text-slate-400 uppercase">Evaluation Type</span>
+                            <p className="text-slate-700 dark:text-slate-300">{(a as any).form_type || (a as any).eval_type || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-500 dark:text-slate-400 uppercase">Review Period</span>
+                            <p className="text-slate-700 dark:text-slate-300">{(a as any).eval_period_from || (a as any).review_period_from || '—'} to {(a as any).eval_period_to || (a as any).review_period_to || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-500 dark:text-slate-400 uppercase">Supervisor Signature</span>
+                            <p className={(a as any).supervisor_signature ? 'text-emerald-600 font-semibold' : 'text-amber-600 font-semibold'}>{(a as any).supervisor_signature ? 'Available' : 'Missing'}</p>
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-500 dark:text-slate-400 uppercase">Employee Signature</span>
+                            <p className={(a as any).employee_signature ? 'text-emerald-600 font-semibold' : 'text-amber-600 font-semibold'}>{(a as any).employee_signature ? 'Available' : 'Missing'}</p>
+                          </div>
+                        </div>
+                        <label className="inline-flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                          <input
+                            type="checkbox"
+                            className="accent-amber-600"
+                            checked={!!hrReviewed[a.id]}
+                            onChange={(e) => setHrReviewed(prev => ({ ...prev, [a.id]: e.target.checked }))}
+                          />
+                          I reviewed this appraisal and the required signatures before HR sign-off.
+                        </label>
+                      </div>
+                    </td></tr>
+                  )}
                   {signingId === a.id && (
                     <tr><td colSpan={6} className="py-3 px-2">
                       <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3 bg-slate-50 dark:bg-slate-800/50">
-                        <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase">HR Officer Signature</h4>
+                        <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase">HR Admin Signature</h4>
                         <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">I have reviewed the supervisor's evaluation, reviewer's comments, and the employee's statement (if any). This form shall be made part of the employee's official Personnel File.</p>
-                        <SignatureUpload label="HR Signature" value={hrSignatures[a.id] || ''} onChange={v => setHrSignatures(prev => ({ ...prev, [a.id]: v }))} />
+                        <SignatureUpload label="HR Admin Signature" value={hrSignatures[a.id] || ''} onChange={v => setHrSignatures(prev => ({ ...prev, [a.id]: v }))} />
                         <div className="flex gap-2 justify-end">
                           <button onClick={() => { setSigningId(null); setHrSignatures(prev => { const n = { ...prev }; delete n[a.id]; return n; }); }} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700">Cancel</button>
-                          <button onClick={() => signAsHR(a.id)} className="flex items-center gap-2 bg-teal-deep text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors"><FileCheck size={14} /> Submit HR Signature</button>
+                          <button onClick={() => signAsHR(a.id)} className="flex items-center gap-2 bg-teal-deep text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors"><FileCheck size={14} /> Submit HR Admin Signature</button>
                         </div>
                       </div>
                     </td></tr>

@@ -5,9 +5,10 @@ import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { SignatureUpload } from '../../common/SignatureUpload';
-import { Star, FileText, X, Download, Trash2, ArrowLeft, Eye, CheckCircle, Printer } from 'lucide-react';
+import { Star, FileText, X, Download, ArrowLeft, Eye, CheckCircle, Archive } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { appConfirm } from '../../../utils/appDialog';
 
 /* ── rating descriptors matching PDF form ───────────────────────────── */
 
@@ -116,6 +117,8 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
   const [view, setView] = useState<'dashboard' | 'achievement' | 'performance' | 'detail'>('dashboard');
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [detailRecord, setDetailRecord] = useState<any>(null);
+  const [achievementReviewed, setAchievementReviewed] = useState(false);
+  const [performanceSupervisorReviewed, setPerformanceSupervisorReviewed] = useState(false);
 
   /* ── Achievement Measure form state ─────────────────────────────── */
   const freshAch = () => ({
@@ -169,11 +172,60 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
     } catch { setAppraisals([]); }
   };
 
+  /* ── Form validation helpers ────────────────────────────────────── */
+  const isAchievementFormValid = () => {
+    if (!achForm.employee_id || !achForm.date || !achForm.review_period_from || !achForm.review_period_to) return false;
+    if (new Date(achForm.review_period_to) < new Date(achForm.review_period_from)) return false;
+    const achRatingKeys = ['job_knowledge','productivity','attendance','work_quality','communication','dependability'] as const;
+    if (achRatingKeys.some(k => (achForm as any)[k] === 0)) return false;
+    return true;
+  };
+
+  const isPerformanceFormValid = () => {
+    if (!perfForm.employee_id || !perfForm.eval_period_from || !perfForm.eval_period_to) return false;
+    if (new Date(perfForm.eval_period_to) < new Date(perfForm.eval_period_from)) return false;
+    if (!performanceSupervisorReviewed) return false;
+    const perfRatingKeys = ['work_quality','quantity_of_work','relationship_with_others','work_habits','job_knowledge','attendance','promotability'] as const;
+    if (perfRatingKeys.some(k => (perfForm as any)[k] === 0)) return false;
+    if (!perfForm.supervisor_print_name.trim() || !perfForm.supervisor_signature || !perfForm.supervisor_signature_date) return false;
+    return true;
+  };
+
   /* ── submit handlers ────────────────────────────────────────────── */
   const submitAchievement = async () => {
     if (!achForm.employee_id) { window.notify?.('Please select an employee', 'error'); return; }
+    if (!achForm.date || !achForm.review_period_from || !achForm.review_period_to) {
+      window.notify?.('Please complete the date and review period fields', 'error');
+      return;
+    }
+    if (new Date(achForm.review_period_to) < new Date(achForm.review_period_from)) {
+      window.notify?.('Review period end date cannot be earlier than start date', 'error');
+      return;
+    }
     const achRatingKeys = ['job_knowledge','productivity','attendance','work_quality','communication','dependability'] as const;
     if (achRatingKeys.some(k => (achForm as any)[k] === 0)) { window.notify?.('Please rate all categories before submitting', 'error'); return; }
+    const longTextFields = [
+      achForm.job_knowledge_comment,
+      achForm.work_quality_comment,
+      achForm.attendance_comment,
+      achForm.productivity_comment,
+      achForm.communication_comment,
+      achForm.dependability_comment,
+      achForm.additional_comments,
+      achForm.employee_goals,
+    ];
+    if (longTextFields.some((txt) => (txt || '').trim().length > 2000)) {
+      window.notify?.('One or more comment fields exceed the 2000-character limit', 'error');
+      return;
+    }
+    if (achForm.supervisor_print_name.trim().length > 120) {
+      window.notify?.('Manager print name/title must be 120 characters or less', 'error');
+      return;
+    }
+    if (!achievementReviewed) {
+      window.notify?.('Please review the evaluation details before manager sign-off', 'error');
+      return;
+    }
     try {
       const overall = ((achForm.job_knowledge + achForm.productivity + achForm.attendance + achForm.work_quality + achForm.communication + achForm.dependability) / 6).toFixed(1);
       const res = await fetch('/api/appraisals', {
@@ -188,6 +240,7 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Achievement measure saved', 'success');
       setAchForm(freshAch());
+      setAchievementReviewed(false);
       setView('dashboard');
       fetchAppraisals();
     } catch { window.notify?.('Failed to save', 'error'); }
@@ -195,8 +248,35 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
 
   const submitPerformance = async () => {
     if (!perfForm.employee_id) { window.notify?.('Please select an employee', 'error'); return; }
+    if (!perfForm.eval_period_from || !perfForm.eval_period_to) {
+      window.notify?.('Please complete the evaluation period', 'error');
+      return;
+    }
+    if (new Date(perfForm.eval_period_to) < new Date(perfForm.eval_period_from)) {
+      window.notify?.('Evaluation period end date cannot be earlier than start date', 'error');
+      return;
+    }
     const perfRatingKeys = ['work_quality','quantity_of_work','relationship_with_others','work_habits','job_knowledge','attendance','promotability'] as const;
     if (perfRatingKeys.some(k => (perfForm as any)[k] === 0)) { window.notify?.('Please rate all performance factors before submitting', 'error'); return; }
+    const perfTextFields = [
+      perfForm.additional_comments,
+      perfForm.supervisors_overall_comment,
+      perfForm.reviewers_comment,
+      perfForm.employee_acknowledgement,
+    ];
+    if (perfTextFields.some((txt) => (txt || '').trim().length > 2000)) {
+      window.notify?.('One or more comment fields exceed the 2000-character limit', 'error');
+      return;
+    }
+    const nameFields = [perfForm.supervisor_print_name, perfForm.reviewer_print_name, perfForm.employee_print_name, perfForm.hr_print_name];
+    if (nameFields.some((txt) => (txt || '').trim().length > 120)) {
+      window.notify?.('Print name/title fields must be 120 characters or less', 'error');
+      return;
+    }
+    if (!performanceSupervisorReviewed) {
+      window.notify?.('Please review and sign the supervisor section before submitting', 'error');
+      return;
+    }
     try {
       const productivity = parseFloat(((perfForm.work_quality + perfForm.quantity_of_work) / 2).toFixed(1));
       const overall = ((perfForm.work_quality + perfForm.quantity_of_work + perfForm.relationship_with_others + perfForm.work_habits + perfForm.job_knowledge + perfForm.attendance + perfForm.promotability) / 7).toFixed(1);
@@ -214,22 +294,24 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Performance evaluation saved', 'success');
       setPerfForm(freshPerf());
+      setPerformanceSupervisorReviewed(false);
       setView('dashboard');
       fetchAppraisals();
     } catch { window.notify?.('Failed to save', 'error'); }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this appraisal?')) return;
+    if (!(await appConfirm('Archive this appraisal?', { title: 'Archive Appraisal', confirmText: 'Archive' }))) return;
     try {
       await fetch(`/api/appraisals/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-      window.notify?.('Appraisal deleted', 'success');
+      window.notify?.('Appraisal archived', 'success');
       fetchAppraisals();
-    } catch { window.notify?.('Failed to delete', 'error'); }
+    } catch { window.notify?.('Failed to archive', 'error'); }
   };
 
   /* ── PDF export ─────────────────────────────────────────────────── */
-  const exportPDF = (rec: any) => {
+  const exportPDF = async (rec: any) => {
+    if (!(await appConfirm('Export this appraisal as PDF?', { title: 'Export Appraisal PDF', confirmText: 'Export', icon: 'export' }))) return;
     const formType = (rec.form_type || rec.eval_type || '').toString();
     const isAch = formType.toLowerCase().includes('achievement');
     const verified = isAch
@@ -252,7 +334,7 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
       : sigCell('Supervisor', rec.supervisor_print_name || '', rec.supervisor_signature || '', rec.supervisor_signature_date || '')
         + sigCell('Reviewer', rec.reviewer_print_name || '', rec.reviewer_signature || '', rec.reviewer_signature_date || '')
         + sigCell('Employee', rec.employee_print_name || rec.employee_name || '', rec.employee_signature || '', rec.employee_signature_date || '')
-        + sigCell('HR Officer', rec.hr_print_name || '', rec.hr_signature || '', rec.hr_signature_date || '');
+        + sigCell('HR Admin', rec.hr_print_name || '', rec.hr_signature || '', rec.hr_signature_date || '');
     const css = '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11px;color:#1e293b;padding:24px 32px}'
       + 'h2{font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#0f766e;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin:14px 0 8px}'
       + '.sec{border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;margin-bottom:12px}'
@@ -337,9 +419,9 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
       </button>
       <Card>
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Employee Achievement Measure System</h2>
+          <h2 className="screen-heading">Employee Achievement Measure System</h2>
         </div>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-5 border-b dark:border-slate-800 pb-3">
+        <p className="screen-subheading mb-5 border-b dark:border-slate-800 pb-3">
           Ratings: <strong>1</strong> = Poor · <strong>2</strong> = Fair · <strong>3</strong> = Satisfactory · <strong>4</strong> = Good · <strong>5</strong> = Excellent
         </p>
         <form className="space-y-5" onSubmit={e => { e.preventDefault(); submitAchievement(); }}>
@@ -350,21 +432,22 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
               <div>
                 <label className={lbl}>Employee Name</label>
                 <SearchableSelect
-                  options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+                  options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                   value={achForm.employee_id}
-                  onChange={v => setAchForm({ ...achForm, employee_id: v })}
+                  onChange={v => setAchForm({ ...achForm, employee_id: String(v) })}
                   placeholder="Select Employee..."
+                  dropdownVariant="pills-horizontal"
                 />
               </div>
               <div><label className={lbl}>Employee ID</label><input type="text" value={achForm.employee_id ? `#${achForm.employee_id}` : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
               <div><label className={lbl}>Job Title</label><input type="text" value={achForm.employee_id ? (employees.find(e => String(e.id) === achForm.employee_id)?.position || employees.find(e => String(e.id) === achForm.employee_id)?.title || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
-              <div><label className={lbl}>Date</label><input type="date" value={achForm.date} onChange={e => setAchForm({ ...achForm, date: e.target.value })} className={inp} /></div>
+              <div><label className={lbl}>Date</label><input type="date" value={achForm.date} onChange={e => setAchForm({ ...achForm, date: e.target.value })} className={inp} required /></div>
               <div><label className={lbl}>Department</label><input type="text" value={achForm.employee_id ? (employees.find(e => String(e.id) === achForm.employee_id)?.dept || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
               <div><label className={lbl}>Manager</label><input type="text" value={(() => { if (!achForm.employee_id) return ''; const emp = employees.find(e => String(e.id) === achForm.employee_id); if (emp?.manager) return emp.manager; if (emp?.manager_id) { const mgr = employees.find(e => e.id === emp.manager_id); return mgr?.name || ''; } return ''; })()} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4">
-              <div><label className={lbl}>Review Period From</label><input type="date" value={achForm.review_period_from} onChange={e => setAchForm({ ...achForm, review_period_from: e.target.value })} className={inp} /></div>
-              <div><label className={lbl}>Review Period To</label><input type="date" value={achForm.review_period_to} onChange={e => setAchForm({ ...achForm, review_period_to: e.target.value })} className={inp} /></div>
+              <div><label className={lbl}>Review Period From</label><input type="date" value={achForm.review_period_from} onChange={e => setAchForm({ ...achForm, review_period_from: e.target.value })} className={inp} required /></div>
+              <div><label className={lbl}>Review Period To</label><input type="date" value={achForm.review_period_to} onChange={e => setAchForm({ ...achForm, review_period_to: e.target.value })} className={inp} min={achForm.review_period_from || undefined} required /></div>
             </div>
           </div>
 
@@ -385,7 +468,7 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
                     ))}
                   </div>
                 </div>
-                <textarea rows={2} value={(achForm as any)[`${key}_comment`] || ''} onChange={e => setAchForm({ ...achForm, [`${key}_comment`]: e.target.value })} className={inp} placeholder={`Comments for ${label}...`} />
+                <textarea rows={2} value={(achForm as any)[`${key}_comment`] || ''} onChange={e => setAchForm({ ...achForm, [`${key}_comment`]: e.target.value })} className={inp} placeholder={`Comments for ${label}...`} maxLength={2000} />
               </div>
             ))}
             {/* Overall Rating (auto-computed) */}
@@ -407,13 +490,13 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
           {/* ── Additional Comments ── */}
           <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
             <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Additional Comments</h4>
-            <textarea rows={3} value={achForm.additional_comments} onChange={e => setAchForm({ ...achForm, additional_comments: e.target.value })} className={inp} placeholder="Any additional comments or observations..." />
+            <textarea rows={3} value={achForm.additional_comments} onChange={e => setAchForm({ ...achForm, additional_comments: e.target.value })} className={inp} placeholder="Any additional comments or observations..." maxLength={2000} />
           </div>
 
           {/* ── Employee Goals ── */}
           <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
             <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Employee Goals</h4>
-            <textarea rows={3} value={achForm.employee_goals} onChange={e => setAchForm({ ...achForm, employee_goals: e.target.value })} className={inp} placeholder="List specific goals, objectives, and development plans for the next review period..." />
+            <textarea rows={3} value={achForm.employee_goals} onChange={e => setAchForm({ ...achForm, employee_goals: e.target.value })} className={inp} placeholder="List specific goals, objectives, and development plans for the next review period..." maxLength={2000} />
           </div>
 
           {/* ── Verification of Review ── */}
@@ -422,10 +505,32 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
             <p className="text-xs text-slate-500 dark:text-slate-400 italic">
               Signing this form confirms that you have discussed this review in detail with your supervisor. Signing this form does not necessarily indicate that you agree with this evaluation.
             </p>
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3">
+              <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                Review check: confirm employee, review period, and all ratings before the manager signature is captured.
+              </p>
+              <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                <input
+                  type="checkbox"
+                  checked={achievementReviewed}
+                  onChange={(e) => setAchievementReviewed(e.target.checked)}
+                  className="accent-amber-600"
+                />
+                I have reviewed this achievement evaluation before signing.
+              </label>
+            </div>
             <div className="space-y-3">
-              <div><label className={lbl}>Manager Print Name / Title</label><input type="text" value={achForm.supervisor_print_name} onChange={e => setAchForm({ ...achForm, supervisor_print_name: e.target.value })} className={inp} placeholder="e.g. John Doe / Senior Manager" /></div>
-              <SignatureUpload label="Manager Signature" value={achForm.supervisor_signature} onChange={v => setAchForm({ ...achForm, supervisor_signature: v })} />
-              <div><label className={lbl}>Manager Signature Date</label><input type="date" value={achForm.supervisor_signature_date} onChange={e => setAchForm({ ...achForm, supervisor_signature_date: e.target.value })} className={inp} /></div>
+              <div><label className={lbl}>Manager Print Name / Title</label><input type="text" value={achForm.supervisor_print_name} onChange={e => setAchForm({ ...achForm, supervisor_print_name: e.target.value })} className={inp} placeholder="e.g. John Doe / Senior Manager" maxLength={120} /></div>
+              {achievementReviewed ? (
+                <>
+                  <SignatureUpload label="Manager Signature" value={achForm.supervisor_signature} onChange={v => setAchForm({ ...achForm, supervisor_signature: v })} />
+                  <div><label className={lbl}>Manager Signature Date</label><input type="date" value={achForm.supervisor_signature_date} onChange={e => setAchForm({ ...achForm, supervisor_signature_date: e.target.value })} className={inp} /></div>
+                </>
+              ) : (
+                <div className="text-[11px] text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-lg px-3 py-2">
+                  Review confirmation is required before manager signature capture.
+                </div>
+              )}
             </div>
             <p className="text-xs text-slate-400 dark:text-slate-500 italic mt-2">
               The employee will sign this evaluation through their Verification of Review screen.
@@ -433,7 +538,9 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
           </div>
 
           <div className="flex justify-end pt-4">
-            <button type="submit" className="bg-teal-deep text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">Save Achievement Measure</button>
+            <button type="submit" disabled={!isAchievementFormValid()} className="bg-teal-deep text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              Save Achievement Measure
+            </button>
           </div>
         </form>
       </Card>
@@ -449,8 +556,8 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
         <ArrowLeft size={16} /> Back to Dashboard
       </button>
       <Card>
-        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-0">Employee Performance Evaluation Form</h2>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-5 border-b dark:border-slate-800 pb-3">
+        <h2 className="screen-heading mb-0">Employee Performance Evaluation Form</h2>
+        <p className="screen-subheading mt-1 mb-5 border-b dark:border-slate-800 pb-3">
           The following evaluation of your work performance has been completed by your supervisor. This evaluation was based on factors applicable to your duties and responsibilities.
         </p>
 
@@ -461,10 +568,11 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
             <div>
               <label className={lbl}>Name of Employee</label>
               <SearchableSelect
-                options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+                options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                 value={perfForm.employee_id}
-                onChange={v => setPerfForm({ ...perfForm, employee_id: v })}
+                onChange={v => setPerfForm({ ...perfForm, employee_id: String(v) })}
                 placeholder="Select Employee..."
+                dropdownVariant="pills-horizontal"
               />
             </div>
             <div><label className={lbl}>Department</label><input value={perfForm.employee_department} onChange={e => setPerfForm({ ...perfForm, employee_department: e.target.value })} className={inp} placeholder="e.g. Operations" /></div>
@@ -482,8 +590,8 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div><label className={lbl}>Evaluation Period From</label><input type="date" value={perfForm.eval_period_from} onChange={e => setPerfForm({ ...perfForm, eval_period_from: e.target.value })} className={inp} /></div>
-            <div><label className={lbl}>Evaluation Period To</label><input type="date" value={perfForm.eval_period_to} onChange={e => setPerfForm({ ...perfForm, eval_period_to: e.target.value })} className={inp} /></div>
+            <div><label className={lbl}>Evaluation Period From</label><input type="date" value={perfForm.eval_period_from} onChange={e => setPerfForm({ ...perfForm, eval_period_from: e.target.value })} className={inp} required /></div>
+            <div><label className={lbl}>Evaluation Period To</label><input type="date" value={perfForm.eval_period_to} onChange={e => setPerfForm({ ...perfForm, eval_period_to: e.target.value })} className={inp} min={perfForm.eval_period_from || undefined} required /></div>
             <div>
               <label className={lbl}>Type of Evaluation</label>
               <select value={perfForm.eval_type} onChange={e => setPerfForm({ ...perfForm, eval_type: e.target.value })} className={inp}>
@@ -554,7 +662,7 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
             {/* COMMENTS field after rating factors — per PDF */}
             <div className="p-4 border-t dark:border-slate-700">
               <label className={lbl}>Comments</label>
-              <textarea rows={3} value={perfForm.additional_comments} onChange={e => setPerfForm({ ...perfForm, additional_comments: e.target.value })} className={inp} placeholder="Add any comments which you feel will help in making a fair appraisal..." />
+              <textarea rows={3} value={perfForm.additional_comments} onChange={e => setPerfForm({ ...perfForm, additional_comments: e.target.value })} className={inp} placeholder="Add any comments which you feel will help in making a fair appraisal..." maxLength={2000} />
             </div>
           </div>
 
@@ -589,13 +697,36 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
               The overall rating and recommendation (if any) were determined by assessing all factors listed. I have discussed the evaluation with the employee.
             </p>
 
-            <div><label className={lbl}>Supervisor's Comments</label><textarea rows={3} value={perfForm.supervisors_overall_comment} onChange={e => setPerfForm({ ...perfForm, supervisors_overall_comment: e.target.value })} className={inp} placeholder="Summarize the employee's overall performance..." /></div>
+            <div><label className={lbl}>Supervisor's Comments</label><textarea rows={3} value={perfForm.supervisors_overall_comment} onChange={e => setPerfForm({ ...perfForm, supervisors_overall_comment: e.target.value })} className={inp} placeholder="Summarize the employee's overall performance..." maxLength={2000} /></div>
 
-            <div><label className={lbl}>Print Name / Title</label><input type="text" value={perfForm.supervisor_print_name} onChange={e => setPerfForm({ ...perfForm, supervisor_print_name: e.target.value })} className={inp} placeholder="e.g. John Doe / Senior Manager" /></div>
+            <div><label className={lbl}>Print Name / Title</label><input type="text" value={perfForm.supervisor_print_name} onChange={e => setPerfForm({ ...perfForm, supervisor_print_name: e.target.value })} className={inp} placeholder="e.g. John Doe / Senior Manager" maxLength={120} /></div>
+
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3">
+              <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                Review check: confirm Section I ratings, comments, and recommendation before supervisor signature.
+              </p>
+              <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                <input
+                  type="checkbox"
+                  checked={performanceSupervisorReviewed}
+                  onChange={(e) => setPerformanceSupervisorReviewed(e.target.checked)}
+                  className="accent-amber-600"
+                />
+                I have reviewed the supervisor section before signing.
+              </label>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <SignatureUpload label="Supervisor Signature" value={perfForm.supervisor_signature} onChange={v => setPerfForm({ ...perfForm, supervisor_signature: v })} />
-              <div><label className={lbl}>Signature Date</label><input type="date" value={perfForm.supervisor_signature_date} onChange={e => setPerfForm({ ...perfForm, supervisor_signature_date: e.target.value })} className={inp} /></div>
+              {performanceSupervisorReviewed ? (
+                <>
+                  <SignatureUpload label="Supervisor Signature" value={perfForm.supervisor_signature} onChange={v => setPerfForm({ ...perfForm, supervisor_signature: v })} />
+                  <div><label className={lbl}>Signature Date</label><input type="date" value={perfForm.supervisor_signature_date} onChange={e => setPerfForm({ ...perfForm, supervisor_signature_date: e.target.value })} className={inp} /></div>
+                </>
+              ) : (
+                <div className="md:col-span-2 text-[11px] text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-lg px-3 py-2">
+                  Complete the review check to enable supervisor signature fields.
+                </div>
+              )}
             </div>
           </div>
 
@@ -627,9 +758,9 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
               </div>
             )}
 
-            <div><label className={lbl}>Comments (attach additional pages if necessary)</label><textarea rows={3} value={perfForm.reviewers_comment} onChange={e => setPerfForm({ ...perfForm, reviewers_comment: e.target.value })} className={inp} placeholder="Reviewer's comments..." /></div>
+            <div><label className={lbl}>Comments (attach additional pages if necessary)</label><textarea rows={3} value={perfForm.reviewers_comment} onChange={e => setPerfForm({ ...perfForm, reviewers_comment: e.target.value })} className={inp} placeholder="Reviewer's comments..." maxLength={2000} /></div>
 
-            <div><label className={lbl}>Print Name / Title</label><input type="text" value={perfForm.reviewer_print_name} onChange={e => setPerfForm({ ...perfForm, reviewer_print_name: e.target.value })} className={inp} placeholder="e.g. Jane Smith / Department Head" /></div>
+            <div><label className={lbl}>Print Name / Title</label><input type="text" value={perfForm.reviewer_print_name} onChange={e => setPerfForm({ ...perfForm, reviewer_print_name: e.target.value })} className={inp} placeholder="e.g. Jane Smith / Department Head" maxLength={120} /></div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <SignatureUpload label="Reviewer Signature" value={perfForm.reviewer_signature} onChange={v => setPerfForm({ ...perfForm, reviewer_signature: v })} />
@@ -644,33 +775,31 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
               I have reviewed this report on the date indicated and have had the opportunity to discuss it with my rating supervisor(s).
               My signature does not necessarily signify agreement. I understand that I may submit a written rebuttal, which will be attached to this evaluation and placed in my personnel file.
             </p>
-            <div className="space-y-3">
-              <div><label className={lbl}>Employee Print Name</label><input type="text" value={perfForm.employee_print_name} onChange={e => setPerfForm({ ...perfForm, employee_print_name: e.target.value })} className={inp} placeholder="Employee's full name" /></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <SignatureUpload label="Employee Signature" value={perfForm.employee_signature} onChange={v => setPerfForm({ ...perfForm, employee_signature: v })} />
-                <div><label className={lbl}>Signature Date</label><input type="date" value={perfForm.employee_signature_date} onChange={e => setPerfForm({ ...perfForm, employee_signature_date: e.target.value })} className={inp} /></div>
-              </div>
+            <div className="rounded-lg border border-blue-200 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-900/10 p-3">
+              <p className="text-[11px] text-blue-700 dark:text-blue-300">
+                Employee signature is completed on the employee side in Verification of Review after this evaluation is submitted.
+              </p>
             </div>
           </div>
 
-          {/* ── Section IV: Human Resources Officer's Certification ── */}
+          {/* ── Section IV: HR Admin Certification ── */}
           <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-5 space-y-4">
-            <h3 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest">IV. Human Resources Officer's Certification</h3>
+            <h3 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest">IV. HR Admin Certification</h3>
             <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
               I have reviewed the supervisor's evaluation, reviewer's comments, and the employee's statement (if any). I believe this form to be complete and in accordance with the guidelines provided for evaluations of employees serving in this title. This form shall be made part of the employee's official Personnel File.
             </p>
-            <div className="space-y-3">
-              <div><label className={lbl}>HR Officer Print Name / Title</label><input type="text" value={perfForm.hr_print_name} onChange={e => setPerfForm({ ...perfForm, hr_print_name: e.target.value })} className={inp} placeholder="e.g. Maria Santos / HR Officer" /></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <SignatureUpload label="HR Officer Signature" value={perfForm.hr_signature} onChange={v => setPerfForm({ ...perfForm, hr_signature: v })} />
-                <div><label className={lbl}>Certification Date</label><input type="date" value={perfForm.hr_signature_date} onChange={e => setPerfForm({ ...perfForm, hr_signature_date: e.target.value })} className={inp} /></div>
-              </div>
+            <div className="rounded-lg border border-blue-200 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-900/10 p-3">
+              <p className="text-[11px] text-blue-700 dark:text-blue-300">
+                HR certification is completed on the HR side (Employee Jacket) after employee acknowledgement is available.
+              </p>
             </div>
           </div>
 
           {/* ── Submit ───────────────────────────────────────────── */}
           <div className="flex justify-end pt-2">
-            <button type="submit" className="bg-teal-deep text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">Submit Performance Evaluation</button>
+            <button type="submit" disabled={!isPerformanceFormValid()} className="bg-teal-deep text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              Submit Performance Evaluation
+            </button>
           </div>
         </form>
       </Card>
@@ -713,7 +842,7 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
             <ArrowLeft size={16} /> Back to Dashboard
           </button>
           <button onClick={() => exportPDF(a)} className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">
-            <Printer size={16} /> Export PDF
+            <FileText size={16} /> Export PDF
           </button>
         </div>
         <Card>
@@ -772,7 +901,7 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
                 { label: 'Supervisor', sig: a.supervisor_signature, date: a.supervisor_signature_date, printName: a.supervisor_print_name },
                 { label: 'Reviewer', sig: a.reviewer_signature, date: a.reviewer_signature_date, printName: a.reviewer_print_name },
                 { label: 'Employee', sig: a.employee_signature, date: a.employee_signature_date, printName: a.employee_print_name || a.employee_name },
-                { label: 'HR Officer', sig: a.hr_signature, date: a.hr_signature_date, printName: a.hr_print_name },
+                { label: 'HR Admin', sig: a.hr_signature, date: a.hr_signature_date, printName: a.hr_print_name },
               ] : [
                 { label: 'Employee', sig: a.employee_signature, date: a.employee_signature_date, printName: a.employee_name },
                 { label: 'Manager', sig: a.supervisor_signature, date: a.supervisor_signature_date, printName: a.supervisor_print_name },
@@ -884,7 +1013,7 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
                         </td>
                         <td className="py-3 flex items-center gap-2">
                           <button onClick={() => { setDetailRecord(a); setView('detail'); }} className="text-slate-400 hover:text-teal-deep dark:hover:text-teal-green transition-colors"><Eye size={14} /></button>
-                          <button onClick={() => handleDelete(a.id)} className="text-red-400 hover:text-red-600 transition-colors"><Trash2 size={14} /></button>
+                          <button onClick={() => handleDelete(a.id)} className="text-red-500 hover:text-red-600 p-1 rounded transition-colors" title="Archive"><Archive size={15} /></button>
                         </td>
                       </tr>
                     );

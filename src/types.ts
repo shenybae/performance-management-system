@@ -9,6 +9,7 @@ export interface Employee {
   full_name?: string;
   title?: string;
   manager?: string;
+  profile_picture?: string | null;
   hire_date: string;
   salary_base: number;
   ssn: string;

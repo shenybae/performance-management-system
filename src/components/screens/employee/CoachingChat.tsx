@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
+import { ChoicePills } from '../../common/ChoicePills';
 import { getAuthHeaders } from '../../../utils/csv';
 import { io, Socket } from 'socket.io-client';
 
@@ -362,7 +363,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 placeholder="Type your message to your manager..."
                 className="flex-1 p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-black rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/50" />
-              <button onClick={sendMessage} className="bg-teal-deep text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors flex items-center gap-1.5">
+              <button onClick={sendMessage} disabled={!chatInput.trim()} className="bg-teal-deep text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Send size={16} /> Send
               </button>
             </div>
@@ -419,15 +420,17 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
                         <p className="text-[10px] text-slate-400 mt-1">Recommended by: {r.recommended_by} · {r.created_at ? new Date(r.created_at).toLocaleDateString() : ''}</p>
                       </div>
                       <div className="flex flex-col gap-1.5 ml-4">
-                        <select value={r.status} onChange={e => updateRecStatus(r.id, e.target.value)}
-                          className={`text-[10px] font-bold uppercase px-2 py-1 rounded-lg border cursor-pointer ${
-                            r.status === 'In Progress' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 border-blue-200 dark:border-blue-800'
-                            : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 border-amber-200 dark:border-amber-800'
-                          }`}>
-                          <option value="Recommended">Recommended</option>
-                          <option value="In Progress">In Progress</option>
-                          <option value="Completed">Completed</option>
-                        </select>
+                        <ChoicePills
+                          value={r.status}
+                          compact
+                          wrap={false}
+                          onChange={(v) => updateRecStatus(r.id, v)}
+                          options={[
+                            { value: 'Recommended', label: 'Recommended', activeClassName: 'border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300' },
+                            { value: 'In Progress', label: 'In Progress', activeClassName: 'border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300' },
+                            { value: 'Completed', label: 'Completed', activeClassName: 'border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300' },
+                          ]}
+                        />
                       </div>
                     </div>
                   </Card>

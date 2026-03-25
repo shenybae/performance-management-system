@@ -25,7 +25,9 @@ import {
   Info,
   DollarSign,
   Wallet,
-  WifiOff
+  WifiOff,
+  Menu,
+  PanelLeftClose
 } from 'lucide-react';
 
 // --- Types ---
@@ -36,6 +38,19 @@ import { SidebarItem } from './components/common/SidebarItem';
 import { NotificationBell } from './components/common/NotificationBell';
 import { Login } from './components/common/Login';
 import { NotificationProvider, useNotifications } from './notifications/NotificationProvider';
+
+const isSoftDeleted = (row: any) => {
+  const status = String(row?.status || '').toLowerCase();
+  return Boolean(
+    row?.deleted_at ||
+    row?.archived_at ||
+    row?.is_deleted ||
+    row?.is_archived ||
+    status === 'archived' ||
+    status === 'deleted'
+  );
+};
+import AppDialogHost from './components/common/AppDialogHost';
 import { DBViewer } from './components/screens/hr/DBViewer';
 
 // --- HR Screens ---
@@ -55,7 +70,9 @@ import { OKRPlanner } from './components/screens/manager/OKRPlanner';
 import { CoachingJournal } from './components/screens/manager/CoachingJournal';
 import { EvaluationPortal } from './components/screens/manager/EvaluationPortal';
 import { Promotability } from './components/screens/manager/Promotability';
-import { PIPManager } from './components/screens/manager/PIPManager';
+
+// --- Leader Screens ---
+import { TeamLeaderDashboard } from './components/screens/leader/TeamLeaderDashboard';
 
 // --- Employee Screens ---
 import { CareerDashboard } from './components/screens/employee/CareerDashboard';
@@ -63,8 +80,8 @@ import { SelfAssessment } from './components/screens/employee/SelfAssessment';
 import { FeedbackBox } from './components/screens/employee/FeedbackBox';
 import { SuggestionForm } from './components/screens/employee/SuggestionForm';
 import { VerificationOfReview } from './components/screens/employee/VerificationOfReview';
-import { IDP } from './components/screens/employee/IDP';
 import { CoachingChat } from './components/screens/employee/CoachingChat';
+import CareerGrowth from './components/screens/employee/CareerGrowth';
 import { Settings } from './components/screens/common/Settings';
 import { NotFound } from './components/common/NotFound';
 
@@ -72,7 +89,7 @@ interface UserSession {
   id: number;
   username?: string;
   email?: string;
-  role: 'HR' | 'Manager' | 'Employee';
+  role: 'HR' | 'Manager' | 'Employee' | 'Leader';
   employee_id: number | null;
   token?: string;
   profile_picture?: string | null;
@@ -81,6 +98,29 @@ interface UserSession {
   dept?: string | null;
   full_name?: string | null;
 }
+
+const isSupervisorPosition = (session: UserSession | null) => {
+  const pos = String(session?.position || '').toLowerCase();
+  return session?.role === 'Employee' && pos.includes('supervisor');
+};
+
+const getHomeScreenForUser = (session: UserSession | null) => {
+  if (!session) return 'C1';
+  if (session.role === 'HR') return 'C5';
+  if (session.role === 'Manager') return 'B1';
+  if (session.role === 'Leader') return 'D1';
+  if (isSupervisorPosition(session)) return 'C5';
+  return 'C1';
+};
+
+const getHomeRouteForUser = (session: UserSession | null) => {
+  if (!session) return '/employee/career-dashboard';
+  if (session.role === 'HR') return '/admin/signature-queue';
+  if (session.role === 'Manager') return '/manager/okr-planner';
+  if (session.role === 'Leader') return '/leader/team-goals';
+  if (isSupervisorPosition(session)) return '/employee/signature-queue';
+  return '/employee/career-dashboard';
+};
 
 export default function App() {
   const [user, setUser] = useState<UserSession | null>(() => {
@@ -95,6 +135,11 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= 1024;
+  });
   const [isDarkMode, setIsDarkMode] = useState(() => {
     try {
       const saved = localStorage.getItem('talentflow_theme');
@@ -130,6 +175,17 @@ export default function App() {
     return () => { window.removeEventListener('offline', goOffline); window.removeEventListener('online', goOnline); };
   }, []);
 
+  useEffect(() => {
+    const onResize = () => setIsDesktopViewport(window.innerWidth >= 1024);
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (isDesktopViewport) setIsSidebarOpen(false);
+  }, [isDesktopViewport]);
+
   // --- Routing helpers: map screens to role-based URL paths and vice-versa ---
   const roleSlug = (r: string) => (r === 'HR' ? 'admin' : r.toLowerCase());
 
@@ -146,13 +202,13 @@ export default function App() {
     A9: '/admin/audit-logs',
     A10: '/admin/payroll-analytics',
     A11: '/admin/payroll-management',
+    A12: '/admin/promotability',
     // Manager
     B1: '/manager/okr-planner',
     B2: '/manager/coaching-journal',
     B3: '/manager/disciplinary-action',
     B4: '/manager/evaluation-portal',
     B5: '/manager/promotability',
-    B6: '/manager/pip-manager',
     B7: '/manager/suggestion-review',
     B8: '/manager/feedback360',
     // Employee
@@ -161,13 +217,16 @@ export default function App() {
     C3: '/employee/self-assessment',
     C4: '/employee/feedback',
     C5: '/employee/verification-of-review',
-    C6: '/employee/idp',
+    C6: '/employee/career-growth',
     C7: '/employee/coaching-chat',
+    D1: '/leader/team-goals',
+    D2: '/leader/team-progress',
   };
 
   const pathToScreenMap: Record<string, Record<string, string>> = {
     admin: {
       'employee-directory': 'A1',
+      'employee': 'A2',
       'recruitmentboard': 'A3',
       'onboarding': 'A7',
       'offboarding': 'A4',
@@ -175,8 +234,10 @@ export default function App() {
       'audit-logs': 'A9',
       'payroll-analytics': 'A10',
       'payroll-management': 'A11',
+      'promotability': 'A12',
       'db-viewer': 'A6',
       'feedback360': 'A8',
+      'signature-queue': 'C5',
       'settings': 'S1',
     },
     manager: {
@@ -185,9 +246,9 @@ export default function App() {
       'disciplinary-action': 'B3',
       'evaluation-portal': 'B4',
       'promotability': 'B5',
-      'pip-manager': 'B6',
       'suggestion-review': 'B7',
       'feedback360': 'B8',
+      'signature-queue': 'C5',
       'settings': 'S1',
     },
     employee: {
@@ -196,8 +257,15 @@ export default function App() {
       'self-assessment': 'C3',
       'feedback': 'C4',
       'verification-of-review': 'C5',
-      'idp': 'C6',
+      'signature-queue': 'C5',
+      'career-growth': 'C6',
       'coaching-chat': 'C7',
+      'settings': 'S1',
+    },
+    leader: {
+      'team-goals': 'D1',
+      'team-progress': 'D2',
+      'signature-queue': 'C5',
       'settings': 'S1',
     }
   };
@@ -208,6 +276,10 @@ export default function App() {
       const base = user ? roleSlug(user.role) : 'admin';
       return `/${base}/settings`;
     }
+    if (screenCode === 'C5') {
+      const base = user ? roleSlug(user.role) : 'employee';
+      return `/${base}/signature-queue`;
+    }
     return screenRouteMap[screenCode] || null;
   }
 
@@ -217,7 +289,7 @@ export default function App() {
       if (parts.length === 0) return null;
       const role = parts[0];
       const page = parts[1] || '';
-      if (!['admin','manager','employee'].includes(role)) {
+      if (!['admin','manager','employee','leader'].includes(role)) {
         if (parts[0] !== 'login') { setActiveScreen('404'); return '404'; }
         return null;
       }
@@ -231,6 +303,14 @@ export default function App() {
         if (expected !== role) return null; // role mismatch — don't 404, just ignore stale URL
       }
       setActiveScreen(screen);
+      if (screen === 'A2') {
+        const params = new URLSearchParams(window.location.search || '');
+        const idRaw = params.get('id') || params.get('employee_id') || '';
+        const employeeId = Number(idRaw);
+        if (Number.isFinite(employeeId) && employeeId > 0) {
+          fetchEmployeeDetails(employeeId);
+        }
+      }
       return screen;
     } catch (e) { return null; }
   }
@@ -240,10 +320,18 @@ export default function App() {
     if (user) {
       const r = routeForScreen(screenCode);
       if (r) {
-        try { if (window.location.pathname !== r) window.history.pushState({}, '', r); } catch (e) {}
+        let target = r;
+        if (screenCode === 'A2' && ctx?.employee_id) {
+          target = `${r}?id=${encodeURIComponent(String(ctx.employee_id))}`;
+        }
+        try {
+          const current = `${window.location.pathname}${window.location.search}`;
+          if (current !== target) window.history.pushState({}, '', target);
+        } catch (e) {}
       }
     }
     if (ctx) setNavContext(ctx || null);
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) setIsSidebarOpen(false);
   }
 
   useEffect(() => {
@@ -255,9 +343,7 @@ export default function App() {
       // If URL contains a role/page, honor it. Otherwise fall back to default
       const fromPath = setScreenFromPath();
       if (!fromPath) {
-        if (user.role === 'HR') goToScreen('A1');
-        else if (user.role === 'Manager') goToScreen('B1');
-        else if (user.role === 'Employee') goToScreen('C1');
+        goToScreen(getHomeScreenForUser(user));
       }
 
       const onPop = () => { setScreenFromPath(); };
@@ -291,8 +377,8 @@ export default function App() {
 
   const handleLogin = (session: UserSession) => {
     const slug = session.role === 'HR' ? 'admin' : session.role.toLowerCase();
-    const homeRoute = session.role === 'HR' ? '/admin/employee-directory' : session.role === 'Manager' ? '/manager/okr-planner' : '/employee/career-dashboard';
-    const homeScreen = session.role === 'HR' ? 'A1' : session.role === 'Manager' ? 'B1' : 'C1';
+    const homeRoute = getHomeRouteForUser(session);
+    const homeScreen = getHomeScreenForUser(session);
 
     // Only restore pre-login path if it belongs to the same role
     try {
@@ -403,9 +489,9 @@ export default function App() {
   if (activeScreen === '404') {
     return (
       <NotFound onGoHome={() => {
-        const home = user.role === 'HR' ? 'A1' : user.role === 'Manager' ? 'B1' : 'C1';
+        const home = getHomeScreenForUser(user);
         setActiveScreen(home);
-        const route = user.role === 'HR' ? '/admin/employee-directory' : user.role === 'Manager' ? '/manager/okr-planner' : '/employee/career-dashboard';
+        const route = getHomeRouteForUser(user);
         try { window.history.pushState({}, '', route); } catch (e) {}
       }} />
     );
@@ -433,6 +519,8 @@ export default function App() {
           className="w-full"
         >
           {(() => {
+            const searchableUsers = (Array.isArray(users) ? users : []).filter((u: any) => !isSoftDeleted(u));
+            const searchableEmployees = (Array.isArray(employees) ? employees : []).filter((e: any) => !isSoftDeleted(e));
             switch (activeScreen) {
               // HR Screens (The Architect)
               case 'A1': return <EmployeeDirectory employees={employees} onSelectEmployee={(id) => { fetchEmployeeDetails(id); goToScreen('A2', { employee_id: id }); }} onCreateEmployee={fetchEmployees} />;
@@ -443,9 +531,10 @@ export default function App() {
               case 'A5': return <UserAccounts employees={employees} users={users} onRefresh={fetchUsers} />;
               case 'A9': return <AuditLogs />;
               case 'A6': return <DBViewer />;
-              case 'A8': return <FeedbackBox employees={employees} users={users} />;
+              case 'A8': return <FeedbackBox employees={searchableEmployees} users={searchableUsers} />;
               case 'A10': return <PayrollAnalytics />;
               case 'A11': return <PayrollManagement employees={employees} />;
+              case 'A12': return <Promotability employees={employees} />;
 
               // Manager Screens (The Coach & Evaluator)
               case 'B1': return <OKRPlanner employees={employees} />;
@@ -453,18 +542,22 @@ export default function App() {
               case 'B3': return <DisciplinaryLog employees={employees} />;
               case 'B4': return <EvaluationPortal employees={employees} />;
               case 'B5': return <Promotability employees={employees} />;
-              case 'B6': return <PIPManager employees={employees} />;
               case 'B7': return <SuggestionForm employees={employees} />;
-              case 'B8': return <FeedbackBox employees={employees} users={users} />;
+              case 'B8': return <FeedbackBox employees={searchableEmployees} users={searchableUsers} />;
 
               // Employee Screens (The Performer)
               case 'C1': return <CareerDashboard />;
               case 'C2': return <SuggestionForm />;
               case 'C3': return <SelfAssessment />;
-              case 'C4': return <FeedbackBox employees={employees} users={users} />;
+              case 'C4': return <FeedbackBox employees={searchableEmployees} users={searchableUsers} />;
               case 'C5': return <VerificationOfReview />;
-              case 'C6': return <IDP />;
+              case 'C6': return <CareerGrowth />;
               case 'C7': return <CoachingChat navContext={navContext} onNavContextClear={() => setNavContext(null)} />;
+
+              // Leader Screens (Team Leadership)
+              case 'D1': return <TeamLeaderDashboard />;
+              case 'D2': return <div className="glass-card p-4 text-center text-slate-500">Team Progress Tracker (Coming Soon)</div>;
+
               case 'S1': return <Settings onProfilePictureChanged={(pic) => {
                 const updated = { ...user, profile_picture: pic };
                 setUser(updated);
@@ -485,12 +578,68 @@ export default function App() {
     );
   };
 
+  const screenTitleMap: Record<string, string> = {
+    A1: 'Employee Directory',
+    A2: 'Employee Jacket',
+    A3: 'Recruitment Board',
+    A4: 'Offboarding Hub',
+    A5: 'User Accounts',
+    A6: 'Database Viewer',
+    A7: 'Onboarding Hub',
+    A8: 'Feedback 360',
+    A9: 'Audit Logs',
+    A10: 'Payroll Analytics',
+    A11: 'Payroll Management',
+    A12: 'Promotability',
+    B1: 'OKR Planner',
+    B2: 'Coaching Journal',
+    B3: 'Disciplinary Action',
+    B4: 'Evaluation Portal',
+    B5: 'Promotability',
+    B7: 'Suggestion Review',
+    B8: 'Feedback 360',
+    C1: 'My Career Dashboard',
+    C2: 'Suggestion Form',
+    C3: 'Self-Assessment',
+    C4: 'Feedback',
+    C5: 'Verification of Review',    C6: 'Career Growth & Promotability',    C7: 'Coaching & E-Learning',
+    D1: 'Team Goals',
+    D2: 'Team Progress',
+    S1: 'Settings',
+  };
+  const activeTitle = screenTitleMap[activeScreen] || 'Dashboard';
+  const userDisplay = user.employee_name || user.full_name || user.username || user.email || 'User';
+  const roleDisplay = (role?: string | null) => role === 'HR' ? 'HR Admin' : (role || '');
+
   return (
     <NotificationProvider>
-    <div className="flex h-screen bg-transparent overflow-hidden selection:bg-teal-green/30 selection:text-teal-deep transition-colors duration-500">
+    <AppDialogHost />
+    <div className="relative flex h-screen bg-transparent overflow-hidden selection:bg-teal-green/30 selection:text-teal-deep transition-colors duration-500">
+      <AnimatePresence>
+        {!isDesktopViewport && isSidebarOpen && (
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px]"
+            onClick={() => setIsSidebarOpen(false)}
+            aria-label="Close sidebar"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
-      <aside className="w-64 system-bg border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-500">
+      <motion.aside
+        initial={false}
+        animate={{
+          x: isDesktopViewport || isSidebarOpen ? 0 : -320,
+          opacity: isDesktopViewport || isSidebarOpen ? 1 : 0.96,
+        }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        className="fixed inset-y-0 left-0 z-50 w-72 lg:w-64 system-bg border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-500 lg:static lg:z-auto"
+      >
         <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-start justify-between gap-2">
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -498,6 +647,15 @@ export default function App() {
           >
             <img src="/logo.png" alt="Maptech Logo" className="h-14 w-full object-contain mb-2" />
           </motion.div>
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(false)}
+            className="lg:hidden mt-1 p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label="Close navigation"
+          >
+            <PanelLeftClose size={16} />
+          </button>
+          </div>
           <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-4 text-center">Performance System</p>
         </div>
 
@@ -523,7 +681,7 @@ export default function App() {
           </div>
           {user.role === 'HR' && (
             <>
-              <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">HR Command Center</div>
+              <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">HR Admin Command Center</div>
               <SidebarItem icon={UserPlus} label="Recruitment Board" active={activeScreen === 'A3'} onClick={() => goToScreen('A3')} />
               <SidebarItem icon={Users} label="360° Feedback" active={activeScreen === 'A8'} onClick={() => goToScreen('A8')} />
               <SidebarItem icon={Briefcase} label="Onboarding Hub" active={activeScreen === 'A7'} onClick={() => goToScreen('A7')} />
@@ -533,6 +691,8 @@ export default function App() {
               <SidebarItem icon={ShieldCheck} label="Audit Logs" active={activeScreen === 'A9'} onClick={() => goToScreen('A9')} />
               <SidebarItem icon={DollarSign} label="Payroll Analytics" active={activeScreen === 'A10'} onClick={() => goToScreen('A10')} />
               <SidebarItem icon={Wallet} label="Payroll Management" active={activeScreen === 'A11'} onClick={() => goToScreen('A11')} />
+              <SidebarItem icon={Award} label="Promotability" active={activeScreen === 'A12'} onClick={() => goToScreen('A12')} />
+              <SidebarItem icon={ShieldCheck} label="Signature Queue" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
               <SidebarItem icon={TrendingUp} label="DB Viewer" active={activeScreen === 'A6'} onClick={() => goToScreen('A6')} />
               <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
             </>
@@ -547,8 +707,8 @@ export default function App() {
               <SidebarItem icon={ShieldAlert} label="Disciplinary Action" active={activeScreen === 'B3'} onClick={() => goToScreen('B3')} />
               <SidebarItem icon={ClipboardCheck} label="Evaluation Portal" active={activeScreen === 'B4'} onClick={() => goToScreen('B4')} />
               <SidebarItem icon={Award} label="Promotability" active={activeScreen === 'B5'} onClick={() => goToScreen('B5')} />
-              <SidebarItem icon={TrendingUp} label="IDP / PIP Manager" active={activeScreen === 'B6'} onClick={() => goToScreen('B6')} />
               <SidebarItem icon={Lightbulb} label="Suggestion Review" active={activeScreen === 'B7'} onClick={() => goToScreen('B7')} />
+              <SidebarItem icon={ShieldCheck} label="Signature Queue" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
               <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
             </>
           )}
@@ -561,27 +721,49 @@ export default function App() {
               <SidebarItem icon={ClipboardCheck} label="Self-Assessment" active={activeScreen === 'C3'} onClick={() => goToScreen('C3')} />
               <SidebarItem icon={MessageSquare} label="360° Feedback" active={activeScreen === 'C4'} onClick={() => goToScreen('C4')} />
               <SidebarItem icon={ShieldCheck} label="Verification of Review" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
-              <SidebarItem icon={Briefcase} label="Development Plan" active={activeScreen === 'C6'} onClick={() => goToScreen('C6')} />
+              <SidebarItem icon={Award} label="Career Growth" active={activeScreen === 'C6'} onClick={() => goToScreen('C6')} />
               <SidebarItem icon={GraduationCap} label="Coaching & E-Learning" active={activeScreen === 'C7'} onClick={() => goToScreen('C7')} />
+              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
+            </>
+          )}
+
+          {user.role === 'Leader' && (
+            <>
+              <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Team Leader</div>
+              <SidebarItem icon={Target} label="Team Goals" active={activeScreen === 'D1'} onClick={() => goToScreen('D1')} />
+              <SidebarItem icon={TrendingUp} label="Team Progress" active={activeScreen === 'D2'} onClick={() => goToScreen('D2')} />
+              <SidebarItem icon={ShieldCheck} label="Signature Queue" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
               <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
             </>
           )}
         </nav>
 
         <div className="p-4 border-t border-slate-100 dark:border-slate-800">
-          <div className="flex flex-col items-center gap-2 mb-4 px-2">
-            {user.profile_picture ? (
-              <img src={user.profile_picture} alt="Profile" className="w-14 h-14 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700" />
-            ) : (
-              <div className="w-14 h-14 system-bg border-2 border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-teal-deep dark:text-teal-green font-bold text-lg">
-                {((user.employee_name || user.full_name || user.username || user.email || 'U')[0] || 'U').toUpperCase()}
+          <div className="mb-4 px-2">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/30 p-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {user.profile_picture ? (
+                  <img src={user.profile_picture} alt="Profile" className="w-12 h-12 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700 shrink-0" />
+                ) : (
+                  <div className="w-12 h-12 system-bg border-2 border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-teal-deep dark:text-teal-green font-bold text-base shrink-0">
+                    {((user.employee_name || user.full_name || user.username || user.email || 'U')[0] || 'U').toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.employee_name || user.full_name || user.username || user.email}</p>
+                  <div className="mt-1 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    {roleDisplay(user.role)}
+                  </div>
+                </div>
               </div>
-            )}
-            <div className="text-center min-w-0 w-full">
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.employee_name || user.full_name || user.username || user.email}</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">{user.role}</p>
-              {user.position && <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{user.position}</p>}
-              {user.dept && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold truncate">{user.dept}</p>}
+              <div className="mt-2.5 flex gap-1 w-full">
+                <span className="flex-1 min-w-0 flex items-center justify-center px-1.5 py-0.5 rounded-md text-[9px] font-medium bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 truncate">
+                  {user.position || 'N/A'}
+                </span>
+                <span className="flex-1 min-w-0 flex items-center justify-center px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-100 dark:border-teal-800/40 truncate">
+                  {user.dept || 'N/A'}
+                </span>
+              </div>
             </div>
           </div>
           <button
@@ -591,26 +773,56 @@ export default function App() {
             <LogOut size={14} /> Sign Out
           </button>
         </div>
-      </aside>
+      </motion.aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-transparent transition-colors duration-500 relative">
+      <main className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6 bg-transparent transition-colors duration-500 relative">
+        <motion.div
+          key={`topnav-${activeScreen}`}
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+          className="sticky top-0 z-40 mb-4"
+        >
+          <div className="system-bg/95 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-2xl px-3 sm:px-4 py-2.5 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setIsSidebarOpen(v => !v)}
+                  className="lg:hidden inline-flex items-center justify-center p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                  aria-label="Toggle navigation"
+                >
+                  {isSidebarOpen ? <PanelLeftClose size={16} /> : <Menu size={16} />}
+                </motion.button>
+                <div className="min-w-0">
+                  <p className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100 truncate">{activeTitle}</p>
+                  <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">{roleDisplay(user.role)} workspace · {userDisplay}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                <span className="hidden md:inline-flex text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300">
+                  {roleDisplay(user.role)}
+                </span>
+                <NotificationBell onNavigate={(screen, ctx) => { goToScreen(screen); setNavContext(ctx || null); }} />
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
         <AnimatePresence>
           {isOffline && (
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="sticky top-0 z-50 mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-sm rounded-xl flex items-center gap-2 font-medium"
+              className="relative z-30 mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-sm rounded-xl flex items-center gap-2 font-medium"
             >
               <WifiOff size={16} className="shrink-0" /> You are offline. Some features may not work until your connection is restored.
             </motion.div>
           )}
         </AnimatePresence>
-        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-40">
-          <NotificationBell onNavigate={(screen, ctx) => { goToScreen(screen); setNavContext(ctx || null); }} />
-        </div>
-        <div className="max-w-6xl mx-auto min-h-full">
+        <div className="max-w-6xl mx-auto min-h-full pb-4">
           {renderScreen()}
         </div>
       </main>

@@ -4,11 +4,12 @@ import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SignatureUpload } from '../../common/SignatureUpload';
 import { SearchableSelect } from '../../common/SearchableSelect';
-import { Plus, X, Box, LogOut, Download, Trash2, ChevronDown, ChevronUp, Printer, Package, FileText, Search } from 'lucide-react';
+import { Plus, X, Box, LogOut, Download, Trash2, ChevronDown, ChevronUp, Package, FileText, Search, Eye, Archive } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { sigBlockHtml } from '../../../utils/print';
 import { Employee } from '../../../types';
+import { appConfirm } from '../../../utils/appDialog';
 
 interface PropertyRow {
   property_number: string; asset_category: string; brand: string; description: string;
@@ -32,6 +33,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
   const [offboardingData, setOffboardingData] = useState<any[]>([]);
   const [exitInterviews, setExitInterviews] = useState<any[]>([]);
   const [propertyRecords, setPropertyRecords] = useState<any[]>([]);
+  const [expandedOffboarding, setExpandedOffboarding] = useState<number | null>(null);
   const [expandedProp, setExpandedProp] = useState<number | null>(null);
   const [propSearch, setPropSearch] = useState('');
   const [offForm, setOffForm] = useState({ employee_name: '', last_day: '', reason: '' });
@@ -58,6 +60,9 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
     would_recommend: '', improvement_suggestions: '', additional_comments: '',
     employee_sig: '', interviewer_name: '', interviewer_sig: '', interviewer_date: ''
   });
+  const todayISO = new Date().toISOString().split('T')[0];
+
+  const trimText = (value: string) => value.trim();
 
   useEffect(() => { fetchData(); }, []);
 
@@ -68,9 +73,17 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
   };
 
   const submitOffboarding = async () => {
-    if (!offForm.employee_name) { window.notify?.('Please enter employee name', 'error'); return; }
+    const cleaned = {
+      employee_name: trimText(offForm.employee_name),
+      last_day: trimText(offForm.last_day),
+      reason: trimText(offForm.reason),
+    };
+    if (!cleaned.employee_name || !cleaned.last_day || !cleaned.reason) {
+      window.notify?.('Employee name, last day, and reason are required', 'error');
+      return;
+    }
     try {
-      const res = await fetch('/api/offboarding', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ...offForm, clearance_status: 'Pending' }) });
+      const res = await fetch('/api/offboarding', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ...cleaned, clearance_status: 'Pending' }) });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Offboarding record created', 'success');
       setOffForm({ employee_name: '', last_day: '', reason: '' });
@@ -88,25 +101,110 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
   });
 
   const submitProperty = async () => {
-    if (!propForm.employee_name) { window.notify?.('Please enter employee name', 'error'); return; }
-    if (propForm.items.length === 0) { window.notify?.('Please add at least one property item', 'error'); return; }
+    if (!(await appConfirm('Save this property accountability form?', { title: 'Save Property Form', confirmText: 'Save', icon: 'success' }))) return;
+    
+    const cleaned = {
+      ...propForm,
+      employee_name: trimText(propForm.employee_name),
+      position_dept: trimText(propForm.position_dept),
+      date_prepared: trimText(propForm.date_prepared),
+      turnover_by_name: trimText(propForm.turnover_by_name),
+      turnover_by_date: trimText(propForm.turnover_by_date),
+      turnover_by_sig: trimText(propForm.turnover_by_sig),
+      noted_by_name: trimText(propForm.noted_by_name),
+      noted_by_date: trimText(propForm.noted_by_date),
+      noted_by_sig: trimText(propForm.noted_by_sig),
+      received_by_name: trimText(propForm.received_by_name),
+      received_by_date: trimText(propForm.received_by_date),
+      received_by_sig: trimText(propForm.received_by_sig),
+      audited_by_name: trimText(propForm.audited_by_name),
+      audited_by_date: trimText(propForm.audited_by_date),
+      audited_by_sig: trimText(propForm.audited_by_sig),
+      items: propForm.items.map(item => ({
+        property_number: trimText(item.property_number),
+        asset_category: trimText(item.asset_category),
+        brand: trimText(item.brand),
+        description: trimText(item.description),
+        serial_no: trimText(item.serial_no),
+        uom_qty: trimText(item.uom_qty),
+        dr_si_no: trimText(item.dr_si_no),
+        amount: trimText(item.amount),
+        remarks: trimText(item.remarks),
+      })),
+    };
+
+    if (!cleaned.employee_name || !cleaned.position_dept || !cleaned.date_prepared) {
+      window.notify?.('Employee name, position/department, and date prepared are required', 'error');
+      return;
+    }
+    if (cleaned.items.length === 0) {
+      window.notify?.('Please add at least one property item', 'error');
+      return;
+    }
+
+    const hasAtLeastOneFilledRow = cleaned.items.some(item => Object.values(item).some(Boolean));
+    if (!hasAtLeastOneFilledRow) {
+      window.notify?.('Please complete at least one property item row', 'error');
+      return;
+    }
+
+    const invalidRowIndex = cleaned.items.findIndex(item => {
+      const hasAny = Object.values(item).some(Boolean);
+      if (!hasAny) return false;
+      const quantity = Number.parseFloat(item.uom_qty);
+      const amount = item.amount ? Number.parseFloat(item.amount) : 0;
+      return (
+        !item.property_number ||
+        !item.asset_category ||
+        !item.brand ||
+        !item.description ||
+        !item.serial_no ||
+        !item.uom_qty ||
+        !Number.isFinite(quantity) ||
+        quantity <= 0 ||
+        (item.amount !== '' && (!Number.isFinite(amount) || amount < 0))
+      );
+    });
+    if (invalidRowIndex >= 0) {
+      window.notify?.(`Property item row ${invalidRowIndex + 1} is incomplete or has invalid quantity/amount`, 'error');
+      return;
+    }
+
+    const signers = [
+      { label: 'Turnover by', name: cleaned.turnover_by_name, date: cleaned.turnover_by_date, sig: cleaned.turnover_by_sig },
+      { label: 'Noted by', name: cleaned.noted_by_name, date: cleaned.noted_by_date, sig: cleaned.noted_by_sig },
+      { label: 'Received by', name: cleaned.received_by_name, date: cleaned.received_by_date, sig: cleaned.received_by_sig },
+      { label: 'Audited by', name: cleaned.audited_by_name, date: cleaned.audited_by_date, sig: cleaned.audited_by_sig },
+    ];
+    for (const signer of signers) {
+      const hasAny = Boolean(signer.name || signer.date || signer.sig);
+      if (hasAny && (!signer.name || !signer.date || !signer.sig)) {
+        window.notify?.(`${signer.label} requires printed name, date, and signature`, 'error');
+        return;
+      }
+      if (!hasAny) {
+        window.notify?.(`${signer.label} printed name, date, and signature are required`, 'error');
+        return;
+      }
+    }
+
     try {
       // try to resolve an employee id from the entered name so records attach to the employee file
-      const matched = (employees || []).find(e => (e.name || '').toString().trim().toLowerCase() === (propForm.employee_name || '').toString().trim().toLowerCase());
+      const matched = (employees || []).find(e => (e.name || '').toString().trim().toLowerCase() === cleaned.employee_name.toLowerCase());
       const employeeId = matched ? matched.id : null;
 
       const res = await fetch('/api/property_accountability', {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           employee_id: employeeId,
-          employee_name: propForm.employee_name,
-          position_dept: propForm.position_dept,
-          date_prepared: propForm.date_prepared,
-          items: JSON.stringify(propForm.items),
-          turnover_by_name: propForm.turnover_by_name, turnover_by_date: propForm.turnover_by_date, turnover_by_sig: propForm.turnover_by_sig,
-          noted_by_name: propForm.noted_by_name, noted_by_date: propForm.noted_by_date, noted_by_sig: propForm.noted_by_sig,
-          received_by_name: propForm.received_by_name, received_by_date: propForm.received_by_date, received_by_sig: propForm.received_by_sig,
-          audited_by_name: propForm.audited_by_name, audited_by_date: propForm.audited_by_date, audited_by_sig: propForm.audited_by_sig,
+          employee_name: cleaned.employee_name,
+          position_dept: cleaned.position_dept,
+          date_prepared: cleaned.date_prepared,
+          items: JSON.stringify(cleaned.items),
+          turnover_by_name: cleaned.turnover_by_name, turnover_by_date: cleaned.turnover_by_date, turnover_by_sig: cleaned.turnover_by_sig,
+          noted_by_name: cleaned.noted_by_name, noted_by_date: cleaned.noted_by_date, noted_by_sig: cleaned.noted_by_sig,
+          received_by_name: cleaned.received_by_name, received_by_date: cleaned.received_by_date, received_by_sig: cleaned.received_by_sig,
+          audited_by_name: cleaned.audited_by_name, audited_by_date: cleaned.audited_by_date, audited_by_sig: cleaned.audited_by_sig,
         })
       });
       if (res.ok) {
@@ -117,11 +215,12 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
   };
 
   const deletePropRecord = async (id: number) => {
-    if (!confirm('Delete this property record?')) return;
-    try { await fetch(`/api/property_accountability/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Deleted', 'success'); fetchData(); } catch { window.notify?.('Failed to delete', 'error'); }
+    if (!(await appConfirm('Archive this property record?', { title: 'Archive Property Record', confirmText: 'Archive' }))) return;
+    try { await fetch(`/api/property_accountability/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Archived', 'success'); fetchData(); } catch { window.notify?.('Failed to archive', 'error'); }
   };
 
-  const printPropRecord = (rec: any) => {
+  const printPropRecord = async (rec: any) => {
+    if (!(await appConfirm('Export this property accountability form as PDF?', { title: 'Export Property PDF', confirmText: 'Export', icon: 'export' }))) return;
     const items: PropertyRow[] = (() => { try { return JSON.parse(rec.items || '[]'); } catch { return []; } })();
     const sigBlock = (label: string, name: string, sig: string, date: string) => sigBlockHtml(sig, label, date, name);
     const w = window.open('', '_blank'); if (!w) return;
@@ -152,7 +251,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
     </body></html>`);
     w.document.close(); setTimeout(() => {
       w.print();
-      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'print', description: `Property Accountability Form — ${rec.employee_name || ''}`, entity: 'property_accountability', entity_id: rec.id || null, meta: { source: 'OffboardingHub', printType: 'property_accountability' } }) }).catch(() => {}); } catch {};
+      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'export_pdf', description: `Property Accountability PDF — ${rec.employee_name || ''}`, entity: 'property_accountability', entity_id: rec.id || null, meta: { source: 'OffboardingHub', exportType: 'property_accountability' } }) }).catch(() => {}); } catch {};
     }, 300);
   };
 
@@ -163,21 +262,95 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
   };
 
   const submitExitInterview = async () => {
-    if (!exitForm.employee_name) { window.notify?.('Please enter employee name', 'error'); return; }
+    if (!(await appConfirm('Submit this exit interview?', { title: 'Submit Exit Interview', confirmText: 'Submit', icon: 'success' }))) return;
+    
+    const cleaned = {
+      ...exitForm,
+      employee_name: trimText(exitForm.employee_name),
+      department: trimText(exitForm.department),
+      supervisor: trimText(exitForm.supervisor),
+      interview_date: trimText(exitForm.interview_date),
+      ssn: trimText(exitForm.ssn),
+      hire_date: trimText(exitForm.hire_date),
+      termination_date: trimText(exitForm.termination_date),
+      starting_position: trimText(exitForm.starting_position),
+      ending_position: trimText(exitForm.ending_position),
+      salary: trimText(exitForm.salary),
+      reason_category: trimText(exitForm.reason_category),
+      reason_details: exitForm.reason_details.map(trimText).filter(Boolean),
+      dismissal_details: trimText(exitForm.dismissal_details),
+      liked_most: trimText(exitForm.liked_most),
+      liked_least: trimText(exitForm.liked_least),
+      pay_benefits_opinion: trimText(exitForm.pay_benefits_opinion),
+      would_recommend: trimText(exitForm.would_recommend),
+      improvement_suggestions: trimText(exitForm.improvement_suggestions),
+      additional_comments: trimText(exitForm.additional_comments),
+      employee_sig: trimText(exitForm.employee_sig),
+      interviewer_name: trimText(exitForm.interviewer_name),
+      interviewer_sig: trimText(exitForm.interviewer_sig),
+      interviewer_date: trimText(exitForm.interviewer_date),
+    };
+
+    if (!cleaned.employee_name || !cleaned.department || !cleaned.supervisor || !cleaned.interview_date) {
+      window.notify?.('Employee, department, supervisor, and interview date are required', 'error');
+      return;
+    }
+    if (!cleaned.hire_date || !cleaned.termination_date) {
+      window.notify?.('Please provide hire date and termination date', 'error');
+      return;
+    }
+    if (cleaned.termination_date < cleaned.hire_date) {
+      window.notify?.('Termination date cannot be earlier than hire date', 'error');
+      return;
+    }
+    if (!cleaned.starting_position || !cleaned.ending_position) {
+      window.notify?.('Please provide starting and ending positions', 'error');
+      return;
+    }
+    if (!cleaned.reason_category || cleaned.reason_details.length === 0) {
+      window.notify?.('Please select at least one reason for leaving', 'error');
+      return;
+    }
+    if (cleaned.reason_category === 'Dismissal' && cleaned.dismissal_details.length < 5) {
+      window.notify?.('Please provide dismissal details', 'error');
+      return;
+    }
+    if (!cleaned.liked_most || !cleaned.liked_least || !cleaned.pay_benefits_opinion) {
+      window.notify?.('Please complete Part II comments', 'error');
+      return;
+    }
+    const ratings = Object.values(cleaned.satisfaction_ratings);
+    if (ratings.some(v => v < 1 || v > 5)) {
+      window.notify?.('Please complete all satisfaction ratings from 1 to 5', 'error');
+      return;
+    }
+    if (!cleaned.would_recommend || !cleaned.improvement_suggestions) {
+      window.notify?.('Please complete Part IV additional comments', 'error');
+      return;
+    }
+    if (!cleaned.employee_sig) {
+      window.notify?.('Employee signature is required', 'error');
+      return;
+    }
+    if (!cleaned.interviewer_name || !cleaned.interviewer_sig || !cleaned.interviewer_date) {
+      window.notify?.('Interviewer name, signature, and date are required', 'error');
+      return;
+    }
+
     try {
       const res = await fetch('/api/exit_interviews', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({
-        employee_name: exitForm.employee_name, department: exitForm.department, supervisor: exitForm.supervisor,
-        interview_date: exitForm.interview_date, reasons: `${exitForm.reason_category}: ${exitForm.reason_details.join(', ')}`,
-        liked_most: exitForm.liked_most, liked_least: exitForm.liked_least,
-        ssn: exitForm.ssn, hire_date: exitForm.hire_date, termination_date: exitForm.termination_date,
-        starting_position: exitForm.starting_position, ending_position: exitForm.ending_position, salary: exitForm.salary,
-        pay_benefits_opinion: exitForm.pay_benefits_opinion,
-        satisfaction_ratings: JSON.stringify(exitForm.satisfaction_ratings),
-        would_recommend: exitForm.would_recommend, improvement_suggestions: exitForm.improvement_suggestions,
-        additional_comments: exitForm.additional_comments,
-        employee_sig: exitForm.employee_sig, interviewer_name: exitForm.interviewer_name,
-        interviewer_sig: exitForm.interviewer_sig, interviewer_date: exitForm.interviewer_date,
-        dismissal_details: exitForm.dismissal_details
+        employee_name: cleaned.employee_name, department: cleaned.department, supervisor: cleaned.supervisor,
+        interview_date: cleaned.interview_date, reasons: `${cleaned.reason_category}: ${cleaned.reason_details.join(', ')}`,
+        liked_most: cleaned.liked_most, liked_least: cleaned.liked_least,
+        ssn: cleaned.ssn, hire_date: cleaned.hire_date, termination_date: cleaned.termination_date,
+        starting_position: cleaned.starting_position, ending_position: cleaned.ending_position, salary: cleaned.salary,
+        pay_benefits_opinion: cleaned.pay_benefits_opinion,
+        satisfaction_ratings: JSON.stringify(cleaned.satisfaction_ratings),
+        would_recommend: cleaned.would_recommend, improvement_suggestions: cleaned.improvement_suggestions,
+        additional_comments: cleaned.additional_comments,
+        employee_sig: cleaned.employee_sig, interviewer_name: cleaned.interviewer_name,
+        interviewer_sig: cleaned.interviewer_sig, interviewer_date: cleaned.interviewer_date,
+        dismissal_details: cleaned.dismissal_details
       }) });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Exit interview saved', 'success');
@@ -200,8 +373,8 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
   };
 
   const deleteOffboarding = async (id: number) => {
-    if (!confirm('Delete?')) return;
-    try { await fetch(`/api/offboarding/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Deleted', 'success'); fetchData(); } catch { window.notify?.('Failed', 'error'); }
+    if (!(await appConfirm('Archive this offboarding record?', { title: 'Archive Offboarding Record', confirmText: 'Archive' }))) return;
+    try { await fetch(`/api/offboarding/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Archived', 'success'); fetchData(); } catch { window.notify?.('Failed', 'error'); }
   };
 
   const markCleared = async (id: number) => {
@@ -212,11 +385,12 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
   const [expandedExit, setExpandedExit] = useState<number | null>(null);
 
   const deleteExitInterview = async (id: number) => {
-    if (!confirm('Delete this exit interview?')) return;
-    try { await fetch(`/api/exit_interviews/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Deleted', 'success'); fetchData(); } catch { window.notify?.('Failed to delete', 'error'); }
+    if (!(await appConfirm('Archive this exit interview?', { title: 'Archive Exit Interview', confirmText: 'Archive' }))) return;
+    try { await fetch(`/api/exit_interviews/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Archived', 'success'); fetchData(); } catch { window.notify?.('Failed to archive', 'error'); }
   };
 
-  const printExitInterview = (rec: any) => {
+  const printExitInterview = async (rec: any) => {
+    if (!(await appConfirm('Export this exit interview as PDF?', { title: 'Export Exit Interview PDF', confirmText: 'Export', icon: 'export' }))) return;
     const ratings: Record<string, number> = (() => { try { return JSON.parse(rec.satisfaction_ratings || '{}'); } catch { return {}; } })();
     const ratingLabels: Record<string, string> = {
       opportunity_use_abilities: 'Opportunity to use your abilities',
@@ -281,13 +455,15 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
     </body></html>`);
     w.document.close(); setTimeout(() => {
       w.print();
-      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'print', description: `Exit Interview — ${rec.employee_name || ''}`, entity: 'exit_interview', entity_id: rec.id || null, meta: { source: 'OffboardingHub' } }) }).catch(() => {}); } catch {};
+      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'export_pdf', description: `Exit Interview PDF — ${rec.employee_name || ''}`, entity: 'exit_interview', entity_id: rec.id || null, meta: { source: 'OffboardingHub' } }) }).catch(() => {}); } catch {};
     }, 300);
   };
 
   const reasonCounts = offboardingData.reduce((acc: any, curr) => { const r = curr.reason || 'Other'; acc[r] = (acc[r] || 0) + 1; return acc; }, {});
   const pieData = Object.keys(reasonCounts).map(k => ({ name: k, value: reasonCounts[k] }));
   const COLORS = ['#0f766e', '#14b8a6', '#f59e0b', '#ef4444'];
+  const filteredExitInterviews = exitInterviews.filter(ei => !exitSearch || ei.employee_name?.toLowerCase().includes(exitSearch.toLowerCase()) || ei.department?.toLowerCase().includes(exitSearch.toLowerCase()));
+  const filteredPropertyRecords = propertyRecords.filter(r => !propSearch || r.employee_name?.toLowerCase().includes(propSearch.toLowerCase()) || r.position_dept?.toLowerCase().includes(propSearch.toLowerCase()));
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -316,17 +492,18 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                 <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Employee Name</label>
                   {employees.length > 0 ? (
                     <SearchableSelect
-                      options={employees.map(e => ({ value: e.name, label: e.name }))}
+                      options={employees.map(e => ({ value: e.name, label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                       value={offForm.employee_name}
-                      onChange={v => setOffForm({ ...offForm, employee_name: v })}
+                      onChange={v => setOffForm({ ...offForm, employee_name: String(v) })}
                       placeholder="Select Employee..."
+                      dropdownVariant="pills-horizontal"
                     />
                   ) : (
-                    <input type="text" value={offForm.employee_name} onChange={e => setOffForm({ ...offForm, employee_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+                    <input type="text" value={offForm.employee_name} onChange={e => setOffForm({ ...offForm, employee_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required />
                   )}
                 </div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Last Day</label><input type="date" value={offForm.last_day} onChange={e => setOffForm({ ...offForm, last_day: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Reason</label><select value={offForm.reason} onChange={e => setOffForm({ ...offForm, reason: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"><option value="">Select...</option><option>Resignation</option><option>Relocation</option><option>Better Opportunity</option><option>Retirement</option><option>Termination</option><option>Other</option></select></div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Last Day</label><input type="date" value={offForm.last_day} onChange={e => setOffForm({ ...offForm, last_day: e.target.value })} max={todayISO} required className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Reason</label><select value={offForm.reason} onChange={e => setOffForm({ ...offForm, reason: e.target.value })} required className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"><option value="">Select...</option><option>Resignation</option><option>Relocation</option><option>Better Opportunity</option><option>Retirement</option><option>Termination</option><option>Other</option></select></div>
               </div>
               <div className="flex justify-end"><button type="submit" className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green">Create Record</button></div>
             </form>
@@ -347,17 +524,18 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                 <div><label className={labelCls}>Employee Name <span className="text-red-500">*</span></label>
                   {employees.length > 0 ? (
                     <SearchableSelect
-                      options={employees.map(e => ({ value: e.name, label: e.name }))}
+                      options={employees.map(e => ({ value: e.name, label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                       value={propForm.employee_name}
-                      onChange={v => setPropForm({ ...propForm, employee_name: v })}
+                      onChange={v => setPropForm({ ...propForm, employee_name: String(v) })}
                       placeholder="Select Employee..."
+                      dropdownVariant="pills-horizontal"
                     />
                   ) : (
-                    <input type="text" value={propForm.employee_name} onChange={e => setPropForm({ ...propForm, employee_name: e.target.value })} className={inputCls} />
+                    <input type="text" value={propForm.employee_name} onChange={e => setPropForm({ ...propForm, employee_name: e.target.value })} className={inputCls} maxLength={120} required />
                   )}
                 </div>
-                <div><label className={labelCls}>Position / Dept.</label><input type="text" value={propForm.position_dept} onChange={e => setPropForm({ ...propForm, position_dept: e.target.value })} className={inputCls} /></div>
-                <div><label className={labelCls}>Date Prepared</label><input type="date" value={propForm.date_prepared} onChange={e => setPropForm({ ...propForm, date_prepared: e.target.value })} className={inputCls} /></div>
+                <div><label className={labelCls}>Position / Dept.</label><input type="text" value={propForm.position_dept} onChange={e => setPropForm({ ...propForm, position_dept: e.target.value })} className={inputCls} maxLength={120} required /></div>
+                <div><label className={labelCls}>Date Prepared</label><input type="date" value={propForm.date_prepared} onChange={e => setPropForm({ ...propForm, date_prepared: e.target.value })} max={todayISO} className={inputCls} required /></div>
               </div>
 
               {/* Property Items Table */}
@@ -385,15 +563,32 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                     <tbody>
                       {propForm.items.map((item, idx) => (
                         <tr key={idx} className="border-b border-slate-100 dark:border-slate-800">
-                          <td className="p-1"><input type="text" value={item.property_number} onChange={e => updatePropRow(idx, 'property_number', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="PN-001" /></td>
-                          <td className="p-1"><select value={item.asset_category} onChange={e => updatePropRow(idx, 'asset_category', e.target.value)} className={inputCls + ' !p-1 !text-xs'}><option value="">Category...</option>{['IT Equipment','Office Furniture','Vehicle','Tools','Supplies','Other'].map(c => <option key={c}>{c}</option>)}</select></td>
-                          <td className="p-1"><input type="text" value={item.brand} onChange={e => updatePropRow(idx, 'brand', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="Brand" /></td>
-                          <td className="p-1"><input type="text" value={item.description} onChange={e => updatePropRow(idx, 'description', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="Description" /></td>
-                          <td className="p-1"><input type="text" value={item.serial_no} onChange={e => updatePropRow(idx, 'serial_no', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="SN-XXX" /></td>
-                          <td className="p-1"><input type="text" value={item.uom_qty} onChange={e => updatePropRow(idx, 'uom_qty', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="1 pc" /></td>
-                          <td className="p-1"><input type="text" value={item.dr_si_no} onChange={e => updatePropRow(idx, 'dr_si_no', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="DR-001" /></td>
-                          <td className="p-1"><input type="number" step="0.01" value={item.amount} onChange={e => updatePropRow(idx, 'amount', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="0.00" /></td>
-                          <td className="p-1"><input type="text" value={item.remarks} onChange={e => updatePropRow(idx, 'remarks', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="Remarks" /></td>
+                          <td className="p-1"><input type="text" value={item.property_number} onChange={e => updatePropRow(idx, 'property_number', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="PN-001" maxLength={80} /></td>
+                          <td className="p-1">
+                            <SearchableSelect
+                              options={[
+                                { value: '', label: 'Category...' },
+                                { value: 'IT Equipment', label: 'IT Equipment' },
+                                { value: 'Office Furniture', label: 'Office Furniture' },
+                                { value: 'Vehicle', label: 'Vehicle' },
+                                { value: 'Tools', label: 'Tools' },
+                                { value: 'Supplies', label: 'Supplies' },
+                                { value: 'Other', label: 'Other' },
+                              ]}
+                              value={item.asset_category}
+                              onChange={(v) => updatePropRow(idx, 'asset_category', String(v))}
+                              placeholder="Category..."
+                              searchable
+                              dropdownVariant="pills-horizontal"
+                            />
+                          </td>
+                          <td className="p-1"><input type="text" value={item.brand} onChange={e => updatePropRow(idx, 'brand', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="Brand" maxLength={120} /></td>
+                          <td className="p-1"><input type="text" value={item.description} onChange={e => updatePropRow(idx, 'description', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="Description" maxLength={200} /></td>
+                          <td className="p-1"><input type="text" value={item.serial_no} onChange={e => updatePropRow(idx, 'serial_no', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="SN-XXX" maxLength={120} /></td>
+                          <td className="p-1"><input type="number" min="0.01" step="0.01" value={item.uom_qty} onChange={e => updatePropRow(idx, 'uom_qty', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="1" /></td>
+                          <td className="p-1"><input type="text" value={item.dr_si_no} onChange={e => updatePropRow(idx, 'dr_si_no', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="DR-001" maxLength={80} /></td>
+                          <td className="p-1"><input type="number" min="0" step="0.01" value={item.amount} onChange={e => updatePropRow(idx, 'amount', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="0.00" /></td>
+                          <td className="p-1"><input type="text" value={item.remarks} onChange={e => updatePropRow(idx, 'remarks', e.target.value)} className={inputCls + ' !p-1 !text-xs'} placeholder="Remarks" maxLength={200} /></td>
                           <td className="p-1 text-center">{propForm.items.length > 1 && <button type="button" onClick={() => removePropRow(idx)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>}</td>
                         </tr>
                       ))}
@@ -409,32 +604,32 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                   <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                     <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 uppercase">Turnover by:</div>
                     <div className="grid grid-cols-2 gap-3 mb-2">
-                      <div><label className={labelCls}>Printed Name</label><input type="text" value={propForm.turnover_by_name} onChange={e => setPropForm(f => ({ ...f, turnover_by_name: e.target.value }))} className={inputCls} /></div>
-                      <div><label className={labelCls}>Date</label><input type="date" value={propForm.turnover_by_date} onChange={e => setPropForm(f => ({ ...f, turnover_by_date: e.target.value }))} className={inputCls} /></div>
+                      <div><label className={labelCls}>Printed Name</label><input type="text" value={propForm.turnover_by_name} onChange={e => setPropForm(f => ({ ...f, turnover_by_name: e.target.value }))} className={inputCls} maxLength={120} required /></div>
+                      <div><label className={labelCls}>Date</label><input type="date" value={propForm.turnover_by_date} onChange={e => setPropForm(f => ({ ...f, turnover_by_date: e.target.value }))} max={todayISO} className={inputCls} required /></div>
                     </div>
                     <SignatureUpload label="Signature" value={propForm.turnover_by_sig} onChange={v => setPropForm(f => ({ ...f, turnover_by_sig: v }))} />
                   </div>
                   <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                     <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 uppercase">Noted by:</div>
                     <div className="grid grid-cols-2 gap-3 mb-2">
-                      <div><label className={labelCls}>Printed Name</label><input type="text" value={propForm.noted_by_name} onChange={e => setPropForm(f => ({ ...f, noted_by_name: e.target.value }))} className={inputCls} /></div>
-                      <div><label className={labelCls}>Date</label><input type="date" value={propForm.noted_by_date} onChange={e => setPropForm(f => ({ ...f, noted_by_date: e.target.value }))} className={inputCls} /></div>
+                      <div><label className={labelCls}>Printed Name</label><input type="text" value={propForm.noted_by_name} onChange={e => setPropForm(f => ({ ...f, noted_by_name: e.target.value }))} className={inputCls} maxLength={120} required /></div>
+                      <div><label className={labelCls}>Date</label><input type="date" value={propForm.noted_by_date} onChange={e => setPropForm(f => ({ ...f, noted_by_date: e.target.value }))} max={todayISO} className={inputCls} required /></div>
                     </div>
                     <SignatureUpload label="Signature" value={propForm.noted_by_sig} onChange={v => setPropForm(f => ({ ...f, noted_by_sig: v }))} />
                   </div>
                   <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                     <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 uppercase">Received by:</div>
                     <div className="grid grid-cols-2 gap-3 mb-2">
-                      <div><label className={labelCls}>Printed Name</label><input type="text" value={propForm.received_by_name} onChange={e => setPropForm(f => ({ ...f, received_by_name: e.target.value }))} className={inputCls} /></div>
-                      <div><label className={labelCls}>Date</label><input type="date" value={propForm.received_by_date} onChange={e => setPropForm(f => ({ ...f, received_by_date: e.target.value }))} className={inputCls} /></div>
+                      <div><label className={labelCls}>Printed Name</label><input type="text" value={propForm.received_by_name} onChange={e => setPropForm(f => ({ ...f, received_by_name: e.target.value }))} className={inputCls} maxLength={120} required /></div>
+                      <div><label className={labelCls}>Date</label><input type="date" value={propForm.received_by_date} onChange={e => setPropForm(f => ({ ...f, received_by_date: e.target.value }))} max={todayISO} className={inputCls} required /></div>
                     </div>
                     <SignatureUpload label="Signature" value={propForm.received_by_sig} onChange={v => setPropForm(f => ({ ...f, received_by_sig: v }))} />
                   </div>
                   <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                     <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 uppercase">Audited by:</div>
                     <div className="grid grid-cols-2 gap-3 mb-2">
-                      <div><label className={labelCls}>Printed Name</label><input type="text" value={propForm.audited_by_name} onChange={e => setPropForm(f => ({ ...f, audited_by_name: e.target.value }))} className={inputCls} /></div>
-                      <div><label className={labelCls}>Date</label><input type="date" value={propForm.audited_by_date} onChange={e => setPropForm(f => ({ ...f, audited_by_date: e.target.value }))} className={inputCls} /></div>
+                      <div><label className={labelCls}>Printed Name</label><input type="text" value={propForm.audited_by_name} onChange={e => setPropForm(f => ({ ...f, audited_by_name: e.target.value }))} className={inputCls} maxLength={120} required /></div>
+                      <div><label className={labelCls}>Date</label><input type="date" value={propForm.audited_by_date} onChange={e => setPropForm(f => ({ ...f, audited_by_date: e.target.value }))} max={todayISO} className={inputCls} required /></div>
                     </div>
                     <SignatureUpload label="Signature" value={propForm.audited_by_sig} onChange={v => setPropForm(f => ({ ...f, audited_by_sig: v }))} />
                   </div>
@@ -469,30 +664,31 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                   <div><label className={labelCls}>Employee Name <span className="text-red-500">*</span></label>
                     {employees.length > 0 ? (
                       <SearchableSelect
-                        options={employees.map(e => ({ value: e.name, label: e.name }))}
+                        options={employees.map(e => ({ value: e.name, label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                         value={exitForm.employee_name}
-                        onChange={v => setExitForm({ ...exitForm, employee_name: v })}
+                        onChange={v => setExitForm({ ...exitForm, employee_name: String(v) })}
                         placeholder="Select Employee..."
+                        dropdownVariant="pills-horizontal"
                       />
                     ) : (
-                      <input type="text" value={exitForm.employee_name} onChange={e => setExitForm({ ...exitForm, employee_name: e.target.value })} className={inputCls} />
+                      <input type="text" value={exitForm.employee_name} onChange={e => setExitForm({ ...exitForm, employee_name: e.target.value })} className={inputCls} maxLength={120} required />
                     )}
                   </div>
-                  <div><label className={labelCls}>SSN</label><input type="text" value={exitForm.ssn} onChange={e => setExitForm({ ...exitForm, ssn: e.target.value })} className={inputCls} /></div>
-                  <div><label className={labelCls}>Interview Date</label><input type="date" value={exitForm.interview_date} onChange={e => setExitForm({ ...exitForm, interview_date: e.target.value })} className={inputCls} /></div>
+                  <div><label className={labelCls}>SSN</label><input type="text" value={exitForm.ssn} onChange={e => setExitForm({ ...exitForm, ssn: e.target.value })} className={inputCls} maxLength={64} required /></div>
+                  <div><label className={labelCls}>Interview Date</label><input type="date" value={exitForm.interview_date} onChange={e => setExitForm({ ...exitForm, interview_date: e.target.value })} max={todayISO} className={inputCls} required /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4 mt-3">
-                  <div><label className={labelCls}>Department</label><select value={exitForm.department} onChange={e => setExitForm({ ...exitForm, department: e.target.value })} className={inputCls}><option value="">Select department...</option>{['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => <option key={d}>{d}</option>)}</select></div>
-                  <div><label className={labelCls}>Supervisor</label><SearchableSelect options={employees.map(e => ({ value: e.id, label: e.name }))} value={employees.find(e => e.name === exitForm.supervisor)?.id || ''} onChange={(id: any) => setExitForm({ ...exitForm, supervisor: employees.find(e => e.id === id)?.name || '' })} placeholder="Select supervisor..." /></div>
+                  <div><label className={labelCls}>Department</label><SearchableSelect options={['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => ({ value: d, label: d }))} value={exitForm.department} onChange={v => setExitForm({ ...exitForm, department: String(v) })} placeholder="Select department..." allowEmpty emptyLabel="Select department..." searchable dropdownVariant="pills-horizontal" className="w-full" /></div>
+                  <div><label className={labelCls}>Supervisor</label><SearchableSelect options={employees.map(e => ({ value: e.id, label: e.name, avatarUrl: (e as any).profile_picture || null }))} value={employees.find(e => e.name === exitForm.supervisor)?.id || ''} onChange={(id: any) => setExitForm({ ...exitForm, supervisor: employees.find(e => e.id === id)?.name || '' })} placeholder="Select supervisor..." dropdownVariant="pills-horizontal" /></div>
                 </div>
                 <div className="grid grid-cols-4 gap-4 mt-3">
-                  <div><label className={labelCls}>Hire Date</label><input type="date" value={exitForm.hire_date} onChange={e => setExitForm({ ...exitForm, hire_date: e.target.value })} className={inputCls} /></div>
-                  <div><label className={labelCls}>Termination Date</label><input type="date" value={exitForm.termination_date} onChange={e => setExitForm({ ...exitForm, termination_date: e.target.value })} className={inputCls} /></div>
-                  <div><label className={labelCls}>Starting Position</label><input type="text" value={exitForm.starting_position} onChange={e => setExitForm({ ...exitForm, starting_position: e.target.value })} className={inputCls} /></div>
-                  <div><label className={labelCls}>Ending Position</label><input type="text" value={exitForm.ending_position} onChange={e => setExitForm({ ...exitForm, ending_position: e.target.value })} className={inputCls} /></div>
+                  <div><label className={labelCls}>Hire Date</label><input type="date" value={exitForm.hire_date} onChange={e => setExitForm({ ...exitForm, hire_date: e.target.value })} max={todayISO} className={inputCls} required /></div>
+                  <div><label className={labelCls}>Termination Date</label><input type="date" value={exitForm.termination_date} onChange={e => setExitForm({ ...exitForm, termination_date: e.target.value })} max={todayISO} className={inputCls} required /></div>
+                  <div><label className={labelCls}>Starting Position</label><input type="text" value={exitForm.starting_position} onChange={e => setExitForm({ ...exitForm, starting_position: e.target.value })} className={inputCls} maxLength={120} required /></div>
+                  <div><label className={labelCls}>Ending Position</label><input type="text" value={exitForm.ending_position} onChange={e => setExitForm({ ...exitForm, ending_position: e.target.value })} className={inputCls} maxLength={120} required /></div>
                 </div>
                 <div className="grid grid-cols-4 gap-4 mt-3">
-                  <div><label className={labelCls}>Salary</label><input type="number" min="0" step="0.01" value={exitForm.salary} onChange={e => setExitForm({ ...exitForm, salary: e.target.value })} className={inputCls} placeholder="0.00" /></div>
+                  <div><label className={labelCls}>Salary</label><input type="number" min="0.01" step="0.01" value={exitForm.salary} onChange={e => setExitForm({ ...exitForm, salary: e.target.value })} className={inputCls} placeholder="0.00" required /></div>
                 </div>
               </div>
 
@@ -526,13 +722,13 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                     ))}
                     <div className="mt-2">
                       <label className={labelCls}>Specify Details</label>
-                      <input type="text" value={exitForm.dismissal_details} onChange={e => setExitForm({ ...exitForm, dismissal_details: e.target.value })} className={inputCls} placeholder="Specify if other..." />
+                      <input type="text" value={exitForm.dismissal_details} onChange={e => setExitForm({ ...exitForm, dismissal_details: e.target.value })} className={inputCls} placeholder="Specify if other..." maxLength={250} required={exitForm.reason_category === 'Dismissal'} />
                     </div>
                   </div>
                   {/* Column 4: Plans */}
                   <div>
                     <p className="font-bold text-slate-700 dark:text-slate-200 mb-2 text-xs uppercase tracking-wide">Plans After Leaving</p>
-                    <textarea rows={6} value={exitForm.additional_comments} onChange={e => setExitForm({ ...exitForm, additional_comments: e.target.value })} className={inputCls} placeholder="Describe your plans after leaving the organization..." />
+                    <textarea rows={6} value={exitForm.additional_comments} onChange={e => setExitForm({ ...exitForm, additional_comments: e.target.value })} className={inputCls} placeholder="Describe your plans after leaving the organization..." maxLength={2000} />
                   </div>
                 </div>
               </div>
@@ -541,9 +737,9 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
               <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                 <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Part II — Comments / Suggestions for Improvement</h4>
                 <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div><label className={labelCls}>What did you like best about your job?</label><textarea rows={2} value={exitForm.liked_most} onChange={e => setExitForm({ ...exitForm, liked_most: e.target.value })} className={inputCls} /></div>
-                  <div><label className={labelCls}>What did you like least about your job?</label><textarea rows={2} value={exitForm.liked_least} onChange={e => setExitForm({ ...exitForm, liked_least: e.target.value })} className={inputCls} /></div>
-                  <div className="col-span-2"><label className={labelCls}>How did you feel about the pay and benefits?</label><textarea rows={2} value={exitForm.pay_benefits_opinion} onChange={e => setExitForm({ ...exitForm, pay_benefits_opinion: e.target.value })} className={inputCls} /></div>
+                  <div><label className={labelCls}>What did you like best about your job?</label><textarea rows={2} value={exitForm.liked_most} onChange={e => setExitForm({ ...exitForm, liked_most: e.target.value })} className={inputCls} minLength={5} maxLength={1000} required /></div>
+                  <div><label className={labelCls}>What did you like least about your job?</label><textarea rows={2} value={exitForm.liked_least} onChange={e => setExitForm({ ...exitForm, liked_least: e.target.value })} className={inputCls} minLength={5} maxLength={1000} required /></div>
+                  <div className="col-span-2"><label className={labelCls}>How did you feel about the pay and benefits?</label><textarea rows={2} value={exitForm.pay_benefits_opinion} onChange={e => setExitForm({ ...exitForm, pay_benefits_opinion: e.target.value })} className={inputCls} minLength={5} maxLength={1000} required /></div>
                 </div>
               </div>
 
@@ -581,7 +777,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                             <td key={n} className="p-2 text-center">
                               <input type="radio" name={`exit-${item.key}`} checked={exitForm.satisfaction_ratings[item.key] === n}
                                 onChange={() => setExitForm(prev => ({ ...prev, satisfaction_ratings: { ...prev.satisfaction_ratings, [item.key]: n } }))}
-                                className="w-4 h-4 accent-teal-600 cursor-pointer" />
+                                className="w-4 h-4 accent-teal-600 cursor-pointer" required={n === 1} />
                             </td>
                           ))}
                         </tr>
@@ -595,8 +791,8 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
               <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                 <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Part IV — Additional Comments</h4>
                 <div className="space-y-3">
-                  <div><label className={labelCls}>Would you recommend this organization to a friend? If seeking another job, what kind?</label><textarea rows={2} value={exitForm.would_recommend} onChange={e => setExitForm({ ...exitForm, would_recommend: e.target.value })} className={inputCls} /></div>
-                  <div><label className={labelCls}>What changes or improvement would you suggest that might have influenced your decision to stay?</label><textarea rows={2} value={exitForm.improvement_suggestions} onChange={e => setExitForm({ ...exitForm, improvement_suggestions: e.target.value })} className={inputCls} /></div>
+                  <div><label className={labelCls}>Would you recommend this organization to a friend? If seeking another job, what kind?</label><textarea rows={2} value={exitForm.would_recommend} onChange={e => setExitForm({ ...exitForm, would_recommend: e.target.value })} className={inputCls} minLength={5} maxLength={1000} required /></div>
+                  <div><label className={labelCls}>What changes or improvement would you suggest that might have influenced your decision to stay?</label><textarea rows={2} value={exitForm.improvement_suggestions} onChange={e => setExitForm({ ...exitForm, improvement_suggestions: e.target.value })} className={inputCls} minLength={5} maxLength={1000} required /></div>
                 </div>
               </div>
 
@@ -612,10 +808,10 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                   </div>
                   {/* Interviewer Signature */}
                   <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 uppercase">Interviewer / HR Representative</div>
+                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 uppercase">Interviewer / HR Admin Representative</div>
                     <div className="grid grid-cols-2 gap-3 mb-2">
-                      <div><label className={labelCls}>Printed Name</label><input type="text" value={exitForm.interviewer_name} onChange={e => setExitForm(f => ({ ...f, interviewer_name: e.target.value }))} className={inputCls} /></div>
-                      <div><label className={labelCls}>Date</label><input type="date" value={exitForm.interviewer_date} onChange={e => setExitForm(f => ({ ...f, interviewer_date: e.target.value }))} className={inputCls} /></div>
+                      <div><label className={labelCls}>Printed Name</label><input type="text" value={exitForm.interviewer_name} onChange={e => setExitForm(f => ({ ...f, interviewer_name: e.target.value }))} className={inputCls} maxLength={120} required /></div>
+                      <div><label className={labelCls}>Date</label><input type="date" value={exitForm.interviewer_date} onChange={e => setExitForm(f => ({ ...f, interviewer_date: e.target.value }))} max={todayISO} className={inputCls} required /></div>
                     </div>
                     <SignatureUpload label="Sign or upload" value={exitForm.interviewer_sig} onChange={v => setExitForm(f => ({ ...f, interviewer_sig: v }))} />
                   </div>
@@ -623,7 +819,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
               </div>
 
               <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">For official HR use only — file in 201 Employee Folder</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">For official HR Admin use only — file in 201 Employee Folder</span>
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setActiveForm('none')} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">Cancel</button>
                   <button type="submit" className="gradient-bg text-white px-6 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-lg shadow-teal-green/10">Save Exit Interview</button>
@@ -654,19 +850,47 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                 <th className="pb-3"></th>
               </tr></thead><tbody>
                 {offboardingData.map(data => (
-                  <tr key={data.id} className="border-b border-slate-50 dark:border-slate-800/50">
-                    <td className="py-4 font-medium text-slate-700 dark:text-slate-200">{data.employee_name}</td>
-                    <td className="py-4 text-sm text-slate-500 dark:text-slate-400">{data.last_day}</td>
-                    <td className="py-4 text-sm text-slate-500 dark:text-slate-400">{data.reason}</td>
-                    <td className="py-4">
-                      {data.clearance_status === 'Completed' ? (
-                        <span className="font-bold text-[10px] uppercase tracking-wider text-emerald-600">Completed</span>
-                      ) : (
-                        <button onClick={() => markCleared(data.id)} className="font-bold text-[10px] uppercase tracking-wider text-amber-500 hover:text-emerald-600">Pending (click to clear)</button>
+                  <React.Fragment key={data.id}>
+                    <tr className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors cursor-pointer" onClick={() => setExpandedOffboarding(expandedOffboarding === data.id ? null : data.id)}>
+                      <td className="py-4 font-medium text-slate-700 dark:text-slate-200">
+                        <div className="flex items-center gap-2">
+                          {expandedOffboarding === data.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          {data.employee_name}
+                        </div>
+                      </td>
+                      <td className="py-4 text-sm text-slate-500 dark:text-slate-400">{data.last_day}</td>
+                      <td className="py-4 text-sm text-slate-500 dark:text-slate-400">{data.reason}</td>
+                      <td className="py-4">
+                        {data.clearance_status === 'Completed' ? (
+                          <span className="font-bold text-[10px] uppercase tracking-wider text-emerald-600">Completed</span>
+                        ) : (
+                          <button onClick={(e) => { e.stopPropagation(); markCleared(data.id); }} className="font-bold text-[10px] uppercase tracking-wider text-amber-500 hover:text-emerald-600">Pending (click to clear)</button>
+                        )}
+                      </td>
+                      <td className="py-4">
+                        <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => setExpandedOffboarding(expandedOffboarding === data.id ? null : data.id)} className="text-blue-500 hover:text-blue-700" title="View Record"><Eye size={15} /></button>
+                          <button onClick={() => deleteOffboarding(data.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                    <AnimatePresence>
+                      {expandedOffboarding === data.id && (
+                        <tr>
+                          <td colSpan={5} className="p-0">
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                              <div className="bg-slate-50 dark:bg-slate-900/50 p-4 border-b border-slate-200 dark:border-slate-700 grid grid-cols-4 gap-3 text-xs">
+                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Employee</span><span className="text-slate-700 dark:text-slate-200">{data.employee_name || '—'}</span></div>
+                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Last Day</span><span className="text-slate-700 dark:text-slate-200">{data.last_day || '—'}</span></div>
+                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Reason</span><span className="text-slate-700 dark:text-slate-200">{data.reason || '—'}</span></div>
+                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Clearance</span><span className="text-slate-700 dark:text-slate-200">{data.clearance_status || 'Pending'}</span></div>
+                              </div>
+                            </motion.div>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td className="py-4"><button onClick={() => deleteOffboarding(data.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button></td>
-                  </tr>
+                    </AnimatePresence>
+                  </React.Fragment>
                 ))}
                 {offboardingData.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-slate-400">No offboarding records</td></tr>}
               </tbody></table>
@@ -675,8 +899,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
         </div>
       </div>
 
-      {exitInterviews.length > 0 && (
-        <Card>
+      <Card>
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">Exit Interviews ({exitInterviews.length})</h3>
             <div className="flex gap-2 items-center">
@@ -705,7 +928,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                 <th className="py-3 px-4 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right">Actions</th>
               </tr></thead>
               <tbody>
-                {exitInterviews.filter(ei => !exitSearch || ei.employee_name?.toLowerCase().includes(exitSearch.toLowerCase()) || ei.department?.toLowerCase().includes(exitSearch.toLowerCase())).map((ei: any) => {
+                {filteredExitInterviews.map((ei: any) => {
                   const isExpanded = expandedExit === ei.id;
                   const ratings: Record<string, number> = (() => { try { return JSON.parse(ei.satisfaction_ratings || '{}'); } catch { return {}; } })();
                   return (
@@ -720,8 +943,9 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                         <td className="py-3 px-4 text-slate-500 dark:text-slate-400 text-xs max-w-[200px] truncate">{ei.reasons}</td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
-                            <button onClick={() => printExitInterview(ei)} className="text-blue-500 hover:text-blue-700" title="Print"><Printer size={15} /></button>
-                            <button onClick={() => deleteExitInterview(ei.id)} className="text-red-400 hover:text-red-600" title="Delete"><Trash2 size={15} /></button>
+                            <button onClick={() => setExpandedExit(isExpanded ? null : ei.id)} className="text-blue-500 hover:text-blue-700" title="View"><Eye size={15} /></button>
+                            <button onClick={() => printExitInterview(ei)} className="text-blue-500 hover:text-blue-700" title="Export PDF"><FileText size={15} /></button>
+                            <button onClick={() => deleteExitInterview(ei.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                           </div>
                         </td>
                       </tr>
@@ -787,11 +1011,15 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                     </React.Fragment>
                   );
                 })}
+                {filteredExitInterviews.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-10 text-center text-slate-400">{exitSearch ? 'No exit interviews match your search.' : 'No exit interviews yet.'}</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
-        </Card>
-      )}
+      </Card>
 
       {/* Property Accountability Records */}
       <Card>
@@ -825,10 +1053,10 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
               <th className="py-3 px-4 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right">Actions</th>
             </tr></thead>
             <tbody>
-              {propertyRecords.filter(r => !propSearch || r.employee_name?.toLowerCase().includes(propSearch.toLowerCase()) || r.position_dept?.toLowerCase().includes(propSearch.toLowerCase())).length === 0 && (
+              {filteredPropertyRecords.length === 0 && (
                 <tr><td colSpan={6} className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">No property accountability records</td></tr>
               )}
-              {propertyRecords.filter(r => !propSearch || r.employee_name?.toLowerCase().includes(propSearch.toLowerCase()) || r.position_dept?.toLowerCase().includes(propSearch.toLowerCase())).map((rec: any) => {
+              {filteredPropertyRecords.map((rec: any) => {
                 const items: PropertyRow[] = (() => { try { return JSON.parse(rec.items || '[]'); } catch { return []; } })();
                 const total = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
                 const isExpanded = expandedProp === rec.id;
@@ -850,8 +1078,9 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                       <td className="py-3 px-4 text-right font-mono text-sm text-slate-700 dark:text-slate-200">₱{total.toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => printPropRecord(rec)} className="text-blue-500 hover:text-blue-700" title="Print"><Printer size={15} /></button>
-                          <button onClick={() => deletePropRecord(rec.id)} className="text-red-400 hover:text-red-600" title="Delete"><Trash2 size={15} /></button>
+                          <button onClick={() => setExpandedProp(isExpanded ? null : rec.id)} className="text-blue-500 hover:text-blue-700" title="View"><Eye size={15} /></button>
+                          <button onClick={() => printPropRecord(rec)} className="text-blue-500 hover:text-blue-700" title="Export PDF"><FileText size={15} /></button>
+                          <button onClick={() => deletePropRecord(rec.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                         </div>
                       </td>
                     </tr>

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Modal } from '../../common/Modal';
+import { ChoicePills } from '../../common/ChoicePills';
 import { getAuthHeaders } from '../../../utils/csv';
 import { RefreshCw, Search, Filter, ChevronDown, ChevronUp, Plus, Edit3, Trash2, Eye, Clock, Shield, Database, Activity } from 'lucide-react';
 
@@ -30,7 +31,7 @@ const ACTION_CONFIG: Record<string, { label: string; color: string; bg: string; 
   create: { label: 'Created', color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30', icon: Plus },
   insert: { label: 'Created', color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30', icon: Plus },
   update: { label: 'Updated', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/30', icon: Edit3 },
-  delete: { label: 'Deleted', color: 'text-red-700 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30', icon: Trash2 },
+  delete: { label: 'Archived', color: 'text-red-700 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30', icon: Trash2 },
 };
 
 const timeAgo = (dateStr: string) => {
@@ -98,7 +99,7 @@ export const AuditLogs = () => {
   // Stats
   const creates = logs.filter(l => ['create', 'insert'].includes((l.action || '').toLowerCase())).length;
   const updates = logs.filter(l => (l.action || '').toLowerCase() === 'update').length;
-  const deletes = logs.filter(l => (l.action || '').toLowerCase() === 'delete').length;
+  const archives = logs.filter(l => (l.action || '').toLowerCase() === 'delete').length;
 
   const inp = 'w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100';
 
@@ -128,7 +129,7 @@ export const AuditLogs = () => {
           { label: 'Total Events', value: logs.length, icon: Activity, color: 'bg-teal-600' },
           { label: 'Creates', value: creates, icon: Plus, color: 'bg-emerald-500' },
           { label: 'Updates', value: updates, icon: Edit3, color: 'bg-blue-500' },
-          { label: 'Deletes', value: deletes, icon: Trash2, color: 'bg-red-500' },
+          { label: 'Archives', value: archives, icon: Trash2, color: 'bg-red-500' },
         ].map((s, i) => (
           <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
             <Card>
@@ -173,12 +174,17 @@ export const AuditLogs = () => {
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Action</label>
-                  <select value={actionFilter} onChange={e => setActionFilter(e.target.value)} className={inp + ' mt-1'}>
-                    <option value="">All Actions</option>
-                    <option value="create">Create</option>
-                    <option value="update">Update</option>
-                    <option value="delete">Delete</option>
-                  </select>
+                  <ChoicePills
+                    value={actionFilter}
+                    onChange={setActionFilter}
+                    className="mt-1"
+                    options={[
+                      { value: '', label: 'All Actions' },
+                      { value: 'create', label: 'Create' },
+                      { value: 'update', label: 'Update' },
+                      { value: 'delete', label: 'Archive' },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Limit</label>
@@ -199,35 +205,41 @@ export const AuditLogs = () => {
 
       {/* Logs Table */}
       <Card>
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="flex items-center gap-3 text-slate-400">
-              <RefreshCw size={18} className="animate-spin" />
-              <span className="text-sm">Loading audit trail...</span>
-            </div>
-          </div>
-        ) : logs.length === 0 ? (
-          <div className="text-center py-12">
-            <Shield size={40} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-            <p className="text-sm text-slate-500 dark:text-slate-400">No audit entries found</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Try different filters or toggle Employee activities</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b-2 border-slate-200 dark:border-slate-700">
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">When</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">User</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Description</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Table</th>
-                  <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Source</th>
-                  <th className="pb-3 w-8"></th>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b-2 border-slate-200 dark:border-slate-700">
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">When</th>
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">User</th>
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Description</th>
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Table</th>
+                <th className="pb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Source</th>
+                <th className="pb-3 w-8"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="py-12">
+                    <div className="flex items-center justify-center">
+                      <div className="flex items-center gap-3 text-slate-400">
+                        <RefreshCw size={18} className="animate-spin" />
+                        <span className="text-sm">Loading audit trail...</span>
+                      </div>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {logs.map((l, idx) => {
+              ) : logs.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center">
+                    <Shield size={40} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+                    <p className="text-sm text-slate-500 dark:text-slate-400">No audit entries found</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Try different filters or toggle Employee activities</p>
+                  </td>
+                </tr>
+              ) : (
+                logs.map((l, idx) => {
                   const ac = getActionConfig(l.action);
                   const ActionIcon = ac.icon;
                   const isExpanded = expandedRow === l.id;
@@ -321,11 +333,11 @@ export const AuditLogs = () => {
                       </AnimatePresence>
                     </React.Fragment>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Modal open={modalOpen} title={modalTitle} onClose={() => setModalOpen(false)}>

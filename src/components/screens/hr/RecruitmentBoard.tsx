@@ -2,17 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
-import { Plus, X, Users, FileText, Download, Trash2, Printer, Pencil } from 'lucide-react';
+import { SearchableSelect } from '../../common/SearchableSelect';
+import { Plus, X, Users, FileText, Download, Pencil, Eye, Archive } from 'lucide-react';
 import { SignatureUpload } from '../../common/SignatureUpload';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { sigBlockHtml } from '../../../utils/print';
+import { appConfirm } from '../../../utils/appDialog';
 
 export const RecruitmentBoard = () => {
   const [activeForm, setActiveForm] = useState<'none' | 'requisition' | 'appraisal'>('none');
   const [editingApplicantId, setEditingApplicantId] = useState<number | null>(null);
   const [applicants, setApplicants] = useState<any[]>([]);
   const [requisitions, setRequisitions] = useState<any[]>([]);
+  const [supervisorOptions, setSupervisorOptions] = useState<Array<{ value: string; label: string; avatarUrl?: string | null }>>([]);
+  const [approvalOpenId, setApprovalOpenId] = useState<number | null>(null);
   const [reqForm, setReqForm] = useState({
     job_title: '', department: '', supervisor: '', hiring_contact: '',
     position_status: '', months_per_year: '' as any, hours_per_week: '' as any,
@@ -27,6 +31,15 @@ export const RecruitmentBoard = () => {
     president_approval: '', president_approval_date: '', president_approval_sig: '',
     comments: ''
   });
+  const emptyApprovalForm = {
+    supervisor_approval: '', supervisor_approval_date: '', supervisor_approval_sig: '',
+    dept_head_approval: '', dept_head_approval_date: '', dept_head_approval_sig: '',
+    cabinet_approval: '', cabinet_approval_date: '', cabinet_approval_sig: '',
+    vp_approval: '', vp_approval_date: '', vp_approval_sig: '',
+    president_approval: '', president_approval_date: '', president_approval_sig: '',
+    comments: ''
+  };
+  const [approvalForm, setApprovalForm] = useState(emptyApprovalForm);
   const emptyAppForm = {
     name: '', position: '', job_skills: '', asset_value: '',
     communication_skills: '', interview_impression: '',
@@ -41,8 +54,18 @@ export const RecruitmentBoard = () => {
     recommendation: ''
   };
   const [appForm, setAppForm] = useState(emptyAppForm);
+  const todayISO = new Date().toISOString().split('T')[0];
 
-  useEffect(() => { fetchApplicants(); fetchRequisitions(); }, []);
+  useEffect(() => { fetchApplicants(); fetchRequisitions(); fetchSupervisors(); }, []);
+
+  useEffect(() => {
+    if (!approvalOpenId) return;
+    const exists = requisitions.some(r => Number(r.id) === Number(approvalOpenId));
+    if (!exists) {
+      setApprovalOpenId(null);
+      setApprovalForm(emptyApprovalForm);
+    }
+  }, [requisitions, approvalOpenId]);
 
   const fetchApplicants = async () => {
     try { const res = await fetch('/api/applicants', { headers: getAuthHeaders() }); const data = await res.json(); setApplicants(Array.isArray(data) ? data : []); } catch { setApplicants([]); }
@@ -51,40 +74,174 @@ export const RecruitmentBoard = () => {
     try { const res = await fetch('/api/requisitions', { headers: getAuthHeaders() }); const data = await res.json(); setRequisitions(Array.isArray(data) ? data : []); } catch { setRequisitions([]); }
   };
 
-  const submitRequisition = async () => {
-    if (!reqForm.job_title) { window.notify?.('Please enter a job title', 'error'); return; }
+  const fetchSupervisors = async () => {
     try {
-      const res = await fetch('/api/requisitions', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(reqForm) });
+      const res = await fetch('/api/employees', { headers: getAuthHeaders() });
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data : [];
+      const supervisors = rows.filter((e: any) => String(e?.position || '').toLowerCase().includes('supervisor'));
+      const source = supervisors.length > 0 ? supervisors : rows;
+      const mapped = source
+        .filter((e: any) => String(e?.name || '').trim().length > 0)
+        .map((e: any) => ({
+          value: String(e.name),
+          label: String(e.name),
+          avatarUrl: e?.profile_picture || null,
+        }));
+      setSupervisorOptions(mapped);
+    } catch {
+      setSupervisorOptions([]);
+    }
+  };
+
+  const trimText = (value: any, maxLen: number) => String(value || '').trim().slice(0, maxLen);
+
+  const sanitizeRequisitionForm = () => ({
+    ...reqForm,
+    job_title: trimText(reqForm.job_title, 120),
+    department: trimText(reqForm.department, 100),
+    supervisor: trimText(reqForm.supervisor, 120),
+    hiring_contact: trimText(reqForm.hiring_contact, 120),
+    position_status: trimText(reqForm.position_status, 40),
+    months_per_year: Number(reqForm.months_per_year || 0),
+    hours_per_week: Number(reqForm.hours_per_week || 0),
+    position_type: trimText(reqForm.position_type, 40),
+    type_reason: trimText(reqForm.type_reason, 1000),
+    office_assignment: trimText(reqForm.office_assignment, 200),
+    recruitment_web: trimText(reqForm.recruitment_web, 200),
+    recruitment_newspapers: trimText(reqForm.recruitment_newspapers, 200),
+    recruitment_listserv: trimText(reqForm.recruitment_listserv, 200),
+    recruitment_other: trimText(reqForm.recruitment_other, 200),
+    classification: trimText(reqForm.classification, 20),
+    hiring_range: trimText(reqForm.hiring_range, 120),
+    hourly_rate: reqForm.hourly_rate === '' ? '' : Number(reqForm.hourly_rate),
+    comments: trimText(reqForm.comments, 2000),
+  });
+
+  const sanitizeApplicantForm = () => ({
+    ...appForm,
+    name: trimText(appForm.name, 120),
+    position: trimText(appForm.position, 120),
+    job_skills: trimText(appForm.job_skills, 2),
+    asset_value: trimText(appForm.asset_value, 2),
+    communication_skills: trimText(appForm.communication_skills, 2),
+    interview_impression: trimText(appForm.interview_impression, 2),
+    teamwork: trimText(appForm.teamwork, 2),
+    dept_fit: trimText(appForm.dept_fit, 2),
+    previous_qualifications: trimText(appForm.previous_qualifications, 2),
+    q_experience: trimText(appForm.q_experience, 1000),
+    q_why_interested: trimText(appForm.q_why_interested, 1000),
+    q_strengths: trimText(appForm.q_strengths, 1000),
+    q_weakness: trimText(appForm.q_weakness, 1000),
+    q_conflict: trimText(appForm.q_conflict, 1000),
+    q_goals: trimText(appForm.q_goals, 1000),
+    q_teamwork: trimText(appForm.q_teamwork, 1000),
+    q_pressure: trimText(appForm.q_pressure, 1000),
+    q_contribution: trimText(appForm.q_contribution, 1000),
+    q_questions: trimText(appForm.q_questions, 1000),
+    additional_comments: trimText(appForm.additional_comments, 2000),
+    interviewer_name: trimText(appForm.interviewer_name, 120),
+    interviewer_title: trimText(appForm.interviewer_title, 120),
+    hr_reviewer_name: trimText(appForm.hr_reviewer_name, 120),
+    recommendation: trimText(appForm.recommendation || appForm.status, 40),
+    status: trimText(appForm.status || appForm.recommendation, 40),
+  });
+
+  const resetRequisitionForm = () => {
+    setReqForm({
+      job_title: '', department: '', supervisor: '', hiring_contact: '',
+      position_status: '', months_per_year: '' as any, hours_per_week: '' as any,
+      start_date: '', position_type: '', type_reason: '',
+      office_assignment: '',
+      recruitment_web: '', recruitment_newspapers: '', recruitment_listserv: '', recruitment_other: '',
+      classification: '', hiring_range: '', hourly_rate: '',
+      supervisor_approval: '', supervisor_approval_date: '', supervisor_approval_sig: '',
+      dept_head_approval: '', dept_head_approval_date: '', dept_head_approval_sig: '',
+      cabinet_approval: '', cabinet_approval_date: '', cabinet_approval_sig: '',
+      vp_approval: '', vp_approval_date: '', vp_approval_sig: '',
+      president_approval: '', president_approval_date: '', president_approval_sig: '',
+      comments: ''
+    });
+  };
+
+  const submitRequisition = async () => {
+    const cleaned = sanitizeRequisitionForm();
+    if (!cleaned.job_title) { window.notify?.('Please enter a job title', 'error'); return; }
+    if (!cleaned.department) { window.notify?.('Please select a department', 'error'); return; }
+    if (!cleaned.supervisor) { window.notify?.('Please enter/select a supervisor', 'error'); return; }
+    if (!cleaned.position_status) { window.notify?.('Please select a position status', 'error'); return; }
+    if (!cleaned.start_date) { window.notify?.('Please select a desired start date', 'error'); return; }
+    if (!cleaned.position_type) { window.notify?.('Please select a position type', 'error'); return; }
+    if (!cleaned.type_reason || cleaned.type_reason.length < 10) { window.notify?.('Please provide a justification of at least 10 characters', 'error'); return; }
+    if (!cleaned.office_assignment) { window.notify?.('Please enter an office assignment', 'error'); return; }
+    if (!cleaned.classification) { window.notify?.('Please select a classification', 'error'); return; }
+
+    if (!Number.isFinite(cleaned.months_per_year) || cleaned.months_per_year < 1 || cleaned.months_per_year > 12) {
+      window.notify?.('Months per year must be between 1 and 12', 'error');
+      return;
+    }
+    if (!Number.isFinite(cleaned.hours_per_week) || cleaned.hours_per_week < 1 || cleaned.hours_per_week > 168) {
+      window.notify?.('Hours per week must be between 1 and 168', 'error');
+      return;
+    }
+    if (cleaned.classification === 'Exempt' && !cleaned.hiring_range) {
+      window.notify?.('Please provide hiring range for exempt classification', 'error');
+      return;
+    }
+    if (cleaned.classification === 'Non-Exempt') {
+      if (cleaned.hourly_rate === '' || !Number.isFinite(cleaned.hourly_rate) || Number(cleaned.hourly_rate) < 0 || Number(cleaned.hourly_rate) > 100000) {
+        window.notify?.('Please provide a valid hourly rate (0 to 100000)', 'error');
+        return;
+      }
+    }
+
+    try {
+      const res = await fetch('/api/requisitions', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(cleaned) });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Requisition submitted', 'success');
-      setReqForm({
-        job_title: '', department: '', supervisor: '', hiring_contact: '',
-        position_status: '', months_per_year: '' as any, hours_per_week: '' as any,
-        start_date: '', position_type: '', type_reason: '',
-        office_assignment: '',
-        recruitment_web: '', recruitment_newspapers: '', recruitment_listserv: '', recruitment_other: '',
-        classification: '', hiring_range: '', hourly_rate: '',
-        supervisor_approval: '', supervisor_approval_date: '', supervisor_approval_sig: '',
-        dept_head_approval: '', dept_head_approval_date: '', dept_head_approval_sig: '',
-        cabinet_approval: '', cabinet_approval_date: '', cabinet_approval_sig: '',
-        vp_approval: '', vp_approval_date: '', vp_approval_sig: '',
-        president_approval: '', president_approval_date: '', president_approval_sig: '',
-        comments: ''
-      });
+      resetRequisitionForm();
       setActiveForm('none');
       fetchRequisitions();
     } catch { window.notify?.('Failed to submit', 'error'); }
   };
 
   const submitAppraisal = async () => {
-    if (!appForm.name || !appForm.position) { window.notify?.('Please enter applicant name and position', 'error'); return; }
+    const cleaned = sanitizeApplicantForm();
+    if (!cleaned.name || !cleaned.position) { window.notify?.('Please enter applicant name and position', 'error'); return; }
+    if (!cleaned.interview_date) { window.notify?.('Please enter interview date', 'error'); return; }
+    if (!cleaned.q_experience || cleaned.q_experience.length < 10) { window.notify?.('Please provide response for question 1 (minimum 10 characters)', 'error'); return; }
+    if (!cleaned.q_why_interested || cleaned.q_why_interested.length < 10) { window.notify?.('Please provide response for question 2 (minimum 10 characters)', 'error'); return; }
+    if (!cleaned.recommendation) { window.notify?.('Please select a recommendation', 'error'); return; }
+    if (!cleaned.interviewer_name) { window.notify?.('Please enter interviewer name', 'error'); return; }
+    if (!cleaned.interviewer_signature) { window.notify?.('Please provide interviewer signature', 'error'); return; }
+    if (cleaned.hr_reviewer_signature && (!cleaned.hr_reviewer_name || !cleaned.hr_reviewer_date)) {
+      window.notify?.('HR reviewer signature requires printed name and date', 'error');
+      return;
+    }
+    if ((cleaned.hr_reviewer_name || cleaned.hr_reviewer_date) && !cleaned.hr_reviewer_signature) {
+      window.notify?.('Please provide HR reviewer signature when reviewer details are entered', 'error');
+      return;
+    }
+
+    const criteriaKeys = ['job_skills', 'communication_skills', 'interview_impression', 'previous_qualifications', 'teamwork', 'dept_fit', 'asset_value'];
+    const hasMissingCriteria = criteriaKeys.some((k) => !['1', '2', '3', '4', '5'].includes(String((cleaned as any)[k])));
+    if (hasMissingCriteria) {
+      window.notify?.('Please rate all evaluation criteria from 1 to 5', 'error');
+      return;
+    }
+    const overallRating = Number(cleaned.overall_rating);
+    if (!Number.isFinite(overallRating) || overallRating < 1 || overallRating > 5) {
+      window.notify?.('Please provide overall rating from 1 to 5', 'error');
+      return;
+    }
+
     try {
       if (editingApplicantId !== null) {
-        const res = await fetch(`/api/applicants/${editingApplicantId}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ ...appForm, score: appForm.overall_rating }) });
+        const res = await fetch(`/api/applicants/${editingApplicantId}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ ...cleaned, score: overallRating }) });
         if (!res.ok) throw new Error('Failed');
         window.notify?.('Applicant updated', 'success');
       } else {
-        const res = await fetch('/api/applicants', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ...appForm, score: appForm.overall_rating }) });
+        const res = await fetch('/api/applicants', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ...cleaned, score: overallRating }) });
         if (!res.ok) throw new Error('Failed');
         window.notify?.('Applicant appraisal saved', 'success');
       }
@@ -119,16 +276,109 @@ export const RecruitmentBoard = () => {
   };
 
   const deleteApplicant = async (id: number) => {
-    if (!confirm('Delete this applicant?')) return;
-    try { await fetch(`/api/applicants/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Deleted', 'success'); fetchApplicants(); } catch { window.notify?.('Failed', 'error'); }
+    if (!(await appConfirm('Archive this applicant?', { title: 'Archive Applicant', confirmText: 'Archive' }))) return;
+    try { await fetch(`/api/applicants/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Archived', 'success'); fetchApplicants(); } catch { window.notify?.('Failed', 'error'); }
   };
 
   const deleteRequisition = async (id: number) => {
-    if (!confirm('Delete this requisition?')) return;
-    try { await fetch(`/api/requisitions/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Deleted', 'success'); fetchRequisitions(); } catch { window.notify?.('Failed', 'error'); }
+    if (!(await appConfirm('Archive this requisition?', { title: 'Archive Requisition', confirmText: 'Archive' }))) return;
+    try {
+      await fetch(`/api/requisitions/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+      if (approvalOpenId === id) {
+        setApprovalOpenId(null);
+        setApprovalForm(emptyApprovalForm);
+      }
+      window.notify?.('Archived', 'success');
+      fetchRequisitions();
+    } catch { window.notify?.('Failed', 'error'); }
   };
 
-  const exportRequisitionPDF = (r: any) => {
+  const approvalRows = [
+    { label: 'Supervisor Approval', nameKey: 'supervisor_approval', dateKey: 'supervisor_approval_date', sigKey: 'supervisor_approval_sig' },
+    { label: 'Department Head Approval', nameKey: 'dept_head_approval', dateKey: 'dept_head_approval_date', sigKey: 'dept_head_approval_sig' },
+    { label: 'Cabinet Member Approval', nameKey: 'cabinet_approval', dateKey: 'cabinet_approval_date', sigKey: 'cabinet_approval_sig' },
+    { label: 'V.P. for Business and Finance Approval', nameKey: 'vp_approval', dateKey: 'vp_approval_date', sigKey: 'vp_approval_sig' },
+    { label: 'President Approval', nameKey: 'president_approval', dateKey: 'president_approval_date', sigKey: 'president_approval_sig' },
+  ] as const;
+
+  const requisitionApprovalStatus = (r: any) => {
+    if (r?.approval_status) return r.approval_status;
+    const hasSig = (v: any) => typeof v === 'string' && v.trim().length > 0;
+    const signed = hasSig(r?.supervisor_approval_sig)
+      && hasSig(r?.dept_head_approval_sig)
+      && hasSig(r?.cabinet_approval_sig)
+      && hasSig(r?.vp_approval_sig)
+      && hasSig(r?.president_approval_sig);
+    return signed ? 'Approved' : 'Pending Approval';
+  };
+
+  const openApprovals = (r: any) => {
+    setActiveForm('none');
+    setApprovalOpenId(r.id);
+    setApprovalForm({
+      supervisor_approval: r.supervisor_approval || '',
+      supervisor_approval_date: r.supervisor_approval_date || '',
+      supervisor_approval_sig: r.supervisor_approval_sig || '',
+      dept_head_approval: r.dept_head_approval || '',
+      dept_head_approval_date: r.dept_head_approval_date || '',
+      dept_head_approval_sig: r.dept_head_approval_sig || '',
+      cabinet_approval: r.cabinet_approval || '',
+      cabinet_approval_date: r.cabinet_approval_date || '',
+      cabinet_approval_sig: r.cabinet_approval_sig || '',
+      vp_approval: r.vp_approval || '',
+      vp_approval_date: r.vp_approval_date || '',
+      vp_approval_sig: r.vp_approval_sig || '',
+      president_approval: r.president_approval || '',
+      president_approval_date: r.president_approval_date || '',
+      president_approval_sig: r.president_approval_sig || '',
+      comments: r.comments || '',
+    });
+  };
+
+  const saveApprovals = async () => {
+    if (!approvalOpenId) return;
+    for (const row of approvalRows) {
+      const name = trimText((approvalForm as any)[row.nameKey], 120);
+      const date = String((approvalForm as any)[row.dateKey] || '').trim();
+      const sig = String((approvalForm as any)[row.sigKey] || '').trim();
+      if (sig && (!name || !date)) {
+        window.notify?.(`${row.label}: printed name and date are required when signature is provided`, 'error');
+        return;
+      }
+      if ((name || date) && !sig) {
+        window.notify?.(`${row.label}: please provide signature when name/date is entered`, 'error');
+        return;
+      }
+    }
+
+    const cleanedApprovalForm = {
+      ...approvalForm,
+      supervisor_approval: trimText(approvalForm.supervisor_approval, 120),
+      dept_head_approval: trimText(approvalForm.dept_head_approval, 120),
+      cabinet_approval: trimText(approvalForm.cabinet_approval, 120),
+      vp_approval: trimText(approvalForm.vp_approval, 120),
+      president_approval: trimText(approvalForm.president_approval, 120),
+      comments: trimText(approvalForm.comments, 1000),
+    };
+
+    try {
+      const res = await fetch(`/api/requisitions/${approvalOpenId}/approvals`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(cleanedApprovalForm)
+      });
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.('Approvals updated', 'success');
+      await fetchRequisitions();
+    } catch {
+      window.notify?.('Failed to update approvals', 'error');
+    }
+  };
+
+  const activeApprovalReq = approvalOpenId ? requisitions.find(r => Number(r.id) === Number(approvalOpenId)) : null;
+
+  const exportRequisitionPDF = async (r: any, shouldPrint = true) => {
+    if (shouldPrint && !(await appConfirm('Export this requisition as PDF?', { title: 'Export Requisition PDF', confirmText: 'Export', icon: 'export' }))) return;
     const row = (label: string, value: string) => value ? `
       <tr>
         <td style="padding:6px 10px;font-weight:600;color:#475569;width:220px;white-space:nowrap;">${label}</td>
@@ -225,10 +475,12 @@ export const RecruitmentBoard = () => {
     win.document.write(html);
     win.document.close();
     win.focus();
-    setTimeout(() => {
-      win.print();
-      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'print', description: `Applicant / Requisition — ${r?.name || r?.job_title || 'Export'}`, entity: 'recruitment', entity_id: r?.id || null, meta: { source: 'RecruitmentBoard' } }) }).catch(() => {}); } catch {};
-    }, 500);
+    if (shouldPrint) {
+      setTimeout(() => {
+        win.print();
+        try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'export_pdf', description: `Recruitment PDF — ${r?.name || r?.job_title || 'Export'}`, entity: 'recruitment', entity_id: r?.id || null, meta: { source: 'RecruitmentBoard' } }) }).catch(() => {}); } catch {};
+      }, 500);
+    }
   };
 
   const statusCounts = applicants.reduce((acc: any, curr) => { acc[curr.status] = (acc[curr.status] || 0) + 1; return acc; }, {});
@@ -257,10 +509,20 @@ export const RecruitmentBoard = () => {
             <form className="space-y-4" onSubmit={e => { e.preventDefault(); submitRequisition(); }}>
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Job Title</label><input type="text" value={reqForm.job_title} onChange={e => setReqForm({ ...reqForm, job_title: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="e.g. Office Coordinator I" /></div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department / Office</label><select value={reqForm.department} onChange={e => setReqForm({ ...reqForm, department: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"><option value="">Select department...</option>{['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => <option key={d}>{d}</option>)}</select></div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Supervisor</label><input type="text" value={reqForm.supervisor} onChange={e => setReqForm({ ...reqForm, supervisor: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Hiring Contact (if other than supervisor)</label><input type="text" value={reqForm.hiring_contact} onChange={e => setReqForm({ ...reqForm, hiring_contact: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Job Title</label><input type="text" value={reqForm.job_title} onChange={e => setReqForm({ ...reqForm, job_title: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="e.g. Office Coordinator I" maxLength={120} required /></div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department / Office</label><SearchableSelect options={['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => ({ value: d, label: d }))} value={reqForm.department} onChange={v => setReqForm({ ...reqForm, department: String(v) })} placeholder="Select department..." allowEmpty emptyLabel="Select department..." searchable dropdownVariant="pills-horizontal" className="w-full" /></div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Supervisor</label>
+                  <SearchableSelect
+                    options={supervisorOptions}
+                    value={reqForm.supervisor}
+                    onChange={v => setReqForm({ ...reqForm, supervisor: String(v) })}
+                    placeholder="Select supervisor..."
+                    dropdownVariant="pills-horizontal"
+                    searchable
+                  />
+                </div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Hiring Contact (if other than supervisor)</label><input type="text" value={reqForm.hiring_contact} onChange={e => setReqForm({ ...reqForm, hiring_contact: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} /></div>
               </div>
 
               {/* Position Status & Work Schedule */}
@@ -269,16 +531,16 @@ export const RecruitmentBoard = () => {
                 <div className="flex flex-wrap gap-4 mb-4 text-sm text-slate-600 dark:text-slate-300">
                   {['Full-time Regular', 'Part-Time Regular', 'Temporary'].map(s => (
                     <label key={s} className="flex items-center gap-2">
-                      <input type="radio" name="position_status" checked={reqForm.position_status === s} onChange={() => setReqForm({ ...reqForm, position_status: s })} />
+                      <input type="radio" name="position_status" checked={reqForm.position_status === s} onChange={() => setReqForm({ ...reqForm, position_status: s })} required />
                       {s}
                     </label>
                   ))}
                 </div>
                 <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-3">Please indicate the number of months to be worked and hours per week:</p>
                 <div className="grid grid-cols-3 gap-4">
-                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Months per Year</label><input type="number" value={reqForm.months_per_year} onChange={e => setReqForm({ ...reqForm, months_per_year: parseInt(e.target.value) || 0 })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
-                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Hours per Week</label><input type="number" value={reqForm.hours_per_week} onChange={e => setReqForm({ ...reqForm, hours_per_week: parseInt(e.target.value) || 0 })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
-                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Desired Start Date</label><input type="date" value={reqForm.start_date} onChange={e => setReqForm({ ...reqForm, start_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Months per Year</label><input type="number" value={reqForm.months_per_year} onChange={e => setReqForm({ ...reqForm, months_per_year: parseInt(e.target.value) || 0 })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" min={1} max={12} required /></div>
+                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Hours per Week</label><input type="number" value={reqForm.hours_per_week} onChange={e => setReqForm({ ...reqForm, hours_per_week: parseInt(e.target.value) || 0 })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" min={1} max={168} required /></div>
+                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Desired Start Date</label><input type="date" value={reqForm.start_date} onChange={e => setReqForm({ ...reqForm, start_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" min={todayISO} required /></div>
                 </div>
               </div>
 
@@ -288,16 +550,16 @@ export const RecruitmentBoard = () => {
                   <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Type of Position</h4>
                   <div className="flex gap-4 text-sm text-slate-600 dark:text-slate-300 mb-2">
                     {['New', 'Replacement', 'Reclassification', 'Temporary'].map(t => (
-                      <label key={t} className="flex items-center gap-2"><input type="radio" name="position_type" checked={reqForm.position_type === t} onChange={() => setReqForm({ ...reqForm, position_type: t })} /> {t}</label>
+                      <label key={t} className="flex items-center gap-2"><input type="radio" name="position_type" checked={reqForm.position_type === t} onChange={() => setReqForm({ ...reqForm, position_type: t })} required /> {t}</label>
                     ))}
                   </div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1 mt-2">Reason / Justification</label>
-                  <textarea rows={2} value={reqForm.type_reason} onChange={e => setReqForm({ ...reqForm, type_reason: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Why is this position needed?" />
+                  <textarea rows={2} value={reqForm.type_reason} onChange={e => setReqForm({ ...reqForm, type_reason: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Why is this position needed?" minLength={10} maxLength={1000} required />
                 </div>
                 <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                   <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Office Assignment</h4>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Building and Room Number</label>
-                  <input type="text" value={reqForm.office_assignment} onChange={e => setReqForm({ ...reqForm, office_assignment: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+                  <input type="text" value={reqForm.office_assignment} onChange={e => setReqForm({ ...reqForm, office_assignment: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={200} required />
                 </div>
               </div>
 
@@ -306,47 +568,21 @@ export const RecruitmentBoard = () => {
                 <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Recruitment Plan</h4>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">If approved, this position will be posted internally for at least one week. Ideas for advertising externally:</p>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Web Sites</label><input type="text" value={reqForm.recruitment_web} onChange={e => setReqForm({ ...reqForm, recruitment_web: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
-                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Newspapers</label><input type="text" value={reqForm.recruitment_newspapers} onChange={e => setReqForm({ ...reqForm, recruitment_newspapers: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
-                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">List Server</label><input type="text" value={reqForm.recruitment_listserv} onChange={e => setReqForm({ ...reqForm, recruitment_listserv: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
-                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Other</label><input type="text" value={reqForm.recruitment_other} onChange={e => setReqForm({ ...reqForm, recruitment_other: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Web Sites</label><input type="text" value={reqForm.recruitment_web} onChange={e => setReqForm({ ...reqForm, recruitment_web: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={200} /></div>
+                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Newspapers</label><input type="text" value={reqForm.recruitment_newspapers} onChange={e => setReqForm({ ...reqForm, recruitment_newspapers: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={200} /></div>
+                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">List Server</label><input type="text" value={reqForm.recruitment_listserv} onChange={e => setReqForm({ ...reqForm, recruitment_listserv: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={200} /></div>
+                  <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Other</label><input type="text" value={reqForm.recruitment_other} onChange={e => setReqForm({ ...reqForm, recruitment_other: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={200} /></div>
                 </div>
               </div>
 
               {/* Approvals */}
               <div className="pt-4 border-t dark:border-slate-800">
                 <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Approvals</h4>
-                {([
-                  { label: 'Supervisor Approval', nameKey: 'supervisor_approval', dateKey: 'supervisor_approval_date', sigKey: 'supervisor_approval_sig' },
-                  { label: 'Department Head Approval', nameKey: 'dept_head_approval', dateKey: 'dept_head_approval_date', sigKey: 'dept_head_approval_sig' },
-                  { label: 'Cabinet Member Approval', nameKey: 'cabinet_approval', dateKey: 'cabinet_approval_date', sigKey: 'cabinet_approval_sig' },
-                  { label: 'V.P. for Business and Finance Approval', nameKey: 'vp_approval', dateKey: 'vp_approval_date', sigKey: 'vp_approval_sig' },
-                  { label: 'President Approval', nameKey: 'president_approval', dateKey: 'president_approval_date', sigKey: 'president_approval_sig' },
-                ] as const).map(row => (
-                  <div key={row.label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 mb-3">
-                    <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">{row.label}</p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Printed Name</label>
-                        <input type="text" value={(reqForm as any)[row.nameKey]} onChange={e => setReqForm({ ...reqForm, [row.nameKey]: e.target.value })} placeholder="Full name" className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
-                      </div>
-                      <div>
-                        <SignatureUpload
-                          label="Signature"
-                          value={(reqForm as any)[row.sigKey]}
-                          onChange={dataUrl => setReqForm({ ...reqForm, [row.sigKey]: dataUrl })}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
-                        <input type="date" value={(reqForm as any)[row.dateKey]} onChange={e => setReqForm({ ...reqForm, [row.dateKey]: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <p className="text-xs text-slate-400 dark:text-slate-500 italic mt-2">
-                  If approved, the Human Resources Specialist will begin the recruitment process and contact the requestor. If not approved, the Associate Vice President of Human Resources will contact the requestor.
-                </p>
+                <div className="border border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-3 bg-slate-50 dark:bg-slate-800/40">
+                  <p className="text-xs text-slate-500 dark:text-slate-300">
+                    Submit the requisition first. Approval signatures are completed afterward from the <span className="font-bold">Open Requisitions</span> section.
+                  </p>
+                </div>
               </div>
 
               {/* Classification */}
@@ -354,16 +590,16 @@ export const RecruitmentBoard = () => {
                 <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Classification</h4>
                 <div className="space-y-3">
                   <label className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-                    <input type="radio" name="classification" checked={reqForm.classification === 'Exempt'} onChange={() => setReqForm({ ...reqForm, classification: 'Exempt' })} />
+                    <input type="radio" name="classification" checked={reqForm.classification === 'Exempt'} onChange={() => setReqForm({ ...reqForm, classification: 'Exempt' })} required />
                     <span className="font-bold w-28">Exempt:</span>
                     <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mr-1">Hiring Range</span>
-                    <input type="text" value={reqForm.hiring_range} onChange={e => setReqForm({ ...reqForm, hiring_range: e.target.value })} disabled={reqForm.classification !== 'Exempt'} className="flex-1 p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100 disabled:opacity-40" placeholder="e.g. $40,000–$50,000" />
+                    <input type="text" value={reqForm.hiring_range} onChange={e => setReqForm({ ...reqForm, hiring_range: e.target.value })} disabled={reqForm.classification !== 'Exempt'} required={reqForm.classification === 'Exempt'} className="flex-1 p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100 disabled:opacity-40" placeholder="e.g. $40,000–$50,000" maxLength={120} />
                   </label>
                   <label className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-                    <input type="radio" name="classification" checked={reqForm.classification === 'Non-Exempt'} onChange={() => setReqForm({ ...reqForm, classification: 'Non-Exempt' })} />
+                    <input type="radio" name="classification" checked={reqForm.classification === 'Non-Exempt'} onChange={() => setReqForm({ ...reqForm, classification: 'Non-Exempt' })} required />
                     <span className="font-bold w-28">Non-Exempt:</span>
                     <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mr-1">Hourly Pay Rate</span>
-                    <input type="number" min="0" step="0.01" value={reqForm.hourly_rate} onChange={e => setReqForm({ ...reqForm, hourly_rate: e.target.value })} disabled={reqForm.classification !== 'Non-Exempt'} className="flex-1 p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100 disabled:opacity-40" placeholder="18.50" />
+                    <input type="number" min="0" max="100000" step="0.01" value={reqForm.hourly_rate} onChange={e => setReqForm({ ...reqForm, hourly_rate: e.target.value })} disabled={reqForm.classification !== 'Non-Exempt'} required={reqForm.classification === 'Non-Exempt'} className="flex-1 p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100 disabled:opacity-40" placeholder="18.50" />
                   </label>
                 </div>
               </div>
@@ -371,7 +607,7 @@ export const RecruitmentBoard = () => {
               {/* Comments */}
               <div className="pt-4 border-t dark:border-slate-800">
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Comments</label>
-                <textarea rows={3} value={reqForm.comments} onChange={e => setReqForm({ ...reqForm, comments: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+                <textarea rows={3} value={reqForm.comments} onChange={e => setReqForm({ ...reqForm, comments: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={2000} />
               </div>
 
               <div className="flex justify-end pt-4"><button type="submit" className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green">Submit Requisition</button></div>
@@ -391,9 +627,9 @@ export const RecruitmentBoard = () => {
             <form className="space-y-4" onSubmit={e => { e.preventDefault(); submitAppraisal(); }}>
               {/* Applicant Info */}
               <div className="grid grid-cols-3 gap-4">
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Applicant Name</label><input type="text" value={appForm.name} onChange={e => setAppForm({ ...appForm, name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Position Applied For</label><input type="text" value={appForm.position} onChange={e => setAppForm({ ...appForm, position: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Interview Date</label><input type="date" value={appForm.interview_date} onChange={e => setAppForm({ ...appForm, interview_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Applicant Name</label><input type="text" value={appForm.name} onChange={e => setAppForm({ ...appForm, name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required /></div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Position Applied For</label><input type="text" value={appForm.position} onChange={e => setAppForm({ ...appForm, position: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required /></div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Interview Date</label><input type="date" value={appForm.interview_date} onChange={e => setAppForm({ ...appForm, interview_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" max={todayISO} required /></div>
               </div>
 
               {/* Part I: Interview Questions */}
@@ -415,7 +651,7 @@ export const RecruitmentBoard = () => {
                   ].map(({ key, q }) => (
                     <div key={key}>
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{q}</label>
-                      <textarea rows={2} value={(appForm as any)[key]} onChange={e => setAppForm({ ...appForm, [key]: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Record applicant's response..." />
+                      <textarea rows={2} value={(appForm as any)[key]} onChange={e => setAppForm({ ...appForm, [key]: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Record applicant's response..." minLength={10} maxLength={1000} required />
                     </div>
                   ))}
                 </div>
@@ -444,7 +680,7 @@ export const RecruitmentBoard = () => {
                         <tr key={key} className="border-b dark:border-slate-800">
                           <td className="py-2 text-slate-700 dark:text-slate-300">{label}</td>
                           {[1,2,3,4,5].map(n => (
-                            <td key={n} className="text-center py-2"><input type="radio" name={`appraisal_${key}`} checked={(appForm as any)[key] === String(n)} onChange={() => setAppForm({ ...appForm, [key]: String(n) })} /></td>
+                            <td key={n} className="text-center py-2"><input type="radio" name={`appraisal_${key}`} checked={(appForm as any)[key] === String(n)} onChange={() => setAppForm({ ...appForm, [key]: String(n) })} required={n === 1} /></td>
                           ))}
                         </tr>
                       ))}
@@ -460,12 +696,12 @@ export const RecruitmentBoard = () => {
                   {[
                     { v: 1, l: '1 – Poor' }, { v: 2, l: '2 – Below Average' }, { v: 3, l: '3 – Average' }, { v: 4, l: '4 – Above Average' }, { v: 5, l: '5 – Excellent' }
                   ].map(({ v, l }) => (
-                    <label key={v} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="radio" name="overall_rating" checked={appForm.overall_rating === v} onChange={() => setAppForm({ ...appForm, overall_rating: v })} /> {l}</label>
+                    <label key={v} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="radio" name="overall_rating" checked={appForm.overall_rating === v} onChange={() => setAppForm({ ...appForm, overall_rating: v })} required={v === 1} /> {l}</label>
                   ))}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Recommendation</label>
-                    <select value={appForm.recommendation || appForm.status} onChange={e => setAppForm({ ...appForm, recommendation: e.target.value, status: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100">
+                    <select value={appForm.recommendation || appForm.status} onChange={e => setAppForm({ ...appForm, recommendation: e.target.value, status: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" required>
                       <option value="">Select Recommendation...</option>
                       <option value="Screening">Screening — Needs Further Review</option>
                       <option value="Shortlisted">Shortlisted — Recommend for Next Round</option>
@@ -476,7 +712,7 @@ export const RecruitmentBoard = () => {
                     </select>
                   </div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Additional Comments</label>
-                    <textarea rows={2} value={appForm.additional_comments} onChange={e => setAppForm({ ...appForm, additional_comments: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Final remarks or notes..." />
+                    <textarea rows={2} value={appForm.additional_comments} onChange={e => setAppForm({ ...appForm, additional_comments: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Final remarks or notes..." maxLength={2000} />
                   </div>
                 </div>
               </div>
@@ -490,11 +726,11 @@ export const RecruitmentBoard = () => {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Printed Name</label>
-                      <input type="text" value={appForm.interviewer_name} onChange={e => setAppForm({ ...appForm, interviewer_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+                      <input type="text" value={appForm.interviewer_name} onChange={e => setAppForm({ ...appForm, interviewer_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Title</label>
-                      <input type="text" value={appForm.interviewer_title} onChange={e => setAppForm({ ...appForm, interviewer_title: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+                      <input type="text" value={appForm.interviewer_title} onChange={e => setAppForm({ ...appForm, interviewer_title: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} />
                     </div>
                     <div>
                       <SignatureUpload
@@ -505,28 +741,28 @@ export const RecruitmentBoard = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
-                      <input type="date" value={appForm.interview_date} onChange={e => setAppForm({ ...appForm, interview_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+                      <input type="date" value={appForm.interview_date} onChange={e => setAppForm({ ...appForm, interview_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" max={todayISO} required />
                     </div>
                   </div>
                 </div>
-                {/* HR Reviewer */}
+                {/* HR Admin Reviewer */}
                 <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">HR Reviewer</p>
+                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">HR Admin Reviewer</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Printed Name</label>
-                      <input type="text" value={appForm.hr_reviewer_name} onChange={e => setAppForm({ ...appForm, hr_reviewer_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+                      <input type="text" value={appForm.hr_reviewer_name} onChange={e => setAppForm({ ...appForm, hr_reviewer_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} />
                     </div>
                     <div>
                       <SignatureUpload
-                        label="HR Reviewer Signature"
+                        label="HR Admin Reviewer Signature"
                         value={appForm.hr_reviewer_signature}
                         onChange={dataUrl => setAppForm(prev => ({ ...prev, hr_reviewer_signature: dataUrl }))}
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
-                      <input type="date" value={appForm.hr_reviewer_date} onChange={e => setAppForm({ ...appForm, hr_reviewer_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+                      <input type="date" value={appForm.hr_reviewer_date} onChange={e => setAppForm({ ...appForm, hr_reviewer_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" max={todayISO} />
                     </div>
                   </div>
                 </div>
@@ -562,7 +798,7 @@ export const RecruitmentBoard = () => {
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-teal-green">{app.score || app.overall_rating}/5</span>
                     <button onClick={() => startEditApplicant(app)} title="Edit" className="text-teal-500 hover:text-teal-700"><Pencil size={12} /></button>
-                    <button onClick={() => deleteApplicant(app.id)} className="text-red-400 hover:text-red-600"><Trash2 size={12} /></button>
+                    <button onClick={() => deleteApplicant(app.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                   </div>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">{app.position}</p>
@@ -582,7 +818,7 @@ export const RecruitmentBoard = () => {
               <thead><tr className="border-b border-slate-100 dark:border-slate-800">
                 <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase">Job Title</th>
                 <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase">Department</th>
-                <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase">Status</th>
+                <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase">Approval</th>
                 <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase">Start Date</th>
                 <th className="pb-2"></th>
               </tr></thead>
@@ -590,16 +826,95 @@ export const RecruitmentBoard = () => {
                 <tr key={r.id} className="border-b border-slate-50 dark:border-slate-800/50">
                   <td className="py-3 font-medium text-slate-700 dark:text-slate-200">{r.job_title}</td>
                   <td className="py-3 text-slate-500 dark:text-slate-400">{r.department}</td>
-                  <td className="py-3 text-xs font-bold text-teal-green uppercase">{r.position_status}</td>
+                  <td className="py-3 text-xs">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full font-bold uppercase tracking-wide ${requisitionApprovalStatus(r) === 'Approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                      {requisitionApprovalStatus(r)}
+                    </span>
+                  </td>
                   <td className="py-3 text-xs text-slate-500">{r.start_date || 'TBD'}</td>
                   <td className="py-3 flex items-center gap-2">
-                    <button onClick={() => exportRequisitionPDF(r)} title="Export PDF" className="text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300"><Printer size={14} /></button>
-                    <button onClick={() => deleteRequisition(r.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
+                    <button
+                      onClick={() => approvalOpenId === r.id ? setApprovalOpenId(null) : openApprovals(r)}
+                      className={`text-xs font-bold px-2 py-1 rounded-md ${approvalOpenId === r.id ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200' : 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300'}`}
+                    >
+                      {approvalOpenId === r.id ? 'Close' : 'Approvals'}
+                    </button>
+                    <button onClick={() => exportRequisitionPDF(r, false)} title="View" className="text-blue-500 hover:text-blue-700"><Eye size={14} /></button>
+                    <button onClick={() => exportRequisitionPDF(r)} title="Export PDF" className="text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300"><FileText size={14} /></button>
+                    <button onClick={() => deleteRequisition(r.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                   </td>
                 </tr>
               ))}</tbody>
             </table>
           </div>
+
+          {activeApprovalReq && (
+            <div className="mt-4 border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-900/30">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-700 dark:text-slate-100">Approval Signatures</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{activeApprovalReq.job_title} {activeApprovalReq.department ? `• ${activeApprovalReq.department}` : ''}</p>
+                </div>
+                <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase ${requisitionApprovalStatus(activeApprovalReq) === 'Approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                  {requisitionApprovalStatus(activeApprovalReq)}
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {approvalRows.map(row => (
+                  <div key={row.label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
+                    <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">{row.label}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Printed Name</label>
+                        <input
+                          type="text"
+                          value={(approvalForm as any)[row.nameKey]}
+                          onChange={e => setApprovalForm({ ...approvalForm, [row.nameKey]: e.target.value })}
+                          placeholder="Full name"
+                          maxLength={120}
+                          className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+                        />
+                      </div>
+                      <div>
+                        <SignatureUpload
+                          label="Signature"
+                          value={(approvalForm as any)[row.sigKey]}
+                          onChange={dataUrl => setApprovalForm({ ...approvalForm, [row.sigKey]: dataUrl })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
+                        <input
+                          type="date"
+                          value={(approvalForm as any)[row.dateKey]}
+                          onChange={e => setApprovalForm({ ...approvalForm, [row.dateKey]: e.target.value })}
+                          max={todayISO}
+                          className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Comments</label>
+                  <textarea
+                    rows={3}
+                    value={approvalForm.comments}
+                    onChange={e => setApprovalForm({ ...approvalForm, comments: e.target.value })}
+                    maxLength={2000}
+                    className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-4">
+                <button onClick={() => setApprovalOpenId(null)} className="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold">Close</button>
+                <button onClick={saveApprovals} className="px-4 py-2 rounded-lg bg-teal-deep text-white text-sm font-bold hover:bg-teal-green">Save Approvals</button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
     </motion.div>

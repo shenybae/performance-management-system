@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Download, Trash2, ChevronDown, ChevronUp, Search, AlertTriangle, Target, Users, User, Building2, TrendingDown, Printer, Check, ArrowLeft, Clock, Filter, MessageSquare, DollarSign } from 'lucide-react';
+import { Plus, X, Download, ChevronDown, ChevronUp, Search, AlertTriangle, Target, Users, User, Building2, TrendingDown, TrendingUp, FileText, Check, ArrowLeft, Clock, Filter, MessageSquare, DollarSign, Eye, Archive } from 'lucide-react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
+import { PIPManager } from './PIPManager';
+import { GoalScopePlanManager } from './GoalScopePlanManager';
 import { SearchableSelect } from '../../common/SearchableSelect';
+import { ChoicePills } from '../../common/ChoicePills';
 import { CircularProgress } from '../../common/CircularProgress';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { appConfirm } from '../../../utils/appDialog';
 
 const DEPARTMENTS = ['Accounting/Financing', 'Sales Admin', 'Marketing', 'Pre-Technical', 'Post-Technical', 'Executives'] as const;
 const SCOPES = ['Department', 'Team', 'Individual'] as const;
@@ -23,8 +27,10 @@ interface OKRPlannerProps {
 
 export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [goals, setGoals] = useState<any[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'Department' | 'Team' | 'Individual'>('Department');
+  const [plannerView, setPlannerView] = useState<'overview' | 'analytics' | 'goals'>('goals');
   const [filterDept, setFilterDept] = useState<string>('All');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,7 +41,21 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [quickEdit, setQuickEdit] = useState<number | null>(null);
   const [editProgress, setEditProgress] = useState(0);
   const [editStatus, setEditStatus] = useState('');
+  const [underperfTopTab, setUnderperfTopTab] = useState<'metrics'|'plans'>('metrics');
+  const [plansNavigator, setPlansNavigator] = useState<'employee' | 'scope'>('employee');
   const [underperfView, setUnderperfView] = useState<'list'|'employee'|'team'|'department'>('list');
+  const [underperfQuickFilter, setUnderperfQuickFilter] = useState<'all'|'overdue'|'highPriority'|'stalled'>('all');
+  const [recoveryTaskCount7d, setRecoveryTaskCount7d] = useState(0);
+  const [recoveryTaskOpenGoal, setRecoveryTaskOpenGoal] = useState<number | null>(null);
+  const [recoveryTaskSavingGoal, setRecoveryTaskSavingGoal] = useState<number | null>(null);
+  const [pipSavingGoal, setPipSavingGoal] = useState<number | null>(null);
+  const [idpSavingGoal, setIdpSavingGoal] = useState<number | null>(null);
+  const [improvementSavingGoal, setImprovementSavingGoal] = useState<number | null>(null);
+  const [developmentSavingGoal, setDevelopmentSavingGoal] = useState<number | null>(null);
+  const [recoveryTaskDrafts, setRecoveryTaskDrafts] = useState<Record<number, { member_employee_id: string; title: string; description: string; due_date: string; priority: string }>>({});
+  const [proofReviewOpenGoal, setProofReviewOpenGoal] = useState<number | null>(null);
+  const [proofReviewLoadingGoal, setProofReviewLoadingGoal] = useState<number | null>(null);
+  const [proofReviewTasksByGoal, setProofReviewTasksByGoal] = useState<Record<number, any[]>>({});
   const [form, setForm] = useState({
     employee_id: '', title: '', statement: '', metric: '', target_date: '',
     status: '', progress: 0, scope: '' as string,
@@ -52,39 +72,125 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     assignee_ids: [] as string[]
   };
 
-  useEffect(() => { fetchGoals(); }, []);
+  useEffect(() => { fetchGoals(); }, [showArchived]);
 
-  useEffect(() => { // fetch users for Team Leader selection in Add Goal form
+  useEffect(() => { // fetch users for Team Leader selection
     (async () => {
-      try { const r = await fetch('/api/users', { headers: getAuthHeaders() }); const d = await r.json(); setUsersList(Array.isArray(d) ? d : []); } catch { setUsersList([]); }
+      try {
+        const usersRes = await fetch('/api/users', { headers: getAuthHeaders() });
+        const usersData = await usersRes.json();
+        setUsersList(Array.isArray(usersData) ? usersData : []);
+      } catch {
+        setUsersList([]);
+      }
     })();
   }, []);
 
+  const selectedLeaderEmployeeId = useMemo(() => {
+    if (!form.leader_id) return null;
+    const row = usersList.find(u => String(u.id) === String(form.leader_id));
+    const eid = Number(row?.employee_id);
+    return Number.isFinite(eid) && eid > 0 ? eid : null;
+  }, [usersList, form.leader_id]);
+
+  const availableAssignees = useMemo(() => {
+    return employees.filter(emp => {
+      if (selectedLeaderEmployeeId && emp.id === selectedLeaderEmployeeId) return false;
+      return true;
+    });
+  }, [employees, selectedLeaderEmployeeId]);
+
+  useEffect(() => {
+    setForm(prev => {
+      if (!(prev.scope === 'Team' || prev.scope === 'Department')) return prev;
+      const allowed = new Set(availableAssignees.map(e => String(e.id)));
+      const nextAssignees = prev.assignee_ids.filter(id => allowed.has(String(id)));
+      if (nextAssignees.length === prev.assignee_ids.length) return prev;
+      return { ...prev, assignee_ids: nextAssignees };
+    });
+  }, [availableAssignees]);
+
   const fetchGoals = async () => {
     try {
-      const res = await fetch('/api/goals', { headers: getAuthHeaders() });
-      const data = await res.json();
-      setGoals(Array.isArray(data) ? data : []);
-    } catch { setGoals([]); }
+      const [goalsRes, recoveryRes] = await Promise.all([
+        fetch(`/api/goals?include_archived=${showArchived ? '1' : '0'}`, { headers: getAuthHeaders() }),
+        fetch('/api/member-tasks/recovery-metrics?days=7', { headers: getAuthHeaders() })
+      ]);
+
+      const goalsData = await goalsRes.json();
+      setGoals(Array.isArray(goalsData) ? goalsData : []);
+
+      if (recoveryRes.ok) {
+        const recoveryData = await recoveryRes.json();
+        setRecoveryTaskCount7d(Number(recoveryData?.count || 0));
+      } else {
+        setRecoveryTaskCount7d(0);
+      }
+    } catch {
+      setGoals([]);
+      setRecoveryTaskCount7d(0);
+    }
   };
 
   const handleSubmit = async () => {
-    if (!form.statement) { window.notify?.('Please enter a goal statement', 'error'); return; }
+    if (!(await appConfirm('Create this goal/OKR?', { title: 'Create Goal', confirmText: 'Create', icon: 'success' }))) return;
+    
+    const title = form.title.trim();
+    const statement = form.statement.trim();
+    const metric = form.metric.trim();
+    const progress = Math.max(0, Math.min(100, Number(form.progress) || 0));
+    if (!form.scope) { window.notify?.('Please select a goal level', 'error'); return; }
+    if (!form.department) { window.notify?.('Please select a department', 'error'); return; }
+    if (!title) { window.notify?.('Please enter a goal title', 'error'); return; }
+    if (title.length > 120) { window.notify?.('Goal title must be 120 characters or less', 'error'); return; }
+    if (!statement) { window.notify?.('Please enter a goal statement', 'error'); return; }
+    if (statement.length < 10) { window.notify?.('Goal statement must be at least 10 characters', 'error'); return; }
+    if (statement.length > 1000) { window.notify?.('Goal statement must be 1000 characters or less', 'error'); return; }
+    if (metric.length > 120) { window.notify?.('Key metric must be 120 characters or less', 'error'); return; }
+    if (!form.status) { window.notify?.('Please select an initial status', 'error'); return; }
+    if (form.target_date) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const targetDate = new Date(form.target_date);
+      if (!Number.isNaN(targetDate.getTime()) && targetDate < today) {
+        window.notify?.('Target date cannot be in the past', 'error');
+        return;
+      }
+    }
     if (form.scope === 'Individual' && !form.employee_id) { window.notify?.('Please select an employee for individual goals', 'error'); return; }
-    if (form.scope === 'Department' && !form.department) { window.notify?.('Please select a department', 'error'); return; }
+    if ((form.scope === 'Team' || form.scope === 'Department') && form.team_name.trim().length > 100) {
+      window.notify?.('Team name must be 100 characters or less', 'error');
+      return;
+    }
+    if (form.delegation.trim().length > 120) {
+      window.notify?.('Goal owner/responsible must be 120 characters or less', 'error');
+      return;
+    }
     try {
       const leaderIdNum = form.leader_id ? parseInt(String(form.leader_id), 10) : null;
       const assigneeIds = (Array.isArray(form.assignee_ids) ? form.assignee_ids : [])
         .map((id) => parseInt(String(id), 10))
         .filter((id) => Number.isFinite(id) && id > 0);
 
+      if (form.scope === 'Team' || form.scope === 'Department') {
+        if (!leaderIdNum) { window.notify?.('Please select a Team Leader', 'error'); return; }
+        if (assigneeIds.length === 0) { window.notify?.('Please select at least one team member', 'error'); return; }
+        if (selectedLeaderEmployeeId && assigneeIds.includes(selectedLeaderEmployeeId)) {
+          window.notify?.('A Team Leader cannot be selected as a team member', 'error');
+          return;
+        }
+      }
+
       const res = await fetch('/api/goals', {
         method: 'POST', headers: getAuthHeaders(),
         body: JSON.stringify({
           ...form,
+          title,
+          statement,
+          metric,
           employee_id: form.employee_id ? parseInt(form.employee_id) : null,
           leader_id: leaderIdNum,
-          progress: Number(form.progress)
+          progress
         }),
       });
       if (!res.ok) throw new Error('Failed');
@@ -111,8 +217,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this goal?')) return;
-    try { await fetch(`/api/goals/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Goal deleted', 'success'); fetchGoals(); } catch { window.notify?.('Failed to delete', 'error'); }
+    if (!(await appConfirm('Archive this goal?', { title: 'Archive Goal', confirmText: 'Archive', icon: 'archive' }))) return;
+    try { await fetch(`/api/goals/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Goal archived', 'success'); fetchGoals(); } catch { window.notify?.('Failed to archive', 'error'); }
   };
 
   const updateGoal = async (id: number, updates: Record<string, any>, silent = true) => {
@@ -120,6 +226,247 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       const res = await fetch(`/api/goals/${id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(updates) });
       if (res.ok) { if (!silent) window.notify?.('Goal updated', 'success'); fetchGoals(); }
     } catch { window.notify?.('Failed to update goal', 'error'); }
+  };
+
+  const updateRecoveryTaskDraft = (goalId: number, patch: Partial<{ member_employee_id: string; title: string; description: string; due_date: string; priority: string }>) => {
+    setRecoveryTaskDrafts(prev => ({
+      ...prev,
+      [goalId]: {
+        member_employee_id: '',
+        title: '',
+        description: '',
+        due_date: '',
+        priority: 'High',
+        ...(prev[goalId] || {}),
+        ...patch,
+      }
+    }));
+  };
+
+  const handleCreateRecoveryTask = async (goal: any) => {
+    const goalId = Number(goal?.id || 0);
+    if (!goalId) return;
+
+    const draft = recoveryTaskDrafts[goalId] || { member_employee_id: '', title: '', description: '', due_date: '', priority: 'High' };
+    const memberId = Number(draft.member_employee_id);
+    const title = String(draft.title || '').trim();
+    const description = String(draft.description || '').trim();
+    const dueDate = String(draft.due_date || '').trim();
+    const priority = String(draft.priority || 'High');
+
+    if (!memberId) { window.notify?.('Select a delegated member for the recovery task', 'error'); return; }
+    if (!title) { window.notify?.('Enter a recovery task title', 'error'); return; }
+    if (!dueDate) { window.notify?.('Set a recovery deadline', 'error'); return; }
+
+    setRecoveryTaskSavingGoal(goalId);
+    try {
+      const res = await fetch(`/api/goals/${goalId}/member-tasks`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          member_employee_id: memberId,
+          title,
+          description,
+          due_date: dueDate,
+          priority,
+        }),
+      });
+      if (!res.ok) {
+        let msg = 'Failed to create recovery task';
+        try { const err = await res.json(); msg = err.error || msg; } catch {}
+        throw new Error(msg);
+      }
+      window.notify?.('Recovery task assigned', 'success');
+      setRecoveryTaskOpenGoal(null);
+      setRecoveryTaskDrafts(prev => {
+        const next = { ...prev };
+        delete next[goalId];
+        return next;
+      });
+      fetchGoals();
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to create recovery task', 'error');
+    } finally {
+      setRecoveryTaskSavingGoal(null);
+    }
+  };
+
+  const openProofReview = async (goalId: number) => {
+    if (proofReviewOpenGoal === goalId) {
+      setProofReviewOpenGoal(null);
+      return;
+    }
+    setProofReviewLoadingGoal(goalId);
+    try {
+      const res = await fetch(`/api/goals/${goalId}/member-tasks`, { headers: getAuthHeaders() });
+      const data = await res.json();
+      setProofReviewTasksByGoal(prev => ({ ...prev, [goalId]: Array.isArray(data) ? data : [] }));
+      setProofReviewOpenGoal(goalId);
+    } catch {
+      window.notify?.('Failed to load proof tasks', 'error');
+    } finally {
+      setProofReviewLoadingGoal(null);
+    }
+  };
+
+  const refreshProofReviewTasks = async (goalId: number) => {
+    const res = await fetch(`/api/goals/${goalId}/member-tasks`, { headers: getAuthHeaders() });
+    const data = await res.json();
+    setProofReviewTasksByGoal(prev => ({ ...prev, [goalId]: Array.isArray(data) ? data : [] }));
+  };
+
+  const reviewTaskProof = async (taskId: number, goalId: number, status: 'Approved' | 'Needs Revision' | 'Rejected') => {
+    const note = status === 'Approved' ? '' : (prompt('Add review note (optional):') || '');
+    try {
+      const res = await fetch(`/api/member-tasks/${taskId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ proof_review_status: status, proof_review_note: note })
+      });
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.(`Proof ${status.toLowerCase()}`, 'success');
+      await refreshProofReviewTasks(goalId);
+    } catch {
+      window.notify?.('Failed to review proof', 'error');
+    }
+  };
+
+  const handleCreatePIPFromGoal = async (goal: any) => {
+    const goalId = Number(goal?.id || 0);
+    if ((goal?.scope || 'Individual') !== 'Individual') { window.notify?.('PIP can only be created from individual goals', 'error'); return; }
+    const employeeId = Number(goal?.employee_id || 0);
+    if (!employeeId) { window.notify?.('Goal has no assigned employee', 'error'); return; }
+    setPipSavingGoal(goalId);
+    try {
+      const now = new Date();
+      const start = now.toISOString().slice(0,10);
+      const end = new Date(now);
+      end.setDate(end.getDate() + 30);
+      const payload = {
+        employee_id: employeeId,
+        appraisal_id: null,
+        goal_id: goalId,
+        start_date: start,
+        end_date: end.toISOString().slice(0,10),
+        deficiency: `Underperforming goal: ${goal.title || goal.statement || ''}`,
+        improvement_objective: `Raise progress on goal "${goal.title || goal.statement || ''}"`,
+        action_steps: `Review goal tasks; assign recovery tasks; weekly check-ins.`,
+        support_provided: 'Manager coaching',
+        progress_check_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0,10),
+        progress_notes: '',
+        outcome: 'In Progress',
+        supervisor_name: ''
+      };
+      const res = await fetch('/api/pip_plans', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
+      if (!res.ok) {
+        let msg = 'Failed to create PIP';
+        try { const j = await res.json(); msg = j.error || msg; } catch {}
+        throw new Error(msg);
+      }
+      window.notify?.('PIP created', 'success');
+      fetchGoals();
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to create PIP', 'error');
+    } finally { setPipSavingGoal(null); }
+  };
+
+  const handleCreateIDPFromGoal = async (goal: any) => {
+    const goalId = Number(goal?.id || 0);
+    if ((goal?.scope || 'Individual') !== 'Individual') { window.notify?.('IDP can only be created from individual goals', 'error'); return; }
+    const employeeId = Number(goal?.employee_id || 0);
+    if (!employeeId) { window.notify?.('Goal has no assigned employee', 'error'); return; }
+    setIdpSavingGoal(goalId);
+    try {
+      const payload = {
+        employee_id: employeeId,
+        skill_gap: `Development needed for goal: ${goal.title || goal.statement || ''}`,
+        growth_step: 'Training / mentoring',
+        step_order: 1,
+        status: 'Not Started',
+        goal_id: goalId
+      };
+      const res = await fetch('/api/development_plans', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
+      if (!res.ok) {
+        let msg = 'Failed to create IDP';
+        try { const j = await res.json(); msg = j.error || msg; } catch {}
+        throw new Error(msg);
+      }
+      window.notify?.('IDP created', 'success');
+      fetchGoals();
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to create IDP', 'error');
+    } finally { setIdpSavingGoal(null); }
+  };
+
+  const handleCreateImprovementPlanFromGoal = async (goal: any) => {
+    const goalId = Number(goal?.id || 0);
+    const scope = (goal?.scope || 'Individual');
+    if (!['Team', 'Department'].includes(scope)) {
+      window.notify?.('Improvement plan is only available for Team/Department goals', 'error');
+      return;
+    }
+    setImprovementSavingGoal(goalId);
+    try {
+      const review = new Date();
+      review.setDate(review.getDate() + 14);
+      const payload = {
+        goal_id: goalId,
+        plan_title: `${scope} improvement plan: ${goal.title || goal.statement || 'Goal'}`,
+        issue_summary: `Underperforming ${scope.toLowerCase()} goal: ${goal.title || goal.statement || ''}`,
+        improvement_objective: `Raise progress and reduce risk for this ${scope.toLowerCase()} goal`,
+        action_steps: 'Break down blockers, assign targeted recovery tasks, and review weekly progress.',
+        review_date: review.toISOString().slice(0, 10),
+        status: 'Not Started',
+      };
+      const res = await fetch('/api/goal_improvement_plans', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
+      if (!res.ok) {
+        let msg = 'Failed to create improvement plan';
+        try { const j = await res.json(); msg = j.error || msg; } catch {}
+        throw new Error(msg);
+      }
+      window.notify?.(`${scope} improvement plan created`, 'success');
+      setUnderperfTopTab('plans');
+      setPlansNavigator('scope');
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to create improvement plan', 'error');
+    } finally {
+      setImprovementSavingGoal(null);
+    }
+  };
+
+  const handleCreateDevelopmentPlanFromGoal = async (goal: any) => {
+    const goalId = Number(goal?.id || 0);
+    const scope = (goal?.scope || 'Individual');
+    if (!['Team', 'Department'].includes(scope)) {
+      window.notify?.('Development plan is only available for Team/Department goals', 'error');
+      return;
+    }
+    setDevelopmentSavingGoal(goalId);
+    try {
+      const review = new Date();
+      review.setDate(review.getDate() + 30);
+      const payload = {
+        goal_id: goalId,
+        plan_title: `${scope} development plan: ${goal.title || goal.statement || 'Goal'}`,
+        skill_focus: `Capability gaps affecting this ${scope.toLowerCase()} goal`,
+        development_actions: 'Cross-team coaching, shared training sessions, and milestone reviews.',
+        review_date: review.toISOString().slice(0, 10),
+        status: 'Not Started',
+      };
+      const res = await fetch('/api/goal_development_plans', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
+      if (!res.ok) {
+        let msg = 'Failed to create development plan';
+        try { const j = await res.json(); msg = j.error || msg; } catch {}
+        throw new Error(msg);
+      }
+      window.notify?.(`${scope} development plan created`, 'success');
+      setUnderperfTopTab('plans');
+      setPlansNavigator('scope');
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to create development plan', 'error');
+    } finally {
+      setDevelopmentSavingGoal(null);
+    }
   };
 
   const statusColor = (s: string) => {
@@ -153,10 +500,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   // Filtered goals
   const filtered = useMemo(() => {
     return goals.filter(g => {
+      const isArchived = !!g.deleted_at;
+      if (!showArchived && isArchived) return false;
       const scope = g.scope || 'Individual';
       if (scope !== activeTab) return false;
-      if (filterDept !== 'All' && g.department !== filterDept) return false;
-      if (filterStatus !== 'All' && g.status !== filterStatus) return false;
+      if (filterDept && filterDept !== 'All' && g.department !== filterDept) return false;
+      if (filterStatus && filterStatus !== 'All' && g.status !== filterStatus) return false;
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
         return (g.title || '').toLowerCase().includes(q) || (g.statement || '').toLowerCase().includes(q) ||
@@ -165,7 +514,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       }
       return true;
     });
-  }, [goals, activeTab, filterDept, filterStatus, searchTerm]);
+  }, [goals, activeTab, filterDept, filterStatus, searchTerm, showArchived]);
 
   // Underperforming metrics
   const underperforming = useMemo(() => {
@@ -349,7 +698,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     return { name: f, total, completed, inProg, atRisk, avgProg, color: FREQ_META[f]?.color || '#64748b' };
   }).filter(d => d.total > 0);
 
-  const printGoal = (g: any) => {
+  const exportGoalPdf = async (g: any) => {
+    if (!(await appConfirm('Export this goal as PDF?', { title: 'Export Goal PDF', confirmText: 'Export', icon: 'export' }))) return;
     const w = window.open('', '_blank');
     if (!w) return;
     w.document.write(`<html><head><title>OKR - ${g.title}</title><style>
@@ -380,7 +730,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     w.document.close();
     setTimeout(() => {
       w.print();
-      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'print', description: `OKR — ${g.title || g.statement}`, entity: 'goal', entity_id: g.id || null, meta: { source: 'OKRPlanner' } }) }).catch(() => {}); } catch {};
+      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'export_pdf', description: `OKR PDF — ${g.title || g.statement}`, entity: 'goal', entity_id: g.id || null, meta: { source: 'OKRPlanner' } }) }).catch(() => {}); } catch {};
     }, 300);
   };
 
@@ -392,7 +742,19 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     const daysOverdue = (d: string) => { const diff = Math.ceil((now.getTime() - new Date(d).getTime()) / (1000 * 60 * 60 * 24)); return diff > 0 ? diff : 0; };
     const uniqueEmployees = [...new Set(underperforming.map(g => g.employee_name || g.delegation || '').filter(Boolean))];
 
-    const displayGoals = empFilter === 'All' ? underperforming : underperforming.filter(g => (g.employee_name || g.delegation || '') === empFilter);
+    const baseDisplayGoals = empFilter === 'All'
+      ? underperforming
+      : underperforming.filter(g => (g.employee_name || g.delegation || '') === empFilter);
+
+    const displayGoals = baseDisplayGoals.filter(g => {
+      const isOverdue = !!(g.target_date && new Date(g.target_date) < now);
+      const isHighPriority = g.priority === 'Critical' || g.priority === 'High';
+      const isStalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
+      if (underperfQuickFilter === 'overdue') return isOverdue;
+      if (underperfQuickFilter === 'highPriority') return isHighPriority;
+      if (underperfQuickFilter === 'stalled') return isStalled;
+      return true;
+    });
 
     // Priority heatmap data
     const heatmapData: Record<string, Record<string, number>> = {};
@@ -432,13 +794,53 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             <AlertTriangle size={24} className="text-red-500" />
           </motion.div>
           <div>
-            <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">Underperforming Goals & Metrics</h2>
-            <p className="text-sm text-slate-400 dark:text-slate-500">
+            <h2 className="screen-heading">Underperforming Goals & Metrics</h2>
+            <p className="screen-subheading">
               <span className="text-red-500 font-bold">{underperforming.length}</span> goal{underperforming.length !== 1 ? 's' : ''} need attention — at risk, overdue, or stalled
             </p>
           </div>
         </div>
 
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-5 w-fit">
+          <button
+            onClick={() => setUnderperfTopTab('metrics')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${underperfTopTab === 'metrics' ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+          >
+            Underperformance Metrics
+          </button>
+          <button
+            onClick={() => setUnderperfTopTab('plans')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${underperfTopTab === 'plans' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+          >
+            Plans Manager
+          </button>
+        </div>
+
+        {underperfTopTab === 'plans' ? (
+          <div className="space-y-5">
+            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 w-fit">
+              <button
+                onClick={() => setPlansNavigator('employee')}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${plansNavigator === 'employee' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                Employee Plans (IDP & PIP)
+              </button>
+              <button
+                onClick={() => setPlansNavigator('scope')}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${plansNavigator === 'scope' ? 'bg-white dark:bg-slate-900 text-cyan-700 dark:text-cyan-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                Team / Department Plans
+              </button>
+            </div>
+
+            {plansNavigator === 'employee' ? (
+              <PIPManager employees={employees} />
+            ) : (
+              <GoalScopePlanManager />
+            )}
+          </div>
+        ) : (
+          <>
         {underperforming.length === 0 ? (
           <Card>
             <div className="py-16 text-center">
@@ -452,7 +854,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         ) : (
           <div className="space-y-5">
             {/* Summary metric cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
               {(() => {
                 const overdueCount = underperforming.filter(g => g.target_date && new Date(g.target_date) < now).length;
                 const atRiskCount = underperforming.filter(g => g.status === 'At Risk').length;
@@ -518,6 +920,19 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           <p className={`text-2xl font-black ${healthScore >= 70 ? 'text-emerald-600' : healthScore >= 40 ? 'text-amber-500' : 'text-red-500'}`}>{healthScore}%</p>
                         </div>
                         <CircularProgress value={healthScore} size={52} strokeWidth={5} />
+                      </div>
+                    </Card>
+                  </motion.div>,
+                  <motion.div key="recovery7d" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+                    <Card className="border-l-4 border-teal-500">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0">
+                          <MessageSquare size={18} className="text-teal-600" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-teal-600 tracking-wider">Recovery Tasks (7d)</p>
+                          <p className="text-2xl font-black text-teal-600 dark:text-teal-400">{recoveryTaskCount7d}</p>
+                        </div>
                       </div>
                     </Card>
                   </motion.div>,
@@ -619,13 +1034,37 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             {underperfView === 'list' ? (
               <>
                 {/* Employee filter */}
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <Filter size={14} className="text-slate-400" />
-                  <select value={empFilter} onChange={e => setEmpFilter(e.target.value)} className="px-3 py-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 font-bold">
-                    <option value="All">All Employees ({underperforming.length})</option>
-                    {uniqueEmployees.map(n => <option key={n} value={n}>{n} ({underperforming.filter(g => (g.employee_name || g.delegation || '') === n).length})</option>)}
-                  </select>
+                  <ChoicePills
+                    value={empFilter}
+                    onChange={setEmpFilter}
+                    wrap={false}
+                    options={[
+                      { value: 'All', label: `All Employees (${underperforming.length})` },
+                      ...uniqueEmployees.map(n => ({
+                        value: n,
+                        label: `${n} (${underperforming.filter(g => (g.employee_name || g.delegation || '') === n).length})`,
+                      })),
+                    ]}
+                  />
                   {empFilter !== 'All' && <button onClick={() => setEmpFilter('All')} className="text-xs font-bold text-slate-400 hover:text-red-500"><X size={14} /></button>}
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+                    {[
+                      { key: 'all', label: `All (${baseDisplayGoals.length})` },
+                      { key: 'overdue', label: `Overdue (${baseDisplayGoals.filter(g => g.target_date && new Date(g.target_date) < now).length})` },
+                      { key: 'highPriority', label: `High Priority (${baseDisplayGoals.filter(g => g.priority === 'Critical' || g.priority === 'High').length})` },
+                      { key: 'stalled', label: `Stalled (${baseDisplayGoals.filter(g => (g.progress || 0) <= 10 && g.status === 'In Progress').length})` },
+                    ].map((f) => (
+                      <button
+                        key={f.key}
+                        onClick={() => setUnderperfQuickFilter(f.key as 'all' | 'overdue' | 'highPriority' | 'stalled')}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-colors ${underperfQuickFilter === f.key ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Table */}
@@ -649,58 +1088,260 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           const isOverdue = g.target_date && new Date(g.target_date) < now;
                           const stalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
                           const days = isOverdue ? daysOverdue(g.target_date) : 0;
+                          const isIndividualGoal = (g.scope || 'Individual') === 'Individual';
+                          const canCreatePlanFromGoal = isIndividualGoal && Number(g.employee_id || 0) > 0;
+                          const isScopeGoal = ['Team', 'Department'].includes(g.scope || '');
+                          const canCreateScopePlanFromGoal = isScopeGoal && Number(g.id || 0) > 0;
                           const scopeLabel = g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual';
+                          const assignees = Array.isArray(g.assignees) ? g.assignees : [];
+                          const hasAssignees = assignees.length > 0;
+                          const recoveryDraft = recoveryTaskDrafts[g.id] || {
+                            member_employee_id: String(assignees[0]?.employee_id || ''),
+                            title: `Recovery: ${g.title || g.statement || 'Goal task'}`,
+                            description: '',
+                            due_date: '',
+                            priority: 'High',
+                          };
                           return (
-                            <tr key={g.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
-                              <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 max-w-[180px] truncate">{g.title || g.statement}</td>
-                              <td className="py-2.5 px-3"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeLabel}</span></td>
-                              <td className="py-2.5 px-3 text-xs text-slate-500">{g.department || '\u2014'}</td>
-                              <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                <div className="min-w-0">
-                                  <span className="truncate max-w-[220px]" title={g.employee_name || g.delegation || '\u2014'}>{g.employee_name || g.delegation || '\u2014'}</span>
-                                </div>
-                              </td>
-                              <td className="py-2.5 px-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority)}`}>{g.priority || 'Medium'}</span></td>
-                              <td className="py-2.5 px-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-20 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden relative">
-                                    <motion.div initial={{ width: 0 }} animate={{ width: `${g.progress || 0}%` }} transition={{ duration: 0.5 }} className="bg-red-500 h-2.5 rounded-full" />
+                            <React.Fragment key={g.id}>
+                              <tr className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
+                                <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 max-w-[180px] truncate">{g.title || g.statement}</td>
+                                <td className="py-2.5 px-3"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeLabel}</span></td>
+                                <td className="py-2.5 px-3 text-xs text-slate-500">{g.department || '\u2014'}</td>
+                                <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                  <div className="min-w-0">
+                                    <span className="truncate max-w-[220px]" title={g.employee_name || g.delegation || '\u2014'}>{g.employee_name || g.delegation || '\u2014'}</span>
                                   </div>
-                                  <span className="text-[10px] font-black text-red-500 w-8">{g.progress || 0}%</span>
-                                </div>
-                              </td>
-                              <td className={`py-2.5 px-3 text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '\u2014'}</td>
-                              <td className="py-2.5 px-3">
-                                {isOverdue ? (
-                                  <span className="flex items-center gap-1 text-[10px] font-black text-red-600"><Clock size={11} /> +{days}d</span>
-                                ) : <span className="text-[10px] text-slate-400">\u2014</span>}
-                              </td>
-                              <td className="py-2.5 px-3">
-                                <div className="flex gap-1 flex-wrap">
-                                  {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
-                                  {g.status === 'At Risk' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600">AT RISK</span>}
-                                  {stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}
-                                </div>
-                              </td>
-                              <td className="py-2.5 px-3 text-center">
-                                {quickEdit === g.id ? (
-                                  <div className="flex items-center gap-1.5">
-                                    <input type="range" min={0} max={100} step={5} value={editProgress} onChange={e => setEditProgress(Number(e.target.value))} className="w-16 accent-teal-600" title={`${editProgress}%`} />
-                                    <span className="text-[9px] font-bold text-slate-500 w-7">{editProgress}%</span>
-                                    <select value={editStatus} onChange={e => setEditStatus(e.target.value)} className="text-[9px] font-bold px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300">
-                                      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                    <button onClick={() => { updateGoal(g.id, { progress: editProgress, status: editStatus }); setQuickEdit(null); }} className="text-[9px] font-bold px-2 py-0.5 rounded bg-teal-deep text-white hover:bg-teal-green">Save</button>
-                                    <button onClick={() => setQuickEdit(null)} className="text-[9px] font-bold px-1.5 py-0.5 rounded text-slate-400 hover:text-red-500"><X size={11} /></button>
+                                </td>
+                                <td className="py-2.5 px-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority)}`}>{g.priority || 'Medium'}</span></td>
+                                <td className="py-2.5 px-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-20 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden relative">
+                                      <motion.div initial={{ width: 0 }} animate={{ width: `${g.progress || 0}%` }} transition={{ duration: 0.5 }} className="bg-red-500 h-2.5 rounded-full" />
+                                    </div>
+                                    <span className="text-[10px] font-black text-red-500 w-8">{g.progress || 0}%</span>
                                   </div>
-                                ) : (
-                                  <button onClick={() => { setQuickEdit(g.id); setEditProgress(g.progress || 0); setEditStatus(g.status || 'In Progress'); }}
-                                    className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 transition-colors">
-                                    Update
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
+                                </td>
+                                <td className={`py-2.5 px-3 text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '\u2014'}</td>
+                                <td className="py-2.5 px-3">
+                                  {isOverdue ? (
+                                    <span className="flex items-center gap-1 text-[10px] font-black text-red-600"><Clock size={11} /> +{days}d</span>
+                                  ) : <span className="text-[10px] text-slate-400">\u2014</span>}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <div className="flex gap-1 flex-wrap">
+                                    {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
+                                    {g.status === 'At Risk' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600">AT RISK</span>}
+                                    {stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  {quickEdit === g.id ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <input type="range" min={0} max={100} step={5} value={editProgress} onChange={e => setEditProgress(Number(e.target.value))} className="w-16 accent-teal-600" title={`${editProgress}%`} />
+                                      <span className="text-[9px] font-bold text-slate-500 w-7">{editProgress}%</span>
+                                      <ChoicePills
+                                        value={editStatus}
+                                        onChange={setEditStatus}
+                                        compact
+                                        wrap={false}
+                                        options={STATUSES.map(s => ({ value: s, label: s }))}
+                                      />
+                                      <button onClick={() => { updateGoal(g.id, { progress: editProgress, status: editStatus }); setQuickEdit(null); }} className="text-[9px] font-bold px-2 py-0.5 rounded bg-teal-deep text-white hover:bg-teal-green">Save</button>
+                                      <button onClick={() => setQuickEdit(null)} className="text-[9px] font-bold px-1.5 py-0.5 rounded text-slate-400 hover:text-red-500"><X size={11} /></button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button onClick={() => { setQuickEdit(g.id); setEditProgress(g.progress || 0); setEditStatus(g.status || 'In Progress'); }}
+                                        className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 transition-colors">
+                                        Update
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          if (!recoveryTaskDrafts[g.id]) {
+                                            const due = new Date();
+                                            due.setDate(due.getDate() + 7);
+                                            updateRecoveryTaskDraft(g.id, {
+                                              member_employee_id: String(assignees[0]?.employee_id || ''),
+                                              title: `Recovery: ${g.title || g.statement || 'Goal task'}`,
+                                              due_date: due.toISOString().slice(0, 10),
+                                              priority: 'High',
+                                              description: '',
+                                            });
+                                          }
+                                          setRecoveryTaskOpenGoal(prev => prev === g.id ? null : g.id);
+                                        }}
+                                        disabled={!hasAssignees}
+                                        className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1"
+                                      >
+                                        <MessageSquare size={11} /> Recovery Task
+                                      </button>
+                                      <button
+                                        onClick={() => openProofReview(g.id)}
+                                        className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors inline-flex items-center gap-1"
+                                      >
+                                        <Eye size={11} /> Proofs
+                                      </button>
+                                      {isIndividualGoal ? (
+                                        <>
+                                          <button
+                                            onClick={() => handleCreatePIPFromGoal(g)}
+                                            disabled={pipSavingGoal === g.id || !canCreatePlanFromGoal}
+                                            title={canCreatePlanFromGoal ? 'Create PIP for this employee goal' : 'PIP is only available for individual goals'}
+                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 inline-flex items-center gap-1"
+                                          >
+                                            {pipSavingGoal === g.id ? 'Saving...' : <><AlertTriangle size={11} /> PIP</>}
+                                          </button>
+                                          <button
+                                            onClick={() => handleCreateIDPFromGoal(g)}
+                                            disabled={idpSavingGoal === g.id || !canCreatePlanFromGoal}
+                                            title={canCreatePlanFromGoal ? 'Create IDP for this employee goal' : 'IDP is only available for individual goals'}
+                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-teal-deep text-white hover:bg-teal-green disabled:opacity-50 inline-flex items-center gap-1"
+                                          >
+                                            {idpSavingGoal === g.id ? 'Saving...' : <><TrendingUp size={11} /> IDP</>}
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <button
+                                            onClick={() => handleCreateImprovementPlanFromGoal(g)}
+                                            disabled={improvementSavingGoal === g.id || !canCreateScopePlanFromGoal}
+                                            title={canCreateScopePlanFromGoal ? 'Create team/department improvement plan' : 'Improvement plan is only available for Team/Department goals'}
+                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 inline-flex items-center gap-1"
+                                          >
+                                            {improvementSavingGoal === g.id ? 'Saving...' : <><AlertTriangle size={11} /> Improvement</>}
+                                          </button>
+                                          <button
+                                            onClick={() => handleCreateDevelopmentPlanFromGoal(g)}
+                                            disabled={developmentSavingGoal === g.id || !canCreateScopePlanFromGoal}
+                                            title={canCreateScopePlanFromGoal ? 'Create team/department development plan' : 'Development plan is only available for Team/Department goals'}
+                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-50 inline-flex items-center gap-1"
+                                          >
+                                            {developmentSavingGoal === g.id ? 'Saving...' : <><TrendingUp size={11} /> Development</>}
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+
+                              {recoveryTaskOpenGoal === g.id && (
+                                <tr className="border-b border-slate-100 dark:border-slate-800/50 bg-red-50/40 dark:bg-red-900/10">
+                                  <td colSpan={10} className="px-3 py-3">
+                                    {hasAssignees ? (
+                                      <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
+                                        <select
+                                          value={recoveryDraft.member_employee_id}
+                                          onChange={(e) => updateRecoveryTaskDraft(g.id, { member_employee_id: e.target.value })}
+                                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                                        >
+                                          <option value="">Select member...</option>
+                                          {assignees.map((a: any) => (
+                                            <option key={a.employee_id} value={a.employee_id}>{a.name || a.employee_name || 'Unnamed team member'}</option>
+                                          ))}
+                                        </select>
+                                        <input
+                                          type="text"
+                                          value={recoveryDraft.title}
+                                          onChange={(e) => updateRecoveryTaskDraft(g.id, { title: e.target.value })}
+                                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                                          placeholder="Recovery task title"
+                                        />
+                                        <input
+                                          type="date"
+                                          value={recoveryDraft.due_date}
+                                          onChange={(e) => updateRecoveryTaskDraft(g.id, { due_date: e.target.value })}
+                                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                                        />
+                                        <select
+                                          value={recoveryDraft.priority}
+                                          onChange={(e) => updateRecoveryTaskDraft(g.id, { priority: e.target.value })}
+                                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                                        >
+                                          <option value="Critical">Critical</option>
+                                          <option value="High">High</option>
+                                          <option value="Medium">Medium</option>
+                                          <option value="Low">Low</option>
+                                        </select>
+                                        <div className="flex items-center gap-1 justify-end">
+                                          <button
+                                            onClick={() => setRecoveryTaskOpenGoal(null)}
+                                            className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-slate-700"
+                                          >
+                                            Cancel
+                                          </button>
+                                          <button
+                                            onClick={() => handleCreateRecoveryTask(g)}
+                                            disabled={recoveryTaskSavingGoal === g.id}
+                                            className="px-2.5 py-1.5 rounded-lg bg-red-600 text-white text-[10px] font-bold hover:bg-red-700 disabled:opacity-50"
+                                          >
+                                            {recoveryTaskSavingGoal === g.id ? 'Saving...' : 'Assign'}
+                                          </button>
+                                        </div>
+                                        <textarea
+                                          rows={2}
+                                          value={recoveryDraft.description}
+                                          onChange={(e) => updateRecoveryTaskDraft(g.id, { description: e.target.value })}
+                                          className="md:col-span-5 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                                          placeholder="Recovery note / expected result"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs text-slate-500">No delegated members on this goal yet. Add members first, then assign a recovery task.</p>
+                                    )}
+                                  </td>
+                                </tr>
+                              )}
+
+                              {proofReviewOpenGoal === g.id && (
+                                <tr className="border-b border-slate-100 dark:border-slate-800/50 bg-blue-50/40 dark:bg-blue-900/10">
+                                  <td colSpan={10} className="px-3 py-3">
+                                    {proofReviewLoadingGoal === g.id ? (
+                                      <p className="text-xs text-slate-500">Loading proofs...</p>
+                                    ) : ((proofReviewTasksByGoal[g.id] || []).length === 0 ? (
+                                      <p className="text-xs text-slate-500">No delegated tasks found for this goal yet.</p>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {(proofReviewTasksByGoal[g.id] || []).map((t: any) => {
+                                          const reviewStatus = t.proof_review_status || 'Not Submitted';
+                                          return (
+                                            <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5">
+                                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                                <div>
+                                                  <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
+                                                  <p className="text-[10px] text-slate-500">{t.member_name || `#${t.member_employee_id}`} • Due {t.due_date || 'N/A'}</p>
+                                                </div>
+                                                <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
+                                                  {reviewStatus}
+                                                </span>
+                                              </div>
+
+                                              {t.proof_image && (
+                                                <a href={t.proof_image} target="_blank" rel="noreferrer" className="inline-block mt-2">
+                                                  <img src={t.proof_image} alt="Proof" className="w-44 h-24 object-cover rounded border border-slate-200 dark:border-slate-700" />
+                                                </a>
+                                              )}
+
+                                              {t.proof_note && <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{t.proof_note}</p>}
+                                              {t.proof_review_note && <p className="mt-1 text-[10px] text-slate-500">Review note: {t.proof_review_note}</p>}
+
+                                              {t.proof_image && (
+                                                <div className="mt-2 flex gap-2">
+                                                  <button onClick={() => reviewTaskProof(Number(t.id), g.id, 'Approved')} className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Approve</button>
+                                                  <button onClick={() => reviewTaskProof(Number(t.id), g.id, 'Needs Revision')} className="text-[10px] font-bold px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Needs Revision</button>
+                                                  <button onClick={() => reviewTaskProof(Number(t.id), g.id, 'Rejected')} className="text-[10px] font-bold px-2 py-1 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">Reject</button>
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ))}
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           );
                         })}
                       </tbody>
@@ -897,6 +1538,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             )}
           </div>
         )}
+          </>
+        )}
       </motion.div>
     );
   }
@@ -911,8 +1554,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         <div className="flex items-center gap-2 mb-5">
           <div className="w-9 h-9 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center"><Target size={18} className="text-teal-600" /></div>
           <div>
-            <h2 className="text-lg font-black text-slate-800 dark:text-slate-100">New Goal / OKR</h2>
-            <p className="text-xs text-slate-400">Define targets for department, team, or individual</p>
+            <h2 className="screen-heading text-lg">New Goal / OKR</h2>
+            <p className="screen-subheading">Define targets for department, team, or individual</p>
           </div>
         </div>
         <Card>
@@ -921,7 +1564,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             <div className="grid grid-cols-4 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Level *</label>
-                <select value={form.scope} onChange={e => setForm({ ...form, scope: e.target.value })} className={inp}>
+                <select value={form.scope} onChange={e => setForm({ ...form, scope: e.target.value })} className={inp} required>
                   <option value="">Select Goal Level...</option>
                   <option value="Department">Dept-wide — Entire department</option>
                   <option value="Team">Team — Specific group/team</option>
@@ -930,10 +1573,17 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department *</label>
-                <select value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} className={inp}>
-                  <option value="">Select Department...</option>
-                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
+                <SearchableSelect
+                  options={DEPARTMENTS.map(d => ({ value: d, label: d }))}
+                  value={form.department}
+                  onChange={v => setForm({ ...form, department: String(v) })}
+                  placeholder="Select Department..."
+                  allowEmpty
+                  emptyLabel="Select Department..."
+                  searchable
+                  dropdownVariant="pills-horizontal"
+                  className="w-full"
+                />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Quarter</label>
@@ -961,56 +1611,58 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               {(form.scope === 'Team' || form.scope === 'Department') && (
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Team Name</label>
-                  <input type="text" value={form.team_name} onChange={e => setForm({ ...form, team_name: e.target.value })} className={inp} placeholder="e.g. Sales Team A" />
+                  <input type="text" value={form.team_name} onChange={e => setForm({ ...form, team_name: e.target.value })} className={inp} placeholder="e.g. Sales Team A" maxLength={100} />
                 </div>
               )}
               {form.scope === 'Individual' && (
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Employee *</label>
                   <SearchableSelect
-                    options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+                    options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                     value={form.employee_id}
-                    onChange={v => setForm({ ...form, employee_id: v })}
+                    onChange={v => setForm({ ...form, employee_id: String(v) })}
                     placeholder="Select Employee..."
+                    dropdownVariant="pills-horizontal"
                   />
                 </div>
               )}
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Owner / Responsible</label>
-                <input type="text" value={form.delegation} onChange={e => setForm({ ...form, delegation: e.target.value })} className={inp} placeholder="Who is accountable for this goal" />
+                <input type="text" value={form.delegation} onChange={e => setForm({ ...form, delegation: e.target.value })} className={inp} placeholder="Who is accountable for this goal" maxLength={120} />
               </div>
               {(form.scope === 'Team' || form.scope === 'Department') && (
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Team Leader</label>
                   <select value={form.leader_id} onChange={e => setForm({ ...form, leader_id: e.target.value })} className={inp}>
-                    <option value="">No Team Leader (manager direct)</option>
+                    <option value="">Select Team Leader...</option>
                     {usersList
-                      .filter(u => !['HR', 'Admin'].includes(String(u.role || '')))
+                      .filter(u => String(u.role || '') === 'Employee' && Number(u.employee_id) > 0)
                       .map(u => (
                         <option key={u.id} value={u.id}>
                           {(u.full_name || u.username || `User ${u.id}`) + (u.employee_name ? ` (${u.employee_name})` : '')}
                         </option>
                       ))}
                   </select>
-                  <p className="mt-1 text-[10px] text-slate-400">Selected assignees will be linked under this leader when you create the goal.</p>
+                  <p className="mt-1 text-[10px] text-slate-400">Choose the leader once here. Team members are assigned below and linked automatically.</p>
                 </div>
               )}
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Target Date</label>
-                <input type="date" value={form.target_date} onChange={e => setForm({ ...form, target_date: e.target.value })} className={inp} />
+                <input type="date" value={form.target_date} onChange={e => setForm({ ...form, target_date: e.target.value })} className={inp} min={new Date().toISOString().split('T')[0]} />
               </div>
             </div>
             {/* Assignees for Team/Department goals */}
             {(form.scope === 'Team' || form.scope === 'Department') && (
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
-                  Assignees <span className="text-slate-400 font-normal normal-case text-[11px]">— select which employees this goal applies to</span>
+                  Team Members <span className="text-slate-400 font-normal normal-case text-[11px]">— manager-defined roster for this leader</span>
                 </label>
                 <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
                   <div className="max-h-36 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-                    {employees.map(emp => (
+                    {availableAssignees.map(emp => (
                       <label key={emp.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
                         <input type="checkbox"
+                          disabled={!form.leader_id}
                           checked={form.assignee_ids.includes(String(emp.id))}
                           onChange={ev => {
                             const id = String(emp.id);
@@ -1025,6 +1677,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         <span className="text-sm text-slate-700 dark:text-slate-300 flex-1">{emp.name}</span>
                       </label>
                     ))}
+                    {availableAssignees.length === 0 && (
+                      <div className="px-3 py-3 text-xs text-slate-400">No eligible members available.</div>
+                    )}
                   </div>
                   <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 text-xs font-bold text-slate-500 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span>{form.assignee_ids.length === 0 ? 'No assignees selected' : `${form.assignee_ids.length} assignee${form.assignee_ids.length !== 1 ? 's' : ''} selected`}</span>
@@ -1033,25 +1688,26 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     )}
                   </div>
                 </div>
+                {!form.leader_id && <p className="mt-1 text-[10px] text-slate-400">Select Team Leader first to enable member selection.</p>}
               </div>
             )}
             {/* Goal Details */}
             <div>
               <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Title *</label>
-              <input type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className={inp} placeholder="Short title for the goal/OKR" />
+              <input type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className={inp} placeholder="Short title for the goal/OKR" maxLength={120} required />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Statement / Key Result *</label>
-              <textarea rows={2} value={form.statement} onChange={e => setForm({ ...form, statement: e.target.value })} className={inp} placeholder="e.g. Increase department revenue by 20% through cross-selling initiatives"></textarea>
+              <textarea rows={2} value={form.statement} onChange={e => setForm({ ...form, statement: e.target.value })} className={inp} placeholder="e.g. Increase department revenue by 20% through cross-selling initiatives" minLength={10} maxLength={1000} required></textarea>
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Key Metric</label>
-                <input type="text" value={form.metric} onChange={e => setForm({ ...form, metric: e.target.value })} className={inp} placeholder="e.g. Revenue, NPS Score" />
+                <input type="text" value={form.metric} onChange={e => setForm({ ...form, metric: e.target.value })} className={inp} placeholder="e.g. Revenue, NPS Score" maxLength={120} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Initial Status</label>
-                <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className={inp}>
+                <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className={inp} required>
                   <option value="">Select Status...</option>
                   {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -1091,7 +1747,31 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         </div>
       </div>
 
+      <div className="mb-4">
+        <div className="flex flex-wrap gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+          {[
+            { key: 'overview', label: 'Overview', icon: Target },
+            { key: 'analytics', label: 'Analytics', icon: TrendingDown },
+            { key: 'goals', label: `Goals (${filtered.length})`, icon: Users },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const active = plannerView === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setPlannerView(tab.key as 'overview' | 'analytics' | 'goals')}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold transition-all ${active ? 'bg-white dark:bg-slate-900 text-teal-deep dark:text-teal-green shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                <Icon size={14} /> {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* SCOPE HERO CARDS */}
+      {plannerView === 'overview' && (
+      <>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         {scopeStats.map(({ scope, total, completed, inProgress, atRisk, notStarted, avgProgress, owners }) => {
           const Icon = scope === 'Department' ? Building2 : scope === 'Team' ? Users : User;
@@ -1223,8 +1903,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           </Card>
         ))}
       </div>
+      </>
+      )}
 
       {/* CHARTS ROW */}
+      {plannerView === 'analytics' && (
+      <>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <Card>
           <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-3">Goals by Department</h3>
@@ -1369,10 +2053,15 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           </div>
         </div>
       )}
+      </>
+      )}
 
       {/* SCOPE TABS & FILTERS */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 gap-1">
+      {plannerView === 'goals' && (
+      <>
+      <div className="mb-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
+        <div className="flex items-center justify-between gap-3">
+        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 gap-1 overflow-x-auto whitespace-nowrap">
           {([{ scope: 'Department' as const, icon: Building2, label: 'Dept-wide', desc: 'Whole department goals' },
             { scope: 'Team' as const, icon: Users, label: 'Team', desc: 'Group / team goals' },
             { scope: 'Individual' as const, icon: User, label: 'Individual', desc: 'Personal employee goals' },
@@ -1386,20 +2075,46 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             );
           })}
         </div>
-        <div className="flex gap-2 items-center">
-          <div className="relative w-48">
+        <div className="relative w-56 shrink-0">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input type="text" placeholder="Search goals..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
               className="w-full pl-8 pr-3 py-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-green/50 placeholder:text-slate-400" />
-          </div>
-          <select value={filterDept} onChange={e => setFilterDept(e.target.value)} className="px-3 py-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 font-bold">
-            <option value="All">All Departments</option>
-            {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="px-3 py-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 font-bold">
-            <option value="All">All Statuses</option>
-            {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+        </div>
+        </div>
+
+        <div className="mt-3 flex items-center gap-2 min-w-0 overflow-hidden">
+          <SearchableSelect
+            className="w-[210px] shrink-0"
+            options={[{ value: 'All', label: 'All Departments' }, ...DEPARTMENTS.map(d => ({ value: d, label: d }))]}
+            value={filterDept}
+            onChange={v => setFilterDept(String(v))}
+            placeholder="All Departments"
+            pill
+            searchable
+            dropdownVariant="pills-horizontal"
+          />
+          <SearchableSelect
+            className="w-[190px] shrink-0"
+            options={[{ value: 'All', label: 'All Statuses' }, ...STATUSES.map(s => ({ value: s, label: s }))]}
+            value={filterStatus}
+            onChange={v => setFilterStatus(String(v))}
+            placeholder="All Statuses"
+            pill
+            searchable
+            dropdownVariant="pills-horizontal"
+          />
+          <SearchableSelect
+            className="w-[180px] shrink-0"
+            options={[
+              { value: 'active', label: 'Active Only' },
+              { value: 'include', label: 'Show Archived' },
+            ]}
+            value={showArchived ? 'include' : 'active'}
+            onChange={v => setShowArchived(String(v) === 'include')}
+            pill
+            searchable={false}
+            dropdownVariant="pills-horizontal"
+          />
         </div>
       </div>
 
@@ -1427,16 +2142,18 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               )}
               {filtered.map((g: any) => {
                 const isExpanded = expandedGoal === g.id;
+                const isArchived = !!g.deleted_at;
                 const overdue = g.target_date && new Date(g.target_date) < new Date() && g.status !== 'Completed' && g.status !== 'Cancelled';
                 return (
                   <React.Fragment key={g.id}>
-                    <tr className={`border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors cursor-pointer ${overdue ? 'bg-red-50/30 dark:bg-red-900/5' : ''}`}
+                    <tr className={`border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors cursor-pointer ${overdue ? 'bg-red-50/30 dark:bg-red-900/5' : ''} ${isArchived ? 'opacity-60' : ''}`}
                       onClick={() => setExpandedGoal(isExpanded ? null : g.id)}>
                       <td className="py-3 px-4 text-slate-400">{isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-slate-700 dark:text-slate-100 text-sm">{g.title || g.statement}</span>
                           {overdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
+                          {isArchived && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">ARCHIVED</span>}
                           {g.frequency && g.frequency !== 'One-time' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">{g.frequency}</span>}
                         </div>
                         {g.assignees && g.assignees.length > 0 && (
@@ -1489,16 +2206,25 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <select value={g.status || 'Not Started'} onClick={e => e.stopPropagation()}
-                          onChange={e => { e.stopPropagation(); updateGoal(g.id, { status: e.target.value, progress: e.target.value === 'Completed' ? 100 : g.progress || 0 }); }}
-                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border cursor-pointer ${statusColor(g.status || 'Not Started')}`}>
-                          {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
+                        {isArchived ? (
+                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border text-slate-500 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700">Archived</span>
+                        ) : (
+                        <div onClick={e => e.stopPropagation()}>
+                          <ChoicePills
+                            value={g.status || 'Not Started'}
+                            compact
+                            wrap={false}
+                            onChange={(v) => updateGoal(g.id, { status: v, progress: v === 'Completed' ? 100 : g.progress || 0 })}
+                            options={STATUSES.map(s => ({ value: s, label: s, activeClassName: statusColor(s) }))}
+                          />
+                        </div>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => printGoal(g)} className="text-blue-500 hover:text-blue-700 p-1" title="Print"><Printer size={14} /></button>
-                          <button onClick={() => handleDelete(g.id)} className="text-red-400 hover:text-red-600 p-1" title="Delete"><Trash2 size={14} /></button>
+                          <button onClick={() => setExpandedGoal(isExpanded ? null : g.id)} className="text-slate-500 hover:text-blue-700 p-1" title="View"><Eye size={14} /></button>
+                          <button onClick={() => exportGoalPdf(g)} className="text-blue-500 hover:text-blue-700 p-1" title="Export PDF"><FileText size={14} /></button>
+                          {!isArchived && <button onClick={() => handleDelete(g.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>}
                         </div>
                       </td>
                     </tr>
@@ -1518,6 +2244,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 </div>
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Quarter</span><span className="text-slate-700 dark:text-slate-200">{g.quarter || '\u2014'}</span></div>
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Frequency</span><span className="text-slate-700 dark:text-slate-200">{g.frequency || 'One-time'}</span></div>
+                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team Leader</span><span className="text-slate-700 dark:text-slate-200">{g.leader_name || '\u2014'}</span></div>
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Target Date</span><span className={`${overdue ? 'text-red-600 font-bold' : 'text-slate-700 dark:text-slate-200'}`}>{g.target_date || '\u2014'}</span></div>
                               </div>
                               {/* Assignees */}
@@ -1577,6 +2304,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           </table>
         </div>
       </Card>
+      </>
+      )}
     </motion.div>
   );
 };

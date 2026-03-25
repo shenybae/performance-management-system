@@ -26,6 +26,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
   const [savingInfo, setSavingInfo] = useState(false);
   const [editing, setEditing] = useState(false);
   const hasEmployee = !!user.employee_id;
+  const canEditAccountInfo = String(user.role || '').toLowerCase() === 'hr';
 
   useEffect(() => {
     const fetchAccountInfo = async () => {
@@ -48,6 +49,10 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
   }, []);
 
   const saveAccountInfo = async () => {
+    if (!canEditAccountInfo) {
+      (window as any).notify?.('Only HR admin can edit account information', 'error');
+      return;
+    }
     setSavingInfo(true);
     try {
       const token = localStorage.getItem('talentflow_token');
@@ -98,10 +103,24 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
 
   const handleChange = async (e: React.FormEvent) => {
     e.preventDefault();
+    const currentPassword = current.trim();
+    const nextPassword = newPass.trim();
+    if (!currentPassword || !nextPassword) {
+      (window as any).notify('Please provide current and new password', 'error');
+      return;
+    }
+    if (nextPassword.length < 8 || nextPassword.length > 128) {
+      (window as any).notify('New password must be 8 to 128 characters', 'error');
+      return;
+    }
+    if (currentPassword === nextPassword) {
+      (window as any).notify('New password must be different from current password', 'error');
+      return;
+    }
     setLoading(true);
     try {
       const token = localStorage.getItem('talentflow_token');
-      const res = await fetch('/api/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ currentPassword: current, newPassword: newPass }) });
+      const res = await fetch('/api/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ currentPassword, newPassword: nextPassword }) });
       const data = await res.json();
       if (res.ok) { (window as any).notify('Password changed', 'success'); setCurrent(''); setNewPass(''); if (onPasswordChanged) onPasswordChanged(); }
       else (window as any).notify(data.error || 'Failed to change password', 'error');
@@ -218,18 +237,21 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">Account Information</h3>
-            {!editing && (
+            {!editing && canEditAccountInfo && (
               <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-teal-deep dark:hover:text-teal-green bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                 <Edit3 size={12} /> Edit
               </button>
             )}
           </div>
+          {!canEditAccountInfo && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Only HR admin can edit account information.</p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
             <div className="flex items-center gap-3">
               <Briefcase size={16} className="text-slate-400 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Full Name</p>
-                {editing ? (
+                {editing && canEditAccountInfo ? (
                   <input value={accountInfo.employee_name} onChange={e => setAccountInfo({ ...accountInfo, employee_name: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
                 ) : (
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.employee_name || '—'}</p>
@@ -240,7 +262,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
               <Mail size={16} className="text-slate-400 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Email</p>
-                {editing ? (
+                {editing && canEditAccountInfo ? (
                   <input value={accountInfo.email} onChange={e => setAccountInfo({ ...accountInfo, email: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
                 ) : (
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.email || '—'}</p>
@@ -251,7 +273,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
               <Building2 size={16} className="text-slate-400 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Department</p>
-                {editing && hasEmployee ? (
+                {editing && hasEmployee && canEditAccountInfo ? (
                   <input value={accountInfo.dept} onChange={e => setAccountInfo({ ...accountInfo, dept: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
                 ) : (
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.dept || '—'}</p>
@@ -262,7 +284,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
               <Briefcase size={16} className="text-slate-400 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Position</p>
-                {editing && hasEmployee ? (
+                {editing && hasEmployee && canEditAccountInfo ? (
                   <input value={accountInfo.position} onChange={e => setAccountInfo({ ...accountInfo, position: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
                 ) : (
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.position || '—'}</p>
@@ -294,7 +316,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
                   <Phone size={16} className="text-slate-400 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Phone</p>
-                    {editing ? (
+                    {editing && canEditAccountInfo ? (
                       <input value={accountInfo.phone} onChange={e => setAccountInfo({ ...accountInfo, phone: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
                     ) : (
                       <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.phone || '—'}</p>
@@ -305,7 +327,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
                   <MapPin size={16} className="text-slate-400 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Address</p>
-                    {editing ? (
+                    {editing && canEditAccountInfo ? (
                       <input value={accountInfo.address} onChange={e => setAccountInfo({ ...accountInfo, address: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
                     ) : (
                       <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.address || '—'}</p>
@@ -317,7 +339,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
           )}
 
           {/* Edit/Save/Cancel buttons */}
-          {editing && (
+          {editing && canEditAccountInfo && (
             <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex gap-3">
               <button
                 onClick={() => { saveAccountInfo(); setEditing(false); }}
@@ -340,8 +362,8 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
         <Card>
           <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-4">Change Password</h3>
           <form onSubmit={handleChange} className="space-y-3 max-w-sm">
-            <input type="password" placeholder="Current password" value={current} onChange={e => setCurrent(e.target.value)} className="w-full p-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" required />
-            <input type="password" placeholder="New password" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full p-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" required />
+            <input type="password" placeholder="Current password" value={current} onChange={e => setCurrent(e.target.value)} className="w-full p-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" minLength={6} maxLength={128} autoComplete="current-password" required />
+            <input type="password" placeholder="New password" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full p-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" minLength={8} maxLength={128} autoComplete="new-password" required />
             <button type="submit" className="px-4 py-2.5 bg-teal-deep text-white rounded-xl text-sm font-bold hover:bg-teal-green transition-colors" disabled={loading}>{loading ? 'Saving...' : 'Change Password'}</button>
           </form>
         </Card>

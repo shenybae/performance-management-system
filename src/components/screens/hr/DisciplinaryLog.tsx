@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ShieldAlert, Plus, X, Download, Trash2, Search, FileText } from 'lucide-react';
+import { ShieldAlert, Plus, X, Download, Search, FileText, Eye, Archive } from 'lucide-react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
@@ -9,6 +9,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { SignatureUpload } from '../../common/SignatureUpload';
 import { sigBlockHtml } from '../../../utils/print';
+import { appConfirm } from '../../../utils/appDialog';
 
 interface DisciplinaryLogProps {
   employees: Employee[];
@@ -17,7 +18,7 @@ interface DisciplinaryLogProps {
 export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
   const [showForm, setShowForm] = useState(false);
   const [records, setRecords] = useState<any[]>([]);
-  const [form, setForm] = useState({
+  const buildEmptyForm = () => ({
     employee_id: '', violation_type: [] as string[], warning_level: '',
     date_of_warning: '',
     violation_date: '', violation_time: '', violation_place: '',
@@ -32,6 +33,10 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
     preparer_signature: '', preparer_signature_date: '',
     supervisor_signature: '', supervisor_signature_date: '',
   });
+  const [form, setForm] = useState(buildEmptyForm);
+  const todayISO = new Date().toISOString().split('T')[0];
+
+  const trimText = (value: string) => value.trim();
 
   useEffect(() => { fetchRecords(); }, []);
 
@@ -44,49 +49,133 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
   };
 
   const handleSubmit = async () => {
-    if (!form.employee_id || form.violation_type.length === 0) {
-      window.notify?.('Please select an employee and violation type', 'error');
+    if (!(await appConfirm('Save this disciplinary action?', { title: 'Save Disciplinary Action', confirmText: 'Save', icon: 'warning' }))) return;
+    
+    const cleaned = {
+      ...form,
+      violation_type: form.violation_type.filter(Boolean),
+      copy_distribution: form.copy_distribution.filter(Boolean),
+      warning_level: trimText(form.warning_level),
+      date_of_warning: trimText(form.date_of_warning),
+      violation_date: trimText(form.violation_date),
+      violation_time: trimText(form.violation_time),
+      violation_place: trimText(form.violation_place),
+      employer_statement: trimText(form.employer_statement),
+      employee_statement: trimText(form.employee_statement),
+      action_taken: trimText(form.action_taken),
+      approved_by_name: trimText(form.approved_by_name),
+      approved_by_title: trimText(form.approved_by_title),
+      approved_by_date: trimText(form.approved_by_date),
+      supervisor: trimText(form.supervisor),
+      prev_first_date: trimText(form.prev_first_date),
+      prev_first_type: trimText(form.prev_first_type),
+      prev_second_date: trimText(form.prev_second_date),
+      prev_second_type: trimText(form.prev_second_type),
+      prev_third_date: trimText(form.prev_third_date),
+      prev_third_type: trimText(form.prev_third_type),
+      employee_signature: trimText(form.employee_signature),
+      employee_signature_date: trimText(form.employee_signature_date),
+      preparer_signature: trimText(form.preparer_signature),
+      preparer_signature_date: trimText(form.preparer_signature_date),
+      supervisor_signature: trimText(form.supervisor_signature),
+      supervisor_signature_date: trimText(form.supervisor_signature_date),
+    };
+
+    if (!cleaned.employee_id || cleaned.violation_type.length === 0) {
+      window.notify?.('Please select an employee and at least one violation type', 'error');
       return;
     }
+    if (!cleaned.warning_level) {
+      window.notify?.('Please select warning level', 'error');
+      return;
+    }
+    if (!cleaned.date_of_warning || !cleaned.violation_date || !cleaned.violation_time) {
+      window.notify?.('Please provide warning date, violation date, and violation time', 'error');
+      return;
+    }
+    if (cleaned.violation_date > cleaned.date_of_warning) {
+      window.notify?.('Violation date cannot be after warning date', 'error');
+      return;
+    }
+    if (!cleaned.violation_place) {
+      window.notify?.('Please provide where the violation occurred', 'error');
+      return;
+    }
+    if (!cleaned.supervisor) {
+      window.notify?.('Please select the supervisor', 'error');
+      return;
+    }
+    const selectedEmployeeName = (employees.find(e => e.id === Number(cleaned.employee_id))?.name || '').trim().toLowerCase();
+    if (selectedEmployeeName && cleaned.supervisor.trim().toLowerCase() === selectedEmployeeName) {
+      window.notify?.('Employee and supervisor cannot be the same person', 'error');
+      return;
+    }
+    if (cleaned.employer_statement.length < 10) {
+      window.notify?.('Employer statement must be at least 10 characters', 'error');
+      return;
+    }
+    if (!cleaned.action_taken || cleaned.action_taken.length < 10) {
+      window.notify?.('Please provide action taken with at least 10 characters', 'error');
+      return;
+    }
+
+    const approvedFields = [cleaned.approved_by_name, cleaned.approved_by_title, cleaned.approved_by_date];
+    const hasAnyApprovedField = approvedFields.some(Boolean);
+    if (hasAnyApprovedField && (!cleaned.approved_by_name || !cleaned.approved_by_title || !cleaned.approved_by_date)) {
+      window.notify?.('Complete approver name, title, and date', 'error');
+      return;
+    }
+
+    const previousWarningPairs = [
+      ['1st', cleaned.prev_first_date, cleaned.prev_first_type],
+      ['2nd', cleaned.prev_second_date, cleaned.prev_second_type],
+      ['3rd', cleaned.prev_third_date, cleaned.prev_third_type],
+    ] as const;
+    for (const [label, date, type] of previousWarningPairs) {
+      if ((date && !type) || (!date && type)) {
+        window.notify?.(`${label} warning requires both date and type`, 'error');
+        return;
+      }
+    }
+
+    if (!cleaned.preparer_signature || !cleaned.preparer_signature_date) {
+      window.notify?.('Preparer signature and date are required', 'error');
+      return;
+    }
+    if (!cleaned.supervisor_signature || !cleaned.supervisor_signature_date) {
+      window.notify?.('Supervisor signature and date are required', 'error');
+      return;
+    }
+    if (cleaned.copy_distribution.length === 0) {
+      window.notify?.('Please select at least one copy distribution recipient', 'error');
+      return;
+    }
+
     try {
       const res = await fetch('/api/discipline_records', {
         method: 'POST', headers: getAuthHeaders(),
         body: JSON.stringify({
-          ...form,
-          employee_id: parseInt(form.employee_id),
-          violation_type: form.violation_type.join(', '),
-          copy_distribution: form.copy_distribution.join(', '),
+          ...cleaned,
+          employee_id: parseInt(cleaned.employee_id),
+          violation_type: cleaned.violation_type.join(', '),
+          copy_distribution: cleaned.copy_distribution.join(', '),
         }),
       });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Disciplinary action saved', 'success');
-      setForm({
-        employee_id: '', violation_type: [], warning_level: '',
-        date_of_warning: '',
-        violation_date: '', violation_time: '', violation_place: '',
-        employer_statement: '', employee_statement: '', action_taken: '',
-        approved_by_name: '', approved_by_title: '', approved_by_date: '',
-        copy_distribution: [],
-        supervisor: '',
-        prev_first_date: '', prev_first_type: '',
-        prev_second_date: '', prev_second_type: '',
-        prev_third_date: '', prev_third_type: '',
-        employee_signature: '', employee_signature_date: '',
-        preparer_signature: '', preparer_signature_date: '',
-        supervisor_signature: '', supervisor_signature_date: '',
-      });
+      setForm(buildEmptyForm());
       setShowForm(false);
       fetchRecords();
     } catch { window.notify?.('Failed to save disciplinary action', 'error'); }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this record?')) return;
+    if (!(await appConfirm('Archive this record?', { title: 'Archive Record', confirmText: 'Archive', icon: 'archive' }))) return;
     try {
       await fetch(`/api/discipline_records/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-      window.notify?.('Record deleted', 'success');
+      window.notify?.('Record archived', 'success');
       fetchRecords();
-    } catch { window.notify?.('Failed to delete', 'error'); }
+    } catch { window.notify?.('Failed to archive', 'error'); }
   };
 
   const toggleViolation = (v: string) => {
@@ -136,7 +225,8 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
     );
   });
 
-  const exportPersonPdf = (record: any) => {
+  const exportPersonPdf = async (record: any) => {
+    if (!(await appConfirm('Export this disciplinary report as PDF?', { title: 'Export Disciplinary PDF', confirmText: 'Export', icon: 'export' }))) return;
     const empName = record.employee_name || `Employee #${record.employee_id}`;
     const personRecords = records.filter(r => r.employee_id === record.employee_id);
     const w = window.open('', '_blank');
@@ -188,7 +278,7 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
     w.document.close();
     setTimeout(() => {
       w.print();
-      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'print', description: `Disciplinary Report — ${empName}`, entity: 'discipline_record', entity_id: record.employee_id || null, meta: { source: 'DisciplinaryLog', rows: personRecords.length } }) }).catch(() => {}); } catch {};
+      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'export_pdf', description: `Disciplinary PDF — ${empName}`, entity: 'discipline_record', entity_id: record.employee_id || null, meta: { source: 'DisciplinaryLog', rows: personRecords.length } }) }).catch(() => {}); } catch {};
     }, 400);
   };
 
@@ -216,15 +306,16 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Employee Name</label>
                   <SearchableSelect
-                    options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+                    options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                     value={form.employee_id}
-                    onChange={v => setForm({ ...form, employee_id: v })}
+                    onChange={v => setForm({ ...form, employee_id: String(v) })}
                     placeholder="Select Employee..."
+                    dropdownVariant="pills-horizontal"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date of Warning</label>
-                  <input type="date" value={form.date_of_warning} onChange={e => setForm({ ...form, date_of_warning: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
+                  <input type="date" value={form.date_of_warning} onChange={e => setForm({ ...form, date_of_warning: e.target.value })} max={todayISO} required className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department</label>
@@ -232,7 +323,7 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Supervisor</label>
-                  <SearchableSelect options={employees.map(e => ({ value: e.id, label: e.name }))} value={employees.find(e => e.name === form.supervisor)?.id || ''} onChange={(id: any) => setForm({ ...form, supervisor: employees.find(e => e.id === id)?.name || '' })} placeholder="Select supervisor..." />
+                  <SearchableSelect options={employees.filter(e => String(e.id) !== String(form.employee_id || '')).map(e => ({ value: e.id, label: e.name, avatarUrl: (e as any).profile_picture || null }))} value={employees.find(e => e.name === form.supervisor)?.id || ''} onChange={(id: any) => setForm({ ...form, supervisor: employees.find(e => e.id === id)?.name || '' })} placeholder="Select supervisor..." dropdownVariant="pills-horizontal" />
                 </div>
               </div>
 
@@ -249,7 +340,7 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                 <div className="space-y-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Warning Level</label>
-                    <select value={form.warning_level} onChange={e => setForm({ ...form, warning_level: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100">
+                    <select value={form.warning_level} onChange={e => setForm({ ...form, warning_level: e.target.value })} required className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100">
                       <option value="">Select Warning Level...</option>
                       <option value="1st">1st Warning</option>
                       <option value="2nd">2nd Warning</option>
@@ -259,15 +350,15 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Violation Date</label>
-                    <input type="date" value={form.violation_date} onChange={e => setForm({ ...form, violation_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
+                    <input type="date" value={form.violation_date} onChange={e => setForm({ ...form, violation_date: e.target.value })} max={todayISO} required className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Violation Time (a.m./p.m.)</label>
-                    <input type="time" value={form.violation_time} onChange={e => setForm({ ...form, violation_time: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
+                    <input type="time" value={form.violation_time} onChange={e => setForm({ ...form, violation_time: e.target.value })} required className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Place Violation Occurred</label>
-                    <input type="text" value={form.violation_place} onChange={e => setForm({ ...form, violation_place: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
+                    <input type="text" value={form.violation_place} onChange={e => setForm({ ...form, violation_place: e.target.value })} required maxLength={160} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
                   </div>
                 </div>
               </div>
@@ -275,11 +366,11 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
               {/* Statements */}
               <div className="pt-4 border-t dark:border-slate-800">
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Employer Statement</label>
-                <textarea rows={3} value={form.employer_statement} onChange={e => setForm({ ...form, employer_statement: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" placeholder="Describe the violation and circumstances..."></textarea>
+                <textarea rows={3} value={form.employer_statement} onChange={e => setForm({ ...form, employer_statement: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" placeholder="Describe the violation and circumstances..." minLength={10} maxLength={2000} required></textarea>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Employee Statement</label>
-                <textarea rows={3} value={form.employee_statement} onChange={e => setForm({ ...form, employee_statement: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" placeholder="Employee's response or explanation..."></textarea>
+                <textarea rows={3} value={form.employee_statement} onChange={e => setForm({ ...form, employee_statement: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" placeholder="Employee's response or explanation..." maxLength={2000}></textarea>
               </div>
 
               {/* Warning Decision */}
@@ -287,20 +378,20 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                 <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Warning Decision</h4>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Action Taken / Decision</label>
-                  <textarea rows={2} value={form.action_taken} onChange={e => setForm({ ...form, action_taken: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100"></textarea>
+                  <textarea rows={2} value={form.action_taken} onChange={e => setForm({ ...form, action_taken: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" minLength={10} maxLength={2000} required></textarea>
                 </div>
                 <div className="grid grid-cols-3 gap-4 mt-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Approved By (Name)</label>
-                    <input type="text" value={form.approved_by_name} onChange={e => setForm({ ...form, approved_by_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
+                    <input type="text" value={form.approved_by_name} onChange={e => setForm({ ...form, approved_by_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" maxLength={120} required />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Title</label>
-                    <input type="text" value={form.approved_by_title} onChange={e => setForm({ ...form, approved_by_title: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
+                    <input type="text" value={form.approved_by_title} onChange={e => setForm({ ...form, approved_by_title: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" maxLength={120} required />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
-                    <input type="date" value={form.approved_by_date} onChange={e => setForm({ ...form, approved_by_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
+                    <input type="date" value={form.approved_by_date} onChange={e => setForm({ ...form, approved_by_date: e.target.value })} max={todayISO} required className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
                   </div>
                 </div>
               </div>
@@ -309,7 +400,7 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
               <div className="pt-4 border-t dark:border-slate-800">
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Copy Distribution</label>
                 <div className="flex gap-4 text-sm text-slate-600 dark:text-slate-300">
-                  {['Employee', 'HR Dept', 'Supervisor'].map(c => (
+                  {['Employee', 'HR Admin Dept', 'Supervisor'].map(c => (
                     <label key={c} className="flex items-center gap-2"><input type="checkbox" checked={form.copy_distribution.includes(c)} onChange={() => setForm(prev => ({ ...prev, copy_distribution: prev.copy_distribution.includes(c) ? prev.copy_distribution.filter(x => x !== c) : [...prev.copy_distribution, c] }))} className="rounded" /> {c}</label>
                   ))}
                 </div>
@@ -331,7 +422,7 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                   ] as const).map(row => (
                     <div key={row.label} className="grid grid-cols-3 gap-2 mb-2 items-center">
                       <span className="text-xs font-bold text-slate-600 dark:text-slate-300 px-1">{row.label}</span>
-                      <input type="date" value={(form as any)[row.dateKey]} onChange={e => setForm({ ...form, [row.dateKey]: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
+                      <input type="date" value={(form as any)[row.dateKey]} onChange={e => setForm({ ...form, [row.dateKey]: e.target.value })} max={todayISO} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
                       <select value={(form as any)[row.typeKey]} onChange={e => setForm({ ...form, [row.typeKey]: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100">
                         <option value="">—</option>
                         <option value="Verbal">Verbal</option>
@@ -348,8 +439,10 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                 <p className="text-xs text-slate-500 dark:text-slate-400 italic mb-4">
                   "I have read this warning decision. My signature does not necessarily indicate agreement. I understand that continued violation may result in further disciplinary action."
                 </p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mb-4">
+                  Employee signature is completed by the employee in their Verification of Review screen after this disciplinary action is saved.
+                </p>
                 {([
-                  { label: 'Employee Signature', sigKey: 'employee_signature', dateKey: 'employee_signature_date' },
                   { label: 'Signature of Person Who Prepared Warning', sigKey: 'preparer_signature', dateKey: 'preparer_signature_date' },
                   { label: "Supervisor's Signature", sigKey: 'supervisor_signature', dateKey: 'supervisor_signature_date' },
                 ] as const).map(sig => (
@@ -361,7 +454,7 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                     />
                     <div>
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
-                      <input type="date" value={(form as any)[sig.dateKey]} onChange={e => setForm(prev => ({ ...prev, [sig.dateKey]: e.target.value }))} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
+                      <input type="date" value={(form as any)[sig.dateKey]} onChange={e => setForm(prev => ({ ...prev, [sig.dateKey]: e.target.value }))} max={todayISO} required className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
                     </div>
                   </div>
                 ))}
@@ -461,28 +554,26 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
             />
           </div>
         </div>
-        {filteredRecords.length === 0 ? (
-          <p className="text-center text-slate-400 py-10">{search ? 'No records match your search.' : 'No disciplinary records found.'}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm table-fixed">
-              <thead>
-                <tr className="border-b dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  <th className="text-left py-2 pr-4">Employee</th>
-                  <th className="text-left py-2 pr-4">Dept</th>
-                  <th className="text-left py-2 pr-4">Warning</th>
-                  <th className="text-left py-2 pr-4">Violation Type</th>
-                  <th className="text-left py-2 pr-4">Violation Date</th>
-                  <th className="text-left py-2 pr-4">Place</th>
-                  <th className="text-left py-2 pr-4">Supervisor</th>
-                  <th className="text-left py-2 pr-4">Approved By</th>
-                  <th className="text-left py-2 pr-4">Action Taken</th>
-                  <th className="text-left py-2 pr-4">Signatures</th>
-                  <th className="py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRecords.map((d: any) => (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1400px] text-sm">
+            <thead>
+              <tr className="border-b dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <th className="text-left py-2 pr-4">Employee</th>
+                <th className="text-left py-2 pr-4">Dept</th>
+                <th className="text-left py-2 pr-4">Warning</th>
+                <th className="text-left py-2 pr-4">Violation Type</th>
+                <th className="text-left py-2 pr-4">Violation Date</th>
+                <th className="text-left py-2 pr-4">Place</th>
+                <th className="text-left py-2 pr-4">Supervisor</th>
+                <th className="text-left py-2 pr-4">Approved By</th>
+                <th className="text-left py-2 pr-4">Action Taken</th>
+                <th className="text-left py-2 pr-4">Signatures</th>
+                <th className="text-left py-2 pr-4">Acknowledged</th>
+                <th className="text-right py-2 pr-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRecords.map((d: any) => (
                   <>
                     <tr
                       key={d.id}
@@ -527,24 +618,33 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                       <td className="py-3 pr-4">
                         <div className="max-w-[130px] truncate text-slate-600 dark:text-slate-300" title={d.action_taken || undefined}>{d.action_taken || '—'}</div>
                       </td>
-                      <td className="py-3 pr-4">
-                        <div className="flex flex-row gap-1">
+                      <td className="py-3 pr-4 min-w-[130px]">
+                        <div className="flex flex-row gap-1 min-w-[120px]">
                           {d.employee_signature && <img src={d.employee_signature} alt="emp" className="h-6 w-10 object-contain rounded border border-slate-200 dark:border-slate-700" title="Employee Signature" />}
                           {d.preparer_signature && <img src={d.preparer_signature} alt="prep" className="h-6 w-10 object-contain rounded border border-slate-200 dark:border-slate-700" title="Preparer Signature" />}
                           {d.supervisor_signature && <img src={d.supervisor_signature} alt="sup" className="h-6 w-10 object-contain rounded border border-slate-200 dark:border-slate-700" title="Supervisor Signature" />}
                           {!d.employee_signature && !d.preparer_signature && !d.supervisor_signature && <span className="text-slate-400 text-xs">—</span>}
                         </div>
                       </td>
-                      <td className="py-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          <button onClick={e => { e.stopPropagation(); exportPersonPdf(d); }} className="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 p-1" title="Export PDF Report"><FileText size={14} /></button>
-                          <button onClick={e => { e.stopPropagation(); handleDelete(d.id); }} className="text-red-400 hover:text-red-600 p-1" title="Delete Record"><Trash2 size={14} /></button>
+                      <td className="py-3 pr-4 whitespace-nowrap min-w-[140px]">
+                        {(() => {
+                          const signedCount = [d.employee_signature, d.preparer_signature, d.supervisor_signature].filter(Boolean).length;
+                          if (signedCount === 3) return <span className="inline-flex items-center justify-center min-w-[128px] text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-700 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Acknowledged</span>;
+                          if (signedCount > 0) return <span className="inline-flex items-center justify-center min-w-[128px] text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Partially Signed</span>;
+                          return <span className="inline-flex items-center justify-center min-w-[128px] text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">Pending</span>;
+                        })()}
+                      </td>
+                      <td className="py-3 text-right whitespace-nowrap min-w-[110px]">
+                        <div className="flex justify-end gap-1.5">
+                          <button onClick={e => { e.stopPropagation(); setExpandedRecord(expandedRecord === d.id ? null : d.id); }} className="text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 p-1" title="View Record"><Eye size={14} /></button>
+                          <button onClick={e => { e.stopPropagation(); exportPersonPdf(d); }} className="text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 p-1" title="Export PDF Report"><FileText size={14} /></button>
+                          <button onClick={e => { e.stopPropagation(); handleDelete(d.id); }} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive Record"><Archive size={14} /></button>
                         </div>
                       </td>
                     </tr>
                     {expandedRecord === d.id && (
                       <tr key={`${d.id}-expanded`} className="bg-slate-50 dark:bg-slate-800/40">
-                        <td colSpan={11} className="px-4 py-4">
+                        <td colSpan={12} className="px-4 py-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
                             <div className="space-y-2">
                               <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Employer Statement</p>
@@ -591,10 +691,14 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                     )}
                   </>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              {filteredRecords.length === 0 && (
+                <tr>
+                  <td colSpan={12} className="py-10 text-center text-slate-400">{search ? 'No records match your search.' : 'No disciplinary records found.'}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </motion.div>
   );

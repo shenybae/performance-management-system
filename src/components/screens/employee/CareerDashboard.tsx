@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { CircularProgress } from '../../common/CircularProgress';
-import { Download, Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTriangle, DollarSign, Building2, Users, User } from 'lucide-react';
+import { Download, Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTriangle, DollarSign, Building2, Users, User, ClipboardList, CalendarDays, Flag, Save, Archive, Upload, Image as ImageIcon, CheckCircle2 } from 'lucide-react';
 import { LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 
@@ -11,15 +11,49 @@ export const CareerDashboard = () => {
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
   const [pips, setPips] = useState<any[]>([]);
+  const [idps, setIdps] = useState<any[]>([]);
   const [requesting, setRequesting] = useState<number | null>(null);
   const [selfAssessments, setSelfAssessments] = useState<any[]>([]);
   const [salary, setSalary] = useState<number | null>(null);
   const [leaderGoals, setLeaderGoals] = useState<any[]>([]);
   const [leaderTeamMembers, setLeaderTeamMembers] = useState<any[]>([]);
-  const [assignSelections, setAssignSelections] = useState<Record<number, number>>({});
+  const [dashboardTab, setDashboardTab] = useState<'overview' | 'goals' | 'pips' | 'idps'>('overview');
+  const [taskDrafts, setTaskDrafts] = useState<Record<number, any>>({});
+  const [taskProgressEdits, setTaskProgressEdits] = useState<Record<number, number>>({});
+  const [taskSavingGoal, setTaskSavingGoal] = useState<number | null>(null);
+  const [myMemberTasks, setMyMemberTasks] = useState<any[]>([]);
+  const [proofDrafts, setProofDrafts] = useState<Record<number, { proof_image: string; proof_note: string }>>({});
+  const [proofSubmittingTaskId, setProofSubmittingTaskId] = useState<number | null>(null);
   const user = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
 
   useEffect(() => { fetchData(); }, []);
+
+  useEffect(() => {
+    setTaskDrafts(prev => {
+      const next = { ...prev };
+      for (const g of leaderGoals) {
+        if (!next[g.id]) {
+          next[g.id] = { member_id: '', title: '', description: '', due_date: '', priority: 'Medium' };
+        }
+      }
+      return next;
+    });
+  }, [leaderGoals]);
+
+  useEffect(() => {
+    setProofDrafts(prev => {
+      const next = { ...prev };
+      for (const t of myMemberTasks) {
+        if (!next[t.id]) {
+          next[t.id] = {
+            proof_image: t.proof_image || '',
+            proof_note: t.proof_note || '',
+          };
+        }
+      }
+      return next;
+    });
+  }, [myMemberTasks]);
 
   const fetchData = async () => {
     try { const r = await fetch('/api/appraisals', { headers: getAuthHeaders() }); const d = await r.json(); setAppraisals(Array.isArray(d) ? d.filter((a: any) => a.employee_id === (user.employee_id || user.id)) : []); } catch { setAppraisals([]); }
@@ -34,39 +68,157 @@ export const CareerDashboard = () => {
       setLeaderTeamMembers([]);
     }
     try { const r = await fetch('/api/pip_plans', { headers: getAuthHeaders() }); const d = await r.json(); setPips(Array.isArray(d) ? d.filter((p: any) => p.employee_id === (user.employee_id || user.id)) : []); } catch { setPips([]); }
+    try { const r = await fetch('/api/development_plans', { headers: getAuthHeaders() }); const d = await r.json(); setIdps(Array.isArray(d) ? d.filter((i: any) => i.employee_id === (user.employee_id || user.id)) : []); } catch { setIdps([]); }
     try { const r = await fetch('/api/self_assessments', { headers: getAuthHeaders() }); const d = await r.json(); setSelfAssessments(Array.isArray(d) ? d.filter((s: any) => s.employee_id === (user.employee_id || user.id)) : []); } catch { setSelfAssessments([]); }
+    try {
+      const r = await fetch('/api/member-tasks/my', { headers: getAuthHeaders() });
+      const d = await r.json();
+      setMyMemberTasks(Array.isArray(d) ? d : []);
+    } catch {
+      setMyMemberTasks([]);
+    }
     if (user.employee_id) { try { const r = await fetch(`/api/employees/${user.employee_id}`, { headers: getAuthHeaders() }); const d = await r.json(); setSalary(d.salary_base || null); } catch { /* ignore */ } }
   };
 
-  const handleLeaderAssign = async (goalId: number) => {
-    const employeeId = assignSelections[goalId];
-    if (!employeeId) { window.notify?.('Select a member to assign', 'error'); return; }
-    try {
-      const res = await fetch(`/api/goals/${goalId}/assign`, {
-        method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ employee_id: employeeId })
-      });
-      if (!res.ok) throw new Error('Failed');
-      window.notify?.('Member assigned to goal', 'success');
-      setAssignSelections(prev => {
-        const next = { ...prev };
-        delete next[goalId];
-        return next;
-      });
-      fetchData();
-    } catch { window.notify?.('Failed to assign member', 'error'); }
+  const handleProofDraftChange = (taskId: number, patch: Partial<{ proof_image: string; proof_note: string }>) => {
+    setProofDrafts(prev => ({
+      ...prev,
+      [taskId]: {
+        proof_image: prev[taskId]?.proof_image || '',
+        proof_note: prev[taskId]?.proof_note || '',
+        ...patch,
+      }
+    }));
   };
 
-  const handleLeaderUnassign = async (goalId: number, employeeId: number) => {
+  const handleProofImageUpload = async (taskId: number, file?: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      window.notify?.('Please upload an image file', 'error');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      window.notify?.('Image must be under 5 MB', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => handleProofDraftChange(taskId, { proof_image: String(reader.result || '') });
+    reader.readAsDataURL(file);
+  };
+
+  const submitTaskProof = async (taskId: number) => {
+    const draft = proofDrafts[taskId] || { proof_image: '', proof_note: '' };
+    if (!draft.proof_image) {
+      window.notify?.('Please upload proof image first', 'error');
+      return;
+    }
+    setProofSubmittingTaskId(taskId);
     try {
-      const res = await fetch(`/api/goals/${goalId}/unassign`, {
-        method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ employee_id: employeeId })
+      const res = await fetch(`/api/member-tasks/${taskId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          proof_image: draft.proof_image,
+          proof_note: draft.proof_note,
+          status: 'Completed',
+          progress: 100,
+        })
       });
       if (!res.ok) throw new Error('Failed');
-      window.notify?.('Member unassigned from goal', 'success');
+      window.notify?.('Proof submitted for review', 'success');
       fetchData();
-    } catch { window.notify?.('Failed to unassign member', 'error'); }
+    } catch {
+      window.notify?.('Failed to submit proof', 'error');
+    } finally {
+      setProofSubmittingTaskId(null);
+    }
+  };
+
+  const handleTaskDraftChange = (goalId: number, patch: Record<string, any>) => {
+    setTaskDrafts(prev => ({
+      ...prev,
+      [goalId]: {
+        member_id: '',
+        title: '',
+        description: '',
+        due_date: '',
+        priority: 'Medium',
+        ...(prev[goalId] || {}),
+        ...patch,
+      }
+    }));
+  };
+
+  const handleCreateLeaderTask = async (goalId: number) => {
+    const draft = taskDrafts[goalId] || {};
+    const memberId = Number(draft.member_id);
+    const title = String(draft.title || '').trim();
+    const description = String(draft.description || '').trim();
+    const dueDate = String(draft.due_date || '').trim();
+    const priority = String(draft.priority || 'Medium');
+
+    if (!memberId) { window.notify?.('Select a member for this task', 'error'); return; }
+    if (!title) { window.notify?.('Please enter a task title', 'error'); return; }
+    if (!dueDate) { window.notify?.('Please set a deadline', 'error'); return; }
+
+    setTaskSavingGoal(goalId);
+    try {
+      const res = await fetch(`/api/goals/${goalId}/member-tasks`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          member_employee_id: memberId,
+          title,
+          description,
+          due_date: dueDate,
+          priority,
+        })
+      });
+      if (!res.ok) {
+        let msg = 'Failed to assign task';
+        try { const err = await res.json(); msg = err.error || msg; } catch {}
+        throw new Error(msg);
+      }
+      window.notify?.('Detailed task assigned', 'success');
+      setTaskDrafts(prev => ({
+        ...prev,
+        [goalId]: { member_id: '', title: '', description: '', due_date: '', priority: 'Medium' }
+      }));
+      fetchData();
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to assign task', 'error');
+    } finally {
+      setTaskSavingGoal(null);
+    }
+  };
+
+  const handleUpdateLeaderTask = async (taskId: number, updates: Record<string, any>, successMessage = 'Task updated') => {
+    try {
+      const res = await fetch(`/api/member-tasks/${taskId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(updates)
+      });
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.(successMessage, 'success');
+      fetchData();
+    } catch {
+      window.notify?.('Failed to update task', 'error');
+    }
+  };
+
+  const handleDeleteLeaderTask = async (taskId: number) => {
+    try {
+      const res = await fetch(`/api/member-tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.('Task removed', 'success');
+      fetchData();
+    } catch {
+      window.notify?.('Failed to remove task', 'error');
+    }
   };
 
   // Performance trend from appraisals
@@ -127,6 +279,44 @@ export const CareerDashboard = () => {
     return 'bg-red-400';
   };
 
+  const memberNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+
+    for (const m of leaderTeamMembers) {
+      const id = String(m?.member_id ?? '').trim();
+      const name = String(m?.member_name || '').trim();
+      if (id && name) map[id] = name;
+    }
+
+    for (const g of leaderGoals) {
+      const assignees = Array.isArray(g?.assignees) ? g.assignees : [];
+      for (const a of assignees) {
+        const id = String(a?.employee_id ?? '').trim();
+        const name = String(a?.name || a?.employee_name || a?.member_name || '').trim();
+        if (id && name && !map[id]) map[id] = name;
+      }
+    }
+
+    return map;
+  }, [leaderGoals, leaderTeamMembers]);
+
+  const getMemberDisplayName = (member: any, explicitId?: any) => {
+    const directName = String(member?.member_name || member?.employee_name || member?.name || '').trim();
+    if (directName) return directName;
+    const memberId = String(member?.member_id ?? member?.member_employee_id ?? member?.employee_id ?? explicitId ?? '').trim();
+    if (memberId && memberNameById[memberId]) return memberNameById[memberId];
+    return 'Unnamed team member';
+  };
+
+  const leaderTeamMemberIdSet = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of leaderTeamMembers) {
+      const id = String(m?.member_id ?? '').trim();
+      if (id) ids.add(id);
+    }
+    return ids;
+  }, [leaderTeamMembers]);
+
   // Self assessment scores over time
   const assessmentTrend = selfAssessments
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
@@ -152,9 +342,34 @@ export const CareerDashboard = () => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="Career Dashboard" subtitle="Your performance overview and career trajectory" />
-        <button onClick={() => exportToCSV([...appraisals.map(a => ({ ...a, type: 'Appraisal' })), ...goals.map(g => ({ ...g, type: 'Goal' })), ...pips.map(p => ({ ...p, type: 'PIP' }))], 'career_data')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
+        <button onClick={() => exportToCSV([...appraisals.map(a => ({ ...a, type: 'Appraisal' })), ...goals.map(g => ({ ...g, type: 'Goal' })), ...pips.map(p => ({ ...p, type: 'PIP' })), ...idps.map(i => ({ ...i, type: 'IDP' }))], 'career_data')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
       </div>
 
+      <div className="mb-4">
+        <div className="flex flex-wrap gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+          {[
+            { key: 'overview', label: 'Overview', icon: BarChart3 },
+            { key: 'goals', label: `My Goals (${goals.length})`, icon: Target },
+            { key: 'pips', label: `PIPs (${pips.length})`, icon: AlertTriangle },
+            { key: 'idps', label: `Development Plans (${idps.length})`, icon: TrendingUp },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const active = dashboardTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setDashboardTab(tab.key as 'overview' | 'goals' | 'pips' | 'idps')}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold transition-all ${active ? 'bg-white dark:bg-slate-900 text-teal-deep dark:text-teal-green shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                <Icon size={14} /> {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {dashboardTab === 'overview' && (
+      <>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4">
         <StatCard icon={Award} label="Avg Rating" value={avgScore || '—'} color="bg-teal-600" />
         <StatCard icon={Target} label="Total Goals" value={totalGoals} color="bg-blue-500" />
@@ -368,8 +583,11 @@ export const CareerDashboard = () => {
           </div>
         );
       })()}
+      </>
+      )}
 
-      {goals.length > 0 && (
+      {dashboardTab === 'goals' && (
+        goals.length > 0 ? (
         <Card>
           <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">My Goals ({goals.length})</h3>
           <div className="overflow-x-auto">
@@ -377,6 +595,7 @@ export const CareerDashboard = () => {
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Goal</th>
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Scope</th>
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target</th>
+              <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Frequency</th>
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Progress</th>
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Delegated By</th>
@@ -392,12 +611,7 @@ export const CareerDashboard = () => {
                   className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors"
                 >
                   <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
-                    <div className="min-w-0">
-                      <span className="truncate max-w-[220px] block" title={g.title || g.statement}>{g.title || g.statement}</span>
-                      {g.frequency && g.frequency !== 'One-time' && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600">{g.frequency}</span>
-                      )}
-                    </div>
+                    <span className="truncate max-w-[220px] block" title={g.title || g.statement}>{g.title || g.statement}</span>
                   </td>
                   <td className="py-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${scopeStyleMap[g.scope || 'Individual']?.badgeBg || scopeStyleMap.Individual.badgeBg}`}>
@@ -406,6 +620,11 @@ export const CareerDashboard = () => {
                     </span>
                   </td>
                   <td className="py-3 text-sm text-slate-500 dark:text-slate-400">{g.target_date || '—'}</td>
+                  <td className="py-3">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600">
+                      {g.frequency || 'One-time'}
+                    </span>
+                  </td>
                   <td className="py-3"><span className={`text-[10px] font-bold uppercase ${g.status === 'Completed' ? 'text-emerald-600' : g.status === 'In Progress' ? 'text-amber-500' : g.status === 'At Risk' ? 'text-red-500' : 'text-slate-400'}`}>{g.status || 'Not Started'}</span></td>
                   <td className="py-3">
                     <div className="flex items-center gap-2 min-w-[120px]">
@@ -470,15 +689,91 @@ export const CareerDashboard = () => {
             </table>
           </div>
         </Card>
+        ) : (
+        <Card>
+          <div className="py-10 text-center text-slate-400">
+            <Target size={20} className="mx-auto mb-2 opacity-40" />
+            No goals assigned yet.
+          </div>
+        </Card>
+        )
       )}
 
-      {leaderGoals.length > 0 && (
+      {dashboardTab === 'goals' && (
         <Card className="mt-4">
-          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">Goals You Lead ({leaderGoals.length})</h3>
+          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">Delegated Tasks Requiring Proof ({myMemberTasks.length})</h3>
+          {myMemberTasks.length === 0 ? (
+            <div className="py-8 text-center text-slate-400">
+              <CheckCircle2 size={20} className="mx-auto mb-2 opacity-40" />
+              No delegated tasks available for proof submission.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {myMemberTasks.map((t: any) => {
+                const draft = proofDrafts[t.id] || { proof_image: t.proof_image || '', proof_note: t.proof_note || '' };
+                const reviewStatus = t.proof_review_status || 'Not Submitted';
+                return (
+                  <div key={t.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-900/40">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t.goal_title || t.goal_statement || 'Goal task'} • Due {t.due_date || 'N/A'}</p>
+                      </div>
+                      <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
+                        {reviewStatus}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                      <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-3 bg-white/70 dark:bg-slate-900/50">
+                        {draft.proof_image ? (
+                          <img src={draft.proof_image} alt="Task proof" className="w-full max-h-44 object-cover rounded" />
+                        ) : (
+                          <div className="h-32 flex items-center justify-center text-xs text-slate-400"><ImageIcon size={14} className="mr-1" /> No proof image uploaded</div>
+                        )}
+                        <label className="mt-2 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+                          <Upload size={12} /> Upload Proof
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => handleProofImageUpload(t.id, e.target.files?.[0])} />
+                        </label>
+                      </div>
+
+                      <div>
+                        <textarea
+                          rows={5}
+                          value={draft.proof_note}
+                          onChange={(e) => handleProofDraftChange(t.id, { proof_note: e.target.value })}
+                          className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                          placeholder="Add notes explaining how this task was completed"
+                        />
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            onClick={() => submitTaskProof(t.id)}
+                            disabled={proofSubmittingTaskId === t.id}
+                            className="px-3 py-1.5 rounded-lg bg-teal-deep text-white text-xs font-bold hover:bg-teal-green disabled:opacity-50"
+                          >
+                            {proofSubmittingTaskId === t.id ? 'Submitting...' : 'Submit For Review'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {false && (
+        leaderGoals.length > 0 ? (
+        <Card className="mt-4">
+          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goals You Lead ({leaderGoals.length})</h3>
+          <p className="text-xs text-slate-400 mb-4">Your manager defines your team members. You can delegate goal tasks to that roster and track progress here.</p>
           <div className="space-y-3">
             {leaderGoals.map((g) => {
-              const assignees = Array.isArray(g.assignees) ? g.assignees : [];
-              const remainingMembers = leaderTeamMembers.filter((m: any) => !assignees.some((a: any) => String(a.employee_id) === String(m.member_id)));
+              const assignees = (Array.isArray(g.assignees) ? g.assignees : []).filter((a: any) => leaderTeamMemberIdSet.has(String(a?.employee_id ?? '')));
+              const memberTasks = (Array.isArray(g.member_tasks) ? g.member_tasks : []).filter((t: any) => leaderTeamMemberIdSet.has(String(t?.member_employee_id ?? '')));
+              const taskDraft = taskDrafts[g.id] || { member_id: '', title: '', description: '', due_date: '', priority: 'Medium' };
               return (
                 <div key={g.id} className="border border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white/70 dark:bg-slate-900/40">
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -497,60 +792,170 @@ export const CareerDashboard = () => {
                   </div>
 
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Assigned Members</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Team Members (Set By Manager)</p>
                     {assignees.length === 0 ? (
-                      <p className="text-xs text-slate-400">No members assigned yet.</p>
+                      <p className="text-xs text-slate-400">No team members are configured for this goal yet.</p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {assignees.map((a: any) => (
                           <div key={a.employee_id} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs">
-                            <span className="text-slate-700 dark:text-slate-300">{a.employee_name || `Employee ${a.employee_id}`}</span>
-                            <button
-                              onClick={() => handleLeaderUnassign(g.id, Number(a.employee_id))}
-                              className="text-red-500 hover:text-red-600 font-bold"
-                            >
-                              Remove
-                            </button>
+                            <span className="text-slate-700 dark:text-slate-300">{getMemberDisplayName(a)}</span>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
 
-                  <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                    <select
-                      value={assignSelections[g.id] ?? ''}
-                      onChange={(e) => {
-                        const next = Number(e.target.value);
-                        setAssignSelections(prev => {
-                          const copy = { ...prev };
-                          if (!next) delete copy[g.id];
-                          else copy[g.id] = next;
-                          return copy;
-                        });
-                      }}
-                      className="flex-1 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
-                    >
-                      <option value="">Select team member to assign...</option>
-                      {remainingMembers.map((m: any) => (
-                        <option key={m.member_id} value={m.member_id}>{m.member_name || `Employee ${m.member_id}`}</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => handleLeaderAssign(g.id)}
-                      disabled={!assignSelections[g.id]}
-                      className="px-3 py-2 rounded-lg bg-teal-deep text-white text-sm font-bold disabled:opacity-50"
-                    >
-                      Assign Member
-                    </button>
+                  <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2 flex items-center gap-1.5">
+                      <ClipboardList size={12} /> Detailed Task Assignment
+                    </p>
+
+                    {assignees.length === 0 ? (
+                      <p className="text-xs text-slate-400">No manager-assigned members for this goal yet.</p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                          <select
+                            value={taskDraft.member_id}
+                            onChange={(e) => handleTaskDraftChange(g.id, { member_id: e.target.value })}
+                            className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                          >
+                            <option value="">Select team member...</option>
+                            {assignees.map((a: any) => (
+                              <option key={a.employee_id} value={a.employee_id}>{getMemberDisplayName(a)}</option>
+                            ))}
+                          </select>
+
+                          <input
+                            type="text"
+                            value={taskDraft.title}
+                            onChange={(e) => handleTaskDraftChange(g.id, { title: e.target.value })}
+                            className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                            placeholder="Task title (e.g., Prepare Q2 lead report)"
+                          />
+
+                          <input
+                            type="date"
+                            value={taskDraft.due_date}
+                            onChange={(e) => handleTaskDraftChange(g.id, { due_date: e.target.value })}
+                            className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                          />
+
+                          <select
+                            value={taskDraft.priority}
+                            onChange={(e) => handleTaskDraftChange(g.id, { priority: e.target.value })}
+                            className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                          >
+                            <option value="Critical">Critical</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                          </select>
+
+                          <textarea
+                            rows={2}
+                            value={taskDraft.description}
+                            onChange={(e) => handleTaskDraftChange(g.id, { description: e.target.value })}
+                            className="md:col-span-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                            placeholder="Task details / expected output"
+                          />
+                        </div>
+
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => handleCreateLeaderTask(g.id)}
+                            disabled={taskSavingGoal === g.id}
+                            className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold disabled:opacity-50"
+                          >
+                            {taskSavingGoal === g.id ? 'Saving...' : 'Assign Task'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="mt-3">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Task Board ({memberTasks.length})</p>
+                      {memberTasks.length === 0 ? (
+                        <p className="text-xs text-slate-400">No detailed tasks yet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {memberTasks.map((t: any) => {
+                            const progressValue = taskProgressEdits[t.id] ?? Number(t.progress || 0);
+                            return (
+                              <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-900/40">
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <div>
+                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
+                                    {t.description && <p className="text-xs text-slate-500 mt-0.5">{t.description}</p>}
+                                    <div className="flex flex-wrap gap-2 mt-1">
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">{getMemberDisplayName(t)}</span>
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 inline-flex items-center gap-1"><Flag size={10} />{t.priority || 'Medium'}</span>
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 inline-flex items-center gap-1"><CalendarDays size={10} />{t.due_date || 'No deadline'}</span>
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => handleDeleteLeaderTask(Number(t.id))}
+                                    className="text-red-500 hover:text-red-600 p-1 rounded"
+                                    title="Archive task"
+                                  >
+                                    <Archive size={15} />
+                                  </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                                  <select
+                                    value={t.status || 'Not Started'}
+                                    onChange={(e) => handleUpdateLeaderTask(Number(t.id), { status: e.target.value }, 'Task status updated')}
+                                    className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                                  >
+                                    <option value="Not Started">Not Started</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Blocked">Blocked</option>
+                                    <option value="Completed">Completed</option>
+                                  </select>
+
+                                  <div className="flex items-center gap-2 md:col-span-2">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      value={progressValue}
+                                      onChange={(e) => setTaskProgressEdits(prev => ({ ...prev, [t.id]: Math.max(0, Math.min(100, Number(e.target.value) || 0)) }))}
+                                      className="w-24 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                                    />
+                                    <span className="text-xs text-slate-500">%</span>
+                                    <button
+                                      onClick={() => handleUpdateLeaderTask(Number(t.id), { progress: progressValue }, 'Task progress updated')}
+                                      className="px-2.5 py-2 rounded-lg bg-teal-deep text-white text-xs font-bold inline-flex items-center gap-1"
+                                    >
+                                      <Save size={12} /> Save Progress
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
         </Card>
+        ) : (
+        <Card className="mt-4">
+          <div className="py-10 text-center text-slate-400">
+            <ClipboardList size={20} className="mx-auto mb-2 opacity-40" />
+            No goals assigned to you as team leader yet.
+          </div>
+        </Card>
+        )
       )}
 
+      {dashboardTab === 'pips' && (
       <Card className="mt-4">
         <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">My Performance Improvement Plans ({pips.length})</h3>
         {pips.length === 0 ? (
@@ -585,6 +990,40 @@ export const CareerDashboard = () => {
           </div>
         )}
       </Card>
+      )}
+
+      {dashboardTab === 'idps' && (
+      <Card className="mt-4">
+        <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">My Development Plans ({idps.length})</h3>
+        {idps.length === 0 ? (
+          <div className="py-8 text-center text-slate-400">
+            <TrendingUp size={20} className="mx-auto mb-2 opacity-40" />
+            No active development plans yet.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {idps.map((idp) => (
+              <div key={idp.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Skill Gap</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-200">{idp.skill_gap || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</p>
+                    <p className="text-sm font-bold text-teal-600 dark:text-teal-400">{idp.status || 'In Progress'}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Growth Step</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-300">{idp.growth_step || '—'}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+      )}
     </motion.div>
   );
 };

@@ -57,6 +57,150 @@ async function query(sql: string, params: any[] = []) {
   }
 }
 
+function assertSafeTableName(tableName: string) {
+  if (!/^[a-z_][a-z0-9_]*$/i.test(tableName)) {
+    throw new Error(`Unsafe table name: ${tableName}`);
+  }
+}
+
+async function softDeleteById(tableName: string, id: any) {
+  assertSafeTableName(tableName);
+  return query(`UPDATE ${tableName} SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?`, [id]);
+}
+
+async function softDeleteWhere(tableName: string, whereClause: string, params: any[] = []) {
+  assertSafeTableName(tableName);
+  return query(`UPDATE ${tableName} SET deleted_at = CURRENT_TIMESTAMP WHERE ${whereClause}`, params);
+}
+
+function usernameBaseFromInput(input: string) {
+  const normalized = (input || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/\.{2,}/g, '.')
+    .replace(/^\.|\.$/g, '');
+  return normalized || 'user';
+}
+
+async function generateUniqueUsername(requested: string) {
+  const base = usernameBaseFromInput(requested).slice(0, 50) || 'user';
+  let candidate = base;
+  let suffix = 1;
+  while (true) {
+    const existing = await query('SELECT id FROM users WHERE username = ? LIMIT 1', [candidate]) as any[];
+    if (!Array.isArray(existing) || existing.length === 0) return candidate;
+    suffix += 1;
+    candidate = `${base}.${suffix}`;
+  }
+}
+
+function escapeRegExp(value: string) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Normalize user-entered full names so UI labels stay readable even with legacy encoding artifacts.
+function sanitizeUserFullName(rawFullName: any, email?: string | null) {
+  let name = String(rawFullName || '')
+    .replace(/\u00e2\u20ac[\u2013\u2014]/g, '-')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!name) return '';
+
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (normalizedEmail) {
+    const trailingProvidedEmail = new RegExp(`\\s*(?:-|\\||\\u00b7)\\s*${escapeRegExp(normalizedEmail)}\\s*$`, 'i');
+    name = name.replace(trailingProvidedEmail, '').trim();
+  }
+
+  const embeddedEmail = name.match(/^(.+?)\s*(?:-|\||\u00b7)\s*([^\s@]+@[^\s@]+\.[^\s@]+)\s*$/i);
+  if (embeddedEmail?.[1]) {
+    name = embeddedEmail[1].trim();
+  }
+
+  return name;
+}
+
+function sanitizeDisplayText(rawValue: any) {
+  const text = String(rawValue || '').trim();
+  if (!text) return '';
+
+  return text
+    // Mojibake for em/en dash (e.g., "â€”", "â€“")
+    .replace(/\u00e2\u20ac[\u201c\u201d]/g, '-')
+    // Mojibake for right arrow (e.g., "â†’")
+    .replace(/\u00e2\u2020\u2019/g, '->')
+    // Mojibake for clipboard emoji (e.g., "ðŸ“‹")
+    .replace(/\u00f0\u0178\u201c\u2039/g, '[Goal]')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function resolveEmployeeIdByFullName(fullName: string): Promise<number | null> {
+  const candidate = String(fullName || '').trim();
+  if (!candidate) return null;
+
+  // First pass: exact match with whitespace normalization only.
+  const strictRows = await query(
+    `SELECT id
+     FROM employees
+     WHERE REGEXP_REPLACE(LOWER(TRIM(name)), '\\s+', ' ', 'g') = REGEXP_REPLACE(LOWER(TRIM(?)), '\\s+', ' ', 'g')
+     ORDER BY id DESC
+     LIMIT 1`,
+    [candidate]
+  ) as any[];
+  const strictMatch = Array.isArray(strictRows) ? strictRows[0] : strictRows;
+  if (strictMatch?.id) return Number(strictMatch.id);
+
+  // Second pass: ignore punctuation/spaces (e.g., middle initials, dots, dashes).
+  const looseRows = await query(
+    `SELECT id
+     FROM employees
+     WHERE REGEXP_REPLACE(LOWER(COALESCE(name, '')), '[^a-z0-9]', '', 'g') = REGEXP_REPLACE(LOWER(COALESCE(?, '')), '[^a-z0-9]', '', 'g')
+     ORDER BY id DESC
+     LIMIT 1`,
+    [candidate]
+  ) as any[];
+  const looseMatch = Array.isArray(looseRows) ? looseRows[0] : looseRows;
+  if (looseMatch?.id) return Number(looseMatch.id);
+
+  return null;
+}
+
+async function ensureEmployeeIdByFullName(fullName: string): Promise<number | null> {
+  const candidate = String(fullName || '').trim();
+  if (!candidate) return null;
+
+  const hiredStatusCheck = "UPPER(COALESCE(status, '')) IN ('PROBATIONARY', 'REGULAR', 'PERMANENT', 'HIRED')";
+
+  const strictRows = await query(
+    `SELECT id
+     FROM employees
+     WHERE ${hiredStatusCheck}
+       AND REGEXP_REPLACE(LOWER(TRIM(name)), '\\s+', ' ', 'g') = REGEXP_REPLACE(LOWER(TRIM(?)), '\\s+', ' ', 'g')
+     ORDER BY id DESC
+     LIMIT 1`,
+    [candidate]
+  ) as any[];
+  const strictMatch = Array.isArray(strictRows) ? strictRows[0] : strictRows;
+  if (strictMatch?.id) return Number(strictMatch.id);
+
+  const looseRows = await query(
+    `SELECT id
+     FROM employees
+     WHERE ${hiredStatusCheck}
+       AND REGEXP_REPLACE(LOWER(COALESCE(name, '')), '[^a-z0-9]', '', 'g') = REGEXP_REPLACE(LOWER(COALESCE(?, '')), '[^a-z0-9]', '', 'g')
+     ORDER BY id DESC
+     LIMIT 1`,
+    [candidate]
+  ) as any[];
+  const looseMatch = Array.isArray(looseRows) ? looseRows[0] : looseRows;
+  if (looseMatch?.id) return Number(looseMatch.id);
+
+  return null;
+}
+
 // Simple audit recorder: stores who did what and snapshots of before/after plus metadata
 async function recordAudit(user: any, action: string, tableName: string, rowId: any = null, before: any = null, after: any = null, meta: any = null) {
   try {
@@ -84,7 +228,36 @@ const auditInterestTables = [
   'employees','goals','coaching_logs','coaching_chats','appraisals','discipline_records','property_accountability',
   'users','suggestions','feedback_360','applicants','requisitions','offboarding','exit_interviews','development_plans',
   'self_assessments','onboarding','notifications','elearning_courses','elearning_recommendations','pip_plans',
-  'promotion_recommendations','promotions'
+  'promotion_recommendations','promotions','goal_member_tasks','goal_improvement_plans','goal_development_plans'
+];
+
+const softDeleteTables = [
+  'users',
+  'employees',
+  'payroll_adjustments',
+  'goals',
+  'goal_member_tasks',
+  'coaching_logs',
+  'coaching_chats',
+  'elearning_courses',
+  'appraisals',
+  'discipline_records',
+  'property_accountability',
+  'suggestions',
+  'feedback_360',
+  'applicants',
+  'requisitions',
+  'offboarding',
+  'exit_interviews',
+  'development_plans',
+  'goal_improvement_plans',
+  'goal_development_plans',
+  'self_assessments',
+  'pip_plans',
+  'promotion_recommendations',
+  'promotions',
+  'career_paths',
+  'onboarding',
 ];
 
 async function initDb() {
@@ -119,6 +292,29 @@ async function initDb() {
       leader_id INTEGER NOT NULL,
       member_id INTEGER NOT NULL,
       UNIQUE(leader_id, member_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS goal_member_tasks (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      goal_id INTEGER NOT NULL,
+      member_employee_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      due_date TEXT,
+      priority TEXT DEFAULT 'Medium',
+      status TEXT DEFAULT 'Not Started',
+      progress INTEGER DEFAULT 0,
+      proof_image TEXT,
+      proof_note TEXT,
+      proof_submitted_at TEXT,
+      proof_review_status TEXT DEFAULT 'Not Submitted',
+      proof_review_note TEXT,
+      proof_reviewed_by INTEGER,
+      proof_reviewed_at TEXT,
+      created_by INTEGER,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(goal_id) REFERENCES goals(id),
+      FOREIGN KEY(member_employee_id) REFERENCES employees(id)
     )`,
       `CREATE TABLE IF NOT EXISTS coaching_logs (
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
@@ -206,8 +402,13 @@ async function initDb() {
       employee_id INTEGER,
       profile_picture TEXT,
       full_name TEXT,
+      position TEXT,
+      dept TEXT,
+      created_by INTEGER,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       linked_user_id INTEGER,
-      FOREIGN KEY(employee_id) REFERENCES employees(id)
+      FOREIGN KEY(employee_id) REFERENCES employees(id),
+      FOREIGN KEY(created_by) REFERENCES users(id)
     )`
     ,
     `CREATE TABLE IF NOT EXISTS password_resets (
@@ -321,12 +522,40 @@ async function initDb() {
     `CREATE TABLE IF NOT EXISTS development_plans (
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
       employee_id INTEGER,
+      goal_id INTEGER,
       skill_gap TEXT,
       growth_step TEXT,
       step_order INTEGER DEFAULT 0,
       status TEXT DEFAULT 'Not Started',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(employee_id) REFERENCES employees(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS goal_improvement_plans (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      goal_id INTEGER NOT NULL,
+      goal_scope TEXT NOT NULL,
+      plan_title TEXT,
+      issue_summary TEXT,
+      improvement_objective TEXT,
+      action_steps TEXT,
+      review_date TEXT,
+      status TEXT DEFAULT 'Not Started',
+      created_by INTEGER,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(goal_id) REFERENCES goals(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS goal_development_plans (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      goal_id INTEGER NOT NULL,
+      goal_scope TEXT NOT NULL,
+      plan_title TEXT,
+      skill_focus TEXT,
+      development_actions TEXT,
+      review_date TEXT,
+      status TEXT DEFAULT 'Not Started',
+      created_by INTEGER,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(goal_id) REFERENCES goals(id)
     )`,
     `CREATE TABLE IF NOT EXISTS self_assessments (
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
@@ -603,6 +832,32 @@ async function initDb() {
       } catch {}
     }
 
+    const goalTaskMigrations = [
+      'ALTER TABLE goal_member_tasks ADD COLUMN description TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN due_date TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN priority TEXT DEFAULT \'Medium\'',
+      'ALTER TABLE goal_member_tasks ADD COLUMN status TEXT DEFAULT \'Not Started\'',
+      'ALTER TABLE goal_member_tasks ADD COLUMN progress INTEGER DEFAULT 0',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_image TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_note TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_submitted_at TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_status TEXT DEFAULT \'Not Submitted\'',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_note TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_by INTEGER',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_at TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN created_by INTEGER',
+      'ALTER TABLE goal_member_tasks ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+      'ALTER TABLE goal_member_tasks ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+    ];
+    for (const sql of goalTaskMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
     // Safe migrations for exit_interviews â€” add all missing fields
     const exitInterviewMigrations = [
       'ALTER TABLE exit_interviews ADD COLUMN ssn TEXT',
@@ -748,6 +1003,7 @@ async function initDb() {
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
       employee_id INTEGER,
       appraisal_id INTEGER,
+      goal_id INTEGER,
       start_date TEXT,
       end_date TEXT,
       deficiency TEXT,
@@ -770,6 +1026,20 @@ async function initDb() {
         try { await c.query(pipTable); } finally { c.release(); }
       } else { sqliteDb.exec(pipTable); }
     } catch {}
+
+    // Safe migration: add goal_id to development_plans and pip_plans if missing
+    const goalLinkMigrations = [
+      'ALTER TABLE development_plans ADD COLUMN goal_id INTEGER',
+      'ALTER TABLE pip_plans ADD COLUMN goal_id INTEGER',
+    ];
+    for (const sql of goalLinkMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
 
     // Create promotion_recommendations table
     const promoRecTable = `CREATE TABLE IF NOT EXISTS promotion_recommendations (
@@ -879,6 +1149,10 @@ async function initDb() {
       'ALTER TABLE users ADD COLUMN profile_picture TEXT',
       'ALTER TABLE users ADD COLUMN email TEXT',
       'ALTER TABLE users ADD COLUMN full_name TEXT',
+      'ALTER TABLE users ADD COLUMN position TEXT',
+      'ALTER TABLE users ADD COLUMN dept TEXT',
+      'ALTER TABLE users ADD COLUMN created_by INTEGER',
+      'ALTER TABLE users ADD COLUMN created_at TIMESTAMP',
       'ALTER TABLE users ADD COLUMN linked_user_id INTEGER',
       'ALTER TABLE users ADD COLUMN deleted_at TIMESTAMP',
       'ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 0',
@@ -889,6 +1163,42 @@ async function initDb() {
       'ALTER TABLE coaching_chats ADD COLUMN action_status TEXT',
     ];
     for (const sql of userMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
+    const softDeleteMigrations = [
+      'ALTER TABLE employees ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE payroll_adjustments ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE goals ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE goal_member_tasks ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE coaching_logs ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE coaching_chats ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE elearning_courses ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE appraisals ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE discipline_records ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE property_accountability ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE suggestions ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE feedback_360 ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE applicants ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE requisitions ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE offboarding ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE exit_interviews ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE development_plans ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE goal_improvement_plans ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE goal_development_plans ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE self_assessments ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE pip_plans ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE promotion_recommendations ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE promotions ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE career_paths ADD COLUMN deleted_at TIMESTAMP',
+      'ALTER TABLE onboarding ADD COLUMN deleted_at TIMESTAMP',
+    ];
+    for (const sql of softDeleteMigrations) {
       try {
         if (usePostgres && pgPool) {
           const c = await pgPool.connect();
@@ -1070,13 +1380,54 @@ async function startServer() {
   }
 
   function isPrivilegedRole(role: any) {
-    const r = (role || '').toString().toLowerCase();
-    return r === 'hr' || r === 'admin';
+    const r = (role || '').toString().toLowerCase().replace(/[_-]+/g, ' ').trim();
+    return r === 'hr' || r === 'hr admin' || r === 'admin';
+  }
+
+  function normalizeUserRole(role: any): 'Employee' | 'Manager' | 'HR' | null {
+    const r = (role || '').toString().toLowerCase().replace(/[_-]+/g, ' ').trim();
+    if (r === 'employee') return 'Employee';
+    if (r === 'manager') return 'Manager';
+    if (r === 'hr' || r === 'hr admin') return 'HR';
+    return null;
   }
 
   function normalizeEmployeeId(value: any): number | null {
     const n = Number(value);
     return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+  }
+  function normalizeDept(value: any): string {
+    return (value || '').toString().trim().toLowerCase();
+  }
+
+  function isSupervisorPositionLabel(position: any): boolean {
+    return (position || '').toString().toLowerCase().includes('supervisor');
+  }
+
+  async function getActorOrgContext(userId: number) {
+    if (!userId) return { dept: null as string | null, position: null as string | null, isSupervisor: false };
+    const rows: any = await query(
+      `SELECT u.id, u.employee_id, u.position AS user_position, u.dept AS user_dept,
+              e.position AS employee_position, e.dept AS employee_dept
+       FROM users u
+       LEFT JOIN employees e ON e.id = u.employee_id
+       WHERE u.id = ?
+       LIMIT 1`,
+      [userId]
+    );
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    const dept = row?.employee_dept || row?.user_dept || null;
+    const position = row?.employee_position || row?.user_position || null;
+    return { dept, position, isSupervisor: isSupervisorPositionLabel(position) };
+  }
+
+  async function canActorAccessEmployeeByDept(actorDept: any, employeeId: number | null) {
+    if (!employeeId) return false;
+    const deptNorm = normalizeDept(actorDept);
+    if (!deptNorm) return false;
+    const rows: any = await query('SELECT dept FROM employees WHERE id = ? LIMIT 1', [employeeId]);
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    return normalizeDept(row?.dept) === deptNorm;
   }
 
   async function getManagedEmployeeIds(managerUserId: number) {
@@ -1288,6 +1639,11 @@ async function startServer() {
       if (user.employee_id) {
         const empRows = await query('SELECT name, position, dept, email, phone, address, hire_date, status FROM employees WHERE id = ?', [user.employee_id]) as any;
         if (empRows[0]) { employee_name = empRows[0].name; position = empRows[0].position; dept = empRows[0].dept; user_email = empRows[0].email; phone = empRows[0].phone; address = empRows[0].address; hire_date = empRows[0].hire_date; status = empRows[0].status; }
+      } else {
+        employee_name = user.full_name || user.username || null;
+        position = user.position || null;
+        dept = user.dept || null;
+        user_email = user.email || null;
       }
       try {
         const meta = {
@@ -1404,31 +1760,75 @@ async function startServer() {
       let creatorPayload: any = null;
         try {
         creatorPayload = await verifyTokenWithVersion(parts[1]);
-        if (creatorPayload.role !== 'HR' && creatorPayload.role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+        const creatorRole = normalizeUserRole(creatorPayload.role);
+        if (creatorRole !== 'HR' && creatorRole !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
       } catch (err) {
         return res.status(401).json({ error: 'Invalid token' });
       }
 
-      const { email, username, password, role, employee_id, full_name, linked_user_id } = req.body;
+      const { email, username, password, role, employee_id, full_name, linked_user_id, position, dept } = req.body;
       if ((!email && !username) || !password) return res.status(400).json({ error: 'Missing email (or username) or password' });
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return res.status(400).json({ error: 'Invalid email format' });
+      const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+      const normalizedFullName = sanitizeUserFullName(typeof full_name === 'string' ? full_name : '', normalizedEmail || null);
+      const normalizedPosition = typeof position === 'string' ? position.trim() : '';
+      const normalizedDept = typeof dept === 'string' ? dept.trim() : '';
+      const requestedUsername = typeof username === 'string' ? username.trim() : '';
+      if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return res.status(400).json({ error: 'Invalid email format' });
       if (typeof password !== 'string' || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
       if (!/[A-Z]/.test(password)) return res.status(400).json({ error: 'Password must contain an uppercase letter' });
       if (!/[0-9]/.test(password)) return res.status(400).json({ error: 'Password must contain a number' });
       if (!/[^A-Za-z0-9]/.test(password)) return res.status(400).json({ error: 'Password must contain a special character' });
-      const allowedRoles = ['Employee', 'Manager', 'HR'];
-      if (!role || typeof role !== 'string' || !allowedRoles.includes(role)) return res.status(400).json({ error: 'Invalid or missing role' });
+      const normalizedRole = normalizeUserRole(role);
+      if (!normalizedRole) return res.status(400).json({ error: 'Invalid or missing role' });
+
+      const usernameSeed = requestedUsername || normalizedEmail.split('@')[0] || normalizedFullName || 'user';
+      const finalUsername = await generateUniqueUsername(usernameSeed);
+
+      let resolvedEmployeeId: number | null = null;
+      if (normalizedRole === 'Employee') {
+        if (!normalizedFullName) {
+          return res.status(400).json({ error: 'Full name is required for Employee account creation' });
+        }
+        resolvedEmployeeId = await ensureEmployeeIdByFullName(normalizedFullName);
+        if (!resolvedEmployeeId) {
+          return res.status(400).json({ error: 'Employee account can only be created for hired employees in Employee Master Directory' });
+        }
+      }
+
+      const explicitLinkedUserId = Number(linked_user_id);
+      const resolvedLinkedUserId = Number.isFinite(explicitLinkedUserId) && explicitLinkedUserId > 0 ? explicitLinkedUserId : null;
+      const shouldStoreOrgMeta = normalizedRole === 'HR' || normalizedRole === 'Manager';
+
       const hashed = bcrypt.hashSync(password, 10);
-      // Prefer email for new accounts; keep username as optional legacy field.
-      await query("INSERT INTO users (username, email, password, role, employee_id, full_name, linked_user_id) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-        [username || null, email || null, hashed, role, employee_id || null, full_name || null, linked_user_id || null]);
+      // Username is required by DB schema; derive one when not provided by the client.
+      await query("INSERT INTO users (username, email, password, role, employee_id, full_name, linked_user_id, position, dept, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+        [
+          finalUsername,
+          normalizedEmail || null,
+          hashed,
+          normalizedRole,
+          resolvedEmployeeId,
+          normalizedFullName || null,
+          resolvedLinkedUserId,
+          shouldStoreOrgMeta ? (normalizedPosition || null) : null,
+          shouldStoreOrgMeta ? (normalizedDept || null) : null,
+          creatorPayload?.id || null,
+          new Date().toISOString(),
+        ]);
 
       try {
-        await recordAudit(creatorPayload, 'create', 'users', null, null, { email: email || null, username: username || null, role, employee_id: employee_id || null, full_name: full_name || null, linked_user_id: linked_user_id || null });
+        await recordAudit(creatorPayload, 'create', 'users', null, null, { email: normalizedEmail || null, username: finalUsername, role: normalizedRole, employee_id: resolvedEmployeeId, full_name: normalizedFullName || null, linked_user_id: resolvedLinkedUserId, position: shouldStoreOrgMeta ? (normalizedPosition || null) : null, dept: shouldStoreOrgMeta ? (normalizedDept || null) : null });
       } catch (e) { /* ignore audit errors */ }
 
       res.json({ success: true });
     } catch (err) {
+      const pgErr: any = err;
+      if (pgErr?.code === '23505') {
+        const detail = String(pgErr?.detail || '');
+        if (detail.includes('(email)')) return res.status(409).json({ error: 'Email is already in use' });
+        if (detail.includes('(username)')) return res.status(409).json({ error: 'Username is already in use' });
+        return res.status(409).json({ error: 'Duplicate user account' });
+      }
       console.error('POST /api/users error:', err);
       res.status(500).json({ error: "Database error" });
     }
@@ -1443,10 +1843,10 @@ async function startServer() {
       if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
       let payload: any;
       try { payload = await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
-      if (payload.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
+      if (normalizeUserRole(payload.role) !== 'HR') return res.status(403).json({ error: 'Forbidden' });
 
       const id = req.params.id;
-      const { password, role, employee_id, full_name, linked_user_id } = req.body;
+      const { password, role, full_name, position, dept } = req.body;
       // Capture previous state for audit
       let before: any = null;
       try {
@@ -1461,14 +1861,56 @@ async function startServer() {
         vals.push(hashed);
       }
       if (role !== undefined) {
-        const allowedRoles = ['Employee', 'Manager', 'HR'];
-        if (!role || !allowedRoles.includes(role)) return res.status(400).json({ error: 'Invalid role' });
+        const normalizedRequestedRole = normalizeUserRole(role);
+        if (!normalizedRequestedRole) return res.status(400).json({ error: 'Invalid role' });
         sets.push('role = ?');
-        vals.push(role);
+        vals.push(normalizedRequestedRole);
       }
-      if (employee_id !== undefined) { sets.push('employee_id = ?'); vals.push(employee_id || null); }
-      if (full_name !== undefined) { sets.push('full_name = ?'); vals.push(full_name || null); }
-      if (linked_user_id !== undefined) { sets.push('linked_user_id = ?'); vals.push(linked_user_id || null); }
+
+      const normalizedFullName = full_name !== undefined
+        ? sanitizeUserFullName(String(full_name || ''), String(before?.email || ''))
+        : sanitizeUserFullName(String(before?.full_name || ''), String(before?.email || ''));
+
+      if (full_name !== undefined) {
+        sets.push('full_name = ?');
+        vals.push(normalizedFullName || null);
+      }
+
+      // Employee link is automatic by full name only for Employee role.
+      if (role !== undefined || full_name !== undefined) {
+        const resolvedRole = normalizeUserRole(role !== undefined ? role : (before?.role || ''));
+        let resolvedEmployeeId: number | null = null;
+        if (resolvedRole === 'Employee' && normalizedFullName) {
+          resolvedEmployeeId = await ensureEmployeeIdByFullName(normalizedFullName);
+          if (!resolvedEmployeeId) {
+            return res.status(400).json({ error: 'Employee role requires a hired employee match in Employee Master Directory' });
+          }
+        }
+        if (resolvedRole === 'Employee' && !normalizedFullName) {
+          return res.status(400).json({ error: 'Full name is required for Employee role' });
+        }
+
+        sets.push('employee_id = ?');
+        vals.push(resolvedEmployeeId);
+      }
+
+      const effectiveRole = normalizeUserRole(role !== undefined ? role : (before?.role || ''));
+      const canStoreOrgMeta = effectiveRole === 'HR' || effectiveRole === 'Manager';
+      if (position !== undefined) {
+        sets.push('position = ?');
+        vals.push(canStoreOrgMeta ? (String(position || '').trim() || null) : null);
+      }
+      if (dept !== undefined) {
+        sets.push('dept = ?');
+        vals.push(canStoreOrgMeta ? (String(dept || '').trim() || null) : null);
+      }
+      if (role !== undefined && !canStoreOrgMeta) {
+        sets.push('position = ?');
+        vals.push(null);
+        sets.push('dept = ?');
+        vals.push(null);
+      }
+
       if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
       vals.push(id);
       await query(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, vals);
@@ -1488,7 +1930,7 @@ async function startServer() {
     try {
       const userId = (req as any).user?.id;
       const employeeId = (req as any).user?.employee_id;
-      const userRows = await query('SELECT id, username, email, role, employee_id, profile_picture, full_name FROM users WHERE id = ?', [userId]) as any;
+      const userRows = await query('SELECT id, username, email, role, employee_id, profile_picture, full_name, position, dept FROM users WHERE id = ?', [userId]) as any;
       const u = userRows[0];
       if (!u) return res.status(404).json({ error: 'User not found' });
       let emp: any = null;
@@ -1497,7 +1939,7 @@ async function startServer() {
         emp = empRows[0] || null;
       }
       if (!emp) {
-        return res.json({ ...u, name: u.full_name || u.username || null });
+        return res.json({ ...u, name: u.full_name || u.username || null, position: u.position || null, dept: u.dept || null });
       }
       res.json({ ...u, ...emp });
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
@@ -1508,6 +1950,10 @@ async function startServer() {
     try {
       const userId = (req as any).user?.id;
       const employeeId = (req as any).user?.employee_id;
+      const actorRole = String((req as any).user?.role || '').toLowerCase();
+      if (actorRole !== 'hr') {
+        return res.status(403).json({ error: 'Only HR admin can edit account information' });
+      }
       const { email, phone, address, employee_name, full_name, position, dept } = req.body;
 
       // Users without a linked employee can still update full_name on users table
@@ -1516,7 +1962,7 @@ async function startServer() {
         if (nameToSet !== undefined) {
           await query('UPDATE users SET full_name = ? WHERE id = ?', [nameToSet || null, userId]);
         }
-        const userRows = await query('SELECT id, username, email, role, full_name, profile_picture FROM users WHERE id = ?', [userId]) as any;
+        const userRows = await query('SELECT id, username, email, role, full_name, profile_picture, position, dept FROM users WHERE id = ?', [userId]) as any;
         return res.json({ success: true, ...(userRows[0] || {}) });
       }
 
@@ -1745,7 +2191,7 @@ async function startServer() {
   // DELETE adjustment
   app.delete('/api/payroll-adjustments/:id', authenticateToken, async (req, res) => {
     try {
-      await query('DELETE FROM payroll_adjustments WHERE id = ?', [req.params.id]);
+      await softDeleteById('payroll_adjustments', req.params.id);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
@@ -1783,10 +2229,90 @@ async function startServer() {
       if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
       try { await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
 
-      const rows: any = await query('SELECT e.*, u.full_name as manager, u.username as manager_username FROM employees e LEFT JOIN users u ON e.manager_id = u.id ORDER BY e.name');
-      const result = (Array.isArray(rows) ? rows : []).map((r: any) => ({ ...r, manager: r.manager || r.manager_username || '' }));
-      res.json(result);
+      try {
+        // Get employees with manager and profile picture information
+        // Use a JOIN with users and pick the latest profile picture (highest user id)
+        const sqlQuery = `
+          SELECT DISTINCT ON (e.id)
+            e.id,
+            e.name,
+            e.status,
+            e.position,
+            e.dept,
+            e.manager_id,
+            e.hire_date,
+            e.salary_base,
+            e.ssn,
+            u.full_name as manager,
+            u.username as manager_username,
+            uu.profile_picture
+          FROM employees e
+          LEFT JOIN users u ON e.manager_id = u.id
+          LEFT JOIN users uu ON uu.employee_id = e.id
+          WHERE UPPER(COALESCE(e.status, '')) IN ('PROBATIONARY', 'REGULAR', 'PERMANENT', 'HIRED')
+            AND NOT EXISTS (
+            SELECT 1
+            FROM users ux
+            WHERE ux.deleted_at IS NULL
+              AND ux.role IN ('HR', 'Manager')
+              AND (
+                ux.employee_id = e.id
+                OR (
+                  COALESCE(TRIM(ux.full_name), '') <> ''
+                  AND REGEXP_REPLACE(LOWER(COALESCE(ux.full_name, '')), '[^a-z0-9]', '', 'g') = REGEXP_REPLACE(LOWER(COALESCE(e.name, '')), '[^a-z0-9]', '', 'g')
+                )
+              )
+          )
+          ORDER BY e.id, uu.id DESC
+        `;
+        
+        const rows: any = await query(sqlQuery);
+        
+        const result = (Array.isArray(rows) ? rows : []).map((r: any) => ({ 
+          ...r, 
+          manager: r.manager || r.manager_username || '',
+          profile_picture: r.profile_picture || null 
+        }));
+        
+        res.json(result);
+      } catch (dbErr) {
+        console.error('Database query error:', dbErr);
+        res.status(500).json({ error: 'Database error retrieving employees' });
+      }
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  // Debug: Check profile picture for a specific employee
+  app.get("/api/employees/debug/:employeeId", async (req, res) => {
+    try {
+      const auth = req.headers['authorization'];
+      if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+      const parts = auth.split(' ');
+      if (parts.length !== 2 || parts[0] !== 'Bearer') return res.status(401).json({ error: 'Unauthorized' });
+      try { await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+
+      const employeeId = req.params.employeeId;
+      
+      // Get employee info
+      const empRows: any = await query('SELECT * FROM employees WHERE id = ?', [employeeId]);
+      const employee = empRows[0];
+      
+      // Get users linked to this employee
+      const userRows: any = await query('SELECT id, username, email, role, employee_id, (profile_picture IS NOT NULL AND profile_picture != \'\') as has_profile, LENGTH(COALESCE(profile_picture, \'\')) as profile_size FROM users WHERE employee_id = ?', [employeeId]);
+      
+      res.json({
+        employee,
+        linked_users: userRows,
+        debug_info: {
+          employee_found: !!employee,
+          users_found: userRows.length,
+          message: userRows.length === 0 ? 'No users linked to this employee!' : userRows.map((u: any) => `User ${u.id} (${u.username}): has_profile=${u.has_profile}, size=${u.profile_size}`).join('; ')
+        }
+      });
+    } catch (err) {
+      console.error('Debug endpoint error:', err);
+      res.status(500).json({ error: 'Database error', details: err instanceof Error ? err.message : 'Unknown error' });
+    }
   });
 
   // Update employee
@@ -1816,14 +2342,31 @@ async function startServer() {
       try { await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
 
       const id = req.params.id;
-      await query('DELETE FROM employees WHERE id = ?', [id]);
+      await softDeleteById('employees', id);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
 
-  app.get("/api/employees/:id", async (req, res) => {
+  app.get("/api/employees/:id", authenticateToken, async (req, res) => {
     try {
+      const actor = (req as any).user || {};
+      const role = String(actor.role || '');
       const id = req.params.id;
+      const employeeId = normalizeEmployeeId(id);
+      if (!employeeId) return res.status(400).json({ error: 'Invalid employee id' });
+
+      if (isPrivilegedRole(role)) {
+        // HR/Admin can view any employee record.
+      } else if (role === 'Manager') {
+        const allowed = await canManagerAccessEmployee(actor.id, employeeId);
+        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+      } else if (role === 'Employee') {
+        const ownEmployeeId = normalizeEmployeeId(actor.employee_id);
+        if (!ownEmployeeId || ownEmployeeId !== employeeId) return res.status(403).json({ error: 'Forbidden' });
+      } else {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
       const empRows = await query("SELECT * FROM employees WHERE id = ?", [id]) as any;
       const employee = empRows[0];
       
@@ -1859,16 +2402,46 @@ async function startServer() {
         try { payload = await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
 
         const includeDeleted = (req.query && (req.query.include_deleted === '1' || req.query.include_deleted === 'true'));
-        if (includeDeleted && payload.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
+        if (includeDeleted && normalizeUserRole(payload.role) !== 'HR') return res.status(403).json({ error: 'Forbidden' });
 
-        const q = `SELECT u.*, e.name AS employee_name, lu.full_name AS linked_user_full_name, lu.role AS linked_user_role
+        // HR/Manager users should not be linked to employees.
+        try {
+          await query("UPDATE users SET employee_id = NULL WHERE COALESCE(TRIM(role), '') <> '' AND LOWER(TRIM(COALESCE(role, ''))) <> 'employee' AND employee_id IS NOT NULL");
+        } catch (e) { /* ignore cleanup errors */ }
+
+        // Backfill unresolved employee links by full_name so existing accounts stop showing N/A.
+        try {
+          const unresolvedUsers = await query(
+            `SELECT id, full_name
+             FROM users
+             WHERE employee_id IS NULL
+               AND COALESCE(TRIM(full_name), '') <> ''
+               AND LOWER(TRIM(COALESCE(role, ''))) = 'employee'
+               ${includeDeleted ? '' : 'AND deleted_at IS NULL'}`
+          ) as any[];
+
+          for (const u of (Array.isArray(unresolvedUsers) ? unresolvedUsers : [])) {
+            const resolvedEmployeeId = await ensureEmployeeIdByFullName(String(u.full_name || ''));
+            if (resolvedEmployeeId) {
+              await query('UPDATE users SET employee_id = ? WHERE id = ?', [resolvedEmployeeId, u.id]);
+            }
+          }
+        } catch (e) { /* ignore backfill errors */ }
+
+        const q = `SELECT u.*, e.name AS employee_name, e.position AS employee_position, e.dept AS employee_dept, lu.full_name AS linked_user_full_name, lu.role AS linked_user_role,
+              cu.full_name AS creator_full_name, cu.email AS creator_email, cu.username AS creator_username
                    FROM users u
                    LEFT JOIN employees e ON u.employee_id = e.id
                    LEFT JOIN users lu ON u.linked_user_id = lu.id
+             LEFT JOIN users cu ON u.created_by = cu.id
                    ${includeDeleted ? '' : 'WHERE u.deleted_at IS NULL'}
                    ORDER BY u.full_name IS NULL, u.full_name, u.email`;
         const users: any = await query(q);
-        res.json(Array.isArray(users) ? users : []);
+        const sanitizedUsers = (Array.isArray(users) ? users : []).map((u: any) => ({
+          ...u,
+          full_name: sanitizeUserFullName(u?.full_name, u?.email)
+        }));
+        res.json(sanitizedUsers);
       } catch (err) { res.status(500).json({ error: 'Database error' }); }
     });
 
@@ -1958,11 +2531,10 @@ async function startServer() {
       const { employee_id, category, notes, is_positive, logged_by } = req.body;
       await query("INSERT INTO coaching_logs (employee_id, category, notes, is_positive, logged_by) VALUES (?, ?, ?, ?, ?)", 
         [employee_id, category, notes, is_positive ? 1 : 0, logged_by]);
-      // Notify the employee
       const empUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employee_id]);
       const empUser = Array.isArray(empUsers) ? empUsers[0] : empUsers;
       if (empUser) {
-        await createNotification({ user_id: empUser.id, type: is_positive ? 'success' : 'info', message: `New coaching entry: ${category || 'General'} â€” ${is_positive ? 'Positive' : 'Constructive'}`, source: 'coaching_log' });
+        await createNotification({ user_id: empUser.id, type: 'info', message: `New ${category || 'coaching'} feedback received`, source: 'coaching' });
       }
       res.json({ success: true });
     } catch (err) {
@@ -1978,7 +2550,8 @@ async function startServer() {
 
       const b = req.body;
       const employeeId = normalizeEmployeeId(b.employee_id);
-      if (!employeeId) return res.status(400).json({ error: 'employee_id is required' });
+      if (!employeeId) return res.status(400).json({ error: 'Invalid employee_id' });
+
       if (role === 'Manager') {
         const allowed = await canManagerAccessEmployee(actor.id, employeeId);
         if (!allowed) return res.status(403).json({ error: 'Forbidden' });
@@ -2017,12 +2590,13 @@ async function startServer() {
           b.status || null, b.employee_department || null, b.employee_title || null, b.probationary_period || null,
           b.supervisor_print_name || null, b.reviewer_print_name || null, b.hr_print_name || null, b.employee_print_name || null,
           b.job_knowledge_comment || null, b.work_quality_comment || null, b.attendance_comment || null, b.productivity_comment || null, b.communication_comment || null, b.dependability_comment || null]);
-      // Notify the employee about their new evaluation
+
       const eUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employeeId]);
       const eUser = Array.isArray(eUsers) ? eUsers[0] : eUsers;
       if (eUser) {
         await createNotification({ user_id: eUser.id, type: 'info', message: `A new ${b.form_type || 'performance'} evaluation has been submitted for you`, source: 'appraisal' });
       }
+
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: "Database error" });
@@ -2034,18 +2608,32 @@ async function startServer() {
     try {
       const actor = (req as any).user || {};
       const role = actor.role;
+      const normalizedRole = normalizeUserRole(role);
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
       const appraisalRows: any = await query('SELECT * FROM appraisals WHERE id = ?', [req.params.id]);
       const appraisal = Array.isArray(appraisalRows) ? appraisalRows[0] : appraisalRows;
       if (!appraisal) return res.status(404).json({ error: 'Appraisal not found' });
 
       const appraisalEmpId = normalizeEmployeeId(appraisal.employee_id);
       if (isPrivilegedRole(role)) {
-        // allowed
+        if (normalizedRole === 'HR') {
+          const hrDept = normalizeDept(actorCtx.dept);
+          if (!hrDept) return res.status(403).json({ error: 'Forbidden' });
+          const allowed = await canActorAccessEmployeeByDept(hrDept, appraisalEmpId);
+          if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+        }
       } else if (role === 'Manager') {
         const allowed = await canManagerAccessEmployee(actor.id, appraisalEmpId);
         if (!allowed) return res.status(403).json({ error: 'Forbidden' });
       } else if (role === 'Employee') {
-        if (!actor.employee_id || normalizeEmployeeId(actor.employee_id) !== appraisalEmpId) return res.status(403).json({ error: 'Forbidden' });
+        if (actorCtx.isSupervisor) {
+          const supervisorDept = normalizeDept(actorCtx.dept);
+          if (!supervisorDept) return res.status(403).json({ error: 'Forbidden' });
+          const allowed = await canActorAccessEmployeeByDept(supervisorDept, appraisalEmpId);
+          if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+        } else if (!actor.employee_id || normalizeEmployeeId(actor.employee_id) !== appraisalEmpId) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
       } else {
         return res.status(403).json({ error: 'Forbidden' });
       }
@@ -2054,15 +2642,23 @@ async function startServer() {
       const sets: string[] = [];
       const vals: any[] = [];
       const employeeUpdatable = ['employee_signature','employee_signature_date','employee_acknowledgement','employee_print_name'];
+      const supervisorUpdatable = ['supervisor_signature','supervisor_signature_date','supervisor_print_name','supervisors_overall_comment'];
+      const hrUpdatable = ['hr_signature','hr_signature_date','hr_print_name'];
       const managerHrUpdatable = ['supervisor_signature','supervisor_signature_date','reviewer_signature','reviewer_signature_date',
         'employee_signature','employee_signature_date','verified','promotability_status',
         'hr_signature','hr_signature_date','overall_rating','recommendation','reviewer_agree','revised_rating',
         'reviewers_comment','employee_acknowledgement','supervisors_overall_comment','status',
         'supervisor_print_name','reviewer_print_name','hr_print_name','employee_print_name'];
 
-      const updatable = role === 'Employee' ? employeeUpdatable : managerHrUpdatable;
+      let updatable = managerHrUpdatable;
       if (role === 'Employee') {
-        const disallowedKeys = Object.keys(b).filter((k) => !employeeUpdatable.includes(k));
+        updatable = actorCtx.isSupervisor ? supervisorUpdatable : employeeUpdatable;
+      } else if (normalizedRole === 'HR') {
+        updatable = hrUpdatable;
+      }
+
+      if (role === 'Employee' || normalizedRole === 'HR') {
+        const disallowedKeys = Object.keys(b).filter((k) => !updatable.includes(k));
         if (disallowedKeys.length > 0) return res.status(403).json({ error: 'Forbidden fields in employee update' });
       }
 
@@ -2125,11 +2721,12 @@ async function startServer() {
       const actor = (req as any).user || {};
       const role = actor.role;
       const queryEmployeeId = normalizeEmployeeId(req.query.employee_id);
+      const includeArchived = String(req.query.include_archived || '0') === '1';
 
       if (isPrivilegedRole(role)) {
         const rows: any = queryEmployeeId
-          ? await query("SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ?", [queryEmployeeId])
-          : await query("SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id");
+          ? await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ? ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`, [queryEmployeeId])
+          : await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id ${includeArchived ? '' : 'WHERE g.deleted_at IS NULL'}`);
         return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
       }
 
@@ -2137,15 +2734,15 @@ async function startServer() {
         const managedIds = await getManagedEmployeeIds(actor.id);
         if (queryEmployeeId) {
           if (!managedIds.includes(queryEmployeeId)) return res.status(403).json({ error: 'Forbidden' });
-          const rows: any = await query("SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ?", [queryEmployeeId]);
+          const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ? ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`, [queryEmployeeId]);
           return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
         }
         if (managedIds.length === 0) {
-          const rows: any = await query("SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id IS NULL");
+          const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id IS NULL ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`);
           return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
         }
         const placeholders = managedIds.map(() => '?').join(',');
-        const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id IN (${placeholders}) OR g.employee_id IS NULL`, managedIds);
+        const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE (g.employee_id IN (${placeholders}) OR g.employee_id IS NULL) ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`, managedIds);
         return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
       }
 
@@ -2153,7 +2750,7 @@ async function startServer() {
         const employeeId = normalizeEmployeeId(actor.employee_id);
         if (!employeeId) return res.json([]);
         const rows: any = await query(
-          "SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ? OR g.id IN (SELECT goal_id FROM goal_assignees WHERE employee_id = ?)",
+          `SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE (g.employee_id = ? OR g.id IN (SELECT goal_id FROM goal_assignees WHERE employee_id = ?)) ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`,
           [employeeId, employeeId]
         );
         return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
@@ -2181,9 +2778,34 @@ async function startServer() {
       }
 
       await query("DELETE FROM goal_assignees WHERE goal_id = ?", [req.params.id]);
-      await query("DELETE FROM goals WHERE id = ?", [req.params.id]);
+      await softDeleteById('goals', req.params.id);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.post('/api/goals/archive-all', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+
+      if (isPrivilegedRole(role)) {
+        await query("UPDATE goals SET deleted_at = CURRENT_TIMESTAMP WHERE deleted_at IS NULL");
+        return res.json({ success: true });
+      }
+
+      const managedIds = await getManagedEmployeeIds(actor.id);
+      if (!Array.isArray(managedIds) || managedIds.length === 0) {
+        await query("UPDATE goals SET deleted_at = CURRENT_TIMESTAMP WHERE employee_id IS NULL AND deleted_at IS NULL");
+        return res.json({ success: true });
+      }
+
+      const placeholders = managedIds.map(() => '?').join(',');
+      await query(`UPDATE goals SET deleted_at = CURRENT_TIMESTAMP WHERE deleted_at IS NULL AND (employee_id IN (${placeholders}) OR employee_id IS NULL)`, managedIds);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
   });
 
   // Leader management: assign/unassign leaders to members
@@ -2195,6 +2817,15 @@ async function startServer() {
       const leaderId = parseInt(String(req.body.leader_id));
       const memberId = normalizeEmployeeId(req.body.member_id);
       if (!leaderId || !memberId) return res.status(400).json({ error: 'Invalid parameters' });
+
+      const leaderRows: any = await query('SELECT id, employee_id FROM users WHERE id = ?', [leaderId]);
+      const leaderUser = Array.isArray(leaderRows) ? leaderRows[0] : leaderRows;
+      if (!leaderUser) return res.status(400).json({ error: 'Invalid leader' });
+      const leaderEmployeeId = normalizeEmployeeId(leaderUser.employee_id);
+      if (leaderEmployeeId && leaderEmployeeId === memberId) {
+        return res.status(400).json({ error: 'A team leader cannot be assigned as their own member' });
+      }
+
       if (role === 'Manager') {
         const allowed = await canManagerAccessEmployee(actor.id, memberId);
         if (!allowed) return res.status(403).json({ error: 'Forbidden' });
@@ -2220,6 +2851,25 @@ async function startServer() {
       await query('DELETE FROM team_leaders WHERE leader_id = ? AND member_id = ?', [leaderId, memberId]);
       await recordAudit(actor, 'remove_leader_mapping', 'team_leaders', null, null, { leader_id: leaderId, member_id: memberId }, { route: req.originalUrl });
       res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.get('/api/leaders', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+      const rows: any = await query(
+        `SELECT l.leader_id,
+                u.employee_id,
+                COALESCE(u.full_name, u.username, u.email) AS leader_name,
+                COUNT(l.member_id) AS member_count
+         FROM team_leaders l
+         LEFT JOIN users u ON u.id = l.leader_id
+         GROUP BY l.leader_id, u.employee_id, u.full_name, u.username, u.email
+         ORDER BY leader_name`
+      );
+      res.json(Array.isArray(rows) ? rows : []);
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
 
@@ -2295,16 +2945,315 @@ async function startServer() {
   app.get('/api/leader-goals', authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
+      const memberRows: any = await query(
+        'SELECT l.member_id, e.name as member_name FROM team_leaders l LEFT JOIN employees e ON l.member_id = e.id WHERE l.leader_id = ?',
+        [actor.id]
+      );
+      const teamMembers = (Array.isArray(memberRows) ? memberRows : []).filter((m: any) => {
+        const memberId = normalizeEmployeeId(m?.member_id);
+        return !!memberId;
+      });
+      const allowedMemberIds = new Set(teamMembers.map((m: any) => String(normalizeEmployeeId(m.member_id))));
+
       const goalRows: any = await query(
         'SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.leader_id = ?',
         [actor.id]
       );
       const goals = await enrichGoalsWithAssignees(Array.isArray(goalRows) ? goalRows : []);
-      const memberRows: any = await query(
-        'SELECT l.member_id, e.name as member_name FROM team_leaders l LEFT JOIN employees e ON l.member_id = e.id WHERE l.leader_id = ?',
-        [actor.id]
+      await Promise.all(
+        goals.map(async (g: any) => {
+          const assignees = Array.isArray(g.assignees) ? g.assignees : [];
+          g.assignees = assignees
+            .filter((a: any) => {
+              const assigneeId = normalizeEmployeeId(a?.employee_id);
+              return !!assigneeId && allowedMemberIds.has(String(assigneeId));
+            })
+            .map((a: any) => ({ ...a, employee_name: a.employee_name || a.name || null }));
+
+          const taskRows: any = await query(
+            'SELECT t.*, e.name as member_name FROM goal_member_tasks t LEFT JOIN employees e ON t.member_employee_id = e.id WHERE t.goal_id = ? ORDER BY t.created_at DESC',
+            [g.id]
+          );
+          g.member_tasks = (Array.isArray(taskRows) ? taskRows : []).filter((t: any) => {
+            const taskMemberId = normalizeEmployeeId(t?.member_employee_id);
+            return !!taskMemberId && allowedMemberIds.has(String(taskMemberId));
+          });
+        })
       );
-      res.json({ goals, teamMembers: Array.isArray(memberRows) ? memberRows : [] });
+      res.json({ goals, teamMembers });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.post('/api/goals/:id/member-tasks', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      const goalId = parseInt(String(req.params.id));
+      const memberId = normalizeEmployeeId(req.body.member_employee_id);
+      const title = String(req.body.title || '').trim();
+      const description = String(req.body.description || '').trim();
+      const dueDate = req.body.due_date ? String(req.body.due_date) : null;
+      const priority = String(req.body.priority || 'Medium');
+
+      if (!goalId || !memberId || !title) return res.status(400).json({ error: 'Invalid task payload' });
+
+      const goalRows: any = await query('SELECT id, employee_id, leader_id FROM goals WHERE id = ?', [goalId]);
+      const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
+      if (!goal) return res.status(404).json({ error: 'Goal not found' });
+
+      let allowed = false;
+      if (isPrivilegedRole(role)) allowed = true;
+      else if (role === 'Manager') {
+        const allowedMgr = await canManagerAccessEmployee(actor.id, normalizeEmployeeId(goal.employee_id));
+        if (allowedMgr) allowed = true;
+      } else if (role === 'Employee') {
+        const isGoalLeader = Number(goal.leader_id) === Number(actor.id);
+        const canLeadMember = await isLeaderOf(actor.id, memberId);
+        if (isGoalLeader && canLeadMember) allowed = true;
+      }
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      const memberAssignedRows: any = await query('SELECT 1 FROM goal_assignees WHERE goal_id = ? AND employee_id = ?', [goalId, memberId]);
+      const memberAssigned = Array.isArray(memberAssignedRows) ? memberAssignedRows.length > 0 : !!memberAssignedRows;
+      if (!memberAssigned) return res.status(400).json({ error: 'Member is not part of this delegated goal team' });
+
+      const inserted: any = await query(
+        'INSERT INTO goal_member_tasks (goal_id, member_employee_id, title, description, due_date, priority, status, progress, proof_review_status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id',
+        [goalId, memberId, title, description || null, dueDate, priority || 'Medium', 'Not Started', 0, 'Not Submitted', actor.id || null]
+      );
+
+      try {
+        const uRows: any = await query('SELECT id FROM users WHERE employee_id = ?', [memberId]);
+        const u = Array.isArray(uRows) ? uRows[0] : uRows;
+        if (u && u.id) await createNotification({ user_id: u.id, type: 'info', message: `New task assigned: ${title}`, source: 'goal_member_tasks' });
+      } catch (e) {}
+
+      const taskId = inserted?.insertId || null;
+      await recordAudit(actor, 'create_goal_member_task', 'goal_member_tasks', taskId, null, { goal_id: goalId, member_employee_id: memberId, title, due_date: dueDate, priority }, { route: req.originalUrl });
+      res.json({ success: true, id: taskId });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.get('/api/member-tasks/recovery-metrics', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+
+      const daysRaw = parseInt(String(req.query.days || '7'), 10);
+      const days = Number.isFinite(daysRaw) ? Math.min(90, Math.max(1, daysRaw)) : 7;
+      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+      if (isPrivilegedRole(role)) {
+        const rows: any = await query(
+          `SELECT COUNT(*) as count
+           FROM goal_member_tasks t
+           WHERE t.created_at >= ?
+             AND LOWER(COALESCE(t.title, '')) LIKE 'recovery:%'`,
+          [cutoff]
+        );
+        const row = Array.isArray(rows) ? rows[0] : rows;
+        return res.json({ count: Number(row?.count || 0), days });
+      }
+
+      const managedIds = await getManagedEmployeeIds(actor.id);
+      if (!Array.isArray(managedIds) || managedIds.length === 0) {
+        const rows: any = await query(
+          `SELECT COUNT(*) as count
+           FROM goal_member_tasks t
+           LEFT JOIN goals g ON g.id = t.goal_id
+           WHERE t.created_at >= ?
+             AND LOWER(COALESCE(t.title, '')) LIKE 'recovery:%'
+             AND g.employee_id IS NULL`,
+          [cutoff]
+        );
+        const row = Array.isArray(rows) ? rows[0] : rows;
+        return res.json({ count: Number(row?.count || 0), days });
+      }
+
+      const placeholders = managedIds.map(() => '?').join(',');
+      const rows: any = await query(
+        `SELECT COUNT(*) as count
+         FROM goal_member_tasks t
+         LEFT JOIN goals g ON g.id = t.goal_id
+         WHERE t.created_at >= ?
+           AND LOWER(COALESCE(t.title, '')) LIKE 'recovery:%'
+           AND (g.employee_id IN (${placeholders}) OR g.employee_id IS NULL)`,
+        [cutoff, ...managedIds]
+      );
+      const row = Array.isArray(rows) ? rows[0] : rows;
+      return res.json({ count: Number(row?.count || 0), days });
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  app.get('/api/member-tasks/my', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const actorEmployeeId = normalizeEmployeeId(actor.employee_id);
+      if (!actorEmployeeId) return res.json([]);
+
+      const rows: any = await query(
+        `SELECT t.*, g.title as goal_title, g.statement as goal_statement,
+                COALESCE(e.name, 'Unknown') as member_name,
+                COALESCE(u.full_name, u.username, u.email) as reviewer_name
+         FROM goal_member_tasks t
+         LEFT JOIN goals g ON g.id = t.goal_id
+         LEFT JOIN employees e ON e.id = t.member_employee_id
+         LEFT JOIN users u ON u.id = t.proof_reviewed_by
+         WHERE t.member_employee_id = ?
+         ORDER BY COALESCE(t.updated_at, t.created_at) DESC`,
+        [actorEmployeeId]
+      );
+      res.json(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  app.get('/api/goals/:id/member-tasks', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      const goalId = parseInt(String(req.params.id));
+      if (!goalId) return res.status(400).json({ error: 'Invalid goal id' });
+
+      const goalRows: any = await query('SELECT id, employee_id, leader_id FROM goals WHERE id = ?', [goalId]);
+      const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
+      if (!goal) return res.status(404).json({ error: 'Goal not found' });
+
+      let allowed = false;
+      if (isPrivilegedRole(role)) allowed = true;
+      else if (role === 'Manager') {
+        const allowedMgr = await canManagerAccessEmployee(actor.id, normalizeEmployeeId(goal.employee_id));
+        if (allowedMgr) allowed = true;
+      } else if (role === 'Employee') {
+        if (Number(goal.leader_id) === Number(actor.id)) allowed = true;
+      }
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      const rows: any = await query(
+        `SELECT t.*, e.name as member_name, COALESCE(u.full_name, u.username, u.email) as reviewer_name
+         FROM goal_member_tasks t
+         LEFT JOIN employees e ON e.id = t.member_employee_id
+         LEFT JOIN users u ON u.id = t.proof_reviewed_by
+         WHERE t.goal_id = ?
+         ORDER BY COALESCE(t.updated_at, t.created_at) DESC`,
+        [goalId]
+      );
+
+      res.json(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  app.put('/api/member-tasks/:id', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      const taskId = parseInt(String(req.params.id));
+      if (!taskId) return res.status(400).json({ error: 'Invalid task id' });
+
+      const taskRows: any = await query(
+        'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
+        [taskId]
+      );
+      const task = Array.isArray(taskRows) ? taskRows[0] : taskRows;
+      if (!task) return res.status(404).json({ error: 'Task not found' });
+
+      const isGoalLeader = Number(task.leader_id) === Number(actor.id);
+      let allowed = false;
+      if (isPrivilegedRole(role)) allowed = true;
+      else if (role === 'Manager') {
+        const allowedMgr = await canManagerAccessEmployee(actor.id, normalizeEmployeeId(task.goal_employee_id));
+        if (allowedMgr) allowed = true;
+      } else if (role === 'Employee') {
+        const actorEmployeeId = normalizeEmployeeId(actor.employee_id);
+        if (isGoalLeader || (actorEmployeeId && actorEmployeeId === normalizeEmployeeId(task.member_employee_id))) allowed = true;
+      }
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      const b = req.body || {};
+      const leaderUpdatable = ['title', 'description', 'due_date', 'priority', 'status', 'progress'];
+      const leaderReviewUpdatable = ['proof_review_status', 'proof_review_note'];
+      const assigneeUpdatable = ['status', 'progress', 'proof_image', 'proof_note'];
+      const updatable = role === 'Employee' && !isGoalLeader ? assigneeUpdatable : leaderUpdatable;
+
+      const sets: string[] = [];
+      const vals: any[] = [];
+      for (const k of updatable) {
+        if (b[k] !== undefined) {
+          sets.push(`${k} = ?`);
+          vals.push(k === 'progress' ? Math.max(0, Math.min(100, Number(b[k]) || 0)) : b[k]);
+        }
+      }
+
+      if (!(role === 'Employee' && !isGoalLeader)) {
+        for (const k of leaderReviewUpdatable) {
+          if (b[k] !== undefined) {
+            sets.push(`${k} = ?`);
+            vals.push(b[k]);
+          }
+        }
+      }
+
+      const assigneeSubmittedProof = role === 'Employee' && !isGoalLeader && (b.proof_image !== undefined || b.proof_note !== undefined);
+      if (assigneeSubmittedProof) {
+        const hasProofImage = typeof b.proof_image === 'string' && b.proof_image.trim().length > 0;
+        sets.push('proof_submitted_at = ?');
+        vals.push(hasProofImage ? new Date().toISOString() : null);
+        sets.push('proof_review_status = ?');
+        vals.push(hasProofImage ? 'Pending Review' : 'Not Submitted');
+      }
+
+      const reviewerSetStatus = !(role === 'Employee' && !isGoalLeader) && b.proof_review_status !== undefined;
+      if (reviewerSetStatus) {
+        const reviewedStatus = String(b.proof_review_status || '');
+        const isReviewed = reviewedStatus === 'Approved' || reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected';
+        sets.push('proof_reviewed_by = ?');
+        vals.push(isReviewed ? (actor.id || null) : null);
+        sets.push('proof_reviewed_at = ?');
+        vals.push(isReviewed ? new Date().toISOString() : null);
+      }
+      if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+      sets.push('updated_at = CURRENT_TIMESTAMP');
+      vals.push(taskId);
+      await query(`UPDATE goal_member_tasks SET ${sets.join(', ')} WHERE id = ?`, vals);
+      await recordAudit(actor, 'update_goal_member_task', 'goal_member_tasks', taskId, null, b, { route: req.originalUrl });
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.delete('/api/member-tasks/:id', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      const taskId = parseInt(String(req.params.id));
+      if (!taskId) return res.status(400).json({ error: 'Invalid task id' });
+
+      const taskRows: any = await query(
+        'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
+        [taskId]
+      );
+      const task = Array.isArray(taskRows) ? taskRows[0] : taskRows;
+      if (!task) return res.status(404).json({ error: 'Task not found' });
+
+      let allowed = false;
+      if (isPrivilegedRole(role)) allowed = true;
+      else if (role === 'Manager') {
+        const allowedMgr = await canManagerAccessEmployee(actor.id, normalizeEmployeeId(task.goal_employee_id));
+        if (allowedMgr) allowed = true;
+      } else if (role === 'Employee') {
+        if (Number(task.leader_id) === Number(actor.id)) allowed = true;
+      }
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      await softDeleteById('goal_member_tasks', taskId);
+      await recordAudit(actor, 'delete_goal_member_task', 'goal_member_tasks', taskId, null, null, { route: req.originalUrl });
+      res.json({ success: true });
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
 
@@ -2313,7 +3262,7 @@ async function startServer() {
     try { const rows = await query("SELECT c.*, e.name as employee_name FROM coaching_logs c LEFT JOIN employees e ON c.employee_id = e.id ORDER BY c.created_at DESC"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/coaching_logs/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM coaching_logs WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try { await softDeleteById('coaching_logs', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Coaching Chat Messages ----
@@ -2354,7 +3303,7 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/coaching_chats/:employee_id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM coaching_chats WHERE employee_id = ?", [req.params.employee_id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try { await softDeleteWhere('coaching_chats', 'employee_id = ?', [req.params.employee_id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- E-Learning Courses & Recommendations ----
@@ -2370,7 +3319,7 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/elearning_courses/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM elearning_courses WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try { await softDeleteById('elearning_courses', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.get("/api/elearning_recommendations/:employee_id", async (req, res) => {
     try { const rows = await query("SELECT * FROM elearning_recommendations WHERE employee_id = ? ORDER BY created_at DESC", [req.params.employee_id]); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
@@ -2405,9 +3354,30 @@ async function startServer() {
     try {
       const actor = (req as any).user || {};
       const role = actor.role;
+      const normalizedRole = normalizeUserRole(role);
       const queryEmployeeId = normalizeEmployeeId(req.query.employee_id);
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
 
       if (isPrivilegedRole(role)) {
+        const hrDept = normalizedRole === 'HR' ? normalizeDept(actorCtx.dept) : '';
+        if (hrDept) {
+          if (queryEmployeeId) {
+            const allowed = await canActorAccessEmployeeByDept(hrDept, queryEmployeeId);
+            if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+            const rows = await query(
+              "SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ? AND LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+              [queryEmployeeId, hrDept]
+            );
+            return res.json(rows);
+          }
+
+          const rows = await query(
+            "SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+            [hrDept]
+          );
+          return res.json(rows);
+        }
+
         const rows = queryEmployeeId
           ? await query("SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?", [queryEmployeeId])
           : await query("SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id");
@@ -2429,6 +3399,27 @@ async function startServer() {
       }
 
       if (role === 'Employee') {
+        if (actorCtx.isSupervisor) {
+          const supervisorDept = normalizeDept(actorCtx.dept);
+          if (!supervisorDept) return res.json([]);
+
+          if (queryEmployeeId) {
+            const allowed = await canActorAccessEmployeeByDept(supervisorDept, queryEmployeeId);
+            if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+            const rows = await query(
+              "SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ? AND LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+              [queryEmployeeId, supervisorDept]
+            );
+            return res.json(rows);
+          }
+
+          const rows = await query(
+            "SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+            [supervisorDept]
+          );
+          return res.json(rows);
+        }
+
         const employeeId = normalizeEmployeeId(actor.employee_id);
         if (!employeeId) return res.json([]);
         const rows = await query("SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?", [employeeId]);
@@ -2439,12 +3430,53 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/appraisals/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM appraisals WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try { await softDeleteById('appraisals', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Discipline Records CRUD ----
-  app.get("/api/discipline_records", async (req, res) => {
-    try { const rows = await query("SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
+  app.get("/api/discipline_records", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+
+      if (role === 'HR') {
+        const hrDept = normalizeDept(actorCtx.dept);
+        if (!hrDept) return res.json([]);
+        const rows = await query(
+          "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+          [hrDept]
+        );
+        return res.json(rows);
+      }
+
+      if (role === 'Manager') {
+        const rows = await query("SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id");
+        return res.json(rows);
+      }
+
+      if (role === 'Employee') {
+        if (actorCtx.isSupervisor) {
+          const supervisorDept = normalizeDept(actorCtx.dept);
+          if (!supervisorDept) return res.json([]);
+          const rows = await query(
+            "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+            [supervisorDept]
+          );
+          return res.json(rows);
+        }
+
+        const employeeId = normalizeEmployeeId(actor.employee_id);
+        if (!employeeId) return res.json([]);
+        const rows = await query(
+          "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE d.employee_id = ?",
+          [employeeId]
+        );
+        return res.json(rows);
+      }
+
+      return res.status(403).json({ error: 'Forbidden' });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.post("/api/discipline_records", authenticateToken, async (req, res) => {
     try {
@@ -2486,8 +3518,77 @@ async function startServer() {
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
+  app.put("/api/discipline_records/:id/employee-sign", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      if (actor.role !== 'Employee') return res.status(403).json({ error: 'Only employees can sign this record' });
+
+      const employeeId = normalizeEmployeeId(actor.employee_id);
+      if (!employeeId) return res.status(400).json({ error: 'Employee profile not linked to this account' });
+
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Invalid record id' });
+
+      const rows = await query("SELECT id, employee_id, supervisor_signature FROM discipline_records WHERE id = ?", [id]) as any[];
+      const rec = Array.isArray(rows) ? rows[0] : rows;
+      if (!rec) return res.status(404).json({ error: 'Record not found' });
+      if (Number(rec.employee_id) !== Number(employeeId)) return res.status(403).json({ error: 'You can only sign your own disciplinary records' });
+      if (!String(rec.supervisor_signature || '').trim()) return res.status(400).json({ error: 'Supervisor signature is required before employee signing' });
+
+      const employee_signature = String(req.body?.employee_signature || '').trim();
+      const employee_signature_date = String(req.body?.employee_signature_date || '').trim() || new Date().toISOString().split('T')[0];
+      const employee_statement = req.body?.employee_statement !== undefined ? String(req.body.employee_statement || '').trim() : null;
+
+      if (!employee_signature) return res.status(400).json({ error: 'Employee signature is required' });
+
+      if (employee_statement !== null) {
+        await query(
+          "UPDATE discipline_records SET employee_signature = ?, employee_signature_date = ?, employee_statement = ? WHERE id = ?",
+          [employee_signature, employee_signature_date, employee_statement, id]
+        );
+      } else {
+        await query(
+          "UPDATE discipline_records SET employee_signature = ?, employee_signature_date = ? WHERE id = ?",
+          [employee_signature, employee_signature_date, id]
+        );
+      }
+
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+  app.put("/api/discipline_records/:id/supervisor-sign", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      if (actor.role !== 'Employee') return res.status(403).json({ error: 'Only supervisor accounts can sign this record' });
+
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      if (!actorCtx.isSupervisor) return res.status(403).json({ error: 'Only supervisor accounts can sign this record' });
+
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Invalid record id' });
+
+      const rows = await query("SELECT id, employee_id FROM discipline_records WHERE id = ?", [id]) as any[];
+      const rec = Array.isArray(rows) ? rows[0] : rows;
+      if (!rec) return res.status(404).json({ error: 'Record not found' });
+
+      const allowed = await canActorAccessEmployeeByDept(actorCtx.dept, normalizeEmployeeId(rec.employee_id));
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      const supervisor_signature = String(req.body?.supervisor_signature || '').trim();
+      const supervisor_signature_date = String(req.body?.supervisor_signature_date || '').trim() || new Date().toISOString().split('T')[0];
+      if (!supervisor_signature) return res.status(400).json({ error: 'Supervisor signature is required' });
+
+      await query(
+        "UPDATE discipline_records SET supervisor_signature = ?, supervisor_signature_date = ? WHERE id = ?",
+        [supervisor_signature, supervisor_signature_date, id]
+      );
+
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
   app.delete("/api/discipline_records/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM discipline_records WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try { await softDeleteById('discipline_records', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Property Accountability CRUD ----
@@ -2562,15 +3663,61 @@ async function startServer() {
       const id = req.params.id;
       const beforeRows: any = await query('SELECT * FROM property_accountability WHERE id = ?', [id]);
       const before = Array.isArray(beforeRows) ? beforeRows[0] : beforeRows;
-      await query("DELETE FROM property_accountability WHERE id = ?", [id]);
+      await softDeleteById('property_accountability', id);
       try { await recordAudit((req as any).user || null, 'delete', 'property_accountability', id, before || null, null); } catch (e) {}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Suggestions CRUD ----
-  app.get("/api/suggestions", async (req, res) => {
-    try { const rows = await query("SELECT * FROM suggestions ORDER BY created_at DESC"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
+  app.get("/api/suggestions", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+
+      if (role === 'Manager') {
+        const rows = await query("SELECT s.* FROM suggestions s ORDER BY s.created_at DESC");
+        return res.json(rows);
+      }
+
+      if (role === 'HR') {
+        const hrDept = normalizeDept(actorCtx.dept);
+        if (!hrDept) return res.json([]);
+        const rows = await query(
+          `SELECT s.*
+           FROM suggestions s
+           LEFT JOIN employees e ON e.id = s.employee_id
+           WHERE LOWER(TRIM(COALESCE(e.dept, s.dept, ''))) = LOWER(TRIM(?))
+           ORDER BY s.created_at DESC`,
+          [hrDept]
+        );
+        return res.json(rows);
+      }
+
+      if (role === 'Employee') {
+        if (actorCtx.isSupervisor) {
+          const supervisorDept = normalizeDept(actorCtx.dept);
+          if (!supervisorDept) return res.json([]);
+          const rows = await query(
+            `SELECT s.*
+             FROM suggestions s
+             LEFT JOIN employees e ON e.id = s.employee_id
+             WHERE LOWER(TRIM(COALESCE(e.dept, s.dept, ''))) = LOWER(TRIM(?))
+             ORDER BY s.created_at DESC`,
+            [supervisorDept]
+          );
+          return res.json(rows);
+        }
+
+        const employeeId = normalizeEmployeeId(actor.employee_id);
+        if (!employeeId) return res.json([]);
+        const rows = await query("SELECT s.* FROM suggestions s WHERE s.employee_id = ? ORDER BY s.created_at DESC", [employeeId]);
+        return res.json(rows);
+      }
+
+      return res.status(403).json({ error: 'Forbidden' });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.post("/api/suggestions", authenticateToken, async (req, res) => {
     try {
@@ -2602,6 +3749,30 @@ async function startServer() {
   });
   app.put("/api/suggestions/:id/management", authenticateToken, async (req, res) => {
     try {
+      const actor = (req as any).user || {};
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      const role = actor.role;
+
+      if (role !== 'Manager' && role !== 'HR' && !(role === 'Employee' && actorCtx.isSupervisor)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      if (role === 'HR' || (role === 'Employee' && actorCtx.isSupervisor)) {
+        const sRows: any = await query(
+          `SELECT s.id, s.employee_id, COALESCE(e.dept, s.dept, '') as dept
+           FROM suggestions s
+           LEFT JOIN employees e ON e.id = s.employee_id
+           WHERE s.id = ?
+           LIMIT 1`,
+          [req.params.id]
+        );
+        const sRow = Array.isArray(sRows) ? sRows[0] : sRows;
+        if (!sRow) return res.status(404).json({ error: 'Suggestion not found' });
+        const actorDept = normalizeDept(actorCtx.dept);
+        const targetDept = normalizeDept(sRow.dept);
+        if (!actorDept || actorDept !== targetDept) return res.status(403).json({ error: 'Forbidden' });
+      }
+
       const b = req.body;
       await query(`UPDATE suggestions SET supervisor_name = ?, supervisor_title = ?, date_received = ?, follow_up_date = ?, suggestion_merit = ?, benefit_to_company = ?, cost_to_company = ?, cost_efficient_explanation = ?, suggestion_priority = ?, action_to_be_taken = ?, suggested_reward = ?, supervisor_signature = ?, supervisor_signature_date = ?, status = ? WHERE id = ?`,
         [b.supervisor_name || null, b.supervisor_title || null, b.date_received || null, b.follow_up_date || null,
@@ -2623,7 +3794,7 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/suggestions/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM suggestions WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try { await softDeleteById('suggestions', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- 360 Feedback CRUD ----
@@ -2647,7 +3818,7 @@ async function startServer() {
       const user: any = (req as any).user || {};
       const allowed = user.role === 'HR' || user.role === 'Manager' || feedback.evaluator_id === user.employee_id || feedback.evaluator_id === user.id;
       if (!allowed) return res.status(403).json({ error: 'Forbidden' });
-      await query("DELETE FROM feedback_360 WHERE id = ?", [req.params.id]);
+      await softDeleteById('feedback_360', req.params.id);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -2710,18 +3881,40 @@ async function startServer() {
       const id = req.params.id;
       let beforeApp: any = null;
       try { const br: any = await query('SELECT * FROM applicants WHERE id = ?', [id]); beforeApp = Array.isArray(br) ? br[0] : br; } catch (e) { beforeApp = null; }
-      await query("DELETE FROM applicants WHERE id = ?", [id]);
+      await softDeleteById('applicants', id);
       try { await recordAudit((req as any).user || null, 'delete', 'applicants', id, beforeApp, null); } catch (e) {}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Requisitions CRUD ----
-  app.get("/api/requisitions", async (req, res) => {
-    try { const rows = await query("SELECT * FROM requisitions ORDER BY created_at DESC"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
+  app.get("/api/requisitions", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      if (!isPrivilegedRole(actor.role) && actor.role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+
+      const rows = await query(
+        `SELECT r.*,
+                CASE
+                  WHEN COALESCE(TRIM(r.supervisor_approval_sig), '') <> ''
+                   AND COALESCE(TRIM(r.dept_head_approval_sig), '') <> ''
+                   AND COALESCE(TRIM(r.cabinet_approval_sig), '') <> ''
+                   AND COALESCE(TRIM(r.vp_approval_sig), '') <> ''
+                   AND COALESCE(TRIM(r.president_approval_sig), '') <> ''
+                  THEN 'Approved'
+                  ELSE 'Pending Approval'
+                END AS approval_status
+         FROM requisitions r
+         ORDER BY r.created_at DESC`
+      );
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.post("/api/requisitions", authenticateToken, async (req, res) => {
     try {
+      const actor = (req as any).user || {};
+      if (!isPrivilegedRole(actor.role) && actor.role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+
       const {
         job_title, department, supervisor, hiring_contact,
         position_status, months_per_year, hours_per_week, start_date,
@@ -2766,8 +3959,69 @@ async function startServer() {
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
+  app.put("/api/requisitions/:id/approvals", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      if (!isPrivilegedRole(actor.role) && actor.role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Invalid requisition id' });
+
+      const {
+        supervisor_approval, supervisor_approval_date, supervisor_approval_sig,
+        dept_head_approval, dept_head_approval_date, dept_head_approval_sig,
+        cabinet_approval, cabinet_approval_date, cabinet_approval_sig,
+        vp_approval, vp_approval_date, vp_approval_sig,
+        president_approval, president_approval_date, president_approval_sig,
+        comments,
+      } = req.body || {};
+
+      const normalize = (v: any) => {
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s.length ? s : null;
+      };
+
+      await query(
+        `UPDATE requisitions
+         SET supervisor_approval = ?,
+             supervisor_approval_date = ?,
+             supervisor_approval_sig = ?,
+             dept_head_approval = ?,
+             dept_head_approval_date = ?,
+             dept_head_approval_sig = ?,
+             cabinet_approval = ?,
+             cabinet_approval_date = ?,
+             cabinet_approval_sig = ?,
+             vp_approval = ?,
+             vp_approval_date = ?,
+             vp_approval_sig = ?,
+             president_approval = ?,
+             president_approval_date = ?,
+             president_approval_sig = ?,
+             comments = COALESCE(?, comments)
+         WHERE id = ?`,
+        [
+          normalize(supervisor_approval), normalize(supervisor_approval_date), normalize(supervisor_approval_sig),
+          normalize(dept_head_approval), normalize(dept_head_approval_date), normalize(dept_head_approval_sig),
+          normalize(cabinet_approval), normalize(cabinet_approval_date), normalize(cabinet_approval_sig),
+          normalize(vp_approval), normalize(vp_approval_date), normalize(vp_approval_sig),
+          normalize(president_approval), normalize(president_approval_date), normalize(president_approval_sig),
+          normalize(comments),
+          id,
+        ]
+      );
+
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
   app.delete("/api/requisitions/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM requisitions WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try {
+      const actor = (req as any).user || {};
+      if (!isPrivilegedRole(actor.role) && actor.role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+      await softDeleteById('requisitions', req.params.id);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Offboarding CRUD ----
@@ -2797,7 +4051,7 @@ async function startServer() {
       const id = req.params.id;
       let before: any = null;
       try { const br: any = await query('SELECT * FROM offboarding WHERE id = ?', [id]); before = Array.isArray(br) ? br[0] : br; } catch (e) { before = null; }
-      await query("DELETE FROM offboarding WHERE id = ?", [id]);
+      await softDeleteById('offboarding', id);
       try { await recordAudit((req as any).user || null, 'delete', 'offboarding', id, before, null); } catch (e) {}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
@@ -2826,7 +4080,7 @@ async function startServer() {
       const id = req.params.id;
       let before: any = null;
       try { const br: any = await query('SELECT * FROM exit_interviews WHERE id = ?', [id]); before = Array.isArray(br) ? br[0] : br; } catch (e) { before = null; }
-      await query("DELETE FROM exit_interviews WHERE id = ?", [id]);
+      await softDeleteById('exit_interviews', id);
       try { await recordAudit((req as any).user || null, 'delete', 'exit_interviews', id, before, null); } catch (e) {}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
@@ -2844,9 +4098,26 @@ async function startServer() {
   });
   app.post("/api/development_plans", authenticateToken, async (req, res) => {
     try {
-      const { employee_id, skill_gap, growth_step, step_order, status } = req.body;
-      await query("INSERT INTO development_plans (employee_id, skill_gap, growth_step, step_order, status) VALUES (?, ?, ?, ?, ?)",
-        [employee_id, skill_gap, growth_step, step_order || 0, status || 'Not Started']);
+      const { employee_id, skill_gap, growth_step, step_order, status, goal_id } = req.body;
+      const employeeId = normalizeEmployeeId(employee_id);
+      if (!employeeId) return res.status(400).json({ error: 'employee_id is required' });
+
+      const goalId = normalizeEmployeeId(goal_id);
+      if (goalId) {
+        const goalRows: any = await query('SELECT id, scope, employee_id FROM goals WHERE id = ?', [goalId]);
+        const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
+        if (!goal) return res.status(400).json({ error: 'Invalid goal_id' });
+        if ((goal.scope || 'Individual') !== 'Individual') {
+          return res.status(400).json({ error: 'goal_id must reference an Individual goal' });
+        }
+        const goalEmployeeId = normalizeEmployeeId(goal.employee_id);
+        if (!goalEmployeeId || goalEmployeeId !== employeeId) {
+          return res.status(400).json({ error: 'employee_id must match the selected goal owner' });
+        }
+      }
+
+      await query("INSERT INTO development_plans (employee_id, skill_gap, growth_step, step_order, status, goal_id) VALUES (?, ?, ?, ?, ?, ?)",
+        [employeeId, skill_gap, growth_step, step_order || 0, status || 'Not Started', goalId || null]);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -2858,7 +4129,166 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/development_plans/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM development_plans WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try { await softDeleteById('development_plans', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  // ---- Team/Department Goal Improvement Plans CRUD ----
+  app.get('/api/goal_improvement_plans', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = (actor.role || '').toString().toLowerCase();
+      if (!isPrivilegedRole(actor.role) && role !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      const rows = await query(
+        `SELECT p.*, g.title as goal_title, g.statement as goal_statement, g.scope as linked_goal_scope, g.department, g.team_name
+         FROM goal_improvement_plans p
+         LEFT JOIN goals g ON p.goal_id = g.id
+         ORDER BY p.created_at DESC`
+      );
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.post('/api/goal_improvement_plans', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = (actor.role || '').toString().toLowerCase();
+      if (!isPrivilegedRole(actor.role) && role !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+
+      const goalId = normalizeEmployeeId(req.body.goal_id);
+      if (!goalId) return res.status(400).json({ error: 'goal_id is required' });
+
+      const goalRows: any = await query('SELECT id, scope, title, statement FROM goals WHERE id = ?', [goalId]);
+      const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
+      if (!goal) return res.status(400).json({ error: 'Invalid goal_id' });
+      if (!['Team', 'Department'].includes(goal.scope || 'Individual')) {
+        return res.status(400).json({ error: 'goal_id must reference a Team or Department goal' });
+      }
+
+      await query(
+        `INSERT INTO goal_improvement_plans (goal_id, goal_scope, plan_title, issue_summary, improvement_objective, action_steps, review_date, status, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+        [
+          goalId,
+          goal.scope,
+          req.body.plan_title || goal.title || goal.statement || null,
+          req.body.issue_summary || null,
+          req.body.improvement_objective || null,
+          req.body.action_steps || null,
+          req.body.review_date || null,
+          req.body.status || 'Not Started',
+          actor.id || null,
+        ]
+      );
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.put('/api/goal_improvement_plans/:id', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = (actor.role || '').toString().toLowerCase();
+      if (!isPrivilegedRole(actor.role) && role !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+
+      const b = req.body || {};
+      const sets: string[] = [];
+      const vals: any[] = [];
+      for (const k of ['plan_title','issue_summary','improvement_objective','action_steps','review_date','status']) {
+        if (b[k] !== undefined) { sets.push(`${k} = ?`); vals.push(b[k]); }
+      }
+      if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+      vals.push(req.params.id);
+      await query(`UPDATE goal_improvement_plans SET ${sets.join(', ')} WHERE id = ?`, vals);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.delete('/api/goal_improvement_plans/:id', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = (actor.role || '').toString().toLowerCase();
+      if (!isPrivilegedRole(actor.role) && role !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      await softDeleteById('goal_improvement_plans', req.params.id);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  // ---- Team/Department Goal Development Plans CRUD ----
+  app.get('/api/goal_development_plans', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = (actor.role || '').toString().toLowerCase();
+      if (!isPrivilegedRole(actor.role) && role !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      const rows = await query(
+        `SELECT p.*, g.title as goal_title, g.statement as goal_statement, g.scope as linked_goal_scope, g.department, g.team_name
+         FROM goal_development_plans p
+         LEFT JOIN goals g ON p.goal_id = g.id
+         ORDER BY p.created_at DESC`
+      );
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.post('/api/goal_development_plans', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = (actor.role || '').toString().toLowerCase();
+      if (!isPrivilegedRole(actor.role) && role !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+
+      const goalId = normalizeEmployeeId(req.body.goal_id);
+      if (!goalId) return res.status(400).json({ error: 'goal_id is required' });
+
+      const goalRows: any = await query('SELECT id, scope, title, statement FROM goals WHERE id = ?', [goalId]);
+      const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
+      if (!goal) return res.status(400).json({ error: 'Invalid goal_id' });
+      if (!['Team', 'Department'].includes(goal.scope || 'Individual')) {
+        return res.status(400).json({ error: 'goal_id must reference a Team or Department goal' });
+      }
+
+      await query(
+        `INSERT INTO goal_development_plans (goal_id, goal_scope, plan_title, skill_focus, development_actions, review_date, status, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          goalId,
+          goal.scope,
+          req.body.plan_title || goal.title || goal.statement || null,
+          req.body.skill_focus || null,
+          req.body.development_actions || null,
+          req.body.review_date || null,
+          req.body.status || 'Not Started',
+          actor.id || null,
+        ]
+      );
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.put('/api/goal_development_plans/:id', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = (actor.role || '').toString().toLowerCase();
+      if (!isPrivilegedRole(actor.role) && role !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+
+      const b = req.body || {};
+      const sets: string[] = [];
+      const vals: any[] = [];
+      for (const k of ['plan_title','skill_focus','development_actions','review_date','status']) {
+        if (b[k] !== undefined) { sets.push(`${k} = ?`); vals.push(b[k]); }
+      }
+      if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+      vals.push(req.params.id);
+      await query(`UPDATE goal_development_plans SET ${sets.join(', ')} WHERE id = ?`, vals);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+  });
+
+  app.delete('/api/goal_development_plans/:id', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = (actor.role || '').toString().toLowerCase();
+      if (!isPrivilegedRole(actor.role) && role !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      await softDeleteById('goal_development_plans', req.params.id);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
 
   // ---- Self Assessments CRUD ----
@@ -2880,7 +4310,7 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/self_assessments/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM self_assessments WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try { await softDeleteById('self_assessments', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- PIP (Performance Improvement Plans) CRUD ----
@@ -2929,13 +4359,28 @@ async function startServer() {
       const b = req.body;
       const employeeId = normalizeEmployeeId(b.employee_id);
       if (!employeeId) return res.status(400).json({ error: 'employee_id is required' });
+
+      const goalId = normalizeEmployeeId(b.goal_id);
+      if (goalId) {
+        const goalRows: any = await query('SELECT id, scope, employee_id FROM goals WHERE id = ?', [goalId]);
+        const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
+        if (!goal) return res.status(400).json({ error: 'Invalid goal_id' });
+        if ((goal.scope || 'Individual') !== 'Individual') {
+          return res.status(400).json({ error: 'goal_id must reference an Individual goal' });
+        }
+        const goalEmployeeId = normalizeEmployeeId(goal.employee_id);
+        if (!goalEmployeeId || goalEmployeeId !== employeeId) {
+          return res.status(400).json({ error: 'employee_id must match the selected goal owner' });
+        }
+      }
+
       if (role === 'Manager') {
         const allowed = await canManagerAccessEmployee(actor.id, employeeId);
         if (!allowed) return res.status(403).json({ error: 'Forbidden' });
       }
 
-      await query(`INSERT INTO pip_plans (employee_id, appraisal_id, start_date, end_date, deficiency, improvement_objective, action_steps, support_provided, progress_check_date, progress_notes, outcome, supervisor_name, supervisor_signature, employee_signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [employeeId, b.appraisal_id || null, b.start_date, b.end_date, b.deficiency, b.improvement_objective, b.action_steps, b.support_provided || null, b.progress_check_date || null, b.progress_notes || null, b.outcome || 'In Progress', b.supervisor_name || null, b.supervisor_signature || null, b.employee_signature || null]);
+      await query(`INSERT INTO pip_plans (employee_id, appraisal_id, goal_id, start_date, end_date, deficiency, improvement_objective, action_steps, support_provided, progress_check_date, progress_notes, outcome, supervisor_name, supervisor_signature, employee_signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [employeeId, b.appraisal_id || null, goalId || null, b.start_date, b.end_date, b.deficiency, b.improvement_objective, b.action_steps, b.support_provided || null, b.progress_check_date || null, b.progress_notes || null, b.outcome || 'In Progress', b.supervisor_name || null, b.supervisor_signature || null, b.employee_signature || null]);
       // Notify the employee about the new PIP
       const pipEmpUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employeeId]);
       const pipEmpUser = Array.isArray(pipEmpUsers) ? pipEmpUsers[0] : pipEmpUsers;
@@ -2998,7 +4443,7 @@ async function startServer() {
         }
       }
 
-      await query("DELETE FROM pip_plans WHERE id = ?", [req.params.id]);
+      await softDeleteById('pip_plans', req.params.id);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -3008,22 +4453,62 @@ async function startServer() {
     try {
       const actor = (req as any).user;
       const role = actor?.role;
+      const roleLower = (role || '').toString().toLowerCase();
+      const employeeOnlyFilter = `NOT EXISTS (
+        SELECT 1
+        FROM users ux
+        WHERE ux.deleted_at IS NULL
+          AND COALESCE(TRIM(ux.role), '') <> ''
+          AND LOWER(TRIM(COALESCE(ux.role, ''))) <> 'employee'
+          AND (
+            ux.employee_id = e.id
+            OR (
+              REGEXP_REPLACE(
+                LOWER(
+                  COALESCE(
+                    NULLIF(TRIM(ux.full_name), ''),
+                    NULLIF(TRIM(ux.username), ''),
+                    NULLIF(TRIM(SPLIT_PART(COALESCE(ux.email, ''), '@', 1)), ''),
+                    ''
+                  )
+                ),
+                '[^a-z0-9]',
+                '',
+                'g'
+              ) = REGEXP_REPLACE(LOWER(COALESCE(e.name, '')), '[^a-z0-9]', '', 'g')
+            )
+          )
+      )`;
 
       let employeeRows: any[];
-      if (isPrivilegedRole(role)) {
-        employeeRows = await query("SELECT id, name, position, dept, hire_date, status, salary_base FROM employees ORDER BY name");
-      } else if ((role || '').toLowerCase() === 'manager') {
-        const ids = await getManagedEmployeeIds(actor.id);
-        if (ids.length === 0) return res.json([]);
-        const ph = ids.map((_: any, i: number) => `$${i + 1}`).join(',');
-        employeeRows = await query(`SELECT id, name, position, dept, hire_date, status, salary_base FROM employees WHERE id IN (${ph})`, ids);
+      if (isPrivilegedRole(role) || roleLower === 'manager') {
+        // Both HR and Manager see all employees for promotability planning
+        const rows: any = await query(
+          `SELECT e.id, e.name, e.position, e.dept, e.hire_date, e.status, e.salary_base
+           FROM employees e
+           WHERE ${employeeOnlyFilter}
+           ORDER BY e.name`
+        );
+        employeeRows = Array.isArray(rows) ? rows : [];
+      } else if (roleLower === 'employee') {
+        const actorEmpId = normalizeEmployeeId(actor?.employee_id);
+        if (!actorEmpId) return res.status(400).json({ error: 'Employee account is not linked' });
+        const ownRows: any = await query(
+          `SELECT e.id, e.name, e.position, e.dept, e.hire_date, e.status, e.salary_base
+           FROM employees e
+           WHERE e.id = ?
+             AND ${employeeOnlyFilter}
+           ORDER BY e.name`,
+          [actorEmpId]
+        );
+        employeeRows = Array.isArray(ownRows) ? ownRows : [];
       } else {
         return res.status(403).json({ error: 'Forbidden' });
       }
 
       if (employeeRows.length === 0) return res.json([]);
       const empIds = employeeRows.map((e: any) => e.id);
-      const ph = empIds.map((_: any, i: number) => `$${i + 1}`).join(',');
+      const ph = empIds.map(() => '?').join(',');
 
       const [appraisals, goals, elearning, activePips] = await Promise.all([
         query(`SELECT * FROM appraisals WHERE employee_id IN (${ph}) ORDER BY sign_off_date DESC`, empIds),
@@ -3091,15 +4576,30 @@ async function startServer() {
     try {
       const actor = (req as any).user;
       const role = actor?.role;
-      if (isPrivilegedRole(role)) {
+      const roleLower = (role || '').toString().toLowerCase();
+      const employeeIdParam = (req.query.employee_id as string);
+      
+      // If filtering by employee_id (employee viewing their own), honor that
+      if (employeeIdParam) {
+        const actorEmpId = normalizeEmployeeId(actor?.employee_id);
+        if (!actorEmpId) return res.status(400).json({ error: 'Employee account is not linked' });
+        // Employees can only see their own
+        if (roleLower === 'employee' && String(employeeIdParam) !== String(actorEmpId)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+        const rows = await query("SELECT pr.*, e.name as employee_name, u.full_name as recommended_by_name FROM promotion_recommendations pr LEFT JOIN employees e ON pr.employee_id = e.id LEFT JOIN users u ON pr.recommended_by = u.id WHERE pr.employee_id = ? ORDER BY pr.created_at DESC", [parseInt(employeeIdParam)]);
+        return res.json(rows);
+      }
+      
+      // For org-wide Promotability view: Both HR and Manager see all recommendations
+      if (isPrivilegedRole(role) || roleLower === 'manager') {
         const rows = await query("SELECT pr.*, e.name as employee_name, u.full_name as recommended_by_name FROM promotion_recommendations pr LEFT JOIN employees e ON pr.employee_id = e.id LEFT JOIN users u ON pr.recommended_by = u.id ORDER BY pr.created_at DESC");
         return res.json(rows);
       }
-      if ((role || '').toLowerCase() === 'manager') {
-        const ids = await getManagedEmployeeIds(actor.id);
-        if (ids.length === 0) return res.json([]);
-        const ph = ids.map((_: any, i: number) => `$${i + 1}`).join(',');
-        const rows = await query(`SELECT pr.*, e.name as employee_name, u.full_name as recommended_by_name FROM promotion_recommendations pr LEFT JOIN employees e ON pr.employee_id = e.id LEFT JOIN users u ON pr.recommended_by = u.id WHERE pr.employee_id IN (${ph}) ORDER BY pr.created_at DESC`, ids);
+      if (roleLower === 'employee') {
+        const actorEmpId = normalizeEmployeeId(actor?.employee_id);
+        if (!actorEmpId) return res.status(400).json({ error: 'Employee account is not linked' });
+        const rows = await query("SELECT pr.*, e.name as employee_name, u.full_name as recommended_by_name FROM promotion_recommendations pr LEFT JOIN employees e ON pr.employee_id = e.id LEFT JOIN users u ON pr.recommended_by = u.id WHERE pr.employee_id = ? ORDER BY pr.created_at DESC", [actorEmpId]);
         return res.json(rows);
       }
       return res.status(403).json({ error: 'Forbidden' });
@@ -3110,13 +4610,12 @@ async function startServer() {
     try {
       const actor = (req as any).user;
       const role = actor?.role;
-      if (!isPrivilegedRole(role) && (role || '').toLowerCase() !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      const roleLower = (role || '').toString().toLowerCase();
+      if (roleLower !== 'manager') return res.status(403).json({ error: 'Only managers can submit promotion recommendations' });
       const { employee_id, recommended_position, justification } = req.body;
-      if (!employee_id) return res.status(400).json({ error: "employee_id is required" });
-      if ((role || '').toLowerCase() === 'manager') {
-        const allowed = await canManagerAccessEmployee(actor.id, employee_id);
-        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
-      }
+      if (!employee_id) return res.status(400).json({ error: 'employee_id is required' });
+      const allowed = await canManagerAccessEmployee(actor.id, employee_id);
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
       // Lookup employee current info
       const empRows: any = await query("SELECT position, dept FROM employees WHERE id = ?", [employee_id]);
       const emp = Array.isArray(empRows) && empRows.length > 0 ? empRows[0] : {};
@@ -3124,7 +4623,6 @@ async function startServer() {
         "INSERT INTO promotion_recommendations (employee_id, recommended_by, recommended_position, current_position, current_dept, justification, status) VALUES (?, ?, ?, ?, ?, ?, 'Proposed') RETURNING id",
         [employee_id, actor.id, recommended_position || null, emp.position || null, emp.dept || null, justification || null]
       );
-      // Notify HR
       await createNotification({ role: 'HR', type: 'info', message: `New promotion recommendation submitted for review`, source: 'promotability' });
       res.json({ success: true, id: result?.id || result?.insertId });
     } catch (err) { console.error(err); res.status(500).json({ error: "Database error" }); }
@@ -3134,28 +4632,67 @@ async function startServer() {
     try {
       const actor = (req as any).user;
       const role = actor?.role;
-      if (!isPrivilegedRole(role) && (role || '').toLowerCase() !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      const roleLower = (role || '').toString().toLowerCase();
+      if (!isPrivilegedRole(role) && roleLower !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+
+      const recRows: any = await query("SELECT * FROM promotion_recommendations WHERE id = ?", [req.params.id]);
+      const existingRec = Array.isArray(recRows) && recRows.length > 0 ? recRows[0] : null;
+      if (!existingRec) return res.status(404).json({ error: 'Recommendation not found' });
+
+      if (roleLower === 'manager') {
+        const allowed = await canManagerAccessEmployee(actor.id, existingRec.employee_id);
+        if (!allowed || Number(existingRec.recommended_by) !== Number(actor.id)) return res.status(403).json({ error: 'Forbidden' });
+      }
+
       const { status, review_notes, effective_date, recommended_position, justification } = req.body;
+
       const fields: string[] = [];
       const vals: any[] = [];
-      let pIdx = 1;
-      if (status !== undefined) { fields.push(`status = $${pIdx++}`); vals.push(status); }
-      if (review_notes !== undefined) { fields.push(`review_notes = $${pIdx++}`); vals.push(review_notes); }
-      if (effective_date !== undefined) { fields.push(`effective_date = $${pIdx++}`); vals.push(effective_date); }
-      if (recommended_position !== undefined) { fields.push(`recommended_position = $${pIdx++}`); vals.push(recommended_position); }
-      if (justification !== undefined) { fields.push(`justification = $${pIdx++}`); vals.push(justification); }
-      if (isPrivilegedRole(role) && status) {
-        fields.push(`reviewed_by = $${pIdx++}`); vals.push(actor.id);
-        fields.push(`review_date = $${pIdx++}`); vals.push(new Date().toISOString().split('T')[0]);
+      if (recommended_position !== undefined) { fields.push(`recommended_position = ?`); vals.push(recommended_position); }
+      if (justification !== undefined) { fields.push(`justification = ?`); vals.push(justification); }
+
+      if (roleLower === 'manager') {
+        if ((existingRec.status || 'Proposed') !== 'Proposed') {
+          return res.status(400).json({ error: 'Only proposed recommendations can be updated by manager' });
+        }
+        if (status !== undefined) {
+          const nextStatus = String(status || '');
+          if (!['Proposed', 'Withdrawn'].includes(nextStatus)) {
+            return res.status(400).json({ error: 'Invalid status value' });
+          }
+          fields.push(`status = ?`);
+          vals.push(nextStatus);
+        }
+        if (review_notes !== undefined || effective_date !== undefined) {
+          return res.status(403).json({ error: 'Only HR can review recommendations' });
+        }
       }
+
+      if (isPrivilegedRole(role)) {
+        if (status !== undefined) {
+          const nextStatus = String(status || '');
+          if (!['Proposed', 'Under Review', 'Approved', 'Denied', 'Withdrawn'].includes(nextStatus)) {
+            return res.status(400).json({ error: 'Invalid status value' });
+          }
+          fields.push(`status = ?`);
+          vals.push(nextStatus);
+          fields.push(`reviewed_by = ?`);
+          vals.push(actor.id);
+          fields.push(`review_date = ?`);
+          vals.push(new Date().toISOString().split('T')[0]);
+        }
+        if (review_notes !== undefined) { fields.push(`review_notes = ?`); vals.push(review_notes); }
+        if (effective_date !== undefined) { fields.push(`effective_date = ?`); vals.push(effective_date); }
+      }
+
       if (fields.length === 0) return res.status(400).json({ error: "No fields to update" });
       vals.push(req.params.id);
-      await query(`UPDATE promotion_recommendations SET ${fields.join(', ')} WHERE id = $${pIdx}`, vals);
+      await query(`UPDATE promotion_recommendations SET ${fields.join(', ')} WHERE id = ?`, vals);
 
-      // If approved, create promotion record and update employee position
-      if (status === 'Approved') {
-        const recRows: any = await query("SELECT * FROM promotion_recommendations WHERE id = ?", [req.params.id]);
-        const rec = Array.isArray(recRows) && recRows.length > 0 ? recRows[0] : null;
+      // If approved by HR, create promotion record and update employee position.
+      if (isPrivilegedRole(role) && status === 'Approved') {
+        const recRows2: any = await query("SELECT * FROM promotion_recommendations WHERE id = ?", [req.params.id]);
+        const rec = Array.isArray(recRows2) && recRows2.length > 0 ? recRows2[0] : null;
         if (rec) {
           const empRows: any = await query("SELECT position, dept, salary_base FROM employees WHERE id = ?", [rec.employee_id]);
           const emp = Array.isArray(empRows) && empRows.length > 0 ? empRows[0] : {};
@@ -3166,7 +4703,6 @@ async function startServer() {
           if (rec.recommended_position) {
             await query("UPDATE employees SET position = ? WHERE id = ?", [rec.recommended_position, rec.employee_id]);
           }
-          // Notify recommender and employee
           await createNotification({ user_id: rec.recommended_by, type: 'success', message: `Promotion recommendation approved`, source: 'promotability' });
           const empUser: any = await query("SELECT id FROM users WHERE employee_id = ?", [rec.employee_id]);
           if (Array.isArray(empUser) && empUser.length > 0) {
@@ -3174,6 +4710,7 @@ async function startServer() {
           }
         }
       }
+
       res.json({ success: true });
     } catch (err) { console.error(err); res.status(500).json({ error: "Database error" }); }
   });
@@ -3181,8 +4718,18 @@ async function startServer() {
   app.delete("/api/promotion_recommendations/:id", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user;
-      if (!isPrivilegedRole(actor?.role)) return res.status(403).json({ error: 'Forbidden' });
-      await query("DELETE FROM promotion_recommendations WHERE id = ?", [req.params.id]);
+      const roleLower = (actor?.role || '').toString().toLowerCase();
+      if (isPrivilegedRole(actor?.role)) {
+        await softDeleteById('promotion_recommendations', req.params.id);
+        return res.json({ success: true });
+      }
+      if (roleLower !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      const recRows: any = await query("SELECT id, employee_id, recommended_by FROM promotion_recommendations WHERE id = ?", [req.params.id]);
+      const rec = Array.isArray(recRows) ? recRows[0] : recRows;
+      if (!rec) return res.status(404).json({ error: 'Recommendation not found' });
+      const allowed = await canManagerAccessEmployee(actor.id, rec.employee_id);
+      if (!allowed || Number(rec.recommended_by) !== Number(actor.id)) return res.status(403).json({ error: 'Forbidden' });
+      await softDeleteById('promotion_recommendations', req.params.id);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -3192,15 +4739,16 @@ async function startServer() {
     try {
       const actor = (req as any).user;
       const role = actor?.role;
-      if (isPrivilegedRole(role)) {
+      const roleLower = (role || '').toString().toLowerCase();
+      // Both HR and Manager see all promotions for org-wide compliance & planning
+      if (isPrivilegedRole(role) || roleLower === 'manager') {
         const rows = await query("SELECT p.*, e.name as employee_name FROM promotions p LEFT JOIN employees e ON p.employee_id = e.id ORDER BY p.effective_date DESC");
         return res.json(rows);
       }
-      if ((role || '').toLowerCase() === 'manager') {
-        const ids = await getManagedEmployeeIds(actor.id);
-        if (ids.length === 0) return res.json([]);
-        const ph = ids.map((_: any, i: number) => `$${i + 1}`).join(',');
-        const rows = await query(`SELECT p.*, e.name as employee_name FROM promotions p LEFT JOIN employees e ON p.employee_id = e.id WHERE p.employee_id IN (${ph}) ORDER BY p.effective_date DESC`, ids);
+      if (roleLower === 'employee') {
+        const actorEmpId = normalizeEmployeeId(actor?.employee_id);
+        if (!actorEmpId) return res.status(400).json({ error: 'Employee account is not linked' });
+        const rows = await query("SELECT p.*, e.name as employee_name FROM promotions p LEFT JOIN employees e ON p.employee_id = e.id WHERE p.employee_id = ? ORDER BY p.effective_date DESC", [actorEmpId]);
         return res.json(rows);
       }
       return res.status(403).json({ error: 'Forbidden' });
@@ -3225,7 +4773,7 @@ async function startServer() {
     try {
       const actor = (req as any).user;
       if (!isPrivilegedRole(actor?.role)) return res.status(403).json({ error: 'Forbidden' });
-      await query("DELETE FROM promotions WHERE id = ?", [req.params.id]);
+      await softDeleteById('promotions', req.params.id);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -3241,7 +4789,8 @@ async function startServer() {
   app.post("/api/career_paths", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user;
-      if (!isPrivilegedRole(actor?.role)) return res.status(403).json({ error: 'Forbidden' });
+      const isManager = ((actor?.role || '').toString().toLowerCase() === 'manager');
+      if (!isManager) return res.status(403).json({ error: 'Only managers can manage career paths' });
       const { current_role, next_role, department, min_tenure_months, min_readiness_score, notes } = req.body;
       if (!current_role || !next_role) return res.status(400).json({ error: 'current_role and next_role are required' });
       const result: any = await query(
@@ -3255,8 +4804,9 @@ async function startServer() {
   app.delete("/api/career_paths/:id", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user;
-      if (!isPrivilegedRole(actor?.role)) return res.status(403).json({ error: 'Forbidden' });
-      await query("DELETE FROM career_paths WHERE id = ?", [req.params.id]);
+      const isManager = ((actor?.role || '').toString().toLowerCase() === 'manager');
+      if (!isManager) return res.status(403).json({ error: 'Only managers can manage career paths' });
+      await softDeleteById('career_paths', req.params.id);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -3266,8 +4816,21 @@ async function startServer() {
     try {
       const actor = (req as any).user;
       const role = actor?.role;
-      // Verify access: HR/Manager only, or the employee themselves via their recommendation
-      if (!isPrivilegedRole(role) && (role || '').toLowerCase() !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      const roleLower = (role || '').toString().toLowerCase();
+      const recRows: any = await query("SELECT id, employee_id FROM promotion_recommendations WHERE id = ?", [req.params.id]);
+      const rec = Array.isArray(recRows) && recRows.length > 0 ? recRows[0] : null;
+      if (!rec) return res.status(404).json({ error: 'Recommendation not found' });
+      if (isPrivilegedRole(role)) {
+        // allowed
+      } else if (roleLower === 'manager') {
+        const allowed = await canManagerAccessEmployee(actor.id, rec.employee_id);
+        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+      } else if (roleLower === 'employee') {
+        const actorEmpId = normalizeEmployeeId(actor?.employee_id);
+        if (!actorEmpId || Number(actorEmpId) !== Number(rec.employee_id)) return res.status(403).json({ error: 'Forbidden' });
+      } else {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
       const rows = await query("SELECT * FROM promotion_comments WHERE recommendation_id = ? ORDER BY created_at ASC", [req.params.id]);
       res.json(rows);
     } catch (err) { res.status(500).json({ error: "Database error" }); }
@@ -3277,7 +4840,21 @@ async function startServer() {
     try {
       const actor = (req as any).user;
       const role = actor?.role;
-      if (!isPrivilegedRole(role) && (role || '').toLowerCase() !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      const roleLower = (role || '').toString().toLowerCase();
+      const recRows: any = await query("SELECT id, employee_id FROM promotion_recommendations WHERE id = ?", [req.params.id]);
+      const rec = Array.isArray(recRows) && recRows.length > 0 ? recRows[0] : null;
+      if (!rec) return res.status(404).json({ error: 'Recommendation not found' });
+      if (isPrivilegedRole(role)) {
+        // allowed
+      } else if (roleLower === 'manager') {
+        const allowed = await canManagerAccessEmployee(actor.id, rec.employee_id);
+        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+      } else if (roleLower === 'employee') {
+        const actorEmpId = normalizeEmployeeId(actor?.employee_id);
+        if (!actorEmpId || Number(actorEmpId) !== Number(rec.employee_id)) return res.status(403).json({ error: 'Forbidden' });
+      } else {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
       const { comment } = req.body;
       if (!comment || !comment.trim()) return res.status(400).json({ error: 'comment is required' });
       const userName = actor.full_name || actor.email || actor.username || 'Unknown';
@@ -3294,11 +4871,30 @@ async function startServer() {
     try {
       const actor = (req as any).user;
       const role = actor?.role;
-      if (!isPrivilegedRole(role) && (role || '').toLowerCase() !== 'manager') return res.status(403).json({ error: 'Forbidden' });
+      const roleLower = (role || '').toString().toLowerCase();
+      let promotions: any[] = [];
+      let recommendations: any[] = [];
+      let employees: any[] = [];
 
-      const promotions: any[] = await query("SELECT p.*, e.name as employee_name, e.hire_date, e.dept FROM promotions p LEFT JOIN employees e ON p.employee_id = e.id ORDER BY p.effective_date DESC") as any[];
-      const recommendations: any[] = await query("SELECT * FROM promotion_recommendations") as any[];
-      const employees: any[] = await query("SELECT id, name, dept, hire_date FROM employees WHERE status != 'Resigned'") as any[];
+      if (isPrivilegedRole(role) || roleLower === 'manager') {
+        // Both HR and Manager see org-wide analytics
+        promotions = await query("SELECT p.*, e.name as employee_name, e.hire_date, e.dept FROM promotions p LEFT JOIN employees e ON p.employee_id = e.id ORDER BY p.effective_date DESC") as any[];
+        recommendations = await query("SELECT * FROM promotion_recommendations") as any[];
+        employees = await query("SELECT id, name, dept, hire_date FROM employees WHERE status != 'Resigned'") as any[];
+      } else if (roleLower === 'employee') {
+        const actorEmpId = normalizeEmployeeId(actor?.employee_id);
+        if (!actorEmpId) return res.status(400).json({ error: 'Employee account is not linked' });
+        promotions = await query("SELECT p.*, e.name as employee_name, e.hire_date, e.dept FROM promotions p LEFT JOIN employees e ON p.employee_id = e.id WHERE p.employee_id = ? ORDER BY p.effective_date DESC", [actorEmpId]) as any[];
+        recommendations = await query("SELECT * FROM promotion_recommendations WHERE employee_id = ?", [actorEmpId]) as any[];
+        const actorEmpRows: any = await query("SELECT dept FROM employees WHERE id = ?", [actorEmpId]);
+        const actorEmp = Array.isArray(actorEmpRows) && actorEmpRows.length > 0 ? actorEmpRows[0] : null;
+        const actorDept = actorEmp?.dept || null;
+        employees = actorDept
+          ? await query("SELECT id, name, dept, hire_date FROM employees WHERE status != 'Resigned' AND dept = ?", [actorDept]) as any[]
+          : await query("SELECT id, name, dept, hire_date FROM employees WHERE id = ?", [actorEmpId]) as any[];
+      } else {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
 
       // Promotions by year
       const byYear: Record<string, number> = {};
@@ -3373,15 +4969,57 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/onboarding/:id", authenticateToken, async (req, res) => {
-    try { await query("DELETE FROM onboarding WHERE id = ?", [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try { await softDeleteById('onboarding', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Notifications CRUD ----
   // Helper: create a notification for a user or role
-  async function createNotification(opts: { user_id?: number | null; role?: string | null; type?: string; message: string; source?: string }) {
+  async function createNotification(opts: { user_id?: number | null; role?: string | null; type?: string; message: string; source?: string; employee_id?: number | null }) {
     try {
-      await query("INSERT INTO notifications (user_id, role, type, message, source) VALUES (?, ?, ?, ?, ?)",
-        [opts.user_id || null, opts.role || null, opts.type || 'info', opts.message, opts.source || null]);
+      const targetUserId = opts.user_id || null;
+      const targetRole = opts.role || null;
+      const type = opts.type || 'info';
+      const source = opts.source || null;
+      const message = opts.message;
+
+      // Prevent short-window duplicates for the same target and payload.
+      const dupRows: any = await query(
+        `SELECT id FROM notifications
+         WHERE COALESCE(user_id, 0) = COALESCE(?, 0)
+           AND COALESCE(role, '') = COALESCE(?, '')
+           AND COALESCE(type, 'info') = COALESCE(?, 'info')
+           AND COALESCE(source, '') = COALESCE(?, '')
+           AND message = ?
+           AND created_at >= (NOW() - INTERVAL '20 seconds')
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [targetUserId, targetRole, type, source || '', message]
+      );
+      const dup = Array.isArray(dupRows) ? dupRows[0] : dupRows;
+      if (dup && dup.id) return;
+
+      const ins: any = await query(
+        `INSERT INTO notifications (user_id, role, type, message, source)
+         VALUES (?, ?, ?, ?, ?)
+         ${usePostgres ? 'RETURNING id' : ''}`,
+        [targetUserId, targetRole, type, message, source]
+      );
+
+      const notificationId = ins?.insertId || ins?.id || null;
+      const payload: any = {
+        id: notificationId,
+        type,
+        message,
+        source,
+      };
+      if (opts.employee_id) payload.employee_id = opts.employee_id;
+
+      if (targetUserId) {
+        try { io.to(`user_${targetUserId}`).emit('notification', payload); } catch {}
+      }
+      if (targetRole) {
+        try { io.to(`role_${targetRole}`).emit('notification', payload); } catch {}
+      }
     } catch (err) { console.error('Failed to create notification:', err); }
   }
 
@@ -3460,6 +5098,133 @@ async function startServer() {
         } catch (e) { out[t] = { count: 0, sample: [], error: 'Table not found' }; }
       }
       res.json(out);
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  // HR archive APIs for soft-deleted rows across all supported tables
+  app.get('/api/archive/overview', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      if (actor.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
+
+      const out: any = {};
+      for (const t of softDeleteTables) {
+        try {
+          assertSafeTableName(t);
+          const rows: any = await query(
+            `SELECT
+               COUNT(*)::int AS total_count,
+               COUNT(*) FILTER (WHERE deleted_at IS NULL)::int AS active_count,
+               COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)::int AS archived_count
+             FROM ${t}`
+          );
+          const summary = Array.isArray(rows) && rows[0] ? rows[0] : { total_count: 0, active_count: 0, archived_count: 0 };
+          out[t] = {
+            total_count: Number(summary.total_count || 0),
+            active_count: Number(summary.active_count || 0),
+            archived_count: Number(summary.archived_count || 0),
+          };
+        } catch (e) {
+          out[t] = { total_count: 0, active_count: 0, archived_count: 0, error: 'Query failed' };
+        }
+      }
+      res.json(out);
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  app.get('/api/archive/:table', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      if (actor.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
+
+      const table = String(req.params.table || '').toLowerCase();
+      if (!softDeleteTables.includes(table)) return res.status(400).json({ error: 'Unsupported table' });
+      assertSafeTableName(table);
+
+      const status = String(req.query.status || 'archived').toLowerCase();
+      const limit = Math.max(1, Math.min(200, parseInt(String(req.query.limit || '50'), 10) || 50));
+      const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
+
+      let where = '';
+      if (status === 'archived') where = 'WHERE deleted_at IS NOT NULL';
+      else if (status === 'active') where = 'WHERE deleted_at IS NULL';
+
+      const rows: any = await query(
+        `SELECT *
+         FROM ${table}
+         ${where}
+         ORDER BY COALESCE(deleted_at, created_at, CURRENT_TIMESTAMP) DESC, id DESC
+         LIMIT ? OFFSET ?`,
+        [limit, offset]
+      );
+
+      const countRows: any = await query(
+        `SELECT COUNT(*)::int AS count
+         FROM ${table}
+         ${where}`
+      );
+      const total = Number((Array.isArray(countRows) && countRows[0]?.count) || 0);
+
+      res.json({ table, status, total, limit, offset, rows: Array.isArray(rows) ? rows : [] });
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  app.put('/api/archive/:table/:id/restore', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      if (actor.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
+
+      const table = String(req.params.table || '').toLowerCase();
+      const id = req.params.id;
+      if (!softDeleteTables.includes(table)) return res.status(400).json({ error: 'Unsupported table' });
+      assertSafeTableName(table);
+
+      let before: any = null;
+      try {
+        const bRows: any = await query(`SELECT * FROM ${table} WHERE id = ?`, [id]);
+        before = Array.isArray(bRows) ? bRows[0] : bRows;
+      } catch {}
+
+      await query(`UPDATE ${table} SET deleted_at = NULL WHERE id = ?`, [id]);
+
+      let after: any = null;
+      try {
+        const aRows: any = await query(`SELECT * FROM ${table} WHERE id = ?`, [id]);
+        after = Array.isArray(aRows) ? aRows[0] : aRows;
+      } catch {}
+
+      try { await recordAudit(actor, 'restore', table, id, before, after); } catch {}
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  app.delete('/api/archive/:table/:id/purge', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      if (actor.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
+
+      const table = String(req.params.table || '').toLowerCase();
+      const id = req.params.id;
+      if (!softDeleteTables.includes(table)) return res.status(400).json({ error: 'Unsupported table' });
+      assertSafeTableName(table);
+
+      let before: any = null;
+      try {
+        const bRows: any = await query(`SELECT * FROM ${table} WHERE id = ?`, [id]);
+        before = Array.isArray(bRows) ? bRows[0] : bRows;
+      } catch {}
+
+      await query(`DELETE FROM ${table} WHERE id = ?`, [id]);
+      try { await recordAudit(actor, 'delete', table, id, before, null, { source: 'archive_purge' }); } catch {}
+      res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: 'Database error' });
     }
@@ -3580,24 +5345,26 @@ async function startServer() {
           try {
             if (r.after_json) {
               const aj = JSON.parse(r.after_json);
-              if (aj && (aj.description || aj.desc || aj.label)) display_description = aj.description || aj.desc || aj.label;
+              if (aj && (aj.description || aj.desc || aj.label)) {
+                display_description = sanitizeDisplayText(aj.description || aj.desc || aj.label);
+              }
               else {
                 const keys = ['full_name','employee_name','email','username','message','title','label'];
                 const parts: string[] = [];
-                for (const k of keys) if (aj[k]) parts.push(aj[k]);
-                if (parts.length) display_description = parts.slice(0,3).join(' â€” ');
+                for (const k of keys) if (aj[k]) parts.push(sanitizeDisplayText(aj[k]));
+                if (parts.length) display_description = sanitizeDisplayText(parts.slice(0,3).join(' - '));
               }
             }
             if (!display_description && r.meta_json) {
               try {
                 const mj = JSON.parse(r.meta_json);
-                if (mj && mj.description) display_description = mj.description;
+                if (mj && mj.description) display_description = sanitizeDisplayText(mj.description);
               } catch (e) { /* ignore */ }
             }
           } catch (e) { display_description = null; }
 
           return { ...r,
-            username: (u && (u.full_name || u.username || u.email)) || r.username,
+            username: sanitizeDisplayText((u && (u.full_name || u.username || u.email)) || r.username),
             user_role: u ? u.role : null,
             display_action: humanizeAction(r),
             display_description: display_description || null
@@ -3680,7 +5447,7 @@ async function startServer() {
       const { employee_id, goal_id, goal_title, proposed_status, proposed_progress, reason } = req.body;
       const user = req.user;
       const actionPayload = JSON.stringify({ goal_id, goal_title, proposed_status, proposed_progress, reason });
-      const sysMessage = `ðŸ“‹ Goal Update Request: "${goal_title}" â†’ ${proposed_status || ''}${proposed_progress !== undefined ? ` (${proposed_progress}%)` : ''}${reason ? ` â€” ${reason}` : ''}`;
+      const sysMessage = `[Goal Update Request] "${goal_title}" -> ${proposed_status || ''}${proposed_progress !== undefined ? ` (${proposed_progress}%)` : ''}${reason ? ` - ${reason}` : ''}`;
       await query(
         "INSERT INTO coaching_chats (employee_id, sender_role, sender_name, message, status, action_type, action_payload, action_status) VALUES (?, 'System', 'System', ?, 'delivered', 'goal_update', ?, 'pending')",
         [employee_id, sysMessage, actionPayload]
@@ -3692,7 +5459,6 @@ async function startServer() {
         const mgrUsers: any = await query("SELECT id FROM users WHERE role = 'Manager'", []);
         for (const mu of (Array.isArray(mgrUsers) ? mgrUsers : [mgrUsers].filter(Boolean))) {
           await createNotification({ user_id: mu.id, type: 'info', message: `${empRow.name} requests goal update approval: "${goal_title}"`, source: 'goal_update' });
-          io.to(`user_${mu.id}`).emit('notification', { type: 'info', message: `${empRow.name} requests goal update approval` });
         }
       }
       // Broadcast the system message
@@ -3710,9 +5476,9 @@ async function startServer() {
   // Role-based sidebar endpoints: map frontend sidebar navigation
   // to explicit server endpoints and return 404 for unknown pages.
   const sidebarRoutes: any = {
-    admin: ['recruitmentboard','feedback360','onboarding','employee-directory','offboarding','user-accounts','audit-logs','db-viewer','settings'],
+    admin: ['recruitmentboard','feedback360','onboarding','employee-directory','offboarding','user-accounts','audit-logs','db-viewer','promotability','settings'],
     manager: ['recruitmentboard','feedback360','okr-planner','coaching-journal','disciplinary-action','evaluation-portal','promotability','pip-manager','suggestion-review','settings'],
-    employee: ['career-dashboard','feedback','idp','self-assessment','suggestion-form','coaching-chat','verification-of-review','settings']
+    employee: ['career-dashboard','feedback','idp','self-assessment','suggestion-form','coaching-chat','verification-of-review','promotions','settings']
   };
 
   // Exact two-segment routes: /:role/:page â€” always serve SPA so React handles 404s
@@ -3865,16 +5631,14 @@ async function startServer() {
             const mgrUsers: any = await query("SELECT id FROM users WHERE employee_id = ? AND role = 'Manager'", [empRow.manager_id]);
             const mgrUser = Array.isArray(mgrUsers) ? mgrUsers[0] : mgrUsers;
             if (mgrUser) {
-              await createNotification({ user_id: mgrUser.id, type: 'info', message: `New chat from ${data.sender_name || empRow.name}`, source: 'coaching_chat' });
-              io.to(`user_${mgrUser.id}`).emit('notification', { type: 'info', message: `New chat from ${data.sender_name || empRow.name}`, source: 'coaching_chat', employee_id: data.employee_id });
+              await createNotification({ user_id: mgrUser.id, type: 'info', message: `New chat from ${data.sender_name || empRow.name}`, source: 'coaching_chat', employee_id: data.employee_id });
             }
           }
         } else {
           const empUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [data.employee_id]);
           const empUser = Array.isArray(empUsers) ? empUsers[0] : empUsers;
           if (empUser) {
-            await createNotification({ user_id: empUser.id, type: 'info', message: `New chat from ${data.sender_name || 'your Manager'}`, source: 'coaching_chat' });
-            io.to(`user_${empUser.id}`).emit('notification', { type: 'info', message: `New chat from ${data.sender_name || 'your Manager'}`, source: 'coaching_chat', employee_id: data.employee_id });
+            await createNotification({ user_id: empUser.id, type: 'info', message: `New chat from ${data.sender_name || 'your Manager'}`, source: 'coaching_chat', employee_id: data.employee_id });
           }
         }
       } catch (err) { console.error('Socket chat:send error:', err); }
@@ -3925,7 +5689,6 @@ async function startServer() {
           if (empUser) {
             const statusText = data.action === 'approved' ? 'approved' : 'rejected';
             await createNotification({ user_id: empUser.id, type: data.action === 'approved' ? 'success' : 'error', message: `Your goal update was ${statusText} by your manager`, source: 'goal_action' });
-            io.to(`user_${empUser.id}`).emit('notification', { type: data.action === 'approved' ? 'success' : 'error', message: `Your goal update was ${statusText} by your manager` });
           }
         }
         // Broadcast updated message

@@ -3,10 +3,11 @@ import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
-import { UserPlus, CheckCircle, Package, FileText, ChevronDown, ChevronUp, Trash2, Download } from 'lucide-react';
+import { UserPlus, CheckCircle, Package, FileText, ChevronDown, ChevronUp, Download, Eye, Archive } from 'lucide-react';
 import { SignatureUpload } from '../../common/SignatureUpload';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { Employee } from '../../../types';
+import { appConfirm } from '../../../utils/appDialog';
 
 interface OnboardingHubProps {
   employees: Employee[];
@@ -21,7 +22,7 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
   const [activeOnboard, setActiveOnboard] = useState<any>(null);
 
   // Manual employee creation form
-  const emptyForm = {
+  const buildEmptyForm = () => ({
     name: '', position: '', dept: '', hire_date: '',
     salary_base: '', ssn: '', manager_id: '',
     emergency_contact: '', emergency_phone: '', address: '',
@@ -41,8 +42,11 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
     hr_signature: '',
     employee_signature: '',
     notes: '',
-  };
-  const [form, setForm] = useState(emptyForm);
+  });
+  const [form, setForm] = useState(buildEmptyForm);
+  const todayISO = new Date().toISOString().split('T')[0];
+
+  const trimText = (value: string) => value.trim();
 
   useEffect(() => { fetchData(); }, []);
 
@@ -66,7 +70,7 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
   const startOnboardFromApplicant = (applicant: any) => {
     setActiveOnboard(applicant);
     setForm({
-      ...emptyForm,
+      ...buildEmptyForm(),
       name: applicant.name,
       position: applicant.position || '',
     });
@@ -74,20 +78,81 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
   };
 
   const submitOnboarding = async () => {
-    if (!form.name) { window.notify?.('Employee name is required', 'error'); return; }
+    const cleaned = {
+      ...form,
+      name: trimText(form.name),
+      position: trimText(form.position),
+      dept: trimText(form.dept),
+      hire_date: trimText(form.hire_date),
+      salary_base: trimText(form.salary_base),
+      ssn: trimText(form.ssn),
+      manager_id: trimText(form.manager_id),
+      emergency_contact: trimText(form.emergency_contact),
+      emergency_phone: trimText(form.emergency_phone),
+      address: trimText(form.address),
+      notes: trimText(form.notes),
+      property_items: form.property_items.map(item => ({
+        brand: trimText(item.brand),
+        serial_no: trimText(item.serial_no),
+        description: trimText(item.description),
+        uom_qty: Number.isFinite(Number(item.uom_qty)) ? Math.max(1, Math.round(Number(item.uom_qty))) : 1,
+      })),
+    };
+
+    if (!cleaned.name || !cleaned.position || !cleaned.dept || !cleaned.hire_date) {
+      window.notify?.('Name, position, department, and hire date are required', 'error');
+      return;
+    }
+
+    const salary = Number(cleaned.salary_base);
+    if (!Number.isFinite(salary) || salary <= 0) {
+      window.notify?.('Please enter a valid base salary greater than 0', 'error');
+      return;
+    }
+
+    if (!cleaned.ssn || !cleaned.emergency_contact || !cleaned.emergency_phone || !cleaned.address) {
+      window.notify?.('SSN/ID, emergency contact, emergency phone, and address are required', 'error');
+      return;
+    }
+
+    if (!/^[0-9+()\-\s]{7,20}$/.test(cleaned.emergency_phone)) {
+      window.notify?.('Emergency phone must be 7 to 20 characters and contain only phone symbols', 'error');
+      return;
+    }
+
+    const hasIncompletePropertyRow = cleaned.property_items.some(item => {
+      const hasAny = Boolean(item.brand || item.serial_no || item.description);
+      if (!hasAny) return false;
+      return !item.brand || !item.serial_no || !item.description || item.uom_qty < 1;
+    });
+    if (hasIncompletePropertyRow) {
+      window.notify?.('Each property row must include brand, serial number, description, and quantity', 'error');
+      return;
+    }
+
+    if (!Object.values(cleaned.checklist).every(Boolean)) {
+      window.notify?.('Please complete the onboarding checklist before submission', 'error');
+      return;
+    }
+
+    if (!cleaned.hr_signature || !cleaned.employee_signature) {
+      window.notify?.('HR and employee signatures are required', 'error');
+      return;
+    }
+
     try {
       // 1. Create employee record (201 file)
       const empRes = await fetch('/api/employees', {
         method: 'POST', headers: getAuthHeaders(),
         body: JSON.stringify({
-          name: form.name,
+          name: cleaned.name,
           status: 'Probationary',
-          position: form.position,
-          dept: form.dept,
-          hire_date: form.hire_date,
-          salary_base: parseFloat(form.salary_base) || 0,
-          ssn: form.ssn,
-          manager_id: form.manager_id ? parseInt(form.manager_id) : null,
+          position: cleaned.position,
+          dept: cleaned.dept,
+          hire_date: cleaned.hire_date,
+          salary_base: salary,
+          ssn: cleaned.ssn,
+          manager_id: cleaned.manager_id ? parseInt(cleaned.manager_id) : null,
         }),
       });
       if (!empRes.ok) throw new Error('Failed to create employee');
@@ -95,7 +160,7 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
       const newEmpId = empData.id || empData.insertId;
 
       // 2. Issue property items
-      for (const item of form.property_items) {
+      for (const item of cleaned.property_items) {
         if (item.brand || item.serial_no || item.description) {
           await fetch('/api/property_accountability', {
             method: 'POST', headers: getAuthHeaders(),
@@ -114,12 +179,12 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
         method: 'POST', headers: getAuthHeaders(),
         body: JSON.stringify({
           employee_id: newEmpId,
-          employee_name: form.name,
+          employee_name: cleaned.name,
           applicant_id: activeOnboard?.id || null,
-          checklist: JSON.stringify(form.checklist),
-          hr_signature: form.hr_signature,
-          employee_signature: form.employee_signature,
-          notes: form.notes,
+          checklist: JSON.stringify(cleaned.checklist),
+          hr_signature: cleaned.hr_signature,
+          employee_signature: cleaned.employee_signature,
+          notes: cleaned.notes,
           status: 'Completed',
         }),
       });
@@ -132,8 +197,8 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
         });
       }
 
-      window.notify?.(`${form.name} successfully onboarded!`, 'success');
-      setForm(emptyForm);
+      window.notify?.(`${cleaned.name} successfully onboarded!`, 'success');
+      setForm(buildEmptyForm());
       setShowManualForm(false);
       setActiveOnboard(null);
       fetchData();
@@ -144,12 +209,71 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
   };
 
   const deleteOnboarding = async (id: number) => {
-    if (!confirm('Delete this onboarding record?')) return;
+    if (!(await appConfirm('Archive this onboarding record?', { title: 'Archive Onboarding Record', confirmText: 'Archive' }))) return;
     try {
       await fetch(`/api/onboarding/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-      window.notify?.('Deleted', 'success');
+      window.notify?.('Archived', 'success');
       fetchData();
     } catch { window.notify?.('Failed', 'error'); }
+  };
+
+  const exportOnboardingPdf = async (rec: any) => {
+    if (!(await appConfirm('Export this onboarding record as PDF?', { title: 'Export Onboarding PDF', confirmText: 'Export', icon: 'export' }))) return;
+    let checklist: Record<string, boolean> = {};
+    try { checklist = typeof rec.checklist === 'string' ? JSON.parse(rec.checklist) : (rec.checklist || {}); } catch {}
+    const checklistRows = Object.entries(checklist).map(([k, v]) => `
+      <tr>
+        <td style="padding:6px 8px;border:1px solid #e2e8f0;">${k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</td>
+        <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:center;">${v ? 'Completed' : 'Pending'}</td>
+      </tr>
+    `).join('');
+    const w = window.open('', '_blank');
+    if (!w) { window.notify?.('Please allow popups to export PDF', 'error'); return; }
+    w.document.write(`<!DOCTYPE html><html><head><title>Onboarding Record — ${rec.employee_name || ''}</title></head><body style="font-family:Arial,sans-serif;padding:24px;color:#0f172a;">
+      <h2 style="margin:0 0 6px;color:#0f766e;">Onboarding Record</h2>
+      <p style="margin:0 0 16px;color:#64748b;">Employee: ${rec.employee_name || '—'} | Date: ${(rec.created_at || '').toString().split('T')[0] || '—'}</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px;">
+        <tr><td style="padding:6px 8px;border:1px solid #e2e8f0;width:220px;"><b>Status</b></td><td style="padding:6px 8px;border:1px solid #e2e8f0;">${rec.status || '—'}</td></tr>
+        <tr><td style="padding:6px 8px;border:1px solid #e2e8f0;"><b>Applicant ID</b></td><td style="padding:6px 8px;border:1px solid #e2e8f0;">${rec.applicant_id || '—'}</td></tr>
+      </table>
+      <h3 style="margin:0 0 8px;font-size:14px;color:#334155;">Checklist</h3>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px;">
+        <thead><tr><th style="padding:6px 8px;border:1px solid #e2e8f0;text-align:left;background:#f8fafc;">Item</th><th style="padding:6px 8px;border:1px solid #e2e8f0;text-align:center;background:#f8fafc;">Status</th></tr></thead>
+        <tbody>${checklistRows || '<tr><td colspan="2" style="padding:8px;border:1px solid #e2e8f0;text-align:center;color:#64748b;">No checklist data</td></tr>'}</tbody>
+      </table>
+      <div style="display:flex;gap:24px;align-items:flex-start;">
+        <div style="flex:1;">
+          <div style="font-size:11px;font-weight:bold;color:#475569;text-transform:uppercase;margin-bottom:6px;">HR Admin Signature</div>
+          ${rec.hr_signature ? `<img src="${rec.hr_signature}" alt="HR Admin Signature" style="max-height:64px;border-bottom:1px solid #94a3b8;padding-bottom:4px;" />` : '<div style="height:64px;border-bottom:1px solid #94a3b8;"></div>'}
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:11px;font-weight:bold;color:#475569;text-transform:uppercase;margin-bottom:6px;">Employee Signature</div>
+          ${rec.employee_signature ? `<img src="${rec.employee_signature}" alt="Employee Signature" style="max-height:64px;border-bottom:1px solid #94a3b8;padding-bottom:4px;" />` : '<div style="height:64px;border-bottom:1px solid #94a3b8;"></div>'}
+        </div>
+      </div>
+    </body></html>`);
+    w.document.close();
+    setTimeout(() => {
+      w.print();
+      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'export_pdf', description: `Onboarding PDF — ${rec.employee_name || ''}`, entity: 'onboarding', entity_id: rec.id || null, meta: { source: 'OnboardingHub' } }) }).catch(() => {}); } catch {};
+    }, 300);
+  };
+
+  const viewOnboardingRecord = (rec: any) => {
+    let checklist: Record<string, boolean> = {};
+    try { checklist = typeof rec.checklist === 'string' ? JSON.parse(rec.checklist) : (rec.checklist || {}); } catch {}
+    const rows = Object.entries(checklist).map(([k, v]) => `<li style="margin-bottom:4px;">${k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}: <b>${v ? 'Completed' : 'Pending'}</b></li>`).join('');
+    const w = window.open('', '_blank');
+    if (!w) { window.notify?.('Please allow popups to view records', 'error'); return; }
+    w.document.write(`<!DOCTYPE html><html><head><title>View Onboarding Record — ${rec.employee_name || ''}</title></head><body style="font-family:Arial,sans-serif;padding:24px;color:#0f172a;">
+      <h2 style="margin:0 0 6px;color:#0f766e;">Onboarding Record</h2>
+      <p style="margin:0 0 12px;color:#64748b;">Employee: ${rec.employee_name || '—'}</p>
+      <p style="margin:0 0 8px;"><b>Status:</b> ${rec.status || '—'}</p>
+      <p style="margin:0 0 16px;"><b>Created:</b> ${(rec.created_at || '').toString().split('T')[0] || '—'}</p>
+      <h3 style="margin:0 0 8px;font-size:14px;color:#334155;">Checklist</h3>
+      <ul style="padding-left:18px;">${rows || '<li>No checklist data</li>'}</ul>
+    </body></html>`);
+    w.document.close();
   };
 
   const completedCount = onboardingRecords.filter(r => r.status === 'Completed').length;
@@ -161,7 +285,7 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
         <SectionHeader title="Onboarding Hub" subtitle="Initialize 201 Employee Files and manage new hire onboarding" />
         <div className="flex gap-2">
           <button onClick={() => exportToCSV(onboardingRecords, 'onboarding')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
-          <button onClick={() => { setActiveOnboard(null); setForm(emptyForm); setShowManualForm(!showManualForm); }} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${showManualForm ? 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300' : 'bg-teal-deep text-white hover:bg-teal-green'}`}>
+          <button onClick={() => { setActiveOnboard(null); setForm(buildEmptyForm()); setShowManualForm(!showManualForm); }} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${showManualForm ? 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300' : 'bg-teal-deep text-white hover:bg-teal-green'}`}>
             {showManualForm ? <>✕ Close</> : <><UserPlus size={16} /> Manual Onboard</>}
           </button>
         </div>
@@ -243,32 +367,42 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
                 </h4>
                 <div className="grid grid-cols-3 gap-4">
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Full Name *</label>
-                    <input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                    <input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Position / Job Title</label>
-                    <input type="text" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                    <input type="text" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department</label>
-                    <select value={form.dept} onChange={e => setForm({ ...form, dept: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"><option value="">Select department...</option>{['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => <option key={d}>{d}</option>)}</select></div>
+                    <SearchableSelect
+                      options={['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => ({ value: d, label: d }))}
+                      value={form.dept}
+                      onChange={v => setForm({ ...form, dept: String(v) })}
+                      placeholder="Select department..."
+                      allowEmpty
+                      emptyLabel="Select department..."
+                      searchable
+                      dropdownVariant="pills-horizontal"
+                      className="w-full"
+                    /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Hire Date</label>
-                    <input type="date" value={form.hire_date} onChange={e => setForm({ ...form, hire_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                    <input type="date" value={form.hire_date} onChange={e => setForm({ ...form, hire_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" max={todayISO} required /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Base Salary</label>
-                    <input type="number" min="0" step="0.01" value={form.salary_base} onChange={e => setForm({ ...form, salary_base: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="50000" /></div>
+                    <input type="number" min="0.01" step="0.01" value={form.salary_base} onChange={e => setForm({ ...form, salary_base: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="50000" required /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">SSN / ID Number</label>
-                    <input type="text" value={form.ssn} onChange={e => setForm({ ...form, ssn: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                    <input type="text" value={form.ssn} onChange={e => setForm({ ...form, ssn: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={64} required /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Reporting Manager</label>
                     <SearchableSelect
-                      options={employees.map(e => ({ value: String(e.id), label: `${e.name} — ${e.position}` }))}
+                      options={employees.map(e => ({ value: String(e.id), label: `${e.name} — ${e.position}`, avatarUrl: (e as any).profile_picture || null }))}
                       value={form.manager_id}
-                      onChange={v => setForm({ ...form, manager_id: v })}
+                      onChange={v => setForm({ ...form, manager_id: String(v) })}
                       placeholder="Select Manager..."
                     /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Emergency Contact Name</label>
-                    <input type="text" value={form.emergency_contact} onChange={e => setForm({ ...form, emergency_contact: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                    <input type="text" value={form.emergency_contact} onChange={e => setForm({ ...form, emergency_contact: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Emergency Phone</label>
-                    <input type="tel" value={form.emergency_phone} onChange={e => setForm({ ...form, emergency_phone: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" /></div>
+                    <input type="tel" value={form.emergency_phone} onChange={e => setForm({ ...form, emergency_phone: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={20} pattern="[0-9+()\-\s]{7,20}" required /></div>
                 </div>
                 <div className="mt-4">
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Address</label>
-                  <textarea rows={2} value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+                  <textarea rows={2} value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" minLength={5} maxLength={300} required />
                 </div>
               </div>
 
@@ -321,10 +455,10 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
                     <tbody>
                       {form.property_items.map((item, i) => (
                         <tr key={i} className="border-b border-slate-100 dark:border-slate-800">
-                          <td className="p-1"><input type="text" value={item.brand} onChange={e => { const items = [...form.property_items]; items[i] = { ...items[i], brand: e.target.value }; setForm({ ...form, property_items: items }); }} className="w-full border-0 bg-transparent text-sm dark:text-slate-100 p-1" placeholder="e.g. Dell Laptop" /></td>
-                          <td className="p-1"><input type="text" value={item.serial_no} onChange={e => { const items = [...form.property_items]; items[i] = { ...items[i], serial_no: e.target.value }; setForm({ ...form, property_items: items }); }} className="w-full border-0 bg-transparent text-sm dark:text-slate-100 p-1" placeholder="SN-..." /></td>
-                          <td className="p-1"><input type="text" value={item.description} onChange={e => { const items = [...form.property_items]; items[i] = { ...items[i], description: e.target.value }; setForm({ ...form, property_items: items }); }} className="w-full border-0 bg-transparent text-sm dark:text-slate-100 p-1" placeholder="Details..." /></td>
-                          <td className="p-1"><input type="number" min={1} value={item.uom_qty} onChange={e => { const items = [...form.property_items]; items[i] = { ...items[i], uom_qty: parseInt(e.target.value) || 1 }; setForm({ ...form, property_items: items }); }} className="w-full border-0 bg-transparent text-sm dark:text-slate-100 p-1 text-center" /></td>
+                          <td className="p-1"><input type="text" value={item.brand} onChange={e => { const items = [...form.property_items]; items[i] = { ...items[i], brand: e.target.value }; setForm({ ...form, property_items: items }); }} className="w-full border-0 bg-transparent text-sm dark:text-slate-100 p-1" placeholder="e.g. Dell Laptop" maxLength={120} /></td>
+                          <td className="p-1"><input type="text" value={item.serial_no} onChange={e => { const items = [...form.property_items]; items[i] = { ...items[i], serial_no: e.target.value }; setForm({ ...form, property_items: items }); }} className="w-full border-0 bg-transparent text-sm dark:text-slate-100 p-1" placeholder="SN-..." maxLength={120} /></td>
+                          <td className="p-1"><input type="text" value={item.description} onChange={e => { const items = [...form.property_items]; items[i] = { ...items[i], description: e.target.value }; setForm({ ...form, property_items: items }); }} className="w-full border-0 bg-transparent text-sm dark:text-slate-100 p-1" placeholder="Details..." maxLength={200} /></td>
+                          <td className="p-1"><input type="number" min={1} max={1000} value={item.uom_qty} onChange={e => { const items = [...form.property_items]; items[i] = { ...items[i], uom_qty: parseInt(e.target.value) || 1 }; setForm({ ...form, property_items: items }); }} className="w-full border-0 bg-transparent text-sm dark:text-slate-100 p-1 text-center" /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -339,7 +473,7 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <SignatureUpload
-                      label="HR Representative Signature"
+                      label="HR Admin Representative Signature"
                       value={form.hr_signature}
                       onChange={dataUrl => setForm(prev => ({ ...prev, hr_signature: dataUrl }))}
                     />
@@ -354,7 +488,7 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Additional Notes</label>
-                  <textarea rows={3} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Special accommodations, notes, etc." />
+                  <textarea rows={3} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Special accommodations, notes, etc." maxLength={2000} />
                 </div>
               </div>
 
@@ -378,7 +512,7 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
               <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</th>
               <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Checklist</th>
               <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
-              <th className="pb-2"></th>
+              <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Actions</th>
             </tr></thead>
             <tbody>
               {onboardingRecords.map(rec => {
@@ -399,7 +533,13 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
                       </div>
                     </td>
                     <td className="py-3"><span className={`text-[10px] font-bold uppercase ${rec.status === 'Completed' ? 'text-emerald-600' : 'text-amber-500'}`}>{rec.status}</span></td>
-                    <td className="py-3"><button onClick={() => deleteOnboarding(rec.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button></td>
+                    <td className="py-3">
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => viewOnboardingRecord(rec)} className="text-blue-500 hover:text-blue-700" title="View"><Eye size={14} /></button>
+                        <button onClick={() => exportOnboardingPdf(rec)} className="text-blue-500 hover:text-blue-700" title="Export PDF"><FileText size={14} /></button>
+                        <button onClick={() => deleteOnboarding(rec.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}

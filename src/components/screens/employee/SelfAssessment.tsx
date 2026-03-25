@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
-import { Download, Trash2 } from 'lucide-react';
+import { Download, Archive } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { appConfirm } from '../../../utils/appDialog';
 
 const scoreLabels: Record<number, string> = { 5: 'Excellent', 4: 'Good', 3: 'Satisfactory', 2: 'Fair', 1: 'Poor' };
 
@@ -34,12 +35,21 @@ export const SelfAssessment = () => {
   };
 
   const submitAssessment = async () => {
-    if (!form.achievements.trim()) { window.notify?.('Please enter your achievements', 'error'); return; }
+    const achievements = form.achievements.trim();
+    if (!achievements) { window.notify?.('Please enter your achievements', 'error'); return; }
+    if (achievements.length < 20) { window.notify?.('Achievements must be at least 20 characters', 'error'); return; }
+    if (achievements.length > 1000) { window.notify?.('Achievements must be 1000 characters or less', 'error'); return; }
+    const ratingFields = ['job_knowledge', 'work_quality', 'attendance', 'productivity', 'communication', 'dependability'] as const;
+    const hasMissingRating = ratingFields.some((field) => Number((form as any)[field]) < 1 || Number((form as any)[field]) > 5);
+    if (hasMissingRating) {
+      window.notify?.('Please rate all performance categories from 1 to 5', 'error');
+      return;
+    }
     try {
       const res = await fetch('/api/self_assessments', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ ...form, employee_id: user.employee_id || user.id })
+        body: JSON.stringify({ ...form, achievements, employee_id: user.employee_id || user.id })
       });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Self assessment submitted', 'success');
@@ -48,9 +58,16 @@ export const SelfAssessment = () => {
     } catch { window.notify?.('Failed to submit', 'error'); }
   };
 
+  const isAssessmentFormValid = () => {
+    const achievements = form.achievements.trim();
+    if (!achievements || achievements.length < 20 || achievements.length > 1000) return false;
+    const ratingFields = ['job_knowledge', 'work_quality', 'attendance', 'productivity', 'communication', 'dependability'] as const;
+    return !ratingFields.some((field) => Number((form as any)[field]) < 1 || Number((form as any)[field]) > 5);
+  };
+
   const deleteAssessment = async (id: number) => {
-    if (!confirm('Delete this assessment?')) return;
-    try { await fetch(`/api/self_assessments/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Deleted', 'success'); fetchAssessments(); } catch { window.notify?.('Failed', 'error'); }
+    if (!(await appConfirm('Archive this assessment?', { title: 'Archive Assessment', confirmText: 'Archive' }))) return;
+    try { await fetch(`/api/self_assessments/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Archived', 'success'); fetchAssessments(); } catch { window.notify?.('Failed', 'error'); }
   };
 
   const radarData = [
@@ -65,7 +82,7 @@ export const SelfAssessment = () => {
   const SelectScore = ({ label, field }: { label: string; field: string }) => (
     <div>
       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{label}</label>
-      <select value={(form as any)[field]} onChange={e => setForm({ ...form, [field]: parseInt(e.target.value) })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100">
+        <select value={(form as any)[field]} onChange={e => setForm({ ...form, [field]: parseInt(e.target.value) })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" required>
         <option value={0} disabled>— Select Rating —</option>
         {[5, 4, 3, 2, 1].map(v => <option key={v} value={v}>{v} — {scoreLabels[v]}</option>)}
       </select>
@@ -84,8 +101,8 @@ export const SelfAssessment = () => {
           <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 border-b dark:border-slate-800 pb-2">New Self Assessment</h3>
           <form className="space-y-4" onSubmit={e => { e.preventDefault(); submitAssessment(); }}>
             <div>
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Key Achievements</label>
-              <textarea rows={3} value={form.achievements} onChange={e => setForm({ ...form, achievements: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Describe your key accomplishments..." />
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Key Achievements <span className="text-red-500 font-black">*</span></label>
+              <textarea rows={3} value={form.achievements} onChange={e => setForm({ ...form, achievements: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Describe your key accomplishments..." minLength={20} maxLength={1000} required />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <SelectScore label="Job Knowledge" field="job_knowledge" />
@@ -95,7 +112,7 @@ export const SelfAssessment = () => {
               <SelectScore label="Communication / Listening Skills" field="communication" />
               <SelectScore label="Dependability" field="dependability" />
             </div>
-            <div className="flex justify-end"><button type="submit" className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green">Submit Assessment</button></div>
+            <div className="flex justify-end"><button type="submit" disabled={!isAssessmentFormValid()} className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green disabled:opacity-50 disabled:cursor-not-allowed">Submit Assessment</button></div>
           </form>
         </Card>
         <Card>
@@ -136,7 +153,7 @@ export const SelfAssessment = () => {
                   <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{a.productivity}</td>
                   <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{a.communication}</td>
                   <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{a.dependability}</td>
-                  <td className="py-3"><button onClick={() => deleteAssessment(a.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button></td>
+                  <td className="py-3"><button onClick={() => deleteAssessment(a.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button></td>
                 </tr>
               ))}</tbody>
             </table>

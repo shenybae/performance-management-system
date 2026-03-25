@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import Modal from '../../common/Modal';
+import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
-import { Plus, Download, Trash2, Eye } from 'lucide-react';
+import { Plus, Download, Eye, Archive, Sparkles, Users, BarChart3 } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -27,6 +28,7 @@ import {
 } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { Employee } from '../../../types';
+import { appConfirm } from '../../../utils/appDialog';
 
 interface FeedbackBoxProps {
   employees?: Employee[];
@@ -51,8 +53,9 @@ const ScoreSelect: React.FC<{ label: string; field: string; form: any; setFn: an
       value={form[field]}
       onChange={e => setFn({ ...form, [field]: Number(e.target.value) })}
       className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+      required
     >
-      <option value={0}>0</option>
+      <option value={0} disabled>— Select —</option>
       <option value={1}>1</option>
       <option value={2}>2</option>
       <option value={3}>3</option>
@@ -84,6 +87,19 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
   const [viewItem, setViewItem] = useState<any | null>(null);
   const [search, setSearch] = useState('');
   const [personFilter, setPersonFilter] = useState('');
+  const [relationshipFilter, setRelationshipFilter] = useState('');
+
+  const isSoftDeleted = (row: any) => {
+    const status = String(row?.status || '').toLowerCase();
+    return Boolean(
+      row?.deleted_at ||
+      row?.archived_at ||
+      row?.is_deleted ||
+      row?.is_archived ||
+      status === 'archived' ||
+      status === 'deleted'
+    );
+  };
 
   useEffect(() => { fetchData(); }, []);
 
@@ -93,13 +109,13 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
         try {
           const r = await fetch('/api/users', { headers: getAuthHeaders() });
           const d = await r.json();
-          setUsersList(Array.isArray(d) ? d : []);
+          setUsersList((Array.isArray(d) ? d : []).filter((u: any) => !isSoftDeleted(u)));
         } catch (err) {
           setUsersList([]);
         }
       })();
     } else {
-      setUsersList(users);
+      setUsersList((Array.isArray(users) ? users : []).filter((u: any) => !isSoftDeleted(u)));
     }
   }, [users]);
 
@@ -114,12 +130,33 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
   };
 
   const submitFeedback = async () => {
-    if (!fbForm.target_employee_name.trim()) {
+    const targetName = fbForm.target_employee_name.trim();
+    if (!targetName) {
       window.notify?.('Please enter employee name', 'error');
       return;
     }
+    if (!fbForm.relationship.trim()) {
+      window.notify?.('Please select your relationship', 'error');
+      return;
+    }
+    const scoreFields = ['job_knowledge', 'work_quality', 'attendance', 'productivity', 'communication', 'dependability'] as const;
+    const hasInvalidScore = scoreFields.some((field) => Number((fbForm as any)[field]) < 1 || Number((fbForm as any)[field]) > 5);
+    if (hasInvalidScore) {
+      window.notify?.('Please provide all ratings from 1 to 5', 'error');
+      return;
+    }
+    const strengths = fbForm.strengths.trim();
+    const improvements = fbForm.improvements.trim();
+    if (strengths.length > 500 || improvements.length > 500) {
+      window.notify?.('Strengths and improvements must be 500 characters or less', 'error');
+      return;
+    }
     try {
-      const res = await fetch('/api/feedback_360', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ...fbForm, evaluator_id: user.employee_id || user.id }) });
+      const res = await fetch('/api/feedback_360', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ ...fbForm, target_employee_name: targetName, strengths, improvements, evaluator_id: user.employee_id || user.id })
+      });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('360 Feedback submitted', 'success');
       setFbForm({ target_employee_name: '', relationship: '', job_knowledge: 0, work_quality: 0, attendance: 0, productivity: 0, communication: 0, dependability: 0, strengths: '', improvements: '' });
@@ -130,11 +167,17 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
     }
   };
 
+  const isFeedbackFormValid = () => {
+    if (!fbForm.target_employee_name.trim() || !fbForm.relationship.trim()) return false;
+    const scoreFields = ['job_knowledge', 'work_quality', 'attendance', 'productivity', 'communication', 'dependability'] as const;
+    return !scoreFields.some((field) => Number((fbForm as any)[field]) < 1 || Number((fbForm as any)[field]) > 5);
+  };
+
   const deleteFeedback = async (id: number) => {
-    if (!confirm('Delete?')) return;
+    if (!(await appConfirm('Archive this feedback?', { title: 'Archive Feedback', confirmText: 'Archive' }))) return;
     try {
       await fetch(`/api/feedback_360/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-      window.notify?.('Deleted', 'success');
+      window.notify?.('Archived', 'success');
       fetchData();
     } catch {
       window.notify?.('Failed', 'error');
@@ -145,17 +188,17 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
   const closeView = () => setViewItem(null);
 
   const personOptions = useMemo(() => {
-    const map = new Map<string, { value: string; label: string }>();
+    const map = new Map<string, { value: string; label: string; avatarUrl?: string | null }>();
     (usersList || []).forEach(u => {
       const base = u.full_name || u.employee_name || u.email || u.username || `ID ${u.id || ''}`;
       const role = u.role || u.position || '';
       const label = role ? `${base} (${role})` : base;
-      if (!map.has(base)) map.set(base, { value: base, label });
+      if (!map.has(base)) map.set(base, { value: base, label, avatarUrl: u.profile_picture || null });
     });
-    (employees || []).forEach(e => {
+    (employees || []).filter((e: any) => !isSoftDeleted(e)).forEach(e => {
       const base = e.name || e.full_name || '';
       if (!base) return;
-      if (!map.has(base)) map.set(base, { value: base, label: base });
+      if (!map.has(base)) map.set(base, { value: base, label: base, avatarUrl: (e as any).profile_picture || null });
     });
     return Array.from(map.values());
   }, [usersList, employees]);
@@ -245,6 +288,7 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
 
   const visibleFeedback = useMemo(() => {
     return feedback360.filter(f => {
+      if (relationshipFilter && (f.relationship || '').toString() !== relationshipFilter) return false;
       if (personFilter) {
         const pf = normalizeName(personFilter);
         const fn = normalizeName(f.target_employee_name);
@@ -259,12 +303,12 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
       }
       return true;
     });
-  }, [feedback360, personFilter, search]);
+  }, [feedback360, personFilter, search, relationshipFilter]);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold">360° Feedback</h2>
+      <div className="flex items-end justify-between gap-4 mb-4">
+        <SectionHeader title="360° Feedback" subtitle="Collaborative growth insights from peers, supervisors, and teams" />
         <div className="flex items-center gap-2">
           <button onClick={() => setShowForm(s => !s)} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Plus size={14} /> New</button>
           <button onClick={() => exportToCSV(feedback360, 'feedback_360')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={14} /> XLSX</button>
@@ -276,22 +320,23 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
           <form onSubmit={e => { e.preventDefault(); submitFeedback(); }}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Person</label>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Person <span className="text-red-500 font-black">*</span></label>
                 {personOptions.length > 0 ? (
                   <SearchableSelect
                     options={personOptions}
                     value={fbForm.target_employee_name}
-                    onChange={v => setFbForm({ ...fbForm, target_employee_name: v })}
+                    onChange={v => setFbForm({ ...fbForm, target_employee_name: String(v) })}
                     placeholder="Select Person..."
+                    dropdownVariant="pills-horizontal"
                   />
                 ) : (
-                  <input type="text" value={fbForm.target_employee_name} onChange={e => setFbForm({ ...fbForm, target_employee_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+                  <input type="text" value={fbForm.target_employee_name} onChange={e => setFbForm({ ...fbForm, target_employee_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required />
                 )}
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Relationship</label>
-                <select value={fbForm.relationship} onChange={e => setFbForm({ ...fbForm, relationship: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Relationship <span className="text-red-500 font-black">*</span></label>
+                <select value={fbForm.relationship} onChange={e => setFbForm({ ...fbForm, relationship: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" required>
                   <option value="">Select Relationship...</option>
                   <option>Peer</option>
                   <option>Supervisor</option>
@@ -302,21 +347,21 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
             </div>
 
             <div className="grid grid-cols-3 gap-4 mb-4">
-              {subjects.map(s => <ScoreSelect key={s.key} label={s.label} field={s.key} form={fbForm} setFn={setFbForm} />)}
+              {subjects.map(s => <ScoreSelect key={s.key} label={s.label + " *"} field={s.key} form={fbForm} setFn={setFbForm} />)}
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Strengths</label>
-                <textarea rows={2} value={fbForm.strengths} onChange={e => setFbForm({ ...fbForm, strengths: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+                <textarea rows={2} value={fbForm.strengths} onChange={e => setFbForm({ ...fbForm, strengths: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={500} placeholder="Highlight key strengths (optional)" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Areas for Improvement</label>
-                <textarea rows={2} value={fbForm.improvements} onChange={e => setFbForm({ ...fbForm, improvements: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" />
+                <textarea rows={2} value={fbForm.improvements} onChange={e => setFbForm({ ...fbForm, improvements: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={500} placeholder="Describe opportunities to improve (optional)" />
               </div>
             </div>
 
-            <div className="flex justify-end"><button type="submit" className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green">Submit Feedback</button></div>
+            <div className="flex justify-end"><button type="submit" disabled={!isFeedbackFormValid()} className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green disabled:opacity-50 disabled:cursor-not-allowed">Submit Feedback</button></div>
           </form>
         </Card>
       )}
@@ -324,22 +369,22 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
       {/* KPI tiles */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card>
-          <div className="text-xs text-slate-500 uppercase font-bold mb-2">Total Responses</div>
+          <div className="text-xs text-slate-500 uppercase font-bold mb-2 flex items-center gap-1"><Users size={12} /> Total Responses</div>
           <div className="text-2xl font-black">{totalResponses}</div>
           <div className="text-xs text-slate-400">Feedback entries</div>
         </Card>
         <Card>
-          <div className="text-xs text-slate-500 uppercase font-bold mb-2">Average Score</div>
+          <div className="text-xs text-slate-500 uppercase font-bold mb-2 flex items-center gap-1"><Sparkles size={12} /> Average Score</div>
           <div className="text-2xl font-black">{overallAvg}</div>
           <div className="text-xs text-slate-400">Avg across categories</div>
         </Card>
         <Card>
-          <div className="text-xs text-slate-500 uppercase font-bold mb-2">Unique People</div>
+          <div className="text-xs text-slate-500 uppercase font-bold mb-2 flex items-center gap-1"><Users size={12} /> Unique People</div>
           <div className="text-2xl font-black">{uniqueTargets}</div>
           <div className="text-xs text-slate-400">Receivers</div>
         </Card>
         <Card>
-          <div className="text-xs text-slate-500 uppercase font-bold mb-2">KPI</div>
+          <div className="text-xs text-slate-500 uppercase font-bold mb-2 flex items-center gap-1"><BarChart3 size={12} /> KPI</div>
           <div className="text-2xl font-black">{avgScores.length > 0 ? avgScores[0].avg : '—'}</div>
           <div className="text-xs text-slate-400">Snapshot</div>
         </Card>
@@ -417,21 +462,46 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
       </Card>
 
       {/* Filters + search */}
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3">
-          <div className="text-xs font-bold bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">All Feedback ({feedback360.length})</div>
-          <div className="min-w-[220px]"><SearchableSelect options={personOptions} value={personFilter} onChange={v => setPersonFilter(v)} placeholder="Filter by person" /></div>
+      <div className="mb-4 space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+          <div className="text-xs font-bold bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full shrink-0">All Feedback ({feedback360.length})</div>
+          <div className="w-full lg:w-96">
+            <SearchableSelect
+              options={[
+                { value: '', label: 'All People' },
+                ...personOptions.map((p) => ({ value: p.value, label: p.value })),
+              ]}
+              value={personFilter}
+              onChange={v => setPersonFilter(String(v))}
+              placeholder="All People"
+              searchable
+              dropdownVariant="pills-horizontal"
+            />
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search strengths or names..." className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm" />
-          <select className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm" onChange={e => { /* future */ }}>
-            <option value="">All relationships</option>
-            <option>Peer</option>
-            <option>Supervisor</option>
-            <option>Subordinate</option>
-            <option>Self</option>
-          </select>
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search strengths or names..."
+            className="w-full lg:w-72 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+          />
+          <div className="w-full lg:w-80">
+            <SearchableSelect
+              options={[
+                { value: '', label: 'All relationships' },
+                { value: 'Peer', label: 'Peer' },
+                { value: 'Supervisor', label: 'Supervisor' },
+                { value: 'Subordinate', label: 'Subordinate' },
+                { value: 'Self', label: 'Self' },
+              ]}
+              value={relationshipFilter}
+              onChange={v => setRelationshipFilter(String(v))}
+              placeholder="All relationships"
+              dropdownVariant="pills-horizontal"
+            />
+          </div>
         </div>
       </div>
 
@@ -462,17 +532,23 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
                   <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.communication}</td>
                   <td className="py-3 text-sm text-slate-500 max-w-[480px] truncate" title={f.strengths || undefined}>{f.strengths}</td>
                   <td className="py-3 text-sm text-slate-500 max-w-[480px] truncate" title={f.improvements || undefined}>{f.improvements}</td>
-                  <td className="py-3"><div className="flex items-center gap-3"><button onClick={() => openView(f)} title="View" className="text-slate-600 hover:text-slate-800"><Eye size={16} /></button><button onClick={() => deleteFeedback(f.id)} title="Delete" className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button></div></td>
+                  <td className="py-3">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openView(f)} title="View" className="text-slate-600 hover:text-slate-800 p-1 rounded"><Eye size={16} /></button>
+                      <button onClick={() => deleteFeedback(f.id)} title="Archive" className="text-red-500 hover:text-red-600 p-1 rounded"><Archive size={15} /></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {visibleFeedback.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-sm text-slate-400">No feedback matches your filters.</td>
+                  <td colSpan={8} className="py-8 text-center text-sm text-slate-400">
+                    {feedback360.length === 0 ? 'No feedback records yet.' : 'No feedback matches your filters.'}
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-          {feedback360.length === 0 && <p className="text-center text-sm text-slate-400 py-6">No feedback records yet</p>}
         </div>
       </Card>
 

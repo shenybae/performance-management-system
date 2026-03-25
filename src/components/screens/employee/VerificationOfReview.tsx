@@ -1,191 +1,435 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
-import { Download, CheckCircle, XCircle, FileCheck } from 'lucide-react';
-import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { SignatureUpload } from '../../common/SignatureUpload';
+import { CheckCircle, FileCheck, ShieldAlert } from 'lucide-react';
+import { getAuthHeaders } from '../../../utils/csv';
 
 export const VerificationOfReview = () => {
-  const [appraisals, setAppraisals] = useState<any[]>([]);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [signature, setSignature] = useState('');
-  const [rebuttal, setRebuttal] = useState('');
   const user = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
+  const isSupervisor = user?.role === 'Employee' && String(user?.position || '').toLowerCase().includes('supervisor');
+  const isManager = user?.role === 'Manager';
+  const isLeader = user?.role === 'Leader';
+  const isHR = user?.role === 'HR';
+  const isEmployee = user?.role === 'Employee' && !isSupervisor;
+  const isManagementSigner = isSupervisor || isManager || isLeader;
 
-  useEffect(() => { fetchAppraisals(); }, []);
+  const [appraisals, setAppraisals] = useState<any[]>([]);
+  const [disciplineRecords, setDisciplineRecords] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [signature, setSignature] = useState('');
+  const [remarks, setRemarks] = useState('');
+
+  useEffect(() => {
+    fetchAppraisals();
+    fetchDisciplineRecords();
+    if (isManagementSigner) fetchSuggestions();
+  }, []);
+
+  const queueDept = String(user?.dept || '').trim().toLowerCase();
+  const sameDept = (record: any) => {
+    if (!queueDept) return true;
+    const recDept = String(record?.employee_department || record?.dept || '').trim().toLowerCase();
+    if (!recDept) return true;
+    return recDept === queueDept;
+  };
 
   const fetchAppraisals = async () => {
     try {
       const res = await fetch('/api/appraisals', { headers: getAuthHeaders() });
       const data = await res.json();
-      const mine = Array.isArray(data) ? data : [];
-      setAppraisals(mine);
-    } catch { setAppraisals([]); }
+      setAppraisals(Array.isArray(data) ? data : []);
+    } catch {
+      setAppraisals([]);
+    }
   };
 
-  const verifyReview = async (id: number) => {
-    if (!signature) { window.notify?.('Please provide your signature to verify', 'error'); return; }
+  const fetchDisciplineRecords = async () => {
+    try {
+      const res = await fetch('/api/discipline_records', { headers: getAuthHeaders() });
+      const data = await res.json();
+      setDisciplineRecords(Array.isArray(data) ? data : []);
+    } catch {
+      setDisciplineRecords([]);
+    }
+  };
+
+  const fetchSuggestions = async () => {
+    try {
+      const res = await fetch('/api/suggestions', { headers: getAuthHeaders() });
+      const data = await res.json();
+      setSuggestions(Array.isArray(data) ? data : []);
+    } catch {
+      setSuggestions([]);
+    }
+  };
+
+  const signEmployeeAppraisal = async (id: number) => {
+    if (!signature) return window.notify?.('Please provide your signature', 'error');
     try {
       const res = await fetch(`/api/appraisals/${id}`, {
-        method: 'PUT', headers: getAuthHeaders(),
+        method: 'PUT',
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           employee_signature: signature,
           employee_signature_date: new Date().toISOString().split('T')[0],
-          employee_acknowledgement: rebuttal || 'Acknowledged'
-        })
+          employee_acknowledgement: remarks || 'Acknowledged',
+          employee_print_name: user?.full_name || user?.employee_name || null,
+        }),
       });
-      if (res.ok) {
-        window.notify?.('Review verified successfully', 'success');
-        setSignature(''); setRebuttal(''); setExpandedId(null);
-        fetchAppraisals();
-      }
-    } catch { window.notify?.('Failed to verify review', 'error'); }
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.('Employee signature saved', 'success');
+      setActiveId(null);
+      setSignature('');
+      setRemarks('');
+      fetchAppraisals();
+    } catch {
+      window.notify?.('Failed to sign appraisal', 'error');
+    }
   };
 
-  const scoreColor = (score: number) => score >= 4 ? 'text-emerald-600' : score >= 3 ? 'text-teal-600' : score >= 2 ? 'text-amber-600' : 'text-red-600';
+  const signSupervisorAppraisal = async (id: number) => {
+    if (!signature) return window.notify?.('Please provide your signature', 'error');
+    try {
+      const res = await fetch(`/api/appraisals/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          supervisor_signature: signature,
+          supervisor_signature_date: new Date().toISOString().split('T')[0],
+          supervisor_print_name: user?.full_name || user?.employee_name || null,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.('Supervisor signature saved', 'success');
+      setActiveId(null);
+      setSignature('');
+      fetchAppraisals();
+    } catch {
+      window.notify?.('Failed to sign appraisal', 'error');
+    }
+  };
+
+  const signHrAppraisal = async (id: number) => {
+    if (!signature) return window.notify?.('Please provide your signature', 'error');
+    try {
+      const res = await fetch(`/api/appraisals/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          hr_signature: signature,
+          hr_signature_date: new Date().toISOString().split('T')[0],
+          hr_print_name: user?.full_name || user?.employee_name || null,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.('HR signature saved', 'success');
+      setActiveId(null);
+      setSignature('');
+      fetchAppraisals();
+    } catch {
+      window.notify?.('Failed to sign appraisal', 'error');
+    }
+  };
+
+  const signEmployeeDiscipline = async (id: number) => {
+    if (!signature) return window.notify?.('Please provide your signature', 'error');
+    try {
+      const res = await fetch(`/api/discipline_records/${id}/employee-sign`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          employee_signature: signature,
+          employee_signature_date: new Date().toISOString().split('T')[0],
+          employee_statement: remarks || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.('Disciplinary acknowledgement saved', 'success');
+      setActiveId(null);
+      setSignature('');
+      setRemarks('');
+      fetchDisciplineRecords();
+    } catch {
+      window.notify?.('Failed to sign disciplinary record', 'error');
+    }
+  };
+
+  const signSupervisorDiscipline = async (id: number) => {
+    if (!signature) return window.notify?.('Please provide your signature', 'error');
+    try {
+      const res = await fetch(`/api/discipline_records/${id}/supervisor-sign`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          supervisor_signature: signature,
+          supervisor_signature_date: new Date().toISOString().split('T')[0],
+        }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.('Supervisor disciplinary signature saved', 'success');
+      setActiveId(null);
+      setSignature('');
+      fetchDisciplineRecords();
+    } catch {
+      window.notify?.('Failed to sign disciplinary record', 'error');
+    }
+  };
+
+  const signSupervisorSuggestion = async (s: any) => {
+    if (!signature) return window.notify?.('Please provide your signature', 'error');
+    try {
+      const res = await fetch(`/api/suggestions/${s.id}/management`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          supervisor_name: s.supervisor_name || user?.full_name || user?.employee_name || null,
+          supervisor_title: s.supervisor_title || user?.position || 'Supervisor',
+          date_received: s.date_received || new Date().toISOString().split('T')[0],
+          follow_up_date: s.follow_up_date || null,
+          suggestion_merit: s.suggestion_merit || null,
+          benefit_to_company: s.benefit_to_company || null,
+          cost_to_company: s.cost_to_company || null,
+          cost_efficient_explanation: s.cost_efficient_explanation || null,
+          suggestion_priority: s.suggestion_priority || null,
+          action_to_be_taken: s.action_to_be_taken || null,
+          suggested_reward: s.suggested_reward || null,
+          supervisor_signature: signature,
+          supervisor_signature_date: new Date().toISOString().split('T')[0],
+          status: s.status || 'Reviewed',
+        }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.('Supervisor suggestion signature saved', 'success');
+      setActiveId(null);
+      setSignature('');
+      fetchSuggestions();
+    } catch {
+      window.notify?.('Failed to sign suggestion', 'error');
+    }
+  };
+
+  const pendingEmployeeAppraisals = useMemo(() => appraisals.filter((a) => {
+    const isPerformance = String(a.form_type || a.eval_type || '').toLowerCase().includes('performance');
+    return !!a.supervisor_signature && (!isPerformance || !!a.reviewer_signature) && !a.employee_signature;
+  }), [appraisals]);
+
+  const pendingEmployeeDiscipline = useMemo(
+    () => disciplineRecords.filter((d) => !!d.supervisor_signature && !d.employee_signature),
+    [disciplineRecords]
+  );
+
+  const pendingSupervisorAppraisals = useMemo(
+    () => appraisals.filter((a) => !a.supervisor_signature && sameDept(a)),
+    [appraisals, queueDept]
+  );
+  const doneSupervisorAppraisals = useMemo(
+    () => appraisals.filter((a) => !!a.supervisor_signature && sameDept(a)),
+    [appraisals, queueDept]
+  );
+
+  const pendingSupervisorDiscipline = useMemo(
+    () => disciplineRecords.filter((d) => !d.supervisor_signature && sameDept(d)),
+    [disciplineRecords, queueDept]
+  );
+  const doneSupervisorDiscipline = useMemo(
+    () => disciplineRecords.filter((d) => !!d.supervisor_signature && sameDept(d)),
+    [disciplineRecords, queueDept]
+  );
+
+  const pendingSupervisorSuggestions = useMemo(
+    () => suggestions.filter((s) => !s.supervisor_signature && sameDept(s)),
+    [suggestions, queueDept]
+  );
+  const doneSupervisorSuggestions = useMemo(
+    () => suggestions.filter((s) => !!s.supervisor_signature && sameDept(s)),
+    [suggestions, queueDept]
+  );
+
+  const pendingHrAppraisals = useMemo(() => appraisals.filter((a) => {
+    const isPerformance = String(a.form_type || a.eval_type || '').toLowerCase().includes('performance');
+    return isPerformance && !!a.supervisor_signature && !!a.reviewer_signature && !!a.employee_signature && !a.hr_signature;
+  }), [appraisals]);
+
+  const doneHrAppraisals = useMemo(
+    () => appraisals.filter((a) => !!a.hr_signature),
+    [appraisals]
+  );
+
+  const roleSubtitle = isHR
+    ? 'HR department signature queue (department scoped)'
+    : isManagementSigner
+      ? 'Management signature queue (department scoped)'
+      : 'Review and sign records assigned to you';
+
+  const renderSignBox = (action: () => void, withRemarks = false) => (
+    <div className="mt-3 border-t dark:border-slate-700 pt-3 space-y-3">
+      {withRemarks && (
+        <textarea
+          rows={2}
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+          className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+          placeholder="Optional remarks"
+        />
+      )}
+      <SignatureUpload label="Digital Signature" value={signature} onChange={setSignature} />
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => { setActiveId(null); setSignature(''); setRemarks(''); }}
+          className="px-3 py-1.5 text-sm text-slate-500"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={action}
+          disabled={!signature}
+          className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold disabled:opacity-50"
+        >
+          Sign
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="flex justify-between items-end mb-4">
-        <SectionHeader title="Verification of Review" subtitle="Review and digitally verify your manager's evaluation" />
-        <button onClick={() => exportToCSV(appraisals, 'my_reviews')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
-      </div>
+      <SectionHeader title="Signature Queue" subtitle={roleSubtitle} />
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <Card>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-blue-500"><FileCheck size={18} className="text-white" /></div>
-            <div><p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Total Reviews</p><p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{appraisals.length}</p></div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-500"><CheckCircle size={18} className="text-white" /></div>
-            <div><p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Verified</p><p className="text-2xl font-bold text-emerald-600">{appraisals.filter(a => !!a.supervisor_signature && !!a.employee_signature).length}</p></div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-amber-500"><XCircle size={18} className="text-white" /></div>
-            <div><p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Pending</p><p className="text-2xl font-bold text-amber-600">{appraisals.filter(a => !a.supervisor_signature || !a.employee_signature).length}</p></div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Reviews List */}
-      <div className="space-y-4">
-        {appraisals.map(a => {
-          const managerSigned = !!a.supervisor_signature;
-          const employeeSigned = !!a.employee_signature;
-          const canEmployeeSign = managerSigned && !employeeSigned;
-          const isActuallyVerified = managerSigned && employeeSigned;
-
-          return (
-          <Card key={a.id}>
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="font-bold text-slate-800 dark:text-slate-100">{a.form_type || a.eval_type || 'Performance Evaluation'}</h3>
-                  {isActuallyVerified ? (
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full uppercase flex items-center gap-1"><CheckCircle size={10} /> Verified</span>
-                  ) : managerSigned ? (
-                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full uppercase">Pending Employee Signature</span>
-                  ) : (
-                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full uppercase">Pending Manager Signature</span>
-                  )}
-                </div>
-                <div className="flex gap-6 text-xs text-slate-500 dark:text-slate-400">
-                  <span>Date: {a.sign_off_date || a.created_at?.split('T')[0] || '—'}</span>
-                  {a.eval_period_from && <span>Period: {a.eval_period_from} → {a.eval_period_to}</span>}
-                  <span>Status: {a.promotability_status || '—'}</span>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className={`text-3xl font-bold ${scoreColor(a.overall || 0)}`}>{a.overall || '—'}</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Overall</p>
-              </div>
-            </div>
-
-            {/* Scores Grid */}
-            <div className="grid grid-cols-5 gap-3 mt-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-              {[
-                { label: 'Job Knowledge', val: a.job_knowledge },
-                { label: 'Productivity', val: a.productivity },
-                { label: 'Attendance', val: a.attendance },
-                { label: 'Communication', val: a.communication },
-                { label: 'Dependability', val: a.dependability },
-              ].map(s => (
-                <div key={s.label} className="text-center">
-                  <p className={`text-lg font-bold ${scoreColor(s.val || 0)}`}>{s.val || '—'}</p>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">{s.label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Manager's Comments */}
-            {(a.supervisors_overall_comment || a.employee_goals || a.additional_comments) && (
-              <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-2">
-                {a.supervisors_overall_comment && <p className="text-xs text-slate-600 dark:text-slate-300"><strong className="text-slate-500">Supervisor's Comment:</strong> {a.supervisors_overall_comment}</p>}
-                {a.employee_goals && <p className="text-xs text-slate-600 dark:text-slate-300"><strong className="text-slate-500">Goals for Next Period:</strong> {a.employee_goals}</p>}
-                {a.additional_comments && <p className="text-xs text-slate-600 dark:text-slate-300"><strong className="text-slate-500">Additional Comments:</strong> {a.additional_comments}</p>}
-              </div>
-            )}
-
-            {/* Verification Section */}
-            {canEmployeeSign && (
-              <div className="mt-4">
-                {expandedId === a.id ? (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="border-t dark:border-slate-700 pt-4 space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Comments / Rebuttal (Optional)</label>
-                      <textarea rows={2} value={rebuttal} onChange={e => setRebuttal(e.target.value)} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Add your comments, agreement, or rebuttal to the evaluation..." />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Digital Signature (Required)</label>
-                      <SignatureUpload label="Employee Signature" value={signature} onChange={(val) => setSignature(val)} />
-                    </div>
-                    <div className="flex gap-2 justify-end">
-                      <button onClick={() => { setExpandedId(null); setSignature(''); setRebuttal(''); }} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700">Cancel</button>
-                      <button onClick={() => verifyReview(a.id)} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors">
-                        <CheckCircle size={16} /> Verify & Sign
-                      </button>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <button onClick={() => setExpandedId(a.id)} className="flex items-center gap-2 text-sm font-bold text-teal-deep dark:text-teal-green hover:underline">
-                    <FileCheck size={16} /> Click to Review & Verify
-                  </button>
-                )}
-              </div>
-            )}
-
-            {!managerSigned && !employeeSigned && (
-              <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-100 dark:border-amber-800">
-                <p className="text-xs text-amber-700 dark:text-amber-400">Awaiting manager signature before you can verify this review.</p>
-              </div>
-            )}
-
-            {/* Already verified */}
-            {a.employee_signature && a.employee_acknowledgement && (
-              <div className="mt-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800">
-                <p className="text-xs text-emerald-700 dark:text-emerald-400"><strong>Your Response:</strong> {a.employee_acknowledgement}</p>
-                <p className="text-[10px] text-emerald-500 mt-1">Signed on {a.employee_signature_date || '—'}</p>
-              </div>
-            )}
-          </Card>
-        )})}
-
-        {appraisals.length === 0 && (
+      {isEmployee && (
+        <div className="space-y-4">
           <Card>
-            <div className="py-12 text-center text-slate-400">
-              <FileCheck size={48} className="mx-auto mb-4 opacity-30" />
-              <p className="font-bold text-lg mb-1">No Reviews Yet</p>
-              <p className="text-sm">Your manager's evaluations will appear here for your review and verification.</p>
-            </div>
+            <h3 className="text-sm font-bold mb-3">Appraisals Pending Your Signature</h3>
+            {pendingEmployeeAppraisals.length === 0 && <p className="text-sm text-slate-400">No pending appraisal signatures.</p>}
+            {pendingEmployeeAppraisals.map((a) => (
+              <div key={`emp-app-${a.id}`} className="border rounded-lg p-3 mb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold">{a.form_type || a.eval_type || 'Appraisal'}</p>
+                    <p className="text-xs text-slate-500">{a.employee_name || 'Employee'} • {a.sign_off_date || a.created_at?.split('T')[0] || '—'}</p>
+                  </div>
+                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-app-${a.id}`)}>Sign</button>
+                </div>
+                {activeId === `emp-app-${a.id}` && renderSignBox(() => signEmployeeAppraisal(a.id), true)}
+              </div>
+            ))}
           </Card>
-        )}
+
+          <Card>
+            <h3 className="text-sm font-bold mb-3">Disciplinary Records Pending Your Signature</h3>
+            {pendingEmployeeDiscipline.length === 0 && <p className="text-sm text-slate-400">No pending disciplinary signatures.</p>}
+            {pendingEmployeeDiscipline.map((d) => (
+              <div key={`emp-disc-${d.id}`} className="border rounded-lg p-3 mb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold">{d.warning_level || 'Warning'} - {d.violation_type || 'Disciplinary Action'}</p>
+                    <p className="text-xs text-slate-500">{d.employee_name || 'Employee'} • {d.date_of_warning || '—'}</p>
+                  </div>
+                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-disc-${d.id}`)}>Sign</button>
+                </div>
+                {activeId === `emp-disc-${d.id}` && renderSignBox(() => signEmployeeDiscipline(d.id), true)}
+              </div>
+            ))}
+          </Card>
+        </div>
+      )}
+
+      {isManagementSigner && (
+        <div className="space-y-4">
+          <Card>
+            <h3 className="text-sm font-bold mb-3">Appraisals Needing Management Signature</h3>
+            {pendingSupervisorAppraisals.length === 0 && <p className="text-sm text-slate-400">No pending management signatures.</p>}
+            {pendingSupervisorAppraisals.map((a) => (
+              <div key={`sup-app-${a.id}`} className="border rounded-lg p-3 mb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold">{a.employee_name || 'Employee'} - {a.form_type || a.eval_type || 'Appraisal'}</p>
+                    <p className="text-xs text-slate-500">Department: {a.employee_department || a.dept || user?.dept || '—'}</p>
+                  </div>
+                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`sup-app-${a.id}`)}>Sign</button>
+                </div>
+                {activeId === `sup-app-${a.id}` && renderSignBox(() => signSupervisorAppraisal(a.id))}
+              </div>
+            ))}
+            <p className="mt-2 text-xs text-emerald-600">Finished: {doneSupervisorAppraisals.length}</p>
+          </Card>
+
+          <Card>
+            <h3 className="text-sm font-bold mb-3">Disciplinary Records Needing Management Signature</h3>
+            {pendingSupervisorDiscipline.length === 0 && <p className="text-sm text-slate-400">No pending management disciplinary signatures.</p>}
+            {pendingSupervisorDiscipline.map((d) => (
+              <div key={`sup-disc-${d.id}`} className="border rounded-lg p-3 mb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold">{d.employee_name || 'Employee'} - {d.warning_level || 'Warning'}</p>
+                    <p className="text-xs text-slate-500">{d.violation_type || 'Disciplinary Action'}</p>
+                  </div>
+                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`sup-disc-${d.id}`)}>Sign</button>
+                </div>
+                {activeId === `sup-disc-${d.id}` && renderSignBox(() => signSupervisorDiscipline(d.id))}
+              </div>
+            ))}
+            <p className="mt-2 text-xs text-emerald-600">Finished: {doneSupervisorDiscipline.length}</p>
+          </Card>
+
+          <Card>
+            <h3 className="text-sm font-bold mb-3">Suggestions Needing Management Signature</h3>
+            {pendingSupervisorSuggestions.length === 0 && <p className="text-sm text-slate-400">No pending suggestion signatures.</p>}
+            {pendingSupervisorSuggestions.map((s) => (
+              <div key={`sup-sug-${s.id}`} className="border rounded-lg p-3 mb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold">{s.employee_name || 'Employee'} - Suggestion</p>
+                    <p className="text-xs text-slate-500 truncate">{s.title || s.concern || 'Untitled suggestion'}</p>
+                  </div>
+                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`sup-sug-${s.id}`)}>Sign</button>
+                </div>
+                {activeId === `sup-sug-${s.id}` && renderSignBox(() => signSupervisorSuggestion(s))}
+              </div>
+            ))}
+            <p className="mt-2 text-xs text-emerald-600">Finished: {doneSupervisorSuggestions.length}</p>
+          </Card>
+        </div>
+      )}
+
+      {isHR && (
+        <Card>
+          <h3 className="text-sm font-bold mb-3">Performance Appraisals Needing HR Signature</h3>
+          {pendingHrAppraisals.length === 0 && <p className="text-sm text-slate-400">No pending HR signatures.</p>}
+          {pendingHrAppraisals.map((a) => (
+            <div key={`hr-app-${a.id}`} className="border rounded-lg p-3 mb-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="font-semibold">{a.employee_name || 'Employee'} - {a.form_type || a.eval_type || 'Performance Evaluation'}</p>
+                  <p className="text-xs text-slate-500">All previous signatures complete. Awaiting HR signature.</p>
+                </div>
+                <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`hr-app-${a.id}`)}>Sign</button>
+              </div>
+              {activeId === `hr-app-${a.id}` && renderSignBox(() => signHrAppraisal(a.id))}
+            </div>
+          ))}
+          <div className="mt-3 flex items-center gap-2 text-emerald-600 text-sm font-semibold">
+            <CheckCircle size={14} /> Finished: {doneHrAppraisals.length}
+          </div>
+        </Card>
+      )}
+
+      {!isEmployee && !isSupervisor && !isHR && (
+        <Card>
+          <div className="py-10 text-center text-slate-400">
+            <ShieldAlert size={42} className="mx-auto mb-3 opacity-30" />
+            <p className="font-bold">No signature queue for your role.</p>
+          </div>
+        </Card>
+      )}
+
+      <div className="mt-4 text-xs text-slate-500">
+        <span className="inline-flex items-center gap-1"><FileCheck size={12} /> Records marked as signed are treated as finished.</span>
       </div>
     </motion.div>
   );

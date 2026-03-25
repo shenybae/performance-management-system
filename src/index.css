@@ -19,6 +19,7 @@
     @apply bg-white transition-colors duration-500;
     --chart-tick: #64748b;
     --chart-grid: #e2e8f0;
+    scrollbar-gutter: stable both-edges;
   }
   html.dark {
     @apply bg-black;
@@ -27,6 +28,8 @@
   }
   body {
     @apply font-sans bg-transparent text-slate-900 transition-colors duration-500 antialiased;
+    scrollbar-gutter: stable both-edges;
+    overflow-x: hidden;
   }
   
   .dark body {
@@ -41,10 +44,20 @@
     @apply text-slate-400;
   }
 
-  /* Custom scrollbar for dark mode */
-  .dark ::-webkit-scrollbar {
+  /* Keep scrollbar width consistent between themes to avoid layout jump. */
+  ::-webkit-scrollbar {
     width: 8px;
   }
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-100;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full border-2 border-slate-100;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400;
+  }
+
   .dark ::-webkit-scrollbar-track {
     @apply bg-black;
   }
@@ -57,6 +70,15 @@
 
   input, select, textarea {
     @apply text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400;
+  }
+
+  /* Show a visual marker for required fields without repeating asterisks in JSX. */
+  form label:has(+ input[required])::after,
+  form label:has(+ select[required])::after,
+  form label:has(+ textarea[required])::after {
+    content: ' *';
+    color: #ef4444;
+    font-weight: 700;
   }
 }
 
@@ -140,4 +162,126 @@
   width: 12px;
   height: 12px;
   border-radius: 3px;
+}
+
+/* Shared in-screen heading styles for consistent typography. */
+.screen-heading {
+  @apply text-xl font-black tracking-tight text-slate-800 dark:text-slate-100;
+}
+
+.screen-subheading {
+  @apply text-xs text-slate-400 dark:text-slate-500;
+}
+
+/* Prevent tiny jumps when interactive controls switch active/inactive styles. */
+button,
+a,
+input,
+select,
+textarea {
+  box-sizing: border-box;
+}
+
+/* Cylindrical dropdown look for all select elements */
+select {
+  appearance: none;
+  border-radius: 9999px !important;
+  padding: 0.3rem 1.7rem 0.3rem 0.65rem !important;
+  line-height: 1.1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 20 20'%3E%3Cpath fill='%2364758b' d='M5.6 7.6a1 1 0 0 1 1.4 0L10 10.6l3-3a1 1 0 0 1 1.4 1.4l-3.7 3.7a1 1 0 0 1-1.4 0L5.6 9a1 1 0 0 1 0-1.4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.55rem center;
+  background-size: 12px;
+}
+
+.dark select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 20 20'%3E%3Cpath fill='%23cbd5e1' d='M5.6 7.6a1 1 0 0 1 1.4 0L10 10.6l3-3a1 1 0 0 1 1.4 1.4l-3.7 3.7a1 1 0 0 1-1.4 0L5.6 9a1 1 0 0 1 0-1.4z'/%3E%3C/svg%3E");
+}
+
+/* Consistent icon action buttons on table rows */
+button[title^="View"]:has(svg),
+button[title^="Export"]:has(svg),
+button[title^="Archive"]:has(svg),
+button[title^="Delete"]:has(svg),
+button[title^="Print"]:has(svg) {
+  width: 1.9rem;
+  height: 1.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+button[title^="View"]:has(svg) {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+}
+
+button[title^="View"]:has(svg):hover {
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.16);
+}
+
+button[title^="Export"]:has(svg),
+button[title^="Print"]:has(svg) {
+  color: #0f766e;
+  background: rgba(15, 118, 110, 0.1);
+}
+
+button[title^="Export"]:has(svg):hover,
+button[title^="Print"]:has(svg):hover {
+  color: #115e59;
+  background: rgba(15, 118, 110, 0.2);
+}
+
+button[title^="Archive"]:has(svg),
+button[title^="Delete"]:has(svg) {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+button[title^="Archive"]:has(svg):hover,
+button[title^="Delete"]:has(svg):hover {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.16);
+}
+
+.dark button[title^="View"]:has(svg) {
+  color: #93c5fd;
+  background: rgba(30, 64, 175, 0.35);
+}
+
+.dark button[title^="Export"]:has(svg),
+.dark button[title^="Print"]:has(svg) {
+  color: #5eead4;
+  background: rgba(15, 118, 110, 0.35);
+}
+
+.dark button[title^="Archive"]:has(svg),
+.dark button[title^="Delete"]:has(svg) {
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.45);
+}
+
+/* Ensure all buttons with icon+text align horizontally */
+button:has(svg):has(> :not(svg)) {
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+}
+
+button.flex:has(svg):has(> :not(svg)) {
+  flex-direction: row;
+  align-items: center;
+}
+
+/* Horizontal selector row: keep scroll behavior but hide track for cleaner UI. */
+.choice-pills-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.choice-pills-scroll::-webkit-scrollbar {
+  display: none;
 }

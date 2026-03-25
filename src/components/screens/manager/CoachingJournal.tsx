@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'motion/react';
 import {
-  TrendingUp, MessageSquare, Plus, X, Download, Trash2, Send, ArrowLeft, Search,
+  TrendingUp, MessageSquare, Plus, X, Download, Send, ArrowLeft, Search, Archive,
   AlertTriangle, BookOpen, GraduationCap, Target, Clock, Brain, Lightbulb, BarChart3,
   Check, CheckCheck, Reply, Wifi, WifiOff, ThumbsUp as ThumbsUpIcon, ThumbsDown, CheckCircle2, AlertCircle
 } from 'lucide-react';
@@ -9,7 +9,9 @@ import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
+import { ChoicePills } from '../../common/ChoicePills';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { appConfirm } from '../../../utils/appDialog';
 import { io, Socket } from 'socket.io-client';
 
 const WEAKNESS_CATEGORIES = [
@@ -156,12 +158,17 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
   };
 
   const handleSubmit = async () => {
-    if (!form.employee_id || !form.notes) { window.notify?.('Please select employee and add notes', 'error'); return; }
+    const notes = form.notes.trim();
+    if (!form.employee_id || !notes) { window.notify?.('Please select employee and add notes', 'error'); return; }
+    if (notes.length < 10) { window.notify?.('Observation/notes must be at least 10 characters', 'error'); return; }
+    if (notes.length > 1500) { window.notify?.('Observation/notes must be 1500 characters or less', 'error'); return; }
+    if (!form.category) { window.notify?.('Please select a category', 'error'); return; }
+    if (form.weakness_tags.trim().length > 200) { window.notify?.('Weakness tags must be 200 characters or less', 'error'); return; }
     try {
       const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
       await fetch('/api/coaching_logs', {
         method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ ...form, employee_id: parseInt(form.employee_id), is_positive: form.is_positive ? 1 : 0, logged_by: form.logged_by || user.full_name || user.email || user.username || 'Manager' }),
+        body: JSON.stringify({ ...form, notes, employee_id: parseInt(form.employee_id), is_positive: form.is_positive ? 1 : 0, logged_by: form.logged_by || user.full_name || user.email || user.username || 'Manager' }),
       });
       window.notify?.('Coaching entry saved', 'success');
 
@@ -194,19 +201,21 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this log entry?')) return;
-    try { await fetch(`/api/coaching_logs/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Entry deleted', 'success'); fetchLogs(); } catch { window.notify?.('Failed to delete', 'error'); }
+    if (!(await appConfirm('Archive this log entry?', { title: 'Archive Coaching Log', confirmText: 'Archive' }))) return;
+    try { await fetch(`/api/coaching_logs/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Entry archived', 'success'); fetchLogs(); } catch { window.notify?.('Failed to archive', 'error'); }
   };
 
   const sendChat = async () => {
-    if (!chatInput.trim() || !chatEmployee) return;
+    const message = chatInput.trim();
+    if (!message || !chatEmployee) return;
+    if (message.length > 2000) { window.notify?.('Message is too long (max 2000 characters)', 'error'); return; }
     const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
       if (socketRef.current) {
       socketRef.current.emit('chat:send', {
         employee_id: chatEmployee.id,
         sender_role: 'Manager',
         sender_name: user.full_name || user.email || user.username || 'Manager',
-        message: chatInput.trim(),
+        message,
         reply_to: replyTo?.id || null
       });
       socketRef.current.emit('chat:stop_typing', { employee_id: chatEmployee.id, sender_role: 'Manager' });
@@ -214,7 +223,7 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
       try {
         await fetch('/api/coaching_chats', {
           method: 'POST', headers: getAuthHeaders(),
-          body: JSON.stringify({ employee_id: chatEmployee.id, sender_role: 'Manager', sender_name: user.full_name || user.email || user.username || 'Manager', message: chatInput.trim() }),
+          body: JSON.stringify({ employee_id: chatEmployee.id, sender_role: 'Manager', sender_name: user.full_name || user.email || user.username || 'Manager', message }),
         });
         fetchChatMessages(chatEmployee.id);
       } catch { window.notify?.('Failed to send message', 'error'); return; }
@@ -247,12 +256,14 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
   };
 
   const handleRecommend = async () => {
+    const reason = recForm.reason.trim();
     if (!recForm.employee_id || !recForm.course_title) { window.notify?.('Select employee and course', 'error'); return; }
+    if (reason.length > 500) { window.notify?.('Reason/notes must be 500 characters or less', 'error'); return; }
     const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
     try {
       await fetch('/api/elearning_recommendations', {
         method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ ...recForm, employee_id: parseInt(recForm.employee_id), recommended_by: user.full_name || user.email || user.username || 'Manager' }),
+        body: JSON.stringify({ ...recForm, reason, employee_id: parseInt(recForm.employee_id), recommended_by: user.full_name || user.email || user.username || 'Manager' }),
       });
       window.notify?.('E-Learning recommended', 'success');
       setRecForm({ employee_id: '', course_title: '', reason: '', weakness: '' });
@@ -460,7 +471,7 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
                   <input type="text" value={chatInput} onChange={e => { setChatInput(e.target.value); handleManagerTyping(); }}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
                     placeholder="Type your coaching message..."
-                    className="flex-1 p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-black rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/50" />
+                    className="flex-1 p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-black rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/50" maxLength={2000} />
                   <button onClick={sendChat} className="bg-teal-deep text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors flex items-center gap-1.5">
                     <Send size={16} /> Send
                   </button>
@@ -493,15 +504,16 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Employee *</label>
                 <SearchableSelect
-                  options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+                  options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                   value={form.employee_id}
-                  onChange={v => setForm({ ...form, employee_id: v })}
+                  onChange={v => setForm({ ...form, employee_id: String(v) })}
                   placeholder="Select Employee..."
+                  dropdownVariant="pills-horizontal"
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Category</label>
-                <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className={inp}>
+                <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className={inp} required>
                   <option value="">Select Category...</option>
                   <option value="achievement">Achievement / Positive Behavior</option>
                   <option value="intervention">Intervention / Area for Improvement</option>
@@ -522,7 +534,7 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Observation / Notes *</label>
-              <textarea rows={4} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className={inp} placeholder="Describe the specific behavior, situation, or coaching discussion..."></textarea>
+              <textarea rows={4} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className={inp} placeholder="Describe the specific behavior, situation, or coaching discussion..." minLength={10} maxLength={1500} required></textarea>
             </div>
 
             {/* Weakness Tags (for constructive entries) */}
@@ -631,10 +643,11 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Employee *</label>
                     <SearchableSelect
-                      options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+                      options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                       value={recForm.employee_id}
-                      onChange={v => setRecForm({ ...recForm, employee_id: v })}
+                      onChange={v => setRecForm({ ...recForm, employee_id: String(v) })}
                       placeholder="Select Employee..."
+                      dropdownVariant="pills-horizontal"
                     />
                   </div>
                   <div>
@@ -655,7 +668,7 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Reason / Notes</label>
-                    <input type="text" value={recForm.reason} onChange={e => setRecForm({ ...recForm, reason: e.target.value })} className={inp} placeholder="Why this course?" />
+                    <input type="text" value={recForm.reason} onChange={e => setRecForm({ ...recForm, reason: e.target.value })} className={inp} placeholder="Why this course?" maxLength={500} />
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">
@@ -700,23 +713,24 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
                     <td className="py-2 px-3"><span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600">{r.weakness || '—'}</span></td>
                     <td className="py-2 px-3 text-xs text-slate-500 max-w-[200px] truncate">{r.reason || '—'}</td>
                     <td className="py-2 px-3">
-                      <select value={r.status} onChange={e => updateRecStatus(r.id, e.target.value)}
-                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border cursor-pointer ${
-                          r.status === 'Completed' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 border-emerald-200 dark:border-emerald-800'
-                          : r.status === 'In Progress' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 border-blue-200 dark:border-blue-800'
-                          : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 border-amber-200 dark:border-amber-800'
-                        }`}>
-                        <option value="Recommended">Recommended</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Declined">Declined</option>
-                      </select>
+                      <ChoicePills
+                        value={r.status}
+                        compact
+                        wrap={false}
+                        onChange={(v) => updateRecStatus(r.id, v)}
+                        options={[
+                          { value: 'Recommended', label: 'Recommended', activeClassName: 'border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300' },
+                          { value: 'In Progress', label: 'In Progress', activeClassName: 'border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300' },
+                          { value: 'Completed', label: 'Completed', activeClassName: 'border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300' },
+                          { value: 'Declined', label: 'Declined', activeClassName: 'border-red-200 bg-red-50 text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300' },
+                        ]}
+                      />
                     </td>
                     <td className="py-2 px-3 text-xs text-slate-400">{r.recommended_by || '—'}</td>
                     <td className="py-2 px-3 text-xs text-slate-400">{r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</td>
                     <td className="py-2 px-3 text-right">
-                      <button onClick={async () => { if (confirm('Delete?')) { try { await fetch(`/api/elearning_recommendations/${r.id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Recommendation deleted', 'success'); fetchRecommendations(); } catch { window.notify?.('Failed to delete', 'error'); } } }}
-                        className="text-red-400 hover:text-red-600 p-1"><Trash2 size={13} /></button>
+                      <button onClick={async () => { if (await appConfirm('Archive this recommendation?', { title: 'Archive Recommendation', confirmText: 'Archive' })) { try { await fetch(`/api/elearning_recommendations/${r.id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Recommendation archived', 'success'); fetchRecommendations(); } catch { window.notify?.('Failed to archive', 'error'); } } }}
+                        className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                     </td>
                   </tr>
                 ))}
@@ -746,12 +760,13 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
         {/* Employee Filter */}
         <div className="mb-4">
           <SearchableSelect
-            options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+            options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
             value={analysisEmployee}
-            onChange={v => setAnalysisEmployee(v)}
+            onChange={v => setAnalysisEmployee(String(v))}
             placeholder="All Employees"
             allowEmpty
             emptyLabel="All Employees"
+            dropdownVariant="pills-horizontal"
             className="max-w-xs"
           />
         </div>
@@ -950,7 +965,7 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
                   <div className="flex items-center gap-1">
                     <button onClick={() => { setChatEmployee(employees.find(e => e.id === l.employee_id) || null); setView('chat'); }}
                       className="text-teal-500 hover:text-teal-700 p-1" title="Open Chat"><MessageSquare size={13} /></button>
-                    <button onClick={() => handleDelete(l.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={14} /></button>
+                    <button onClick={() => handleDelete(l.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                   </div>
                 </div>
                 <p className="text-xs font-bold text-teal-green uppercase tracking-widest mb-1">{l.category}</p>

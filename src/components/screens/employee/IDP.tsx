@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
-import { Plus, X, Download, Trash2, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ChoicePills } from '../../common/ChoicePills';
+import { Plus, X, Download, CheckCircle, AlertTriangle, Archive } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { appConfirm } from '../../../utils/appDialog';
 
 export const IDP = () => {
   const [showForm, setShowForm] = useState(false);
@@ -31,9 +33,23 @@ export const IDP = () => {
   };
 
   const submitPlan = async () => {
-    if (!form.skill_gap.trim() || !form.growth_step.trim()) { window.notify?.('Please fill in both fields', 'error'); return; }
+    const skillGap = form.skill_gap.trim();
+    const growthStep = form.growth_step.trim();
+    if (!skillGap || !growthStep) { window.notify?.('Please fill in both fields', 'error'); return; }
+    if (skillGap.length < 3 || growthStep.length < 5) {
+      window.notify?.('Please provide clearer details for skill gap and growth step', 'error');
+      return;
+    }
+    if (skillGap.length > 120 || growthStep.length > 500) {
+      window.notify?.('Skill gap or growth step is too long', 'error');
+      return;
+    }
     try {
-      const res = await fetch('/api/development_plans', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ...form, employee_id: user.employee_id || user.id, step_order: plans.length + 1 }) });
+      const res = await fetch('/api/development_plans', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ ...form, skill_gap: skillGap, growth_step: growthStep, employee_id: user.employee_id || user.id, step_order: plans.length + 1 })
+      });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Development plan added', 'success');
       setForm({ skill_gap: '', growth_step: '', status: '' });
@@ -41,9 +57,18 @@ export const IDP = () => {
     } catch { window.notify?.('Failed to create', 'error'); }
   };
 
+  const isIDPFormValid = () => {
+    const skillGap = form.skill_gap.trim();
+    const growthStep = form.growth_step.trim();
+    if (!skillGap || !growthStep || !form.status) return false;
+    if (skillGap.length < 3 || skillGap.length > 120) return false;
+    if (growthStep.length < 5 || growthStep.length > 500) return false;
+    return true;
+  };
+
   const deletePlan = async (id: number) => {
-    if (!confirm('Delete this plan?')) return;
-    try { await fetch(`/api/development_plans/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Deleted', 'success'); fetchPlans(); } catch { window.notify?.('Failed', 'error'); }
+    if (!(await appConfirm('Archive this plan?', { title: 'Archive Plan', confirmText: 'Archive' }))) return;
+    try { await fetch(`/api/development_plans/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Archived', 'success'); fetchPlans(); } catch { window.notify?.('Failed', 'error'); }
   };
 
   const updateStatus = async (id: number, status: string) => {
@@ -75,11 +100,11 @@ export const IDP = () => {
             <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 border-b dark:border-slate-800 pb-2">New Development Plan Entry</h3>
             <form className="space-y-4" onSubmit={e => { e.preventDefault(); submitPlan(); }}>
               <div className="grid grid-cols-3 gap-4">
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Skill Gap</label><input type="text" value={form.skill_gap} onChange={e => setForm({ ...form, skill_gap: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="e.g. Leadership, Communication..." /></div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Growth Step</label><input type="text" value={form.growth_step} onChange={e => setForm({ ...form, growth_step: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Action to take..." /></div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Status</label><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"><option value="">Select Status...</option><option>Not Started</option><option>In Progress</option><option>Completed</option></select></div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Skill Gap <span className="text-red-500 font-black">*</span></label><input type="text" value={form.skill_gap} onChange={e => setForm({ ...form, skill_gap: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="e.g. Leadership, Communication..." minLength={3} maxLength={120} required /></div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Growth Step <span className="text-red-500 font-black">*</span></label><input type="text" value={form.growth_step} onChange={e => setForm({ ...form, growth_step: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="Action to take..." minLength={5} maxLength={500} required /></div>
+                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Status <span className="text-red-500 font-black">*</span></label><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" required><option value="">Select Status...</option><option>Not Started</option><option>In Progress</option><option>Completed</option></select></div>
               </div>
-              <div className="flex justify-end"><button type="submit" className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green">Add Plan</button></div>
+              <div className="flex justify-end"><button type="submit" disabled={!isIDPFormValid()} className="bg-teal-deep text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-teal-green disabled:opacity-50 disabled:cursor-not-allowed">Add Plan</button></div>
             </form>
           </Card>
         </motion.div>
@@ -134,13 +159,20 @@ export const IDP = () => {
                   <div className="min-w-0"><span className="truncate max-w-[260px]" title={p.growth_step}>{p.growth_step}</span></div>
                 </td>
                 <td className="py-3">
-                  <select value={p.status} onChange={e => updateStatus(p.id, e.target.value)} className="text-xs font-bold uppercase px-2 py-1 rounded-lg border-0 bg-slate-50 dark:bg-slate-800 dark:text-slate-200" style={{ color: p.status === 'Completed' ? '#10b981' : p.status === 'In Progress' ? '#f59e0b' : '#94a3b8' }}>
-                    <option>Not Started</option><option>In Progress</option><option>Completed</option>
-                  </select>
+                  <ChoicePills
+                    value={p.status}
+                    compact
+                    onChange={(v) => updateStatus(p.id, v)}
+                    options={[
+                      { value: 'Not Started', label: 'Not Started', activeClassName: 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300' },
+                      { value: 'In Progress', label: 'In Progress', activeClassName: 'border-amber-300 bg-amber-50 text-amber-600 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+                      { value: 'Completed', label: 'Completed', activeClassName: 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
+                    ]}
+                  />
                 </td>
                 <td className="py-3 flex gap-2">
                   {p.status !== 'Completed' && <button onClick={() => updateStatus(p.id, 'Completed')} className="text-emerald-400 hover:text-emerald-600"><CheckCircle size={14} /></button>}
-                  <button onClick={() => deletePlan(p.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
+                  <button onClick={() => deletePlan(p.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                 </td>
               </tr>
             ))}
