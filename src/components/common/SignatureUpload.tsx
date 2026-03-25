@@ -8,9 +8,17 @@ interface SignatureUploadProps {
   label: string;
   value: string;
   onChange: (dataUrl: string) => void;
+  showQueueReminder?: boolean;
+  queueReminderText?: string;
 }
 
-export const SignatureUpload = ({ label, value, onChange }: SignatureUploadProps) => {
+export const SignatureUpload = ({
+  label,
+  value,
+  onChange,
+  showQueueReminder = true,
+  queueReminderText = 'If this signature is assigned to another role or user, it is completed from their Signature Queue screen.',
+}: SignatureUploadProps) => {
   const penCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M4 20l4.2-1.1 10-10a1.4 1.4 0 0 0 0-2L17.1 5.8a1.4 1.4 0 0 0-2 0l-10 10L4 20z' fill='%231e293b'/%3E%3Cpath d='M13.8 6.2l4 4' stroke='%23ffffff' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 2 22, crosshair`;
   const drawCanvasHeight = 220;
   const padRef = useRef<SignatureCanvas>(null);
@@ -208,6 +216,11 @@ export const SignatureUpload = ({ label, value, onChange }: SignatureUploadProps
   return (
     <div>
       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{label}</label>
+      {showQueueReminder && (
+        <p className="mb-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">
+          {queueReminderText}
+        </p>
+      )}
 
       {/* Saved state — show preview */}
       {value && !signing && mode === null && (

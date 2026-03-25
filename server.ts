@@ -3669,6 +3669,37 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
+  app.put("/api/property_accountability/:id/signature", authenticateToken, async (req, res) => {
+    try {
+      const actor: any = (req as any).user || {};
+      const role = actor.role;
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      const { field, signature, date, name } = req.body || {};
+
+      const allowedByRole: Record<string, string[]> = {
+        HR: ['turnover_by_sig', 'noted_by_sig', 'received_by_sig', 'audited_by_sig'],
+        Manager: ['turnover_by_sig', 'noted_by_sig', 'audited_by_sig'],
+        Leader: ['turnover_by_sig', 'noted_by_sig', 'audited_by_sig'],
+        Employee: actorCtx.isSupervisor
+          ? ['turnover_by_sig', 'noted_by_sig', 'audited_by_sig']
+          : ['received_by_sig'],
+      };
+
+      const allowedFields = allowedByRole[role] || [];
+      if (!allowedFields.includes(field)) return res.status(403).json({ error: 'Forbidden' });
+
+      const prefix = field.replace(/_sig$/, '');
+      const dateField = `${prefix}_date`;
+      const nameField = `${prefix}_name`;
+
+      const stmt = `UPDATE property_accountability SET ${field} = ?, ${dateField} = ?, ${nameField} = COALESCE(?, ${nameField}) WHERE id = ?`;
+      await query(stmt, [signature || null, date || new Date().toISOString().split('T')[0], name || null, req.params.id]);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
   // ---- Suggestions CRUD ----
   app.get("/api/suggestions", authenticateToken, async (req, res) => {
     try {
@@ -4084,6 +4115,29 @@ async function startServer() {
       try { await recordAudit((req as any).user || null, 'delete', 'exit_interviews', id, before, null); } catch (e) {}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.put("/api/exit_interviews/:id/signature", authenticateToken, async (req, res) => {
+    try {
+      const actor: any = (req as any).user || {};
+      const role = actor.role;
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      const { field, signature, date, interviewer_name } = req.body || {};
+
+      const canEmployeeSign = role === 'Employee' && !actorCtx.isSupervisor && field === 'employee_sig';
+      const canInterviewerSign = (role === 'HR' || role === 'Manager' || role === 'Leader' || (role === 'Employee' && actorCtx.isSupervisor)) && field === 'interviewer_sig';
+      if (!canEmployeeSign && !canInterviewerSign) return res.status(403).json({ error: 'Forbidden' });
+
+      if (field === 'employee_sig') {
+        await query('UPDATE exit_interviews SET employee_sig = ? WHERE id = ?', [signature || null, req.params.id]);
+      } else {
+        await query('UPDATE exit_interviews SET interviewer_sig = ?, interviewer_date = COALESCE(?, interviewer_date), interviewer_name = COALESCE(?, interviewer_name) WHERE id = ?',
+          [signature || null, date || new Date().toISOString().split('T')[0], interviewer_name || null, req.params.id]);
+      }
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
   });
 
   // ---- Development Plans CRUD ----
@@ -4967,6 +5021,87 @@ async function startServer() {
         [checklist, hr_signature, employee_signature, notes, status, req.params.id]);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.put('/api/onboarding/:id/signature', authenticateToken, async (req, res) => {
+    try {
+      const actor: any = (req as any).user || {};
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      const { field, signature } = req.body || {};
+      if (field !== 'employee_signature' && field !== 'hr_signature') {
+        return res.status(400).json({ error: 'Invalid signature field' });
+      }
+
+      if (field === 'employee_signature') {
+        if (!(actor.role === 'Employee' && !actorCtx.isSupervisor)) return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      if (field === 'hr_signature') {
+        if (actor.role !== 'HR') return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      await query(`UPDATE onboarding SET ${field} = ? WHERE id = ?`, [signature || null, req.params.id]);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  app.put('/api/applicants/:id/signature', authenticateToken, async (req, res) => {
+    try {
+      const actor: any = (req as any).user || {};
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      const { field, signature, name, date } = req.body || {};
+      if (field !== 'interviewer_signature' && field !== 'hr_reviewer_signature') {
+        return res.status(400).json({ error: 'Invalid signature field' });
+      }
+
+      const canInterviewer = (actor.role === 'Manager' || actor.role === 'Leader' || actor.role === 'HR' || (actor.role === 'Employee' && actorCtx.isSupervisor)) && field === 'interviewer_signature';
+      const canHrReview = actor.role === 'HR' && field === 'hr_reviewer_signature';
+      if (!canInterviewer && !canHrReview) return res.status(403).json({ error: 'Forbidden' });
+
+      if (field === 'interviewer_signature') {
+        await query('UPDATE applicants SET interviewer_signature = ?, interviewer_name = COALESCE(?, interviewer_name), interview_date = COALESCE(?, interview_date) WHERE id = ?',
+          [signature || null, name || null, date || new Date().toISOString().split('T')[0], req.params.id]);
+      } else {
+        await query('UPDATE applicants SET hr_reviewer_signature = ?, hr_reviewer_name = COALESCE(?, hr_reviewer_name), hr_reviewer_date = COALESCE(?, hr_reviewer_date) WHERE id = ?',
+          [signature || null, name || null, date || new Date().toISOString().split('T')[0], req.params.id]);
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  app.put('/api/requisitions/:id/signature', authenticateToken, async (req, res) => {
+    try {
+      const actor: any = (req as any).user || {};
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      const { stage, signature, approver, date } = req.body || {};
+
+      const stageMap: Record<string, { sig: string; name: string; date: string }> = {
+        supervisor: { sig: 'supervisor_approval_sig', name: 'supervisor_approval', date: 'supervisor_approval_date' },
+        dept_head: { sig: 'dept_head_approval_sig', name: 'dept_head_approval', date: 'dept_head_approval_date' },
+        cabinet: { sig: 'cabinet_approval_sig', name: 'cabinet_approval', date: 'cabinet_approval_date' },
+        vp: { sig: 'vp_approval_sig', name: 'vp_approval', date: 'vp_approval_date' },
+        president: { sig: 'president_approval_sig', name: 'president_approval', date: 'president_approval_date' },
+      };
+
+      const target = stageMap[stage || ''];
+      if (!target) return res.status(400).json({ error: 'Invalid stage' });
+
+      const isMgmt = actor.role === 'Manager' || actor.role === 'Leader' || actor.role === 'HR' || (actor.role === 'Employee' && actorCtx.isSupervisor);
+      if (!isMgmt) return res.status(403).json({ error: 'Forbidden' });
+
+      await query(
+        `UPDATE requisitions SET ${target.sig} = ?, ${target.name} = COALESCE(?, ${target.name}), ${target.date} = COALESCE(?, ${target.date}) WHERE id = ?`,
+        [signature || null, approver || null, date || new Date().toISOString().split('T')[0], req.params.id]
+      );
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
   });
   app.delete("/api/onboarding/:id", authenticateToken, async (req, res) => {
     try { await softDeleteById('onboarding', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
