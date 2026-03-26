@@ -237,13 +237,20 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
           eval_period_from: achForm.review_period_from, eval_period_to: achForm.review_period_to,
         }),
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        let msg = 'Failed to save';
+        try {
+          const err = await res.json();
+          msg = err?.error || msg;
+        } catch {}
+        throw new Error(msg);
+      }
       window.notify?.('Achievement measure saved', 'success');
       setAchForm(freshAch());
       setAchievementReviewed(false);
       setView('dashboard');
       fetchAppraisals();
-    } catch { window.notify?.('Failed to save', 'error'); }
+    } catch (e: any) { window.notify?.(e?.message || 'Failed to save', 'error'); }
   };
 
   const submitPerformance = async () => {
@@ -291,13 +298,20 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
           promotability_status: perfForm.overall_rating,
         }),
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        let msg = 'Failed to save';
+        try {
+          const err = await res.json();
+          msg = err?.error || msg;
+        } catch {}
+        throw new Error(msg);
+      }
       window.notify?.('Performance evaluation saved', 'success');
       setPerfForm(freshPerf());
       setPerformanceSupervisorReviewed(false);
       setView('dashboard');
       fetchAppraisals();
-    } catch { window.notify?.('Failed to save', 'error'); }
+    } catch (e: any) { window.notify?.(e?.message || 'Failed to save', 'error'); }
   };
 
   const handleDelete = async (id: number) => {

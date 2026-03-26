@@ -19,7 +19,7 @@
     @apply bg-white transition-colors duration-500;
     --chart-tick: #64748b;
     --chart-grid: #e2e8f0;
-    scrollbar-gutter: stable both-edges;
+    scrollbar-gutter: auto;
   }
   html.dark {
     @apply bg-black;
@@ -28,7 +28,7 @@
   }
   body {
     @apply font-sans bg-transparent text-slate-900 transition-colors duration-500 antialiased;
-    scrollbar-gutter: stable both-edges;
+    scrollbar-gutter: auto;
     overflow-x: hidden;
   }
   

@@ -17,7 +17,7 @@ export const CareerDashboard = () => {
   const [salary, setSalary] = useState<number | null>(null);
   const [leaderGoals, setLeaderGoals] = useState<any[]>([]);
   const [leaderTeamMembers, setLeaderTeamMembers] = useState<any[]>([]);
-  const [dashboardTab, setDashboardTab] = useState<'overview' | 'goals' | 'pips' | 'idps'>('overview');
+  const [dashboardTab, setDashboardTab] = useState<'overview' | 'goals' | 'leaderGoals' | 'pips' | 'idps'>('overview');
   const [taskDrafts, setTaskDrafts] = useState<Record<number, any>>({});
   const [taskProgressEdits, setTaskProgressEdits] = useState<Record<number, number>>({});
   const [taskSavingGoal, setTaskSavingGoal] = useState<number | null>(null);
@@ -58,15 +58,8 @@ export const CareerDashboard = () => {
   const fetchData = async () => {
     try { const r = await fetch('/api/appraisals', { headers: getAuthHeaders() }); const d = await r.json(); setAppraisals(Array.isArray(d) ? d.filter((a: any) => a.employee_id === (user.employee_id || user.id)) : []); } catch { setAppraisals([]); }
     try { const r = await fetch('/api/goals', { headers: getAuthHeaders() }); const d = await r.json(); const empId = String(user.employee_id || user.id || ''); setGoals(Array.isArray(d) ? d.filter((g: any) => String(g.employee_id) === empId || (g.assignees || []).some((a: any) => String(a.employee_id) === empId)) : []); } catch { setGoals([]); }
-    try {
-      const r = await fetch('/api/leader-goals', { headers: getAuthHeaders() });
-      const d = await r.json();
-      setLeaderGoals(Array.isArray(d.goals) ? d.goals : []);
-      setLeaderTeamMembers(Array.isArray(d.teamMembers) ? d.teamMembers : []);
-    } catch {
-      setLeaderGoals([]);
-      setLeaderTeamMembers([]);
-    }
+    setLeaderGoals([]);
+    setLeaderTeamMembers([]);
     try { const r = await fetch('/api/pip_plans', { headers: getAuthHeaders() }); const d = await r.json(); setPips(Array.isArray(d) ? d.filter((p: any) => p.employee_id === (user.employee_id || user.id)) : []); } catch { setPips([]); }
     try { const r = await fetch('/api/development_plans', { headers: getAuthHeaders() }); const d = await r.json(); setIdps(Array.isArray(d) ? d.filter((i: any) => i.employee_id === (user.employee_id || user.id)) : []); } catch { setIdps([]); }
     try { const r = await fetch('/api/self_assessments', { headers: getAuthHeaders() }); const d = await r.json(); setSelfAssessments(Array.isArray(d) ? d.filter((s: any) => s.employee_id === (user.employee_id || user.id)) : []); } catch { setSelfAssessments([]); }
@@ -350,6 +343,7 @@ export const CareerDashboard = () => {
           {[
             { key: 'overview', label: 'Overview', icon: BarChart3 },
             { key: 'goals', label: `My Goals (${goals.length})`, icon: Target },
+            { key: 'leaderGoals', label: `Goals You Lead (${leaderGoals.length})`, icon: ClipboardList },
             { key: 'pips', label: `PIPs (${pips.length})`, icon: AlertTriangle },
             { key: 'idps', label: `Development Plans (${idps.length})`, icon: TrendingUp },
           ].map((tab) => {
@@ -358,7 +352,7 @@ export const CareerDashboard = () => {
             return (
               <button
                 key={tab.key}
-                onClick={() => setDashboardTab(tab.key as 'overview' | 'goals' | 'pips' | 'idps')}
+                onClick={() => setDashboardTab(tab.key as 'overview' | 'goals' | 'leaderGoals' | 'pips' | 'idps')}
                 className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold transition-all ${active ? 'bg-white dark:bg-slate-900 text-teal-deep dark:text-teal-green shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
               >
                 <Icon size={14} /> {tab.label}
@@ -764,7 +758,7 @@ export const CareerDashboard = () => {
         </Card>
       )}
 
-      {false && (
+      {dashboardTab === 'leaderGoals' && (
         leaderGoals.length > 0 ? (
         <Card className="mt-4">
           <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goals You Lead ({leaderGoals.length})</h3>

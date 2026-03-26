@@ -12,6 +12,7 @@ interface AuditRecord {
   user_id?: number;
   username?: string;
   user_role?: string;
+  user_department?: string;
   display_action?: string;
   action: string;
   table_name: string;
@@ -54,7 +55,9 @@ export const AuditLogs = () => {
   const [tableFilter, setTableFilter] = useState('');
   const [usernameFilter, setUsernameFilter] = useState('');
   const [actionFilter, setActionFilter] = useState('');
-  const [limit, setLimit] = useState(200);
+  const [limit] = useState(20);
+  const [page, setPage] = useState(0);
+  const [hasNextPage, setHasNextPage] = useState(true);
   const [employeeOnly, setEmployeeOnly] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -63,9 +66,18 @@ export const AuditLogs = () => {
   const [modalTitle, setModalTitle] = useState('');
   const [modalContent, setModalContent] = useState('');
 
-  useEffect(() => { fetchLogs(); }, [employeeOnly]);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
 
-  const fetchLogs = async () => {
+  const toggleRole = (role: string) => {
+    setSelectedRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]);
+  };
+
+  const toggleDepartment = (dept: string) => {
+    setSelectedDepartments(prev => prev.includes(dept) ? prev.filter(d => d !== dept) : [...prev, dept]);
+  };
+
+  const fetchLogs = async (pageToLoad: number = 0) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -73,15 +85,33 @@ export const AuditLogs = () => {
       if (tableFilter) params.set('table_name', tableFilter);
       if (usernameFilter) params.set('username', usernameFilter);
       if (actionFilter) params.set('action', actionFilter);
-      if (limit) params.set('limit', String(limit));
+      params.set('limit', String(limit));
+      params.set('offset', String(pageToLoad * limit));
+      if (selectedRoles.length > 0) params.set('roles', selectedRoles.join(','));
+      if (selectedDepartments.length > 0) params.set('departments', selectedDepartments.join(','));
       const res = await fetch('/api/audit_logs?' + params.toString(), { headers: getAuthHeaders() });
       if (!res.ok) { setLogs([]); setLoading(false); return; }
       const data = await res.json();
-      setLogs(Array.isArray(data) ? data : []);
+      const rawLogs = Array.isArray(data) ? data : [];
+      const roleSet = new Set(selectedRoles.map(r => r.trim().toLowerCase()));
+      const deptSet = new Set(selectedDepartments.map(d => d.trim().toLowerCase()));
+      const newLogs = rawLogs.filter((row: AuditRecord) => {
+        const rowRole = (row.user_role || '').toString().trim().toLowerCase();
+        const rowDept = (row.user_department || '').toString().trim().toLowerCase();
+        const roleOk = roleSet.size === 0 || roleSet.has(rowRole);
+        const deptOk = deptSet.size === 0 || deptSet.has(rowDept);
+        return roleOk && deptOk;
+      });
+      setLogs(newLogs);
+      setPage(pageToLoad);
+      // Keep next-page enabled only when the server returns a full page.
+      setHasNextPage(rawLogs.length === limit);
     } catch {
       setLogs([]);
     } finally { setLoading(false); }
   };
+
+  useEffect(() => { fetchLogs(0); }, [employeeOnly, selectedRoles, selectedDepartments]);
 
   const openJsonModal = (title: string, jsonStr?: string | null) => {
     let pretty = '';
@@ -115,7 +145,7 @@ export const AuditLogs = () => {
             <Filter size={14} /> Filters
           </button>
           <button
-            onClick={fetchLogs}
+            onClick={() => fetchLogs(0)}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-teal-deep text-white text-sm font-bold hover:bg-teal-green transition-colors"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
@@ -157,45 +187,85 @@ export const AuditLogs = () => {
             className="overflow-hidden mb-4"
           >
             <Card>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <div className="space-y-5">
+                {/* Search & Basic Filters Section */}
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Table</label>
-                  <div className="relative mt-1">
-                    <Database size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
-                    <input value={tableFilter} onChange={e => setTableFilter(e.target.value)} className={inp + ' pl-8'} placeholder="e.g. users" />
+                  <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Search & Basic Filters</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Table</label>
+                      <div className="relative mt-1.5">
+                        <Database size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+                        <input value={tableFilter} onChange={e => setTableFilter(e.target.value)} className={inp + ' pl-8'} placeholder="e.g. users" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">User</label>
+                      <div className="relative mt-1.5">
+                        <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+                        <input value={usernameFilter} onChange={e => setUsernameFilter(e.target.value)} className={inp + ' pl-8'} placeholder="username" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Action</label>
+                      <ChoicePills value={actionFilter} onChange={setActionFilter} className="mt-1.5" options={[{ value: '', label: 'All Actions' }, { value: 'create', label: 'Create' }, { value: 'update', label: 'Update' }, { value: 'delete', label: 'Archive' }]} />
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">User</label>
-                  <div className="relative mt-1">
-                    <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
-                    <input value={usernameFilter} onChange={e => setUsernameFilter(e.target.value)} className={inp + ' pl-8'} placeholder="username" />
+
+                {/* Role & Department Section */}
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Shield size={13} className="text-slate-400" />
+                    Role & Department
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 block mb-2">Roles {selectedRoles.length > 0 && <span className="font-normal text-slate-400">({selectedRoles.length})</span>}</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['HR', 'Manager', 'Employee', 'Leader'].map(role => (
+                          <button
+                            key={role}
+                            onClick={() => toggleRole(role)}
+                            className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all duration-200 ${
+                              selectedRoles.includes(role)
+                                ? 'bg-teal-600 text-white shadow-sm'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            {role}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 block mb-2">Departments {selectedDepartments.length > 0 && <span className="font-normal text-slate-400">({selectedDepartments.length})</span>}</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['Engineering', 'HR', 'Sales', 'Marketing', 'Operations', 'Finance'].map(dept => (
+                          <button
+                            key={dept}
+                            onClick={() => toggleDepartment(dept)}
+                            className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all duration-200 ${
+                              selectedDepartments.includes(dept)
+                                ? 'bg-teal-600 text-white shadow-sm'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            {dept}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Action</label>
-                  <ChoicePills
-                    value={actionFilter}
-                    onChange={setActionFilter}
-                    className="mt-1"
-                    options={[
-                      { value: '', label: 'All Actions' },
-                      { value: 'create', label: 'Create' },
-                      { value: 'update', label: 'Update' },
-                      { value: 'delete', label: 'Archive' },
-                    ]}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Limit</label>
-                  <input type="number" value={limit} onChange={e => setLimit(Math.max(10, Math.min(1000, Number(e.target.value) || 200)))} className={inp + ' mt-1'} />
-                </div>
-                <div className="flex items-end gap-3 pb-0.5">
-                  <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-600 dark:text-slate-300">
-                    <input type="checkbox" checked={employeeOnly} onChange={e => setEmployeeOnly(e.target.checked)} className="accent-teal-600 w-4 h-4" />
-                    Employee only
+
+                {/* Options & Action Section */}
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={employeeOnly} onChange={e => setEmployeeOnly(e.target.checked)} className="accent-teal-600 w-4 h-4 rounded" />
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Employee only</span>
                   </label>
-                  <button onClick={fetchLogs} className="ml-auto px-4 py-2 bg-teal-deep text-white text-sm font-bold rounded-lg hover:bg-teal-green transition-colors">Apply</button>
+                  <button onClick={() => fetchLogs(0)} className="px-5 py-2 bg-teal-600 text-white text-sm font-bold rounded-lg hover:bg-teal-700 active:bg-teal-800 transition-colors shadow-sm">Apply Filters</button>
                 </div>
               </div>
             </Card>
@@ -205,7 +275,28 @@ export const AuditLogs = () => {
 
       {/* Logs Table */}
       <Card>
-        <div className="overflow-x-auto">
+        <div className="flex items-center justify-between px-1 pb-3">
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            Page {page + 1} • {logs.length} {logs.length === 1 ? 'entry' : 'entries'}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchLogs(Math.max(0, page - 1))}
+              disabled={loading || page === 0}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-700"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => fetchLogs(page + 1)}
+              disabled={loading || !hasNextPage}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-700"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+        <div className="overflow-x-auto min-h-[520px]">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b-2 border-slate-200 dark:border-slate-700">
@@ -337,6 +428,24 @@ export const AuditLogs = () => {
               )}
             </tbody>
           </table>
+
+          <div className="flex items-center justify-center gap-2 py-3 border-t border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => fetchLogs(Math.max(0, page - 1))}
+              disabled={loading || page === 0}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-700"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-slate-500 dark:text-slate-400">Page {page + 1}</span>
+            <button
+              onClick={() => fetchLogs(page + 1)}
+              disabled={loading || !hasNextPage}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-700"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </Card>
 

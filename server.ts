@@ -206,6 +206,8 @@ async function recordAudit(user: any, action: string, tableName: string, rowId: 
   try {
     const user_id = user && (user.id || user.employee_id) ? (user.id || user.employee_id) : null;
     const username = user && (user.email || user.username || user.full_name) ? (user.email || user.username || user.full_name) : null;
+    const user_role = user && user.role ? user.role : null;
+    const user_department = user && user.dept ? user.dept : null;
     const source = meta && meta.source ? meta.source : null;
     const ip = meta && meta.ip ? meta.ip : null;
     const user_agent = meta && meta.user_agent ? meta.user_agent : null;
@@ -213,10 +215,48 @@ async function recordAudit(user: any, action: string, tableName: string, rowId: 
     const method = meta && meta.method ? meta.method : null;
     const meta_json = meta ? JSON.stringify(meta) : null;
 
-    await query(
-      'INSERT INTO audit_logs (user_id, username, action, table_name, row_id, before_json, after_json, source, ip, user_agent, route, method, meta_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [user_id, username, action, tableName, rowId, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null, source, ip, user_agent, route, method, meta_json]
-    );
+    try {
+      await query(
+        'INSERT INTO audit_logs (user_id, username, user_role, user_department, action, table_name, row_id, before_json, after_json, source, ip, user_agent, route, method, meta_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [user_id, username, user_role, user_department, action, tableName, rowId, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null, source, ip, user_agent, route, method, meta_json]
+      );
+    } catch (insertErr: any) {
+      // Backward-compatible fallback for databases where audit_logs schema
+      // has not yet been migrated with user_role/user_department columns.
+      const code = insertErr?.code ? String(insertErr.code) : '';
+      const msg = (insertErr?.message || '').toString().toLowerCase();
+      const missingRoleCols =
+        code === '42703' ||
+        msg.includes('user_role') ||
+        msg.includes('user_department') ||
+        msg.includes('no such column');
+
+      if (!missingRoleCols) throw insertErr;
+
+      try {
+        await query(
+          'INSERT INTO audit_logs (user_id, username, action, table_name, row_id, before_json, after_json, source, ip, user_agent, route, method, meta_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [user_id, username, action, tableName, rowId, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null, source, ip, user_agent, route, method, meta_json]
+        );
+      } catch (legacyErr: any) {
+        const legacyCode = legacyErr?.code ? String(legacyErr.code) : '';
+        const legacyMsg = (legacyErr?.message || '').toString().toLowerCase();
+        const missingMetaCols =
+          legacyCode === '42703' ||
+          legacyMsg.includes('source') ||
+          legacyMsg.includes('user_agent') ||
+          legacyMsg.includes('meta_json') ||
+          legacyMsg.includes('no such column');
+
+        if (!missingMetaCols) throw legacyErr;
+
+        // Oldest schema compatibility: only core audit columns.
+        await query(
+          'INSERT INTO audit_logs (user_id, username, action, table_name, row_id, before_json, after_json) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [user_id, username, action, tableName, rowId, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null]
+        );
+      }
+    }
   } catch (err) {
     console.error('recordAudit error:', err);
   }
@@ -634,6 +674,8 @@ async function initDb() {
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
       user_id INTEGER,
       username TEXT,
+      user_role TEXT,
+      user_department TEXT,
       action TEXT NOT NULL,
       table_name TEXT NOT NULL,
       row_id INTEGER,
@@ -1209,6 +1251,8 @@ async function initDb() {
 
     // Safe migrations for audit_logs â€” add metadata columns if missing
     const auditMigrations = [
+      'ALTER TABLE audit_logs ADD COLUMN user_role TEXT',
+      'ALTER TABLE audit_logs ADD COLUMN user_department TEXT',
       'ALTER TABLE audit_logs ADD COLUMN source TEXT',
       'ALTER TABLE audit_logs ADD COLUMN ip TEXT',
       'ALTER TABLE audit_logs ADD COLUMN user_agent TEXT',
@@ -2554,7 +2598,13 @@ async function startServer() {
 
       if (role === 'Manager') {
         const allowed = await canManagerAccessEmployee(actor.id, employeeId);
-        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+        if (!allowed) {
+          // Backward-compatible fallback: some older datasets don't have
+          // employees.manager_id mapped to manager user id. Allow same-dept access.
+          const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+          const allowedByDept = await canActorAccessEmployeeByDept(actorCtx.dept, employeeId);
+          if (!allowedByDept) return res.status(403).json({ error: 'Forbidden' });
+        }
       }
 
       const formType = (b.form_type || '').toString().toLowerCase();
@@ -5375,8 +5425,12 @@ async function startServer() {
       const qUsernameRaw = (req.query.username || '').toString();
       const qUserId = req.query.user_id ? parseInt(req.query.user_id as string) : null;
       const qAction = (req.query.action || '').toString();
+      const qRolesRaw = (req.query.roles || req.query.role || '').toString();
+      const qDepartmentsRaw = (req.query.departments || req.query.department || '').toString();
+      const hasRoleOrDeptFilter = !!(qRolesRaw.trim() || qDepartmentsRaw.trim());
       const employeeOnly = (req.query.employee === '1' || req.query.employee_activity === '1' || req.query.employee === 'true' || req.query.employee_activity === 'true');
-      const limit = Math.min(1000, parseInt((req.query.limit || '200').toString() || '200'));
+      const limit = Math.min(1000, parseInt((req.query.limit || '50').toString() || '50'));
+      const offset = Math.max(0, parseInt((req.query.offset || '0').toString() || '0'));
 
       // (Use global `auditInterestTables` to decide which resources are employee-related)
 
@@ -5402,7 +5456,15 @@ async function startServer() {
       if (qUsernameRaw) { sql += ' AND username ILIKE ?'; params.push(`%${qUsernameRaw}%`); }
       if (!isNaN(Number(qUserId)) && qUserId !== null) { sql += ' AND user_id = ?'; params.push(qUserId); }
       if (qAction) { sql += ' AND action = ?'; params.push(qAction); }
-      sql += ' ORDER BY created_at DESC LIMIT ?'; params.push(limit);
+      
+      // Role/department filtering is applied after enrichment for better identity fallback reliability.
+      if (hasRoleOrDeptFilter) {
+        sql += ' ORDER BY created_at DESC, id DESC LIMIT ?';
+        params.push(5000);
+      } else {
+        sql += ' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?';
+        params.push(limit, offset);
+      }
 
       const rows: any = await query(sql, params);
       const mapped = Array.isArray(rows) ? rows : [];
@@ -5410,11 +5472,44 @@ async function startServer() {
       // Enrich results with user role and a human-friendly action label.
       try {
         const userIds = Array.from(new Set(mapped.map((r: any) => r.user_id).filter(Boolean)));
+        const identityNames = Array.from(new Set(
+          mapped
+            .filter((r: any) => !r.user_id && r.username)
+            .map((r: any) => String(r.username).trim().toLowerCase())
+            .filter(Boolean)
+        ));
         const userMap: any = {};
+        const userEmployeeMap: any = {};
+        const userIdentityMap: any = {};
         if (userIds.length > 0) {
           const placeholders = userIds.map(() => '?').join(',');
-          const urows: any = await query(`SELECT id, role, full_name, username, email FROM users WHERE id IN (${placeholders})`, userIds);
-          for (const u of (Array.isArray(urows) ? urows : [urows].filter(Boolean))) userMap[u.id] = u;
+          const urows: any = await query(
+            `SELECT id, employee_id, role, dept, full_name, username, email
+             FROM users
+             WHERE id IN (${placeholders}) OR employee_id IN (${placeholders})`,
+            [...userIds, ...userIds]
+          );
+          for (const u of (Array.isArray(urows) ? urows : [urows].filter(Boolean))) {
+            userMap[u.id] = u;
+            if (u.employee_id) userEmployeeMap[u.employee_id] = u;
+          }
+        }
+        if (identityNames.length > 0) {
+          const placeholders = identityNames.map(() => '?').join(',');
+          const irows: any = await query(
+            `SELECT id, role, dept, full_name, username, email
+             FROM users
+             WHERE LOWER(COALESCE(username, '')) IN (${placeholders})
+                OR LOWER(COALESCE(full_name, '')) IN (${placeholders})
+                OR LOWER(COALESCE(email, '')) IN (${placeholders})`,
+            [...identityNames, ...identityNames, ...identityNames]
+          );
+          for (const u of (Array.isArray(irows) ? irows : [irows].filter(Boolean))) {
+            const keys = [u.username, u.full_name, u.email]
+              .map((v: any) => (v ? String(v).trim().toLowerCase() : ''))
+              .filter(Boolean);
+            for (const k of keys) if (!userIdentityMap[k]) userIdentityMap[k] = u;
+          }
         }
 
         function titleCase(s: string) {
@@ -5474,7 +5569,8 @@ async function startServer() {
         }
 
         const out = mapped.map((r: any) => {
-          const u = r.user_id ? userMap[r.user_id] : null;
+          const identityKey = r.username ? String(r.username).trim().toLowerCase() : '';
+          const u = r.user_id ? (userMap[r.user_id] || userEmployeeMap[r.user_id]) : (identityKey ? userIdentityMap[identityKey] : null);
           // derive a short description if available in after_json or meta_json
           let display_description: string | null = null;
           try {
@@ -5500,12 +5596,29 @@ async function startServer() {
 
           return { ...r,
             username: sanitizeDisplayText((u && (u.full_name || u.username || u.email)) || r.username),
-            user_role: u ? u.role : null,
+            user_role: r.user_role || (u ? u.role : null),
+            user_department: r.user_department || (u ? u.dept : null),
             display_action: humanizeAction(r),
             display_description: display_description || null
           };
         });
-        res.json(out);
+
+        // Strictly enforce selected role/department against the final enriched values
+        // so displayed rows always match active filters.
+        const selectedRoles = qRolesRaw.split(',').map((r: any) => r.trim().toLowerCase()).filter(Boolean);
+        const selectedDepts = qDepartmentsRaw.split(',').map((d: any) => d.trim().toLowerCase()).filter(Boolean);
+        const roleSet = new Set(selectedRoles);
+        const deptSet = new Set(selectedDepts);
+        const filteredOut = out.filter((row: any) => {
+          const rowRole = (row.user_role || '').toString().trim().toLowerCase();
+          const rowDept = (row.user_department || '').toString().trim().toLowerCase();
+          const roleOk = roleSet.size === 0 || roleSet.has(rowRole);
+          const deptOk = deptSet.size === 0 || deptSet.has(rowDept);
+          return roleOk && deptOk;
+        });
+
+        const pagedOut = hasRoleOrDeptFilter ? filteredOut.slice(offset, offset + limit) : filteredOut;
+        res.json(pagedOut);
         return;
       } catch (e) {
         console.error('audit logs enrich error:', e);
