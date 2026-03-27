@@ -136,6 +136,7 @@ export default function App() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
   const [isDesktopViewport, setIsDesktopViewport] = useState(() => {
     if (typeof window === 'undefined') return true;
     return window.innerWidth >= 1024;
@@ -184,6 +185,10 @@ export default function App() {
 
   useEffect(() => {
     if (isDesktopViewport) setIsSidebarOpen(false);
+  }, [isDesktopViewport]);
+
+  useEffect(() => {
+    if (!isDesktopViewport) setIsSidebarHovered(false);
   }, [isDesktopViewport]);
 
   // --- Routing helpers: map screens to role-based URL paths and vice-versa ---
@@ -610,6 +615,7 @@ export default function App() {
   const activeTitle = screenTitleMap[activeScreen] || 'Dashboard';
   const userDisplay = user.employee_name || user.full_name || user.username || user.email || 'User';
   const roleDisplay = (role?: string | null) => role === 'HR' ? 'HR Admin' : (role || '');
+  const isSidebarExpanded = !isDesktopViewport || isSidebarHovered;
 
   return (
     <NotificationProvider>
@@ -634,18 +640,24 @@ export default function App() {
         animate={{
           x: isDesktopViewport || isSidebarOpen ? 0 : -320,
           opacity: isDesktopViewport || isSidebarOpen ? 1 : 0.96,
+          width: isDesktopViewport ? (isSidebarExpanded ? 264 : 76) : 288,
         }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="fixed inset-y-0 left-0 z-50 w-72 lg:w-64 system-bg border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-500 lg:static lg:z-auto"
+        transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+        onMouseEnter={() => isDesktopViewport && setIsSidebarHovered(true)}
+        onMouseLeave={() => isDesktopViewport && setIsSidebarHovered(false)}
+        className="fixed inset-y-0 left-0 z-50 system-bg border-r border-slate-200 dark:border-slate-800 flex flex-col lg:static lg:z-auto overflow-hidden"
       >
-        <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+        <div className={`border-b border-slate-100 dark:border-slate-800 ${isSidebarExpanded ? 'px-4 py-5' : 'px-2 py-4'}`}>
           <div className="flex items-start justify-between gap-2">
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col mb-1 items-center"
+            className={`flex flex-col mb-1 ${isSidebarExpanded ? 'items-start' : 'items-center'} flex-1 min-w-0`}
           >
-            <img src="/logo.png" alt="Maptech Logo" className="h-14 w-full object-contain mb-2" />
+            <img src="/logo.png" alt="Maptech Logo" className={`${isSidebarExpanded ? 'h-12 w-full' : 'h-8 w-8'} object-contain mb-1`} />
+            {isSidebarExpanded && (
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Performance System</p>
+            )}
           </motion.div>
           <button
             type="button"
@@ -656,121 +668,124 @@ export default function App() {
             <PanelLeftClose size={16} />
           </button>
           </div>
-          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-4 text-center">Performance System</p>
         </div>
 
         <nav className="flex-1 py-4 overflow-y-auto custom-scrollbar">
-          <div className="px-4 mb-4">
+          <div className={`mb-4 ${isSidebarExpanded ? 'px-3' : 'px-2'}`}>
             <motion.button 
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setIsDarkMode(!isDarkMode)}
-              className="w-full flex items-center justify-between px-4 py-2 system-bg border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 transition-all hover:border-teal-green hover:shadow-lg hover:shadow-teal-green/5"
+              title={!isSidebarExpanded ? (isDarkMode ? 'Dark Mode' : 'Light Mode') : undefined}
+              className={`w-full flex items-center py-2 system-bg border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 transition-all hover:border-teal-green hover:shadow-lg hover:shadow-teal-green/5 ${isSidebarExpanded ? 'justify-between px-3' : 'justify-center px-2'}`}
             >
-              <div className="flex items-center gap-2">
+              <div className={`flex items-center ${isSidebarExpanded ? 'gap-2' : 'gap-0'}`}>
                 {isDarkMode ? <Moon size={14} className="text-teal-green" /> : <Sun size={14} className="text-amber-500" />}
-                {isDarkMode ? 'Dark Mode' : 'Light Mode'}
+                {isSidebarExpanded && (isDarkMode ? 'Dark Mode' : 'Light Mode')}
               </div>
-              <div className={`w-8 h-4 rounded-full relative transition-colors ${isDarkMode ? 'bg-teal-green' : 'bg-slate-300'}`}>
-                <motion.div 
-                  animate={{ x: isDarkMode ? 16 : 0 }}
-                  className="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow-sm"
-                />
-              </div>
+              {isSidebarExpanded && (
+                <div className={`w-8 h-4 rounded-full relative transition-colors ${isDarkMode ? 'bg-teal-green' : 'bg-slate-300'}`}>
+                  <motion.div 
+                    animate={{ x: isDarkMode ? 16 : 0 }}
+                    className="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow-sm"
+                  />
+                </div>
+              )}
             </motion.button>
           </div>
           {user.role === 'HR' && (
             <>
-              <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">HR Admin Command Center</div>
-              <SidebarItem icon={UserPlus} label="Recruitment Board" active={activeScreen === 'A3'} onClick={() => goToScreen('A3')} />
-              <SidebarItem icon={Users} label="360° Feedback" active={activeScreen === 'A8'} onClick={() => goToScreen('A8')} />
-              <SidebarItem icon={Briefcase} label="Onboarding Hub" active={activeScreen === 'A7'} onClick={() => goToScreen('A7')} />
-              <SidebarItem icon={Users} label="Employee Directory" active={activeScreen === 'A1' || activeScreen === 'A2'} onClick={() => goToScreen('A1')} />
-              <SidebarItem icon={LogOut} label="Offboarding Hub" active={activeScreen === 'A4'} onClick={() => goToScreen('A4')} />
-              <SidebarItem icon={ShieldCheck} label="User Accounts" active={activeScreen === 'A5'} onClick={() => goToScreen('A5')} />
-              <SidebarItem icon={ShieldCheck} label="Audit Logs" active={activeScreen === 'A9'} onClick={() => goToScreen('A9')} />
-              <SidebarItem icon={DollarSign} label="Payroll Analytics" active={activeScreen === 'A10'} onClick={() => goToScreen('A10')} />
-              <SidebarItem icon={Wallet} label="Payroll Management" active={activeScreen === 'A11'} onClick={() => goToScreen('A11')} />
-              <SidebarItem icon={Award} label="Promotability" active={activeScreen === 'A12'} onClick={() => goToScreen('A12')} />
-              <SidebarItem icon={ShieldCheck} label="Signature Queue" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
-              <SidebarItem icon={TrendingUp} label="DB Viewer" active={activeScreen === 'A6'} onClick={() => goToScreen('A6')} />
-              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
+              {isSidebarExpanded && <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">HR Admin Command Center</div>}
+              <SidebarItem expanded={isSidebarExpanded} icon={UserPlus} label="Recruitment Board" active={activeScreen === 'A3'} onClick={() => goToScreen('A3')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={MessageSquare} label="360° Feedback" active={activeScreen === 'A8'} onClick={() => goToScreen('A8')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={Briefcase} label="Onboarding Hub" active={activeScreen === 'A7'} onClick={() => goToScreen('A7')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={Users} label="Employee Directory" active={activeScreen === 'A1' || activeScreen === 'A2'} onClick={() => goToScreen('A1')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={LogOut} label="Offboarding Hub" active={activeScreen === 'A4'} onClick={() => goToScreen('A4')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={ShieldCheck} label="User Accounts" active={activeScreen === 'A5'} onClick={() => goToScreen('A5')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={ClipboardCheck} label="Audit Logs" active={activeScreen === 'A9'} onClick={() => goToScreen('A9')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={DollarSign} label="Payroll Analytics" active={activeScreen === 'A10'} onClick={() => goToScreen('A10')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={Wallet} label="Payroll Management" active={activeScreen === 'A11'} onClick={() => goToScreen('A11')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={Award} label="Promotability" active={activeScreen === 'A12'} onClick={() => goToScreen('A12')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={CheckCircle} label="Signature Queue" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={TrendingUp} label="DB Viewer" active={activeScreen === 'A6'} onClick={() => goToScreen('A6')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
             </>
           )}
 
           {user.role === 'Manager' && (
             <>
-              <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Performance Dashboard</div>
-              <SidebarItem icon={Users} label="360° Feedback" active={activeScreen === 'B8'} onClick={() => goToScreen('B8')} />
-              <SidebarItem icon={Target} label="Target & OKR Planner" active={activeScreen === 'B1'} onClick={() => goToScreen('B1')} />
-              <SidebarItem icon={MessageSquare} label="Coaching Journal" active={activeScreen === 'B2'} onClick={() => goToScreen('B2')} />
-              <SidebarItem icon={ShieldAlert} label="Disciplinary Action" active={activeScreen === 'B3'} onClick={() => goToScreen('B3')} />
-              <SidebarItem icon={ClipboardCheck} label="Evaluation Portal" active={activeScreen === 'B4'} onClick={() => goToScreen('B4')} />
-              <SidebarItem icon={Award} label="Promotability" active={activeScreen === 'B5'} onClick={() => goToScreen('B5')} />
-              <SidebarItem icon={Lightbulb} label="Suggestion Review" active={activeScreen === 'B7'} onClick={() => goToScreen('B7')} />
-              <SidebarItem icon={ShieldCheck} label="Signature Queue" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
-              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
+              {isSidebarExpanded && <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Performance Dashboard</div>}
+              <SidebarItem expanded={isSidebarExpanded} icon={MessageSquare} label="360° Feedback" active={activeScreen === 'B8'} onClick={() => goToScreen('B8')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={Target} label="Target & OKR Planner" active={activeScreen === 'B1'} onClick={() => goToScreen('B1')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={MessageSquare} label="Coaching Journal" active={activeScreen === 'B2'} onClick={() => goToScreen('B2')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={ShieldAlert} label="Disciplinary Action" active={activeScreen === 'B3'} onClick={() => goToScreen('B3')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={ClipboardCheck} label="Evaluation Portal" active={activeScreen === 'B4'} onClick={() => goToScreen('B4')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={Award} label="Promotability" active={activeScreen === 'B5'} onClick={() => goToScreen('B5')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={Lightbulb} label="Suggestion Review" active={activeScreen === 'B7'} onClick={() => goToScreen('B7')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={CheckCircle} label="Signature Queue" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
             </>
           )}
 
           {user.role === 'Employee' && (
             <>
-              <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Self-Service & Growth</div>
-              <SidebarItem icon={LayoutDashboard} label="My Career Dashboard" active={activeScreen === 'C1'} onClick={() => goToScreen('C1')} />
-              <SidebarItem icon={Lightbulb} label="Suggestion Form" active={activeScreen === 'C2'} onClick={() => goToScreen('C2')} />
-              <SidebarItem icon={ClipboardCheck} label="Self-Assessment" active={activeScreen === 'C3'} onClick={() => goToScreen('C3')} />
-              <SidebarItem icon={MessageSquare} label="360° Feedback" active={activeScreen === 'C4'} onClick={() => goToScreen('C4')} />
-              <SidebarItem icon={ShieldCheck} label="Verification of Review" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
-              <SidebarItem icon={Award} label="Career Growth" active={activeScreen === 'C6'} onClick={() => goToScreen('C6')} />
-              <SidebarItem icon={GraduationCap} label="Coaching & E-Learning" active={activeScreen === 'C7'} onClick={() => goToScreen('C7')} />
-              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
+              {isSidebarExpanded && <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Self-Service & Growth</div>}
+              <SidebarItem expanded={isSidebarExpanded} icon={LayoutDashboard} label="My Career Dashboard" active={activeScreen === 'C1'} onClick={() => goToScreen('C1')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={Lightbulb} label="Suggestion Form" active={activeScreen === 'C2'} onClick={() => goToScreen('C2')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={ClipboardCheck} label="Self-Assessment" active={activeScreen === 'C3'} onClick={() => goToScreen('C3')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={MessageSquare} label="360° Feedback" active={activeScreen === 'C4'} onClick={() => goToScreen('C4')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={CheckCircle} label="Verification of Review" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={Award} label="Career Growth" active={activeScreen === 'C6'} onClick={() => goToScreen('C6')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={GraduationCap} label="Coaching & E-Learning" active={activeScreen === 'C7'} onClick={() => goToScreen('C7')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
             </>
           )}
 
           {user.role === 'Leader' && (
             <>
-              <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Team Leader</div>
-              <SidebarItem icon={Target} label="Team Goals" active={activeScreen === 'D1'} onClick={() => goToScreen('D1')} />
-              <SidebarItem icon={TrendingUp} label="Team Progress" active={activeScreen === 'D2'} onClick={() => goToScreen('D2')} />
-              <SidebarItem icon={ShieldCheck} label="Signature Queue" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
-              <SidebarItem icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
+              {isSidebarExpanded && <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Team Leader</div>}
+              <SidebarItem expanded={isSidebarExpanded} icon={Target} label="Team Goals" active={activeScreen === 'D1'} onClick={() => goToScreen('D1')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={TrendingUp} label="Team Progress" active={activeScreen === 'D2'} onClick={() => goToScreen('D2')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={CheckCircle} label="Signature Queue" active={activeScreen === 'C5'} onClick={() => goToScreen('C5')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={SettingsIcon} label="Settings" active={activeScreen === 'S1'} onClick={() => goToScreen('S1')} />
             </>
           )}
         </nav>
 
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800">
-          <div className="mb-4 px-2">
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/30 p-3">
-              <div className="flex items-center gap-3 min-w-0">
+        <div className={`border-t border-slate-100 dark:border-slate-800 ${isSidebarExpanded ? 'p-4' : 'p-2'}`}>
+          <div className={`mb-3 ${isSidebarExpanded ? 'px-2' : 'px-1'}`}>
+            <div className={`rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/30 ${isSidebarExpanded ? 'p-3' : 'p-2'}`}>
+              <div className={`flex items-center min-w-0 ${isSidebarExpanded ? 'gap-3' : 'justify-center'}`}>
                 {user.profile_picture ? (
-                  <img src={user.profile_picture} alt="Profile" className="w-12 h-12 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700 shrink-0" />
+                  <img src={user.profile_picture} alt="Profile" className={`${isSidebarExpanded ? 'w-12 h-12' : 'w-10 h-10'} rounded-full object-cover border-2 border-slate-200 dark:border-slate-700 shrink-0`} />
                 ) : (
-                  <div className="w-12 h-12 system-bg border-2 border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-teal-deep dark:text-teal-green font-bold text-base shrink-0">
+                  <div className={`${isSidebarExpanded ? 'w-12 h-12' : 'w-10 h-10'} system-bg border-2 border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-teal-deep dark:text-teal-green font-bold text-base shrink-0`}>
                     {((user.employee_name || user.full_name || user.username || user.email || 'U')[0] || 'U').toUpperCase()}
                   </div>
                 )}
-                <div className="min-w-0 flex-1">
+                <div className={`min-w-0 flex-1 ${isSidebarExpanded ? 'block' : 'hidden'}`}>
                   <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.employee_name || user.full_name || user.username || user.email}</p>
                   <div className="mt-1 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                     {roleDisplay(user.role)}
                   </div>
                 </div>
               </div>
-              <div className="mt-2.5 flex gap-1 w-full">
+              {isSidebarExpanded && <div className="mt-2.5 flex gap-1 w-full">
                 <span className="flex-1 min-w-0 flex items-center justify-center px-1.5 py-0.5 rounded-md text-[9px] font-medium bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 truncate">
                   {user.position || 'N/A'}
                 </span>
                 <span className="flex-1 min-w-0 flex items-center justify-center px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-100 dark:border-teal-800/40 truncate">
                   {user.dept || 'N/A'}
                 </span>
-              </div>
+              </div>}
             </div>
           </div>
           <button
             onClick={() => setShowLogoutConfirm(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+            title={!isSidebarExpanded ? 'Sign Out' : undefined}
+            className={`w-full flex items-center py-2 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors ${isSidebarExpanded ? 'gap-2 px-3 justify-start' : 'gap-0 px-2 justify-center'}`}
           >
-            <LogOut size={14} /> Sign Out
+            <LogOut size={14} /> {isSidebarExpanded && 'Sign Out'}
           </button>
         </div>
       </motion.aside>
