@@ -760,11 +760,11 @@ async function initDb() {
       }
     } catch {}
 
-    // Ensure departments have deleted_at column (in case older DBs were created without it)
+    // Ensure departments have deleted_at column (backwards-compat safe)
     try {
       if (usePostgres && pgPool) {
-        const c2 = await pgPool.connect();
-        try { await c2.query("ALTER TABLE departments ADD COLUMN deleted_at TIMESTAMP NULL"); } catch {} finally { c2.release(); }
+        const cdel = await pgPool.connect();
+        try { await cdel.query("ALTER TABLE departments ADD COLUMN deleted_at TIMESTAMP NULL"); } catch {} finally { cdel.release(); }
       } else {
         try { sqliteDb.exec('ALTER TABLE departments ADD COLUMN deleted_at TIMESTAMP NULL'); } catch {}
       }
