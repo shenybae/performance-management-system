@@ -2,7 +2,7 @@
 # - Builder: installs deps and builds frontend (Vite)
 # - Runner: copies built assets + server and runs server via tsx
 
-FROM node:18-slim AS builder
+FROM node:20-slim AS builder
 WORKDIR /app
 
 # Install system build tools required to compile optional native modules
@@ -22,7 +22,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:18-slim AS runner
+FROM node:20-slim AS runner
 WORKDIR /app
 
 # Set production env (can be overridden by runtime envs)
