@@ -5704,11 +5704,12 @@ async function startServer() {
       if (!name) return res.status(400).json({ error: 'Missing name' });
       const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       try {
-        await query('INSERT INTO departments (name, slug, deleted_at) VALUES (?, ?, NULL) ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, deleted_at = COALESCE(departments.deleted_at, NULL)', [name, slug]);
+        const desc = (req.body?.description || null);
+        await query('INSERT INTO departments (name, slug, description, deleted_at) VALUES (?, ?, ?, NULL) ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, deleted_at = COALESCE(departments.deleted_at, NULL)', [name, slug, desc]);
       } catch (e) {
         // ignore duplicate insertion race
       }
-      const rows = await query('SELECT id, name, slug, created_at FROM departments WHERE slug = ? LIMIT 1', [slug]);
+      const rows = await query('SELECT id, name, slug, description, created_at FROM departments WHERE slug = ? LIMIT 1', [slug]);
       return res.status(201).json(Array.isArray(rows) ? rows[0] : rows);
     } catch (err) {
       console.error('POST /api/departments error:', err);

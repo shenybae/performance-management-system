@@ -7,6 +7,7 @@ import { Search } from 'lucide-react';
 export const Departments = () => {
   const [depts, setDepts] = useState<any[]>([]);
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingName, setPendingName] = useState('');
   const [pendingId, setPendingId] = useState<number | null>(null);
@@ -32,6 +33,7 @@ export const Departments = () => {
     e.preventDefault();
     if (!name.trim()) return (window as any).notify('Enter a department name', 'error');
     setPendingName(name.trim());
+    setPendingDescription(description.trim());
     setConfirmOpen(true);
   };
 
@@ -43,12 +45,14 @@ export const Departments = () => {
       const res = await fetch('/api/departments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ name: pendingName })
+        body: JSON.stringify({ name: pendingName, description: (pendingDescription || null) })
       });
       if (res.ok) {
         (window as any).notify('Department created', 'success');
         setName('');
+        setDescription('');
         setPendingName('');
+        setPendingDescription('');
         await fetchDepts();
       } else {
         const err = await res.json().catch(() => ({}));
@@ -74,6 +78,8 @@ export const Departments = () => {
       }
     } catch (e) { (window as any).notify('Server error', 'error'); }
   };
+
+  const [pendingDescription, setPendingDescription] = useState('');
 
   return (
     <>
@@ -120,6 +126,10 @@ export const Departments = () => {
             <div>
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Name</label>
               <input value={name} onChange={e => setName(e.target.value)} className="w-full mt-1 p-2 border rounded-lg text-sm" placeholder="e.g. Human Resources" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description</label>
+              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="w-full mt-1 p-2 border rounded-lg text-sm" placeholder="Short description or responsibilities (optional)" />
             </div>
             <button type="submit" disabled={loading} className="w-full gradient-bg text-white py-2 rounded-lg font-bold text-sm">Add</button>
           </form>
