@@ -16,6 +16,7 @@ RUN apt-get update \
 # Install dependencies (including dev so `tsx` is available)
 COPY package.json package-lock.json ./
 # Run npm ci so optional native modules are compiled against the image's libc/ABI
+ENV SKIP_TAILWIND_VITE_PLUGIN=true
 RUN npm ci
 
 # Copy source and build frontend
