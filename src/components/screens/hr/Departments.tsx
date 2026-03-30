@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
+import { Modal } from '../../common/Modal';
 
 export const Departments = () => {
   const [depts, setDepts] = useState<any[]>([]);
   const [name, setName] = useState('');
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingName, setPendingName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const fetchDepts = async () => {
@@ -18,20 +21,27 @@ export const Departments = () => {
 
   useEffect(() => { fetchDepts(); }, []);
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return (window as any).notify('Enter a department name', 'error');
+    setPendingName(name.trim());
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmAdd = async () => {
+    setConfirmOpen(false);
     setLoading(true);
     try {
       const token = localStorage.getItem('talentflow_token');
       const res = await fetch('/api/departments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ name: name.trim() })
+        body: JSON.stringify({ name: pendingName })
       });
       if (res.ok) {
         (window as any).notify('Department created', 'success');
         setName('');
+        setPendingName('');
         await fetchDepts();
       } else {
         const err = await res.json().catch(() => ({}));
@@ -71,6 +81,15 @@ export const Departments = () => {
                     <div>
                       <div className="font-bold">{d.name}</div>
                       <div className="text-xs text-slate-500">{d.slug}</div>
+                    <Modal open={confirmOpen} title="Confirm create department" onClose={() => setConfirmOpen(false)}>
+                      <div className="space-y-4">
+                        <p>Are you sure you want to create the department <strong>{pendingName}</strong>?</p>
+                        <div className="flex gap-2 justify-end">
+                          <button onClick={() => setConfirmOpen(false)} className="px-3 py-2 rounded-lg border">Cancel</button>
+                          <button onClick={handleConfirmAdd} className="px-3 py-2 rounded-lg gradient-bg text-white">Save</button>
+                        </div>
+                      </div>
+                    </Modal>
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => handleDelete(d.id)} className="text-sm text-red-500 hover:underline">Delete</button>
