@@ -13,6 +13,8 @@ export const Departments = () => {
   const [loading, setLoading] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [query, setQuery] = useState('');
+  const [selectedDept, setSelectedDept] = useState<any | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const fetchDepts = async () => {
     try {
@@ -87,35 +89,27 @@ export const Departments = () => {
             </div>
             <label className="text-sm inline-flex items-center gap-2"><input type="checkbox" checked={showArchived} onChange={e=>{ setShowArchived(e.target.checked); }} /> Show archived</label>
           </div>
-          <div className="space-y-2">
+          <div>
             {depts.length === 0 ? <p className="text-sm text-slate-500">No departments found.</p> : (
-              <ul className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {depts
                   .filter(d => (d.name || '').toLowerCase().includes(query.toLowerCase()))
                   .filter(d => showArchived ? true : !d.deleted_at)
                   .map(d => (
-                  <li key={d.id} className={`flex items-center justify-between p-3 rounded-lg border ${d.deleted_at ? 'opacity-60 bg-slate-50/60' : 'bg-white/80'} border-slate-200 dark:border-slate-700`}>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <div className="font-bold">{d.name}</div>
-                        <div className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">{d.slug}</div>
-                        {d.deleted_at ? <div className="text-xs text-amber-600">(Archived)</div> : null}
+                    <div key={d.id} role="button" onClick={() => { setSelectedDept(d); setDetailOpen(true); }} className={`p-4 rounded-lg border cursor-pointer hover:shadow-md ${d.deleted_at ? 'opacity-60 bg-slate-50/60' : 'bg-white/80'} border-slate-200 dark:border-slate-700`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="font-bold text-lg">{d.name}</div>
+                          <div className="text-xs text-slate-500">{d.description || d.slug}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm">Users: <span className="font-medium">{d.user_count || 0}</span></div>
+                          <div className="text-xs text-slate-400">Head: {d.head_name || '-'}</div>
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-500">Head: {d.head_name || '-'} • Users: <span className="font-medium">{d.user_count || 0}</span> • Created: {d.created_at ? new Date(d.created_at).toLocaleDateString() : '-'}</div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {!d.deleted_at ? (
-                        <button onClick={() => { setPendingName(d.name); setPendingId(d.id); setConfirmOpen(true); }} className="text-sm text-red-500 hover:underline">Archive</button>
-                      ) : (
-                        <button onClick={async () => {
-                          if (!confirm('Restore this department?')) return;
-                          try { const token = localStorage.getItem('talentflow_token'); const res = await fetch(`/api/departments/${d.id}/restore`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} }); if (res.ok) { (window as any).notify('Restored', 'success'); fetchDepts(); } else { (window as any).notify('Restore failed','error'); } } catch (e) { (window as any).notify('Server error','error'); }
-                        }} className="text-sm text-emerald-600 hover:underline">Restore</button>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                  ))}
+              </div>
             )}
           </div>
         </Card>
@@ -140,6 +134,31 @@ export const Departments = () => {
           <button onClick={handleConfirmArchive} className="px-3 py-2 rounded-lg gradient-bg text-white">Archive</button>
         </div>
       </div>
+    </Modal>
+    <Modal open={detailOpen} title={selectedDept ? selectedDept.name : 'Department'} onClose={() => { setDetailOpen(false); setSelectedDept(null); }}>
+      {selectedDept ? (
+        <div className="space-y-4">
+          <div className="text-sm text-slate-600">{selectedDept.description || 'No description provided.'}</div>
+          <div>
+            <div className="text-xs text-slate-500 mb-2">Sample members</div>
+            {Array.isArray(selectedDept.sample_users) && selectedDept.sample_users.length > 0 ? (
+              <ul className="space-y-1">
+                {selectedDept.sample_users.map((u: any, idx: number) => (
+                  <li key={idx} className="text-sm">{u.full_name || u.email} <span className="text-xs text-slate-400">{u.email ? `· ${u.email}` : ''}</span></li>
+                ))}
+              </ul>
+            ) : <div className="text-sm text-slate-500">No members found.</div>}
+          </div>
+          <div className="flex justify-end gap-2">
+            {!selectedDept.deleted_at ? (
+              <button onClick={() => { setPendingName(selectedDept.name); setPendingId(selectedDept.id); setConfirmOpen(true); setDetailOpen(false); }} className="px-3 py-2 rounded-lg border text-red-600">Archive</button>
+            ) : (
+              <button onClick={async () => { if (!confirm('Restore this department?')) return; try { const token = localStorage.getItem('talentflow_token'); const res = await fetch(`/api/departments/${selectedDept.id}/restore`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} }); if (res.ok) { (window as any).notify('Restored', 'success'); fetchDepts(); setDetailOpen(false); } else { (window as any).notify('Restore failed','error'); } } catch (e) { (window as any).notify('Server error','error'); } }} className="px-3 py-2 rounded-lg gradient-bg text-white">Restore</button>
+            )}
+            <button onClick={() => { setDetailOpen(false); setSelectedDept(null); }} className="px-3 py-2 rounded-lg border">Close</button>
+          </div>
+        </div>
+      ) : null}
     </Modal>
     </>
   );

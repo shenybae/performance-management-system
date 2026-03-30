@@ -317,6 +317,7 @@ async function initDb() {
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
       name TEXT NOT NULL UNIQUE,
       slug TEXT NOT NULL UNIQUE,
+      description TEXT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       deleted_at TIMESTAMP NULL
     )`,
@@ -748,6 +749,16 @@ async function initDb() {
         }
       } catch {}
     }
+
+    // Ensure departments have a description column for richer UI details
+    try {
+      if (usePostgres && pgPool) {
+        const c = await pgPool.connect();
+        try { await c.query("ALTER TABLE departments ADD COLUMN description TEXT"); } catch {} finally { c.release(); }
+      } else {
+        try { sqliteDb.exec('ALTER TABLE departments ADD COLUMN description TEXT'); } catch {}
+      }
+    } catch {}
 
     // Safe migrations for requisitions
     const requisitionMigrations = [
@@ -5660,9 +5671,10 @@ async function startServer() {
       const includeDeleted = req.query && (req.query.include_deleted === '1' || req.query.include_deleted === 'true');
       // include a count of active users per department (based on users.dept text)
       const rows = await query(
-        `SELECT d.id, d.name, d.slug, d.created_at, d.deleted_at,
+        `SELECT d.id, d.name, d.slug, d.description, d.created_at, d.deleted_at,
                 COALESCE((SELECT COUNT(*) FROM users u WHERE u.dept = d.name AND u.deleted_at IS NULL), 0) AS user_count,
-                (SELECT u.full_name FROM users u WHERE u.dept = d.name AND u.deleted_at IS NULL ORDER BY u.created_at LIMIT 1) AS head_name
+                (SELECT u.full_name FROM users u WHERE u.dept = d.name AND u.deleted_at IS NULL ORDER BY u.created_at LIMIT 1) AS head_name,
+                (SELECT COALESCE(json_agg(row_to_json(u2)), '[]'::json) FROM (SELECT full_name, email FROM users u2 WHERE u2.dept = d.name AND u2.deleted_at IS NULL ORDER BY u2.created_at LIMIT 5) u2) AS sample_users
          FROM departments d
          ${includeDeleted ? '' : "WHERE d.deleted_at IS NULL"}
          ORDER BY d.name ASC`
