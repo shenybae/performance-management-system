@@ -7,7 +7,8 @@ WORKDIR /app
 
 # Install dependencies (including dev so `tsx` is available)
 COPY package.json package-lock.json ./
-RUN npm ci
+# Install dependencies without optional native bindings which can fail in some CI/container environments
+RUN npm ci --no-optional
 
 # Copy source and build frontend
 COPY . .
