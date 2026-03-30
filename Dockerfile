@@ -8,7 +8,9 @@ WORKDIR /app
 # Install system build tools required to compile optional native modules
 # (some Tailwind/oxide packages ship native bindings that need C toolchain)
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends build-essential python3 make g++ libc6-dev \
+	&& apt-get install -y --no-install-recommends \
+	   build-essential python3 make g++ libc6-dev \
+	   rustc cargo pkg-config libssl-dev curl \
 	&& rm -rf /var/lib/apt/lists/*
 
 # Install dependencies (including dev so `tsx` is available)
