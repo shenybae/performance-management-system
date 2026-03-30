@@ -24,7 +24,7 @@ async function rawQuery(sql: string, params: any[] = []) {
   return res.rows;
 }
 
-async function createLinkedAccounts() {
+export async function createLinkedAccounts() {
   const DEPARTMENTS = [
     'Accounting/Financing',
     'Engineering',
@@ -228,7 +228,10 @@ async function createLinkedAccounts() {
   process.exit(0);
 }
 
-createLinkedAccounts().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+// Run only when explicitly requested via env var to avoid accidental execution when imported.
+if (process.env.RUN_ADD_LINKED_ACCOUNTS === '1') {
+  createLinkedAccounts().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}

@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cors from "cors";
+import { createLinkedAccounts } from './scripts/add_linked_accounts';
 
 dotenv.config();
 
@@ -1621,6 +1622,33 @@ async function startServer() {
       recordAudit(user, normalizedAction, tableName, rowId, null, after, meta).catch(() => {});
     } catch (e) { console.error('audit middleware error:', e); }
     next();
+  });
+
+  // Internal admin endpoint to trigger seeding of linked test accounts.
+  // Protected: requires `x-seed-secret` header to equal `process.env.SEED_SECRET`.
+  // Additionally, to avoid accidental runs against non-Railway DBs, seeding
+  // is allowed only when `DATABASE_URL` contains 'railway' or when
+  // `ALLOW_SEED_ANY_HOST` is set to '1'.
+  app.post('/internal/seed-linked-accounts', async (req, res) => {
+    try {
+      const provided = String(req.headers['x-seed-secret'] || '');
+      const expected = String(process.env.SEED_SECRET || '');
+      if (!expected || provided !== expected) return res.status(403).json({ error: 'Forbidden' });
+
+      const dbUrl = String(process.env.DATABASE_URL || '');
+      const dbHost = String(process.env.DB_HOST || '');
+      const allowAny = String(process.env.ALLOW_SEED_ANY_HOST || '0') === '1';
+      const isRailwayHost = /(railway|rlwy|shuttle|railway.app)/i.test(dbUrl + ' ' + dbHost);
+      if (!allowAny && !isRailwayHost) {
+        return res.status(400).json({ error: 'Seeding only allowed on Railway by default. Set ALLOW_SEED_ANY_HOST=1 to override.' });
+      }
+
+      await createLinkedAccounts();
+      res.json({ success: true, message: 'Seed job started (synchronous)' });
+    } catch (err) {
+      console.error('Seed endpoint error:', err);
+      res.status(500).json({ error: 'Seed failed', details: err instanceof Error ? err.message : String(err) });
+    }
   });
 
   // API Routes
