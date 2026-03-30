@@ -2,7 +2,7 @@
 # - Builder: installs deps and builds frontend (Vite)
 # - Runner: copies built assets + server and runs server via tsx
 
-FROM node:18-alpine AS builder
+FROM node:18-slim AS builder
 WORKDIR /app
 
 # Install dependencies (including dev so `tsx` is available)
@@ -13,7 +13,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:18-alpine AS runner
+FROM node:18-slim AS runner
 WORKDIR /app
 
 # Set production env (can be overridden by runtime envs)
@@ -26,9 +26,13 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.ts ./server.ts
 COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/scripts ./scripts
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Expose port (the app reads PORT env var; default 3000)
 EXPOSE 3000
 
-# Start the server using tsx (available from node_modules)
+# Use entrypoint so we can run optional seeders before starting
+ENTRYPOINT ["/bin/sh", "/app/docker-entrypoint.sh"]
 CMD ["npx", "tsx", "server.ts"]
