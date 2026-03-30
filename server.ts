@@ -5661,7 +5661,8 @@ async function startServer() {
       // include a count of active users per department (based on users.dept text)
       const rows = await query(
         `SELECT d.id, d.name, d.slug, d.created_at, d.deleted_at,
-                COALESCE((SELECT COUNT(*) FROM users u WHERE u.dept = d.name AND u.deleted_at IS NULL), 0) AS user_count
+                COALESCE((SELECT COUNT(*) FROM users u WHERE u.dept = d.name AND u.deleted_at IS NULL), 0) AS user_count,
+                (SELECT u.full_name FROM users u WHERE u.dept = d.name AND u.deleted_at IS NULL ORDER BY u.created_at LIMIT 1) AS head_name
          FROM departments d
          ${includeDeleted ? '' : "WHERE d.deleted_at IS NULL"}
          ORDER BY d.name ASC`

@@ -16,7 +16,8 @@ export const Departments = () => {
 
   const fetchDepts = async () => {
     try {
-      const res = await fetch('/api/departments' + (showArchived ? '?include_deleted=1' : ''));
+      // Always fetch all departments (including archived) and filter client-side
+      const res = await fetch('/api/departments?include_deleted=1');
       if (!res.ok) return setDepts([]);
       const data = await res.json();
       setDepts(Array.isArray(data) ? data : []);
@@ -91,11 +92,16 @@ export const Departments = () => {
               <ul className="space-y-2">
                 {depts
                   .filter(d => (d.name || '').toLowerCase().includes(query.toLowerCase()))
+                  .filter(d => showArchived ? true : !d.deleted_at)
                   .map(d => (
                   <li key={d.id} className={`flex items-center justify-between p-3 rounded-lg border ${d.deleted_at ? 'opacity-60 bg-slate-50/60' : 'bg-white/80'} border-slate-200 dark:border-slate-700`}>
                     <div>
-                      <div className="font-bold">{d.name}</div>
-                      <div className="text-xs text-slate-500">slug: {d.slug} • users: {d.user_count || 0} • created: {d.created_at ? new Date(d.created_at).toLocaleDateString() : '-'}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-bold">{d.name}</div>
+                        <div className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">{d.slug}</div>
+                        {d.deleted_at ? <div className="text-xs text-amber-600">(Archived)</div> : null}
+                      </div>
+                      <div className="text-xs text-slate-500">Head: {d.head_name || '-'} • Users: <span className="font-medium">{d.user_count || 0}</span> • Created: {d.created_at ? new Date(d.created_at).toLocaleDateString() : '-'}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       {!d.deleted_at ? (
