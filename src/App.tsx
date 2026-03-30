@@ -652,9 +652,9 @@ export default function App() {
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className={`flex flex-col mb-1 ${isSidebarExpanded ? 'items-start' : 'items-center'} flex-1 min-w-0`}
+            className={`flex flex-col mb-1 items-center flex-1 min-w-0`}
           >
-            <img src="/logo.png" alt="Maptech Logo" className={`${isSidebarExpanded ? 'h-12 w-full' : 'h-8 w-8'} object-contain mb-1`} />
+            <img src="/logo.png" alt="Maptech Logo" className={`${isSidebarExpanded ? 'h-12 w-12 mx-auto' : 'h-8 w-8'} object-contain mb-1`} />
             {isSidebarExpanded && (
               <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Performance System</p>
             )}
