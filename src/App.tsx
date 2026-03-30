@@ -654,7 +654,7 @@ export default function App() {
             animate={{ opacity: 1, scale: 1 }}
             className={`flex flex-col mb-1 items-center flex-1 min-w-0`}
           >
-            <img src="/logo.png" alt="Maptech Logo" className={`${isSidebarExpanded ? 'h-12 w-12 mx-auto' : 'h-8 w-8'} object-contain mb-1`} />
+            <img src="/logo.png" alt="Maptech Logo" className={`${isSidebarExpanded ? 'h-16 w-full mx-auto' : 'h-8 w-8'} object-contain mb-1`} />
             {isSidebarExpanded && (
               <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Performance System</p>
             )}
