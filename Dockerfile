@@ -5,10 +5,16 @@
 FROM node:18-slim AS builder
 WORKDIR /app
 
+# Install system build tools required to compile optional native modules
+# (some Tailwind/oxide packages ship native bindings that need C toolchain)
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends build-essential python3 make g++ libc6-dev \
+	&& rm -rf /var/lib/apt/lists/*
+
 # Install dependencies (including dev so `tsx` is available)
 COPY package.json package-lock.json ./
-# Install dependencies without optional native bindings which can fail in some CI/container environments
-RUN npm ci --no-optional
+# Run npm ci so optional native modules are compiled against the image's libc/ABI
+RUN npm ci
 
 # Copy source and build frontend
 COPY . .
