@@ -317,7 +317,8 @@ async function initDb() {
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
       name TEXT NOT NULL UNIQUE,
       slug TEXT NOT NULL UNIQUE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TIMESTAMP NULL
     )`,
     `CREATE TABLE IF NOT EXISTS goals (
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
@@ -5656,7 +5657,15 @@ async function startServer() {
   // Departments API
   app.get('/api/departments', async (req, res) => {
     try {
-      const rows = await query('SELECT id, name, slug, created_at FROM departments ORDER BY name ASC');
+      const includeDeleted = req.query && (req.query.include_deleted === '1' || req.query.include_deleted === 'true');
+      // include a count of active users per department (based on users.dept text)
+      const rows = await query(
+        `SELECT d.id, d.name, d.slug, d.created_at, d.deleted_at,
+                COALESCE((SELECT COUNT(*) FROM users u WHERE u.dept = d.name AND u.deleted_at IS NULL), 0) AS user_count
+         FROM departments d
+         ${includeDeleted ? '' : "WHERE d.deleted_at IS NULL"}
+         ORDER BY d.name ASC`
+      );
       res.json(rows);
     } catch (err) {
       console.error('GET /api/departments error:', err);
@@ -5672,7 +5681,7 @@ async function startServer() {
       if (!name) return res.status(400).json({ error: 'Missing name' });
       const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       try {
-        await query('INSERT INTO departments (name, slug) VALUES (?, ?) ON CONFLICT (slug) DO NOTHING', [name, slug]);
+        await query('INSERT INTO departments (name, slug, deleted_at) VALUES (?, ?, NULL) ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, deleted_at = COALESCE(departments.deleted_at, NULL)', [name, slug]);
       } catch (e) {
         // ignore duplicate insertion race
       }
@@ -5683,15 +5692,26 @@ async function startServer() {
       res.status(500).json({ error: 'Database error' });
     }
   });
-
-  app.delete('/api/departments/:id', authenticateToken, async (req: any, res) => {
+  app.post('/api/departments/:id/archive', authenticateToken, async (req: any, res) => {
     try {
       const user = req.user;
       if (!isPrivilegedRole(user?.role)) return res.status(403).json({ error: 'Forbidden' });
-      await query('DELETE FROM departments WHERE id = ?', [req.params.id]);
-      res.status(204).end();
+      await query('UPDATE departments SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [req.params.id]);
+      res.json({ success: true });
     } catch (err) {
-      console.error('DELETE /api/departments error:', err);
+      console.error('ARCHIVE /api/departments error:', err);
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  app.post('/api/departments/:id/restore', authenticateToken, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!isPrivilegedRole(user?.role)) return res.status(403).json({ error: 'Forbidden' });
+      await query('UPDATE departments SET deleted_at = NULL WHERE id = ?', [req.params.id]);
+      res.json({ success: true });
+    } catch (err) {
+      console.error('RESTORE /api/departments error:', err);
       res.status(500).json({ error: 'Database error' });
     }
   });
