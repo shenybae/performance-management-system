@@ -313,6 +313,12 @@ async function initDb() {
       salary_base REAL,
       ssn TEXT
     )`,
+    `CREATE TABLE IF NOT EXISTS departments (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      name TEXT NOT NULL UNIQUE,
+      slug TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
     `CREATE TABLE IF NOT EXISTS goals (
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
       employee_id INTEGER,
@@ -5647,6 +5653,49 @@ async function startServer() {
     }
   });
 
+  // Departments API
+  app.get('/api/departments', async (req, res) => {
+    try {
+      const rows = await query('SELECT id, name, slug, created_at FROM departments ORDER BY name ASC');
+      res.json(rows);
+    } catch (err) {
+      console.error('GET /api/departments error:', err);
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  app.post('/api/departments', authenticateToken, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!isPrivilegedRole(user?.role)) return res.status(403).json({ error: 'Forbidden' });
+      const name = (req.body?.name || '').toString().trim();
+      if (!name) return res.status(400).json({ error: 'Missing name' });
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      try {
+        await query('INSERT INTO departments (name, slug) VALUES (?, ?) ON CONFLICT (slug) DO NOTHING', [name, slug]);
+      } catch (e) {
+        // ignore duplicate insertion race
+      }
+      const rows = await query('SELECT id, name, slug, created_at FROM departments WHERE slug = ? LIMIT 1', [slug]);
+      return res.status(201).json(Array.isArray(rows) ? rows[0] : rows);
+    } catch (err) {
+      console.error('POST /api/departments error:', err);
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  app.delete('/api/departments/:id', authenticateToken, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!isPrivilegedRole(user?.role)) return res.status(403).json({ error: 'Forbidden' });
+      await query('DELETE FROM departments WHERE id = ?', [req.params.id]);
+      res.status(204).end();
+    } catch (err) {
+      console.error('DELETE /api/departments error:', err);
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
   // â”€â”€â”€ Socket.io Real-Time Chat â”€â”€â”€
   const httpServer = createHttpServer(app);
   const io = new SocketIOServer(httpServer, {
@@ -5724,7 +5773,7 @@ async function startServer() {
   // Role-based sidebar endpoints: map frontend sidebar navigation
   // to explicit server endpoints and return 404 for unknown pages.
   const sidebarRoutes: any = {
-    admin: ['recruitmentboard','feedback360','onboarding','employee-directory','offboarding','user-accounts','audit-logs','db-viewer','promotability','settings'],
+    admin: ['recruitmentboard','feedback360','onboarding','employee-directory','offboarding','user-accounts','departments','audit-logs','db-viewer','promotability','settings'],
     manager: ['recruitmentboard','feedback360','okr-planner','coaching-journal','disciplinary-action','evaluation-portal','promotability','pip-manager','suggestion-review','settings'],
     employee: ['career-dashboard','feedback','idp','self-assessment','suggestion-form','coaching-chat','verification-of-review','promotions','settings']
   };

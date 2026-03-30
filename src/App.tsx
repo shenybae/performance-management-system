@@ -11,6 +11,7 @@ import {
   Award,
   MessageSquare,
   ShieldCheck,
+  Layers,
   Sun,
   Moon,
   LayoutDashboard,
@@ -52,6 +53,7 @@ const isSoftDeleted = (row: any) => {
 };
 import AppDialogHost from './components/common/AppDialogHost';
 import { DBViewer } from './components/screens/hr/DBViewer';
+import { Departments } from './components/screens/hr/Departments';
 
 // --- HR Screens ---
 import { EmployeeDirectory } from './components/screens/hr/EmployeeDirectory';
@@ -540,6 +542,7 @@ export default function App() {
               case 'A10': return <PayrollAnalytics />;
               case 'A11': return <PayrollManagement employees={employees} />;
               case 'A12': return <Promotability employees={employees} />;
+              case 'A13': return <Departments />;
 
               // Manager Screens (The Coach & Evaluator)
               case 'B1': return <OKRPlanner employees={employees} />;
@@ -596,6 +599,7 @@ export default function App() {
     A10: 'Payroll Analytics',
     A11: 'Payroll Management',
     A12: 'Promotability',
+    A13: 'Departments',
     B1: 'OKR Planner',
     B2: 'Coaching Journal',
     B3: 'Disciplinary Action',
@@ -702,6 +706,7 @@ export default function App() {
               <SidebarItem expanded={isSidebarExpanded} icon={Users} label="Employee Directory" active={activeScreen === 'A1' || activeScreen === 'A2'} onClick={() => goToScreen('A1')} />
               <SidebarItem expanded={isSidebarExpanded} icon={LogOut} label="Offboarding Hub" active={activeScreen === 'A4'} onClick={() => goToScreen('A4')} />
               <SidebarItem expanded={isSidebarExpanded} icon={ShieldCheck} label="User Accounts" active={activeScreen === 'A5'} onClick={() => goToScreen('A5')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={Layers} label="Departments" active={activeScreen === 'A13'} onClick={() => goToScreen('A13')} />
               <SidebarItem expanded={isSidebarExpanded} icon={ClipboardCheck} label="Audit Logs" active={activeScreen === 'A9'} onClick={() => goToScreen('A9')} />
               <SidebarItem expanded={isSidebarExpanded} icon={DollarSign} label="Payroll Analytics" active={activeScreen === 'A10'} onClick={() => goToScreen('A10')} />
               <SidebarItem expanded={isSidebarExpanded} icon={Wallet} label="Payroll Management" active={activeScreen === 'A11'} onClick={() => goToScreen('A11')} />
