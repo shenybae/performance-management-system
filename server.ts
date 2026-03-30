@@ -760,6 +760,16 @@ async function initDb() {
       }
     } catch {}
 
+    // Ensure departments have deleted_at column (in case older DBs were created without it)
+    try {
+      if (usePostgres && pgPool) {
+        const c2 = await pgPool.connect();
+        try { await c2.query("ALTER TABLE departments ADD COLUMN deleted_at TIMESTAMP NULL"); } catch {} finally { c2.release(); }
+      } else {
+        try { sqliteDb.exec('ALTER TABLE departments ADD COLUMN deleted_at TIMESTAMP NULL'); } catch {}
+      }
+    } catch {}
+
     // Safe migrations for requisitions
     const requisitionMigrations = [
       'ALTER TABLE requisitions ADD COLUMN office_assignment TEXT',
