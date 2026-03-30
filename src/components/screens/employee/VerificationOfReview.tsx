@@ -469,8 +469,17 @@ export const VerificationOfReview = () => {
 
   const pendingHrAppraisals = useMemo(() => appraisals.filter((a) => {
     const isPerformance = String(a.form_type || a.eval_type || '').toLowerCase().includes('performance');
-    return isPerformance && !!a.supervisor_signature && !!a.reviewer_signature && !!a.employee_signature && !a.hr_signature;
-  }), [appraisals]);
+    const isReady = isPerformance && !!a.supervisor_signature && !!a.reviewer_signature && !!a.employee_signature && !a.hr_signature;
+    if (!isReady) return false;
+    
+    // If HR ownership is set, only show to assigned HR user
+    if (a.hr_owner_user_id) {
+      return a.hr_owner_user_id === user?.id;
+    }
+    
+    // Otherwise show to all HR users in department
+    return true;
+  }), [appraisals, user?.id]);
 
   const doneHrAppraisals = useMemo(
     () => appraisals.filter((a) => !!a.hr_signature),
@@ -478,13 +487,29 @@ export const VerificationOfReview = () => {
   );
 
   const pendingHrOnboarding = useMemo(
-    () => onboardingRecords.filter((o) => !o.hr_signature && sameDept(o)),
-    [onboardingRecords, queueDept]
+    () => onboardingRecords.filter((o) => {
+      if (o.hr_signature) return false;
+      if (!sameDept(o)) return false;
+      // If HR ownership is set, only show to assigned HR user
+      if (o.hr_owner_user_id) {
+        return o.hr_owner_user_id === user?.id;
+      }
+      return true;
+    }),
+    [onboardingRecords, queueDept, user?.id]
   );
 
   const pendingHrApplicants = useMemo(
-    () => applicants.filter((a) => !a.hr_reviewer_signature && sameDept(a)),
-    [applicants, queueDept]
+    () => applicants.filter((a) => {
+      if (a.hr_reviewer_signature) return false;
+      if (!sameDept(a)) return false;
+      // If HR ownership is set, only show to assigned HR user
+      if (a.hr_owner_user_id) {
+        return a.hr_owner_user_id === user?.id;
+      }
+      return true;
+    }),
+    [applicants, queueDept, user?.id]
   );
 
   const pendingHrRequisitionStages = useMemo(
@@ -492,13 +517,17 @@ export const VerificationOfReview = () => {
       .filter((r) => sameDept(r))
       .flatMap((r) => {
         const tasks: any[] = [];
-        if (!r.dept_head_approval_sig) tasks.push({ key: `req-dept-${r.id}`, id: r.id, stage: 'dept_head', title: 'Department head approval signature', job_title: r.job_title, department: r.department });
-        if (!r.cabinet_approval_sig) tasks.push({ key: `req-cab-${r.id}`, id: r.id, stage: 'cabinet', title: 'Cabinet approval signature', job_title: r.job_title, department: r.department });
-        if (!r.vp_approval_sig) tasks.push({ key: `req-vp-${r.id}`, id: r.id, stage: 'vp', title: 'VP approval signature', job_title: r.job_title, department: r.department });
-        if (!r.president_approval_sig) tasks.push({ key: `req-prez-${r.id}`, id: r.id, stage: 'president', title: 'President approval signature', job_title: r.job_title, department: r.department });
+        // Filter based on HR ownership if set
+        const hasOwner = r.hr_owner_user_id;
+        const isAssignedToMe = !hasOwner || r.hr_owner_user_id === user?.id;
+        
+        if (!r.dept_head_approval_sig && isAssignedToMe) tasks.push({ key: `req-dept-${r.id}`, id: r.id, stage: 'dept_head', title: 'Department head approval signature', job_title: r.job_title, department: r.department, hr_owner: r.hr_owner_user_id });
+        if (!r.cabinet_approval_sig && isAssignedToMe) tasks.push({ key: `req-cab-${r.id}`, id: r.id, stage: 'cabinet', title: 'Cabinet approval signature', job_title: r.job_title, department: r.department, hr_owner: r.hr_owner_user_id });
+        if (!r.vp_approval_sig && isAssignedToMe) tasks.push({ key: `req-vp-${r.id}`, id: r.id, stage: 'vp', title: 'VP approval signature', job_title: r.job_title, department: r.department, hr_owner: r.hr_owner_user_id });
+        if (!r.president_approval_sig && isAssignedToMe) tasks.push({ key: `req-prez-${r.id}`, id: r.id, stage: 'president', title: 'President approval signature', job_title: r.job_title, department: r.department, hr_owner: r.hr_owner_user_id });
         return tasks;
       }),
-    [requisitions, queueDept]
+    [requisitions, queueDept, user?.id]
   );
 
   const roleSubtitle = isHR
@@ -846,19 +875,30 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'hr-appraisals' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Performance Appraisals Needing HR Signature</h3>
-            {pendingHrAppraisals.length === 0 && <p className="text-sm text-slate-400">No pending HR signatures.</p>}
-            {pendingHrAppraisals.map((a) => (
+            {pendingHrAppraisals.length === 0 && <p className="text-sm text-slate-400">No pending HR signatures assigned to you.</p>}
+            {pendingHrAppraisals.map((a) => {
+              const isAssignedToOther = a.hr_owner_user_id && a.hr_owner_user_id !== user?.id;
+              const canSign = !isAssignedToOther || a.hr_owner_user_id === user?.id;
+              return (
               <div key={`hr-app-${a.id}`} className="border rounded-lg p-3 mb-2">
                 <div className="flex items-center justify-between gap-2">
-                  <div>
+                  <div className="flex-1">
                     <p className="font-semibold">{a.employee_name || 'Employee'} - {a.form_type || a.eval_type || 'Performance Evaluation'}</p>
                     <p className="text-xs text-slate-500">All previous signatures complete. Awaiting HR signature.</p>
+                    {a.hr_owner_user_id && <p className="text-xs text-orange-600 font-semibold mt-1">🔒 Assigned to specific HR user (ID: {a.hr_owner_user_id})</p>}
                   </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`hr-app-${a.id}`)}>Sign</button>
+                  <button 
+                    disabled={!canSign} 
+                    className="text-sm font-bold text-teal-deep disabled:text-slate-400 disabled:cursor-not-allowed" 
+                    onClick={() => setActiveId(`hr-app-${a.id}`)}
+                    title={!canSign ? 'Assigned to another HR user' : 'Sign this appraisal'}
+                  >
+                    Sign
+                  </button>
                 </div>
                 {activeId === `hr-app-${a.id}` && renderSignBox(() => signHrAppraisal(a.id))}
               </div>
-            ))}
+            )})}
             <div className="mt-3 flex items-center gap-2 text-emerald-600 text-sm font-semibold">
               <CheckCircle size={14} /> Finished: {doneHrAppraisals.length}
             </div>

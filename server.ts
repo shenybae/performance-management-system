@@ -1297,6 +1297,26 @@ async function initDb() {
       } catch {}
     }
 
+    // Safe migrations for HR ownership tracking on signature-required tables
+    const hrOwnershipMigrations = [
+      'ALTER TABLE appraisals ADD COLUMN hr_owner_user_id INTEGER',
+      'ALTER TABLE discipline_records ADD COLUMN hr_owner_user_id INTEGER',
+      'ALTER TABLE onboarding ADD COLUMN hr_owner_user_id INTEGER',
+      'ALTER TABLE applicants ADD COLUMN hr_owner_user_id INTEGER',
+      'ALTER TABLE requisitions ADD COLUMN hr_owner_user_id INTEGER',
+      'ALTER TABLE property_accountability ADD COLUMN hr_owner_user_id INTEGER',
+      'ALTER TABLE exit_interviews ADD COLUMN hr_owner_user_id INTEGER',
+      'ALTER TABLE suggestions ADD COLUMN hr_owner_user_id INTEGER',
+    ];
+    for (const sql of hrOwnershipMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
     // Payroll adjustments table
     const payrollAdjTable = `CREATE TABLE IF NOT EXISTS payroll_adjustments (
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
@@ -2525,9 +2545,17 @@ async function startServer() {
 
       const { employee_id, statement, metric, target_date, title, status, progress, scope, department, team_name, delegation, priority, quarter, frequency, leader_id } = req.body;
       const targetEmployeeId = normalizeEmployeeId(employee_id);
-      if (role === 'Manager' && targetEmployeeId) {
-        const allowed = await canManagerAccessEmployee(actor.id, targetEmployeeId);
-        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+      
+      // Department-scoped delegation: Manager can only delegate within their own department
+      if (role === 'Manager') {
+        if (targetEmployeeId) {
+          const allowed = await canManagerAccessEmployee(actor.id, targetEmployeeId);
+          if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+          // Also check department match for delegation
+          const actorCtx = await getActorOrgContext(actor.id);
+          const empAllowed = await canActorAccessEmployeeByDept(actorCtx.dept, targetEmployeeId);
+          if (!empAllowed) return res.status(403).json({ error: 'Manager can only delegate within their department' });
+        }
       }
 
       const { assignee_ids } = req.body;
@@ -2541,6 +2569,12 @@ async function startServer() {
         for (const empId of assignee_ids) {
           const eid = parseInt(String(empId));
           if (!isNaN(eid)) {
+            // Department-scoped delegation: only assign within department
+            if (role === 'Manager') {
+              const actorCtx = await getActorOrgContext(actor.id);
+              const empAllowed = await canActorAccessEmployeeByDept(actorCtx.dept, eid);
+              if (!empAllowed) continue; // Skip this assignment if not in same dept
+            }
             await query("INSERT INTO goal_assignees (goal_id, employee_id, assigned_by, assigned_by_role, assigned_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (goal_id, employee_id) DO NOTHING", [newGoalId, eid, actor.id || null, role || null, now]);
             try { await createNotification({ user_id: (await query('SELECT id FROM users WHERE employee_id = ?', [eid]))?.[0]?.id || null, type: 'info', message: `You were assigned a goal`, source: 'goals' }); } catch (e) {}
           }
@@ -2699,6 +2733,14 @@ async function startServer() {
           if (!hrDept) return res.status(403).json({ error: 'Forbidden' });
           const allowed = await canActorAccessEmployeeByDept(hrDept, appraisalEmpId);
           if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+          
+          // HR ownership check: if this appraisal is assigned to a specific HR user, only that user can approve
+          if (appraisal.hr_owner_user_id && appraisal.hr_owner_user_id !== actor.id) {
+            const b = req.body;
+            if (b && (b.hr_signature || b.hr_signature_date)) {
+              return res.status(403).json({ error: 'This appraisal is assigned to another HR user' });
+            }
+          }
         }
       } else if (role === 'Manager') {
         const allowed = await canManagerAccessEmployee(actor.id, appraisalEmpId);
