@@ -19,6 +19,17 @@ ON CONFLICT (slug) DO NOTHING;
 `;
 
   try {
+    // Ensure departments table exists (local dev may not have run server migrations)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS departments (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        slug TEXT NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        deleted_at TIMESTAMP NULL
+      )
+    `);
+
     const res = await pool.query(sql);
     console.log('Inserted rows (approx):', res.rowCount);
   } catch (err) {
