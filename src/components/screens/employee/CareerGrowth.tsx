@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { TrendingUp, Target, CheckCircle, Star, ArrowRight, Briefcase, Trophy, Zap, BookOpen, Users, Calendar } from 'lucide-react';
+import { motion } from 'motion/react';
+import { TrendingUp, Target, CheckCircle, Star, ArrowRight, Briefcase, Trophy, Zap, BookOpen, Users, Calendar, Sparkles } from 'lucide-react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { CircularProgress } from '../../common/CircularProgress';
@@ -62,6 +62,11 @@ const CareerGrowth = () => {
     }
   };
 
+  const readinessScore = Math.max(0, Math.min(100, Number(readinessData?.readiness_score || 0)));
+  const readinessStatusLabel = readinessData ? scoreLabel(readinessScore) : 'Pending';
+  const approvedRecommendations = recommendations.filter((r) => r?.status === 'Approved').length;
+  const reviewedRecommendations = recommendations.filter((r) => r?.status === 'Reviewed' || r?.status === 'Under Review').length;
+
   if (loading) {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center py-20">
@@ -77,6 +82,33 @@ const CareerGrowth = () => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
       {/* Header */}
       <SectionHeader title="Your Career Growth" subtitle="Track your promotability readiness and explore growth opportunities" />
+
+      {/* Snapshot Strip */}
+      <Card className="relative overflow-hidden border border-teal-100 dark:border-teal-900/50 bg-gradient-to-r from-teal-50 via-cyan-50 to-emerald-50 dark:from-teal-950/20 dark:via-cyan-950/20 dark:to-emerald-950/20">
+        <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-teal-400/10" />
+        <div className="relative grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="md:col-span-2">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-teal-700 dark:text-teal-300 mb-1">Career Snapshot</p>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <TrendingUp size={18} className="text-teal-600" />
+              {readinessData ? `Readiness ${Math.round(readinessScore)}%` : 'Awaiting First Assessment'}
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+              {readinessData
+                ? `Current status: ${readinessStatusLabel}. Keep building consistency across goals, appraisal, and training.`
+                : 'Your manager will publish your first promotability readiness assessment here.'}
+            </p>
+          </div>
+          <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 border border-white/60 dark:border-slate-700/60 p-3">
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Recommendations</p>
+            <p className="text-2xl font-black text-slate-800 dark:text-slate-100 mt-1">{recommendations.length}</p>
+          </div>
+          <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 border border-white/60 dark:border-slate-700/60 p-3">
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Career Paths</p>
+            <p className="text-2xl font-black text-slate-800 dark:text-slate-100 mt-1">{careerPaths.length}</p>
+          </div>
+        </div>
+      </Card>
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -95,6 +127,17 @@ const CareerGrowth = () => {
                   <div className="flex items-center gap-3">
                     <CircularProgress value={readinessData.readiness_score} size={64} strokeWidth={5} />
                   </div>
+                </div>
+
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+                    <Sparkles size={12} className="text-amber-500" />
+                    {scoreLabel(readinessData.readiness_score)}
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300">
+                    <Trophy size={12} />
+                    {approvedRecommendations} approved recommendation{approvedRecommendations === 1 ? '' : 's'}
+                  </span>
                 </div>
 
                 {/* Tier Badge */}
@@ -153,9 +196,9 @@ const CareerGrowth = () => {
               </div>
             </Card>
           ) : (
-            <Card className="text-center p-8">
-              <Zap size={32} className="mx-auto text-yellow-500 mb-2" />
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">No Assessment Yet</p>
+            <Card className="text-center p-8 border border-dashed border-slate-300 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-white dark:from-slate-900/30 dark:to-slate-900/10">
+              <Zap size={32} className="mx-auto text-amber-500 mb-2" />
+              <p className="text-sm font-black text-slate-700 dark:text-slate-300 mb-1">No Assessment Yet</p>
               <p className="text-xs text-slate-500 dark:text-slate-400">Your manager will assess your promotability readiness based on your performance, goals, and development.</p>
             </Card>
           )}
@@ -168,6 +211,10 @@ const CareerGrowth = () => {
                   <Trophy size={16} className="text-amber-500" /> Promotion Recommendations
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Opportunities your manager has identified for you</p>
+                <div className="mt-2 flex items-center gap-2 text-[11px]">
+                  <span className="px-2 py-1 rounded-full font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Approved: {approvedRecommendations}</span>
+                  <span className="px-2 py-1 rounded-full font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">Active Review: {reviewedRecommendations}</span>
+                </div>
               </div>
               
               <div className="space-y-3">
@@ -266,7 +313,7 @@ const CareerGrowth = () => {
               </div>
             </Card>
           ) : (
-            <Card className="text-center p-4">
+            <Card className="text-center p-5 border border-dashed border-slate-300 dark:border-slate-700">
               <Briefcase size={24} className="mx-auto text-slate-400 mb-2" />
               <p className="text-xs font-bold text-slate-600 dark:text-slate-400">No career paths available yet</p>
             </Card>
