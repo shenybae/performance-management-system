@@ -2201,9 +2201,12 @@ async function startServer() {
       const resolvedLinkedUserId = Number.isFinite(explicitLinkedUserId) && explicitLinkedUserId > 0 ? explicitLinkedUserId : null;
       const shouldStoreOrgMeta = normalizedRole === 'HR' || normalizedRole === 'Manager';
       let effectiveDept = normalizedDept;
-      if (shouldStoreOrgMeta && !effectiveDept) {
+      if (shouldStoreOrgMeta) {
         const creatorCtx = await getActorOrgContext(Number(creatorPayload?.id || 0));
         effectiveDept = String(creatorCtx?.dept || '').trim();
+        if (!effectiveDept) {
+          return res.status(400).json({ error: 'Creator account must have a department to create Manager/HR users' });
+        }
       }
 
       const hashed = bcrypt.hashSync(password, 10);

@@ -172,7 +172,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     if (!role) errs.role = 'Role is required';
     if ((role === 'Manager' || role === 'HR') && !position.trim()) errs.position = 'Position is required for Manager/HR';
     if ((role === 'Manager' || role === 'HR') && position.trim().length > 100) errs.position = 'Position must be 100 characters or less';
-    if ((role === 'Manager' || role === 'HR') && !dept.trim()) errs.dept = 'Department is required for Manager/HR';
+    if ((role === 'Manager' || role === 'HR') && !dept.trim()) errs.dept = 'Your account must have a department to create Manager/HR users';
     if ((role === 'Manager' || role === 'HR') && dept.trim().length > 100) errs.dept = 'Department must be 100 characters or less';
     return errs;
   };
@@ -185,7 +185,8 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     const full_name = (fd.get('full_name') || '').toString().trim();
     const role = createRole;
 
-    const errs = validateCreateForm(email, full_name, role, createPosition, createDept);
+    const effectiveCreateDept = createDept.trim() || creatorDept;
+    const errs = validateCreateForm(email, full_name, role, createPosition, effectiveCreateDept);
     setCreateErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
@@ -193,7 +194,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     if (full_name) body.full_name = full_name;
     if (role === 'Manager' || role === 'HR') {
       body.position = createPosition.trim();
-      body.dept = createDept.trim();
+      body.dept = effectiveCreateDept.trim();
     }
 
     try {
@@ -377,15 +378,13 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                   <input
                     type="text"
                     value={createDept}
-                    onChange={e => {
-                      setCreateDept(e.target.value);
-                      if (createErrors.dept) setCreateErrors(p => ({ ...p, dept: '' }));
-                    }}
-                    className={`w-full mt-1 p-2 bg-white dark:bg-black border ${createErrors.dept ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
+                    readOnly
+                    className={`w-full mt-1 p-2 bg-slate-50 dark:bg-slate-900/40 border ${createErrors.dept ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-700 dark:text-slate-200`}
                     placeholder="e.g. Human Resources"
                     maxLength={100}
                     required
                   />
+                  <p className="mt-1 text-[11px] text-slate-400">Locked to your department.</p>
                   {createErrors.dept && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{createErrors.dept}</p>}
                 </div>
               </>
