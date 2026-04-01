@@ -72,6 +72,15 @@ export const Promotability = ({ employees }: Props) => {
       return '';
     }
   }, []);
+  const actorDept = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}';
+      const parsed = JSON.parse(raw);
+      return (parsed?.dept || '').toString().trim().toLowerCase();
+    } catch {
+      return '';
+    }
+  }, []);
   const canManageCareerPaths = actorRole === 'manager';
   const canRecommendRecommendations = actorRole === 'manager';
   const canApproveRecommendations = actorRole === 'hr';
@@ -140,6 +149,12 @@ export const Promotability = ({ employees }: Props) => {
     else if (sortBy === 'tenure') data.sort((a, b) => b.tenure_months - a.tenure_months);
     return data;
   }, [readinessData, searchTerm, filterDept, sortBy]);
+
+  const recommendationCandidates = useMemo(() => {
+    if (actorRole !== 'manager') return readinessData;
+    if (!actorDept) return [];
+    return readinessData.filter((e) => (e?.dept || '').toString().trim().toLowerCase() === actorDept);
+  }, [readinessData, actorRole, actorDept]);
 
   const handleRecommend = async () => {
     if (!canRecommendRecommendations) return;
@@ -482,8 +497,18 @@ export const Promotability = ({ employees }: Props) => {
 
                         {/* Action */}
                         {canRecommendRecommendations && (
-                          <button onClick={() => { setSelectedEmpId(emp.employee_id); setShowRecModal(true); }}
-                            className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              const inDept = (emp?.dept || '').toString().trim().toLowerCase() === actorDept;
+                              if (!inDept) {
+                                window.notify?.('You can only recommend employees from your department', 'error');
+                                return;
+                              }
+                              setSelectedEmpId(emp.employee_id);
+                              setShowRecModal(true);
+                            }}
+                            className="w-full text-xs font-bold px-3 py-2 rounded-lg bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors flex items-center justify-center gap-1.5"
+                          >
                             <Star size={12} /> Recommend for Promotion
                           </button>
                         )}
@@ -910,10 +935,20 @@ export const Promotability = ({ employees }: Props) => {
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Employee *</label>
-            <select value={selectedEmpId} onChange={e => setSelectedEmpId(e.target.value ? Number(e.target.value) : '')} className={inp}>
-              <option value="">Select employee...</option>
-              {readinessData.map(e => <option key={e.employee_id} value={e.employee_id}>{e.employee_name} — {e.position || 'No position'} ({Math.round(e.readiness_score)}%)</option>)}
-            </select>
+            <SearchableSelect
+              options={recommendationCandidates.map((e) => ({
+                value: String(e.employee_id),
+                label: `${e.employee_name || 'Employee'} - ${e.position || 'No position'} (${Math.round(e.readiness_score || 0)}%)`,
+                avatarUrl: null,
+              }))}
+              value={selectedEmpId ? String(selectedEmpId) : ''}
+              onChange={(v) => setSelectedEmpId(v ? Number(v) : '')}
+              placeholder="Select employee..."
+              dropdownVariant="pills-horizontal"
+            />
+            {canRecommendRecommendations && actorDept && recommendationCandidates.length === 0 && (
+              <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-300">No employees from your department are available for recommendation.</p>
+            )}
           </div>
 
           {/* Show selected employee readiness */}

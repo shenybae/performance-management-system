@@ -5287,6 +5287,7 @@ async function startServer() {
       const role = actor?.role;
       const roleLower = (role || '').toString().toLowerCase();
       const employeeIdParam = (req.query.employee_id as string);
+      const actorCtx = await getActorOrgContext(Number(actor?.id || 0));
       
       // If filtering by employee_id (employee viewing their own), honor that
       if (employeeIdParam) {
@@ -5300,9 +5301,19 @@ async function startServer() {
         return res.json(rows);
       }
       
-      // For org-wide Promotability view: Both HR and Manager see all recommendations
-      if (isPrivilegedRole(role) || roleLower === 'manager') {
+      // HR sees org-wide recommendations
+      if (isPrivilegedRole(role) && roleLower !== 'manager') {
         const rows = await query("SELECT pr.*, e.name as employee_name, u.full_name as recommended_by_name FROM promotion_recommendations pr LEFT JOIN employees e ON pr.employee_id = e.id LEFT JOIN users u ON pr.recommended_by = u.id ORDER BY pr.created_at DESC");
+        return res.json(rows);
+      }
+      // Managers are department-scoped for recommendations
+      if (roleLower === 'manager') {
+        const managerDept = normalizeDept(actorCtx.dept);
+        if (!managerDept) return res.status(403).json({ error: 'Manager department not set' });
+        const rows = await query(
+          "SELECT pr.*, e.name as employee_name, u.full_name as recommended_by_name FROM promotion_recommendations pr LEFT JOIN employees e ON pr.employee_id = e.id LEFT JOIN users u ON pr.recommended_by = u.id WHERE LOWER(COALESCE(e.dept, '')) = LOWER(?) ORDER BY pr.created_at DESC",
+          [managerDept]
+        );
         return res.json(rows);
       }
       if (roleLower === 'employee') {
@@ -5325,9 +5336,15 @@ async function startServer() {
       if (!employee_id) return res.status(400).json({ error: 'employee_id is required' });
       const allowed = await canManagerAccessEmployee(actor.id, employee_id);
       if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+      const actorCtx = await getActorOrgContext(Number(actor?.id || 0));
+      const managerDept = normalizeDept(actorCtx.dept);
+      if (!managerDept) return res.status(403).json({ error: 'Manager department not set' });
       // Lookup employee current info
       const empRows: any = await query("SELECT position, dept FROM employees WHERE id = ?", [employee_id]);
       const emp = Array.isArray(empRows) && empRows.length > 0 ? empRows[0] : {};
+      if (normalizeDept(emp?.dept) !== managerDept) {
+        return res.status(403).json({ error: 'Managers can only recommend employees in their own department' });
+      }
       const result: any = await query(
         "INSERT INTO promotion_recommendations (employee_id, recommended_by, recommended_position, current_position, current_dept, justification, status) VALUES (?, ?, ?, ?, ?, ?, 'Proposed') RETURNING id",
         [employee_id, actor.id, recommended_position || null, emp.position || null, emp.dept || null, justification || null]
