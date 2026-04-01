@@ -1454,6 +1454,156 @@ async function initDb() {
       await ensureManagedEmployee('Mia Santos', 'Frontend Engineer', 'Regular', '2025-03-20');
     } catch (e) { console.error('manager_bob department/employee setup error:', e); }
 
+    // Ensure each department has an HR account, a Manager account, and test employees.
+    try {
+      const bcrypt = await import('bcryptjs');
+      const hash = (pw: string) => bcrypt.default.hashSync(pw, 10);
+      const DEPARTMENT_SEED_LIST = [
+        'Accounting/Financing',
+        'Sales Admin',
+        'Marketing',
+        'Pre-Technical',
+        'Post-Technical',
+        'Executives',
+        'Engineering',
+        'HR',
+        'Operations',
+        'IT',
+      ];
+
+      const toSlug = (value: string) =>
+        value
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/_{2,}/g, '_')
+          .replace(/^_|_$/g, '');
+
+      const toLabel = (value: string) =>
+        value
+          .replace(/[\/]+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+      const ensureDepartment = async (dept: string) => {
+        const slug = toSlug(dept).replace(/_/g, '-');
+        await query(
+          "INSERT INTO departments (name, slug, description, deleted_at) VALUES (?, ?, ?, NULL) ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, deleted_at = NULL",
+          [dept, slug, `${dept} team and workforce records`]
+        );
+      };
+
+      const ensureUserAccount = async (args: {
+        username: string;
+        email: string;
+        password: string;
+        role: 'HR' | 'Manager' | 'Employee';
+        fullName: string;
+        dept: string;
+        position: string;
+        employeeId: number | null;
+      }) => {
+        const rows = await query(
+          "SELECT id FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?) LIMIT 1",
+          [args.username, args.email]
+        ) as any[];
+        const existingId = Number(rows?.[0]?.id || 0);
+        if (existingId) {
+          await query(
+            "UPDATE users SET username = ?, email = ?, password = ?, role = ?, employee_id = ?, full_name = ?, dept = ?, position = ?, deleted_at = NULL WHERE id = ?",
+            [args.username, args.email, hash(args.password), args.role, args.employeeId, args.fullName, args.dept, args.position, existingId]
+          );
+          return existingId;
+        }
+        await query(
+          "INSERT INTO users (username, email, password, role, employee_id, full_name, dept, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          [args.username, args.email, hash(args.password), args.role, args.employeeId, args.fullName, args.dept, args.position]
+        );
+        const createdRows = await query("SELECT id FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1", [args.username]) as any[];
+        return Number(createdRows?.[0]?.id || 0);
+      };
+
+      const ensureEmployee = async (name: string, dept: string, position: string, managerId: number | null, hireDate: string) => {
+        const rows = await query("SELECT id FROM employees WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1", [name]) as any[];
+        let employeeId = Number(rows?.[0]?.id || 0);
+        if (!employeeId) {
+          await query(
+            "INSERT INTO employees (name, status, position, dept, hire_date, manager_id) VALUES (?, 'Regular', ?, ?, ?, ?)",
+            [name, position, dept, hireDate, managerId]
+          );
+          const inserted = await query("SELECT id FROM employees WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) ORDER BY id DESC LIMIT 1", [name]) as any[];
+          employeeId = Number(inserted?.[0]?.id || 0);
+        }
+        if (employeeId) {
+          await query(
+            "UPDATE employees SET dept = ?, position = ?, manager_id = ?, status = COALESCE(status, 'Regular') WHERE id = ?",
+            [dept, position, managerId, employeeId]
+          );
+        }
+        return employeeId;
+      };
+
+      for (const dept of DEPARTMENT_SEED_LIST) {
+        const deptSlug = toSlug(dept);
+        const deptLabel = toLabel(dept);
+
+        await ensureDepartment(dept);
+
+        const managerUsername = `manager_${deptSlug}`;
+        const managerEmail = `manager.${deptSlug}@example.com`;
+        const managerFullName = `${deptLabel} Manager`;
+        const managerId = await ensureUserAccount({
+          username: managerUsername,
+          email: managerEmail,
+          password: 'demo_manager_pass',
+          role: 'Manager',
+          fullName: managerFullName,
+          dept,
+          position: 'Manager',
+          employeeId: null,
+        });
+
+        const hrUsername = `hr_${deptSlug}`;
+        const hrEmail = `hr.${deptSlug}@example.com`;
+        const hrFullName = `${deptLabel} HR`;
+        await ensureUserAccount({
+          username: hrUsername,
+          email: hrEmail,
+          password: 'demo_hr_pass',
+          role: 'HR',
+          fullName: hrFullName,
+          dept,
+          position: 'HR Admin',
+          employeeId: null,
+        });
+
+        const empAName = `${deptLabel} Employee A`;
+        const empBName = `${deptLabel} Employee B`;
+        const empAId = await ensureEmployee(empAName, dept, 'Staff', managerId || null, '2025-01-15');
+        const empBId = await ensureEmployee(empBName, dept, 'Staff', managerId || null, '2025-02-15');
+
+        await ensureUserAccount({
+          username: `employee_${deptSlug}_a`,
+          email: `employee.${deptSlug}.a@example.com`,
+          password: 'demo_employee_pass',
+          role: 'Employee',
+          fullName: empAName,
+          dept,
+          position: 'Staff',
+          employeeId: empAId || null,
+        });
+        await ensureUserAccount({
+          username: `employee_${deptSlug}_b`,
+          email: `employee.${deptSlug}.b@example.com`,
+          password: 'demo_employee_pass',
+          role: 'Employee',
+          fullName: empBName,
+          dept,
+          position: 'Staff',
+          employeeId: empBId || null,
+        });
+      }
+    } catch (e) { console.error('department-wide account seed error:', e); }
+
     // Backfill full_name for any users still missing it â€” format username into display name
     try {
       const nameless = await query("SELECT id, username FROM users WHERE (full_name IS NULL OR full_name = '') AND username IS NOT NULL") as any[];
