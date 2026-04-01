@@ -549,6 +549,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     return 'bg-red-500';
   };
 
+  const autoStatusFromProgress = (progress: number): string => {
+    if (progress === 100) return 'Completed';
+    if (progress > 0) return 'In Progress';
+    return 'Not Started';
+  };
+
   const scopeStyleMap: Record<string, { bg: string; text: string; iconBg: string; border: string }> = {
     Department: { bg: 'bg-teal-600/10', text: 'text-teal-600 dark:text-teal-400', iconBg: 'bg-teal-600/15 dark:bg-teal-500/15', border: 'border-teal-500 dark:border-teal-400' },
     Team: { bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-400', iconBg: 'bg-blue-500/15 dark:bg-blue-400/15', border: 'border-blue-500 dark:border-blue-400' },
@@ -2280,37 +2286,35 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       </td>
                       <td className="py-3 px-4"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority || 'Medium')}`}>{g.priority || 'Medium'}</span></td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-3 min-w-[140px]">
-                          <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-3 relative overflow-hidden">
-                            <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: `${g.progress || 0}%` }}
-                              transition={{ duration: 0.6, ease: 'easeOut' }}
-                              className={`h-3 rounded-full ${progressBarColor(g.progress || 0)}`}
-                            />
-                            {(g.progress || 0) >= 20 && (
-                              <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-white drop-shadow-sm">
-                                {g.progress || 0}%
-                              </span>
-                            )}
-                          </div>
-                          {(g.progress || 0) < 20 && (
-                            <span className="text-xs font-bold text-slate-500 w-8 text-right">{g.progress || 0}%</span>
-                          )}
+                        <div className="flex items-center gap-2 min-w-[160px]">
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="5"
+                            value={g.progress || 0}
+                            onChange={(e) => {
+                              const newProgress = Number(e.target.value);
+                              const newStatus = autoStatusFromProgress(newProgress);
+                              updateGoal(g.id, { progress: newProgress, status: newStatus }, true);
+                            }}
+                            className="flex-1 h-2 rounded-full cursor-pointer accent-teal-600 outline-none"
+                          />
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-300 w-10 text-right">{g.progress || 0}%</span>
                         </div>
                       </td>
                       <td className="py-3 px-4">
                         {isArchived ? (
                           <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border text-slate-500 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700">Archived</span>
                         ) : (
-                        <div onClick={e => e.stopPropagation()}>
-                          <ChoicePills
+                        <div onClick={e => e.stopPropagation()} className="flex items-center gap-2 min-w-max">
+                          <select
                             value={g.status || 'Not Started'}
-                            compact
-                            wrap={false}
-                            onChange={(v) => updateGoal(g.id, { status: v, progress: v === 'Completed' ? 100 : g.progress || 0 })}
-                            options={STATUSES.map(s => ({ value: s, label: s, activeClassName: statusColor(s) }))}
-                          />
+                            onChange={(e) => updateGoal(g.id, { status: e.target.value, progress: e.target.value === 'Completed' ? 100 : g.progress || 0 })}
+                            className={`text-[10px] font-bold px-2 py-1 rounded-full border outline-none cursor-pointer ${statusColor(g.status || 'Not Started')}`}
+                          >
+                            {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
                         </div>
                         )}
                       </td>
