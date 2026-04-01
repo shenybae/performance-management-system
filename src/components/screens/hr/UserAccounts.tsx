@@ -36,6 +36,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     if (r === 'employee') return 'Employee';
     return role || '';
   };
+  const normalizeDeptValue = (value?: string | null) => (value || '').toString().trim().toLowerCase();
 
   // Detect current user role from localStorage so we can show HR-only controls
   const currentUser = (() => {
@@ -44,7 +45,9 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
       return s ? JSON.parse(s) : null;
     } catch (e) { return null; }
   })();
-  const isHR = currentUser && currentUser.role === 'HR';
+  const currentRoleNormalized = normalizeRoleValue(currentUser?.role || '');
+  const isHR = currentRoleNormalized === 'HR';
+  const actorDeptNormalized = normalizeDeptValue(currentUser?.dept || '');
   const [createRole, setCreateRole] = useState('');
   const [createPosition, setCreatePosition] = useState('');
   const [createDept, setCreateDept] = useState('');
@@ -75,6 +78,14 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     const position = (u?.position || u?.employee_position || '').toString().trim();
     const dept = (u?.dept || u?.employee_dept || '').toString().trim();
     return [position, dept].filter(Boolean).join(' - ') || '-';
+  };
+
+  const canEditUserAccount = (u: any) => {
+    if (!isHR) return false;
+    if (Number(u?.id) === Number(currentUser?.id)) return true;
+    const targetDept = normalizeDeptValue(u?.employee_dept || u?.dept || '');
+    if (!actorDeptNormalized || !targetDept) return false;
+    return actorDeptNormalized === targetDept;
   };
 
   const toReadableName = (raw: string) => {
@@ -212,6 +223,10 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
 
   const handleSaveEdit = async () => {
     if (!editingUser) return;
+    if (!canEditUserAccount(editingUser)) {
+      (window as any).notify('You can only edit users in your department', 'error');
+      return;
+    }
     try {
       const token = localStorage.getItem('talentflow_token');
       const headers: any = { 'Content-Type': 'application/json' };
@@ -219,6 +234,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
       const normalizedRole = normalizeRoleValue(modalRole || editingUser.role || '');
       const body: any = {
         full_name: modalName.trim() || null,
+        email: modalEmail.trim() || null,
       };
       if (normalizedRole) body.role = normalizedRole;
       const canEditMeta = normalizedRole === 'HR' || normalizedRole === 'Manager';
@@ -491,7 +507,14 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                           >
                             <Eye size={14} />
                           </button>
-                          <button onClick={() => openUserModal(u, 'edit')} className="text-xs text-amber-600 font-bold">Edit</button>
+                          <button
+                            onClick={() => openUserModal(u, 'edit')}
+                            disabled={!canEditUserAccount(u)}
+                            title={canEditUserAccount(u) ? 'Edit user account information' : 'Out of scope: different department'}
+                            className="text-xs text-amber-600 font-bold disabled:text-slate-400 disabled:cursor-not-allowed"
+                          >
+                            Edit
+                          </button>
                           <button onClick={async () => {
                             if (!(await appConfirm('Archive this user account?', { title: 'Archive User Account', confirmText: 'Archive' }))) return;
                             const token = localStorage.getItem('talentflow_token');
@@ -634,7 +657,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
           </div>
           <div>
             <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</label>
-            <input value={modalEmail} readOnly className="w-full mt-1 p-2 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200" />
+            <input value={modalEmail} disabled={modalMode === 'view'} onChange={e => setModalEmail(e.target.value)} className="w-full mt-1 p-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50 disabled:opacity-70 disabled:cursor-not-allowed" />
           </div>
           <div>
             <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</label>

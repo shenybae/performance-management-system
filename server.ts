@@ -2248,7 +2248,31 @@ async function startServer() {
       if (normalizeUserRole(payload.role) !== 'HR') return res.status(403).json({ error: 'Forbidden' });
 
       const id = req.params.id;
-      const { password, role, full_name, position, dept } = req.body;
+      const targetUserId = Number(id);
+      if (!Number.isFinite(targetUserId) || targetUserId <= 0) return res.status(400).json({ error: 'Invalid user id' });
+
+      const actorCtx = await getActorOrgContext(Number(payload.id));
+      const actorDeptNorm = normalizeDept(actorCtx?.dept || '');
+
+      const targetCtxRows: any = await query(
+        `SELECT u.id, u.dept AS user_dept, e.dept AS employee_dept
+         FROM users u
+         LEFT JOIN employees e ON e.id = u.employee_id
+         WHERE u.id = ?
+         LIMIT 1`,
+        [targetUserId]
+      );
+      const targetCtx = Array.isArray(targetCtxRows) ? targetCtxRows[0] : targetCtxRows;
+      if (!targetCtx) return res.status(404).json({ error: 'User not found' });
+      const targetDeptNorm = normalizeDept(targetCtx?.employee_dept || targetCtx?.user_dept || '');
+      const isSelfEdit = Number(payload.id) === targetUserId;
+      if (!isSelfEdit) {
+        if (!actorDeptNorm || !targetDeptNorm || actorDeptNorm !== targetDeptNorm) {
+          return res.status(403).json({ error: 'Department-scoped access: you can only edit users in your department' });
+        }
+      }
+
+      const { password, role, full_name, position, dept, email } = req.body;
       // Capture previous state for audit
       let before: any = null;
       try {
@@ -2261,6 +2285,14 @@ async function startServer() {
         const hashed = bcrypt.hashSync(password, 10);
         sets.push('password = ?');
         vals.push(hashed);
+      }
+      if (email !== undefined) {
+        const normalizedEmail = String(email || '').trim().toLowerCase();
+        if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+          return res.status(400).json({ error: 'Invalid email format' });
+        }
+        sets.push('email = ?');
+        vals.push(normalizedEmail || null);
       }
       if (role !== undefined) {
         const normalizedRequestedRole = normalizeUserRole(role);
@@ -2316,6 +2348,13 @@ async function startServer() {
       if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
       vals.push(id);
       await query(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, vals);
+
+      if (email !== undefined && before?.employee_id) {
+        try {
+          const normalizedEmail = String(email || '').trim().toLowerCase() || null;
+          await query('UPDATE employees SET email = ? WHERE id = ?', [normalizedEmail, before.employee_id]);
+        } catch (e) { /* ignore employee mirror failures */ }
+      }
       // Capture after state and record audit
       try {
         const ar: any = await query('SELECT * FROM users WHERE id = ?', [id]);
@@ -2324,7 +2363,13 @@ async function startServer() {
       } catch (e) { /* ignore audit errors */ }
 
       res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        const detail = String(err?.detail || '');
+        if (detail.includes('(email)')) return res.status(409).json({ error: 'Email is already in use' });
+      }
+      res.status(500).json({ error: 'Database error' });
+    }
   });
 
   // Get own account info
@@ -2853,10 +2898,25 @@ async function startServer() {
                    ${includeDeleted ? '' : 'WHERE u.deleted_at IS NULL'}
                    ORDER BY u.full_name IS NULL, u.full_name, u.email`;
         const users: any = await query(q);
-        const sanitizedUsers = (Array.isArray(users) ? users : []).map((u: any) => ({
+        let sanitizedUsers = (Array.isArray(users) ? users : []).map((u: any) => ({
           ...u,
           full_name: sanitizeUserFullName(u?.full_name, u?.email)
         }));
+
+        const actorRole = normalizeUserRole(payload.role);
+        if (actorRole === 'HR' || actorRole === 'Manager') {
+          const actorCtx = await getActorOrgContext(Number(payload.id));
+          const actorDeptNorm = normalizeDept(actorCtx?.dept || '');
+          if (actorDeptNorm) {
+            sanitizedUsers = sanitizedUsers.filter((u: any) => {
+              if (Number(u?.id) === Number(payload.id)) return true;
+              const targetDeptNorm = normalizeDept(u?.employee_dept || u?.dept || '');
+              return !!targetDeptNorm && targetDeptNorm === actorDeptNorm;
+            });
+          } else {
+            sanitizedUsers = sanitizedUsers.filter((u: any) => Number(u?.id) === Number(payload.id));
+          }
+        }
         res.json(sanitizedUsers);
       } catch (err) { res.status(500).json({ error: 'Database error' }); }
     });
