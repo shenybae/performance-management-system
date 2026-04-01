@@ -14,6 +14,7 @@ interface ChoicePillsProps {
   className?: string;
   compact?: boolean;
   wrap?: boolean;
+  disabled?: boolean;
 }
 
 export const ChoicePills: React.FC<ChoicePillsProps> = ({
@@ -23,9 +24,10 @@ export const ChoicePills: React.FC<ChoicePillsProps> = ({
   className = '',
   compact = false,
   wrap = true,
+  disabled = false,
 }) => {
   return (
-    <div className={`min-w-0 flex items-center gap-2 ${wrap ? 'flex-wrap' : 'overflow-x-auto whitespace-nowrap'} ${className}`}>
+    <div className={`min-w-0 flex items-center gap-2 ${wrap ? 'flex-wrap' : 'overflow-x-auto whitespace-nowrap'} ${disabled ? 'opacity-50' : ''} ${className}`}>
       {options.map((option) => {
         const active = option.value === value;
         const activeClass = option.activeClassName || 'border-blue-500 bg-blue-50 text-blue-700 shadow-[0_0_0_1px_rgba(59,130,246,0.15)] dark:border-blue-400 dark:bg-blue-900/25 dark:text-blue-300';
@@ -34,8 +36,9 @@ export const ChoicePills: React.FC<ChoicePillsProps> = ({
           <button
             key={option.value}
             type="button"
-            onClick={() => onChange(option.value)}
-            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border font-bold leading-none transition-colors ${compact ? 'h-7 px-2 text-[10px]' : 'h-8 px-3 text-xs'} ${active ? activeClass : inactiveClass}`}
+            disabled={disabled}
+            onClick={() => !disabled && onChange(option.value)}
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border font-bold leading-none transition-colors ${compact ? 'h-7 px-2 text-[10px]' : 'h-8 px-3 text-xs'} ${active ? activeClass : inactiveClass} ${disabled ? 'cursor-not-allowed' : ''}`}
           >
             <span className={`h-3 w-3 rounded-full border ${active ? 'border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400' : 'border-slate-300 dark:border-slate-600'}`}>
               {active ? <span className="block h-full w-full text-center text-[8px] leading-[10px] text-white">✓</span> : null}

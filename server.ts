@@ -1463,6 +1463,18 @@ async function initDb() {
       }
     } catch (e) { console.error('full_name backfill error:', e); }
 
+    // Backfill goals.department from employee.dept for goals that have employee_id but no department
+    try {
+      const goalsWithoutDept = await query("SELECT DISTINCT g.id, g.employee_id FROM goals g WHERE (g.department IS NULL OR g.department = '') AND g.employee_id IS NOT NULL") as any[];
+      for (const g of (Array.isArray(goalsWithoutDept) ? goalsWithoutDept : [])) {
+        const empRows: any = await query("SELECT dept FROM employees WHERE id = ? LIMIT 1", [g.employee_id]);
+        const emp = Array.isArray(empRows) ? empRows[0] : empRows;
+        if (emp?.dept) {
+          await query("UPDATE goals SET department = ? WHERE id = ?", [emp.dept, g.id]);
+        }
+      }
+    } catch (e) { console.error('goals.department backfill error:', e); }
+
     console.log(`Database Initialized Successfully in ${usePostgres ? 'PostgreSQL' : 'SQLite'} mode`);
   } catch (err) {
     console.error("Database initialization failed:", err);
@@ -2670,7 +2682,7 @@ async function startServer() {
       const role = actor.role;
       if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
 
-      const existingRows: any = await query('SELECT id, employee_id FROM goals WHERE id = ?', [req.params.id]);
+      const existingRows: any = await query('SELECT id, employee_id, department FROM goals WHERE id = ?', [req.params.id]);
       const existing = Array.isArray(existingRows) ? existingRows[0] : existingRows;
       if (!existing) return res.status(404).json({ error: 'Goal not found' });
 
@@ -2679,6 +2691,17 @@ async function startServer() {
         if (existingEmpId) {
           const allowed = await canManagerAccessEmployee(actor.id, existingEmpId);
           if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        // Enforce department scoping for progress/status updates
+        const b = req.body || {};
+        const isUpdatingProgressOrStatus = b.progress !== undefined || b.status !== undefined;
+        if (isUpdatingProgressOrStatus) {
+          const actorDept = String(actor.dept || '').trim();
+          const goalDept = String(existing.department || '').trim();
+          if (!goalDept || !actorDept || goalDept.toLowerCase() !== actorDept.toLowerCase()) {
+            return res.status(403).json({ error: 'Managers can only update progress/status for goals in their own department' });
+          }
         }
       }
 

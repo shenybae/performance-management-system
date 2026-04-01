@@ -1200,24 +1200,49 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                   </div>
                                 </td>
                                 <td className="py-2.5 px-3 text-center">
-                                  {quickEdit === g.id ? (
-                                    <div className="flex items-center gap-1.5">
-                                      <input type="range" min={0} max={100} step={5} value={editProgress} onChange={e => setEditProgress(Number(e.target.value))} className="w-16 accent-teal-600" title={`${editProgress}%`} />
-                                      <span className="text-[9px] font-bold text-slate-500 w-7">{editProgress}%</span>
-                                      <ChoicePills
-                                        value={editStatus}
-                                        onChange={setEditStatus}
-                                        compact
-                                        wrap={false}
-                                        options={STATUSES.map(s => ({ value: s, label: s }))}
-                                      />
-                                      <button onClick={() => { updateGoal(g.id, { progress: editProgress, status: editStatus }); setQuickEdit(null); }} className="text-[9px] font-bold px-2 py-0.5 rounded bg-teal-deep text-white hover:bg-teal-green">Save</button>
-                                      <button onClick={() => setQuickEdit(null)} className="text-[9px] font-bold px-1.5 py-0.5 rounded text-slate-400 hover:text-red-500"><X size={11} /></button>
-                                    </div>
-                                  ) : (
+                                  {quickEdit === g.id ? (() => {
+                                    const canEditProgressStatus = !isManager || !managerDept || String(g.department || '').trim().toLowerCase() === managerDept.toLowerCase();
+                                    const disabledReason = !canEditProgressStatus ? 'Managers can only update goals in their own department' : '';
+                                    return (
+                                      <div className="flex items-center gap-1.5">
+                                        <input 
+                                          type="range" 
+                                          min={0} 
+                                          max={100} 
+                                          step={5} 
+                                          value={editProgress} 
+                                          onChange={e => setEditProgress(Number(e.target.value))} 
+                                          disabled={!canEditProgressStatus}
+                                          className="w-16 accent-teal-600 disabled:opacity-50 disabled:cursor-not-allowed" 
+                                          title={disabledReason || `${editProgress}%`} 
+                                        />
+                                        <span className="text-[9px] font-bold text-slate-500 w-7">{editProgress}%</span>
+                                        <ChoicePills
+                                          value={editStatus}
+                                          onChange={setEditStatus}
+                                          compact
+                                          wrap={false}
+                                          options={STATUSES.map(s => ({ value: s, label: s }))}
+                                          disabled={!canEditProgressStatus}
+                                        />
+                                        <button 
+                                          onClick={() => { updateGoal(g.id, { progress: editProgress, status: editStatus }); setQuickEdit(null); }} 
+                                          disabled={!canEditProgressStatus}
+                                          title={disabledReason}
+                                          className="text-[9px] font-bold px-2 py-0.5 rounded bg-teal-deep text-white hover:bg-teal-green disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          Save
+                                        </button>
+                                        <button onClick={() => setQuickEdit(null)} className="text-[9px] font-bold px-1.5 py-0.5 rounded text-slate-400 hover:text-red-500"><X size={11} /></button>
+                                      </div>
+                                    );
+                                  })() : (
                                     <div className="flex items-center justify-center gap-1">
-                                      <button onClick={() => { setQuickEdit(g.id); setEditProgress(g.progress || 0); setEditStatus(g.status || 'In Progress'); }}
-                                        className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 transition-colors">
+                                      <button 
+                                        onClick={() => { setQuickEdit(g.id); setEditProgress(g.progress || 0); setEditStatus(g.status || 'In Progress'); }}
+                                        disabled={isManager && managerDept && String(g.department || '').trim().toLowerCase() !== managerDept.toLowerCase()}
+                                        title={isManager && managerDept && String(g.department || '').trim().toLowerCase() !== managerDept.toLowerCase() ? 'Managers can only update goals in their own department' : ''}
+                                        className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                         Update
                                       </button>
                                       <button
