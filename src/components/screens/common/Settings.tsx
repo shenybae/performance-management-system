@@ -26,7 +26,8 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
   const [savingInfo, setSavingInfo] = useState(false);
   const [editing, setEditing] = useState(false);
   const hasEmployee = !!user.employee_id;
-  const canEditAccountInfo = String(user.role || '').toLowerCase() === 'hr';
+  const normalizedRole = String(user.role || '').trim().toLowerCase();
+  const canEditAccountInfo = normalizedRole === 'hr' || normalizedRole === 'hr admin' || normalizedRole === 'hr_admin';
 
   useEffect(() => {
     const fetchAccountInfo = async () => {
@@ -36,7 +37,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
         if (res.ok) {
           const data = await res.json();
           setAccountInfo({
-            email: data.email || '', phone: data.phone || '', address: data.address || '',
+            email: data.email || data.username || user.email || user.username || '', phone: data.phone || '', address: data.address || '',
             employee_name: data.name || data.employee_name || user.employee_name || '',
             position: data.position || user.position || '', dept: data.dept || user.dept || '',
             hire_date: data.hire_date || '', status: data.status || '', role: data.role || user.role || '',

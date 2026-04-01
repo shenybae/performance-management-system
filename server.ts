@@ -2335,15 +2335,29 @@ async function startServer() {
       const userRows = await query('SELECT id, username, email, role, employee_id, profile_picture, full_name, position, dept FROM users WHERE id = ?', [userId]) as any;
       const u = userRows[0];
       if (!u) return res.status(404).json({ error: 'User not found' });
+      const usernameAsEmail = (typeof u.username === 'string' && /@/.test(u.username)) ? u.username : null;
       let emp: any = null;
       if (employeeId) {
         const empRows = await query('SELECT name, position, dept, email, phone, address, hire_date, status FROM employees WHERE id = ?', [employeeId]) as any;
         emp = empRows[0] || null;
       }
       if (!emp) {
-        return res.json({ ...u, name: u.full_name || u.username || null, position: u.position || null, dept: u.dept || null });
+        return res.json({
+          ...u,
+          email: u.email || usernameAsEmail || null,
+          name: u.full_name || u.username || null,
+          position: u.position || null,
+          dept: u.dept || null
+        });
       }
-      res.json({ ...u, ...emp });
+      res.json({
+        ...u,
+        ...emp,
+        email: emp.email || u.email || usernameAsEmail || null,
+        position: emp.position || u.position || null,
+        dept: emp.dept || u.dept || null,
+        name: emp.name || u.full_name || u.username || null,
+      });
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
 
@@ -2353,7 +2367,7 @@ async function startServer() {
       const userId = (req as any).user?.id;
       const employeeId = (req as any).user?.employee_id;
       const actorRole = String((req as any).user?.role || '').toLowerCase();
-      if (actorRole !== 'hr') {
+      if (actorRole !== 'hr' && actorRole !== 'hr admin' && actorRole !== 'hr_admin') {
         return res.status(403).json({ error: 'Only HR admin can edit account information' });
       }
       const { email, phone, address, employee_name, full_name, position, dept } = req.body;
