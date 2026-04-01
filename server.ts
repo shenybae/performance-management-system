@@ -4911,6 +4911,39 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
 
+  app.put("/api/suggestions/:id/signature", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      if (role !== 'Employee') return res.status(403).json({ error: 'Forbidden' });
+
+      const actorEmpId = normalizeEmployeeId(actor.employee_id);
+      if (!actorEmpId) return res.status(400).json({ error: 'Employee account is not linked' });
+
+      const rows: any = await query("SELECT id, employee_id, employee_signature FROM suggestions WHERE id = ? LIMIT 1", [req.params.id]);
+      const rec = Array.isArray(rows) ? rows[0] : rows;
+      if (!rec) return res.status(404).json({ error: 'Suggestion not found' });
+
+      if (normalizeEmployeeId(rec.employee_id) !== actorEmpId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      const signature = String(req.body?.signature || '').trim();
+      const date = String(req.body?.date || new Date().toISOString().split('T')[0]).trim();
+      if (!signature) return res.status(400).json({ error: 'signature is required' });
+
+      await query(
+        "UPDATE suggestions SET employee_signature = ?, employee_signature_date = ? WHERE id = ?",
+        [signature, date || null, req.params.id]
+      );
+
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+
   app.put('/api/goal_improvement_plans/:id', authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};

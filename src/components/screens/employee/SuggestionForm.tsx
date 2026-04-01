@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
-import { SignatureUpload } from '../../common/SignatureUpload';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import {
   Plus, X, Download, Lightbulb, ArrowLeft, Eye, Star, FileText, Archive,
@@ -36,7 +35,6 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
     other_resource_needed: '', estimated_cost: '',
     desired_benefit: '', total_financial_benefit: '',
     planning_step_1: '', planning_step_2: '', planning_step_3: '', estimated_time: '',
-    employee_signature: '', employee_signature_date: '',
   };
   const [form, setForm] = useState(emptyForm);
 
@@ -106,6 +104,8 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
     if (managementErr) { window.notify?.(managementErr, 'error'); return; }
     try {
       const payload: any = { ...form, employee_id: user.employee_id || user.id };
+      payload.employee_signature = null;
+      payload.employee_signature_date = null;
       // Include management fields if manager/HR filled them
       if (isManagement) {
         Object.assign(payload, mgmtForm);
@@ -400,18 +400,16 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
             </div>
           </Card>
 
-          {/* EMPLOYEE SIGNATURE */}
+          {/* EMPLOYEE SIGNATURE (QUEUE-ONLY) */}
           <Card>
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
               <span className="w-7 h-7 rounded-lg bg-teal-deep text-white flex items-center justify-center text-xs font-bold">VI</span>
               <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">Employee Signature</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <SignatureUpload label="Employee Signature" value={form.employee_signature} onChange={v => setForm({ ...form, employee_signature: v })} />
-              <div>
-                <label className={labelClass}>Date</label>
-                <input type="date" value={form.employee_signature_date} onChange={e => setForm({ ...form, employee_signature_date: e.target.value })} className={inputClass} />
-              </div>
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3">
+              <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                Employee signature is completed from the employee's Signature Queue after this suggestion is submitted.
+              </p>
             </div>
           </Card>
 

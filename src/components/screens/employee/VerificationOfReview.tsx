@@ -68,8 +68,8 @@ export const VerificationOfReview = () => {
     fetchRequisitions();
     fetchPropertyRecords();
     fetchExitInterviews();
-    if (isManagementSigner) fetchSuggestions();
-  }, [isManagementSigner]);
+    if (isManagementSigner || isEmployee) fetchSuggestions();
+  }, [isManagementSigner, isEmployee]);
 
   const queueDept = String(user?.dept || '').trim().toLowerCase();
   const sameDept = (record: any) => {
@@ -351,6 +351,27 @@ export const VerificationOfReview = () => {
     }
   };
 
+  const signEmployeeSuggestion = async (id: number) => {
+    if (!signature) return window.notify?.('Please provide your signature', 'error');
+    try {
+      const res = await fetch(`/api/suggestions/${id}/signature`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          signature,
+          date: new Date().toISOString().split('T')[0],
+        }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.('Suggestion signature saved', 'success');
+      setActiveId(null);
+      setSignature('');
+      fetchSuggestions();
+    } catch {
+      window.notify?.('Failed to sign suggestion', 'error');
+    }
+  };
+
   const signOnboarding = async (id: number, field: 'employee_signature' | 'hr_signature') => {
     if (!signature) return window.notify?.('Please provide your signature', 'error');
     try {
@@ -478,6 +499,11 @@ export const VerificationOfReview = () => {
   const pendingEmployeeOnboarding = useMemo(
     () => onboardingRecords.filter((o) => Number(o.employee_id) === userEmpId && !o.employee_signature),
     [onboardingRecords, userEmpId]
+  );
+
+  const pendingEmployeeSuggestions = useMemo(
+    () => suggestions.filter((s) => Number(s.employee_id) === userEmpId && !s.employee_signature),
+    [suggestions, userEmpId]
   );
 
   const pendingEmployeeExitInterviews = useMemo(
@@ -663,6 +689,7 @@ export const VerificationOfReview = () => {
       sections.push({ id: 'emp-appraisals', label: 'Appraisals', count: pendingEmployeeAppraisals.length });
       sections.push({ id: 'emp-discipline', label: 'Disciplinary', count: pendingEmployeeDiscipline.length });
       sections.push({ id: 'emp-onboarding', label: 'Onboarding', count: pendingEmployeeOnboarding.length });
+      sections.push({ id: 'emp-suggestions', label: 'Suggestions', count: pendingEmployeeSuggestions.length });
       sections.push({ id: 'emp-property', label: 'Property', count: pendingEmployeePropertyTasks.length });
       sections.push({ id: 'emp-exit', label: 'Exit Interviews', count: pendingEmployeeExitInterviews.length });
     }
@@ -692,6 +719,7 @@ export const VerificationOfReview = () => {
     pendingEmployeeAppraisals.length,
     pendingEmployeeDiscipline.length,
     pendingEmployeeOnboarding.length,
+    pendingEmployeeSuggestions.length,
     pendingEmployeePropertyTasks.length,
     pendingEmployeeExitInterviews.length,
     pendingSupervisorAppraisals.length,
@@ -1075,6 +1103,25 @@ export const VerificationOfReview = () => {
                   <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-onb-${o.id}`)}>Sign</button>
                 </div>
                 {activeId === `emp-onb-${o.id}` && renderSignBox(() => signOnboarding(o.id, 'employee_signature'))}
+              </div>
+            ))}
+          </Card>
+          )}
+
+          {activeQueueSection === 'emp-suggestions' && (
+          <Card>
+            <h3 className="text-sm font-bold mb-3">Suggestions Pending Your Signature</h3>
+            {pendingEmployeeSuggestions.length === 0 && <p className="text-sm text-slate-400">No pending suggestion signatures.</p>}
+            {pendingEmployeeSuggestions.map((s) => (
+              <div key={`emp-sug-${s.id}`} className="border rounded-lg p-3 mb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold">{s.employee_name || 'Employee'} - Suggestion</p>
+                    <p className="text-xs text-slate-500 truncate">{s.title || s.concern || 'Untitled suggestion'}</p>
+                  </div>
+                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-sug-${s.id}`)}>Sign</button>
+                </div>
+                {activeId === `emp-sug-${s.id}` && renderSignBox(() => signEmployeeSuggestion(s.id))}
               </div>
             ))}
           </Card>
