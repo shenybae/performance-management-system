@@ -236,6 +236,34 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
     });
   };
 
+  const initializeSupervisorForEmployee = (employeeIdRaw: any) => {
+    const employeeId = String(employeeIdRaw || '');
+    const selectedEmployee = employees.find((e) => String(e.id) === employeeId);
+    if (!selectedEmployee) return;
+
+    let supervisorName = String((selectedEmployee as any).manager || '').trim();
+    let supervisorTitle = '';
+
+    if (!supervisorName && selectedEmployee.manager_id) {
+      const managerEmp = employees.find((e) => Number(e.id) === Number(selectedEmployee.manager_id));
+      supervisorName = String(managerEmp?.name || '').trim();
+      supervisorTitle = String(managerEmp?.position || '').trim();
+    }
+
+    if (supervisorName && !supervisorTitle) {
+      const supervisorEmp = employees.find((e) => String(e.name).trim().toLowerCase() === supervisorName.toLowerCase());
+      supervisorTitle = String(supervisorEmp?.position || '').trim();
+    }
+
+    if (!supervisorName) return;
+
+    setMgmtForm((prev) => ({
+      ...prev,
+      supervisor_name: supervisorName,
+      supervisor_title: supervisorTitle || prev.supervisor_title,
+    }));
+  };
+
   /* ──────────────────── NEW MANAGEMENT REVIEW (managers only) ──────────────────── */
   if (view === 'newReview' && isManagement) {
     return (
@@ -263,7 +291,11 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
             <SearchableSelect
               options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
               value={reviewEmployee}
-              onChange={v => setReviewEmployee(String(v))}
+              onChange={v => {
+                const selectedId = String(v || '');
+                setReviewEmployee(selectedId);
+                initializeSupervisorForEmployee(selectedId);
+              }}
               placeholder="Select Employee..."
               dropdownVariant="pills-horizontal"
             />
@@ -347,30 +379,18 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
           </div>
         </Card>
 
-        {/* Suggested Employee Reward + Supervisor Signature */}
+        {/* Suggested Employee Reward */}
         <Card>
           <div className="mb-4">
             <label className="block text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider mb-1">Suggested Employee Reward</label>
             <textarea rows={2} value={mgmtForm.suggested_reward} onChange={e => setMgmtForm({ ...mgmtForm, suggested_reward: e.target.value })} className={inputClass} placeholder="Recommended reward for the employee..." />
           </div>
           <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className={labelClass}>Supervisor Name</label>
-                <SearchableSelect
-                  options={supervisorOptions}
-                  value={mgmtForm.supervisor_name}
-                  onChange={applySupervisorSelection}
-                  placeholder="Select Supervisor..."
-                  dropdownVariant="pills-horizontal"
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Date</label>
-                <input type="date" value={mgmtForm.supervisor_signature_date} onChange={e => setMgmtForm({ ...mgmtForm, supervisor_signature_date: e.target.value })} className={inputClass} />
-              </div>
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3">
+              <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                Supervisor signature, supervisor identity, and signature date are completed by the assigned supervisor in Signature Queue.
+              </p>
             </div>
-            <SignatureUpload label="Supervisor Signature" value={mgmtForm.supervisor_signature} onChange={v => setMgmtForm({ ...mgmtForm, supervisor_signature: v })} />
           </div>
         </Card>
 
@@ -421,6 +441,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                       const selectedValue = String(v);
                       const emp = employees.find(e => String(e.id) === selectedValue);
                       setForm({ ...form, employee_name: emp?.name || selectedValue, position: emp?.position || form.position, dept: emp?.dept || form.dept });
+                      initializeSupervisorForEmployee(selectedValue);
                     }}
                     placeholder="Select Employee..."
                     dropdownVariant="pills-horizontal"
@@ -657,30 +678,18 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                 </div>
               </Card>
 
-              {/* Suggested Employee Reward + Supervisor Signature */}
+              {/* Suggested Employee Reward */}
               <Card>
                 <div className="mb-4">
                   <label className="block text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider mb-1">Suggested Employee Reward</label>
                   <textarea rows={2} value={mgmtForm.suggested_reward} onChange={e => setMgmtForm({ ...mgmtForm, suggested_reward: e.target.value })} className={inputClass} placeholder="Recommended reward for the employee..." />
                 </div>
                 <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className={labelClass}>Supervisor Name</label>
-                      <SearchableSelect
-                        options={supervisorOptions}
-                        value={mgmtForm.supervisor_name}
-                        onChange={applySupervisorSelection}
-                        placeholder="Select Supervisor..."
-                        dropdownVariant="pills-horizontal"
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Date</label>
-                      <input type="date" value={mgmtForm.supervisor_signature_date} onChange={e => setMgmtForm({ ...mgmtForm, supervisor_signature_date: e.target.value })} className={inputClass} />
-                    </div>
+                  <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3">
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                      Supervisor signature, supervisor identity, and signature date are completed by the assigned supervisor in Signature Queue.
+                    </p>
                   </div>
-                  <SignatureUpload label="Supervisor Signature" value={mgmtForm.supervisor_signature} onChange={v => setMgmtForm({ ...mgmtForm, supervisor_signature: v })} />
                 </div>
               </Card>
             </>
@@ -913,30 +922,18 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                 </div>
               </Card>
 
-              {/* Suggested Employee Reward + Supervisor Signature (bordered section) */}
+              {/* Suggested Employee Reward */}
               <Card>
                 <div className="mb-4">
                   <label className="block text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider mb-1">Suggested Employee Reward</label>
                   <textarea rows={2} value={mgmtForm.suggested_reward} onChange={e => setMgmtForm({ ...mgmtForm, suggested_reward: e.target.value })} className={inputClass} placeholder="Recommended reward for the employee..." />
                 </div>
                 <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className={labelClass}>Supervisor Name</label>
-                      <SearchableSelect
-                        options={supervisorOptions}
-                        value={mgmtForm.supervisor_name}
-                        onChange={applySupervisorSelection}
-                        placeholder="Select Supervisor..."
-                        dropdownVariant="pills-horizontal"
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Date</label>
-                      <input type="date" value={mgmtForm.supervisor_signature_date} onChange={e => setMgmtForm({ ...mgmtForm, supervisor_signature_date: e.target.value })} className={inputClass} />
-                    </div>
+                  <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3">
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                      Supervisor signature, supervisor identity, and signature date are completed by the assigned supervisor in Signature Queue.
+                    </p>
                   </div>
-                  <SignatureUpload label="Supervisor Signature" value={mgmtForm.supervisor_signature} onChange={v => setMgmtForm({ ...mgmtForm, supervisor_signature: v })} />
                 </div>
               </Card>
 
