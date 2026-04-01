@@ -485,6 +485,16 @@ export const VerificationOfReview = () => {
     [exitInterviews, userName]
   );
 
+  const pendingEmployeePropertyTasks = useMemo(
+    () => propertyRecords.filter((p) => {
+      if (p.received_by_sig) return false;
+      const byId = userEmpId > 0 && Number(p.employee_id || 0) === userEmpId;
+      const byName = userName && String(p.employee_name || '').trim().toLowerCase() === userName;
+      return byId || byName;
+    }),
+    [propertyRecords, userEmpId, userName]
+  );
+
   const pendingSupervisorAppraisals = useMemo(
     () => appraisals.flatMap((a) => {
       if (!sameDept(a)) return [] as any[];
@@ -653,6 +663,7 @@ export const VerificationOfReview = () => {
       sections.push({ id: 'emp-appraisals', label: 'Appraisals', count: pendingEmployeeAppraisals.length });
       sections.push({ id: 'emp-discipline', label: 'Disciplinary', count: pendingEmployeeDiscipline.length });
       sections.push({ id: 'emp-onboarding', label: 'Onboarding', count: pendingEmployeeOnboarding.length });
+      sections.push({ id: 'emp-property', label: 'Property', count: pendingEmployeePropertyTasks.length });
       sections.push({ id: 'emp-exit', label: 'Exit Interviews', count: pendingEmployeeExitInterviews.length });
     }
 
@@ -681,6 +692,7 @@ export const VerificationOfReview = () => {
     pendingEmployeeAppraisals.length,
     pendingEmployeeDiscipline.length,
     pendingEmployeeOnboarding.length,
+    pendingEmployeePropertyTasks.length,
     pendingEmployeeExitInterviews.length,
     pendingSupervisorAppraisals.length,
     pendingSupervisorDiscipline.length,
@@ -1082,6 +1094,25 @@ export const VerificationOfReview = () => {
                   <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-exit-${e.id}`)}>Sign</button>
                 </div>
                 {activeId === `emp-exit-${e.id}` && renderSignBox(() => signExitInterview(e.id, 'employee_sig'))}
+              </div>
+            ))}
+          </Card>
+          )}
+
+          {activeQueueSection === 'emp-property' && (
+          <Card>
+            <h3 className="text-sm font-bold mb-3">Property Accountability Pending Your Signature</h3>
+            {pendingEmployeePropertyTasks.length === 0 && <p className="text-sm text-slate-400">No pending property signatures.</p>}
+            {pendingEmployeePropertyTasks.map((p) => (
+              <div key={`emp-prop-${p.id}`} className="border rounded-lg p-3 mb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold">{p.employee_name || 'Employee'} - Received by signature</p>
+                    <p className="text-xs text-slate-500">Property accountability</p>
+                  </div>
+                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-prop-${p.id}`)}>Sign</button>
+                </div>
+                {activeId === `emp-prop-${p.id}` && renderSignBox(() => signProperty(p.id, 'received_by_sig'))}
               </div>
             ))}
           </Card>

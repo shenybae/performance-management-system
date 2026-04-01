@@ -108,18 +108,6 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
       employee_name: trimText(propForm.employee_name),
       position_dept: trimText(propForm.position_dept),
       date_prepared: trimText(propForm.date_prepared),
-      turnover_by_name: trimText(propForm.turnover_by_name),
-      turnover_by_date: trimText(propForm.turnover_by_date),
-      turnover_by_sig: trimText(propForm.turnover_by_sig),
-      noted_by_name: trimText(propForm.noted_by_name),
-      noted_by_date: trimText(propForm.noted_by_date),
-      noted_by_sig: trimText(propForm.noted_by_sig),
-      received_by_name: trimText(propForm.received_by_name),
-      received_by_date: trimText(propForm.received_by_date),
-      received_by_sig: trimText(propForm.received_by_sig),
-      audited_by_name: trimText(propForm.audited_by_name),
-      audited_by_date: trimText(propForm.audited_by_date),
-      audited_by_sig: trimText(propForm.audited_by_sig),
       items: propForm.items.map(item => ({
         property_number: trimText(item.property_number),
         asset_category: trimText(item.asset_category),
@@ -170,24 +158,6 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
       return;
     }
 
-    const signers = [
-      { label: 'Turnover by', name: cleaned.turnover_by_name, date: cleaned.turnover_by_date, sig: cleaned.turnover_by_sig },
-      { label: 'Noted by', name: cleaned.noted_by_name, date: cleaned.noted_by_date, sig: cleaned.noted_by_sig },
-      { label: 'Received by', name: cleaned.received_by_name, date: cleaned.received_by_date, sig: cleaned.received_by_sig },
-      { label: 'Audited by', name: cleaned.audited_by_name, date: cleaned.audited_by_date, sig: cleaned.audited_by_sig },
-    ];
-    for (const signer of signers) {
-      const hasAny = Boolean(signer.name || signer.date || signer.sig);
-      if (hasAny && (!signer.name || !signer.date || !signer.sig)) {
-        window.notify?.(`${signer.label} requires printed name, date, and signature`, 'error');
-        return;
-      }
-      if (!hasAny) {
-        window.notify?.(`${signer.label} printed name, date, and signature are required`, 'error');
-        return;
-      }
-    }
-
     try {
       // try to resolve an employee id from the entered name so records attach to the employee file
       const matched = (employees || []).find(e => (e.name || '').toString().trim().toLowerCase() === cleaned.employee_name.toLowerCase());
@@ -201,10 +171,10 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
           position_dept: cleaned.position_dept,
           date_prepared: cleaned.date_prepared,
           items: JSON.stringify(cleaned.items),
-          turnover_by_name: cleaned.turnover_by_name, turnover_by_date: cleaned.turnover_by_date, turnover_by_sig: cleaned.turnover_by_sig,
-          noted_by_name: cleaned.noted_by_name, noted_by_date: cleaned.noted_by_date, noted_by_sig: cleaned.noted_by_sig,
-          received_by_name: cleaned.received_by_name, received_by_date: cleaned.received_by_date, received_by_sig: cleaned.received_by_sig,
-          audited_by_name: cleaned.audited_by_name, audited_by_date: cleaned.audited_by_date, audited_by_sig: cleaned.audited_by_sig,
+          turnover_by_name: null, turnover_by_date: null, turnover_by_sig: null,
+          noted_by_name: null, noted_by_date: null, noted_by_sig: null,
+          received_by_name: null, received_by_date: null, received_by_sig: null,
+          audited_by_name: null, audited_by_date: null, audited_by_sig: null,
         })
       });
       if (res.ok) {
@@ -597,42 +567,13 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                 </div>
               </div>
 
-              {/* Signatures — draw or upload */}
+              {/* Signatures are completed in Signature Queue */}
               <div>
                 <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3 flex items-center gap-2"><FileText size={14} /> Signatures</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 uppercase">Turnover by:</div>
-                    <div className="grid grid-cols-2 gap-3 mb-2">
-                      <div><label className={labelCls}>Printed Name</label><input type="text" value={propForm.turnover_by_name} onChange={e => setPropForm(f => ({ ...f, turnover_by_name: e.target.value }))} className={inputCls} maxLength={120} required /></div>
-                      <div><label className={labelCls}>Date</label><input type="date" value={propForm.turnover_by_date} onChange={e => setPropForm(f => ({ ...f, turnover_by_date: e.target.value }))} max={todayISO} className={inputCls} required /></div>
-                    </div>
-                    <SignatureUpload label="Signature" value={propForm.turnover_by_sig} onChange={v => setPropForm(f => ({ ...f, turnover_by_sig: v }))} />
-                  </div>
-                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 uppercase">Noted by:</div>
-                    <div className="grid grid-cols-2 gap-3 mb-2">
-                      <div><label className={labelCls}>Printed Name</label><input type="text" value={propForm.noted_by_name} onChange={e => setPropForm(f => ({ ...f, noted_by_name: e.target.value }))} className={inputCls} maxLength={120} required /></div>
-                      <div><label className={labelCls}>Date</label><input type="date" value={propForm.noted_by_date} onChange={e => setPropForm(f => ({ ...f, noted_by_date: e.target.value }))} max={todayISO} className={inputCls} required /></div>
-                    </div>
-                    <SignatureUpload label="Signature" value={propForm.noted_by_sig} onChange={v => setPropForm(f => ({ ...f, noted_by_sig: v }))} />
-                  </div>
-                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 uppercase">Received by:</div>
-                    <div className="grid grid-cols-2 gap-3 mb-2">
-                      <div><label className={labelCls}>Printed Name</label><input type="text" value={propForm.received_by_name} onChange={e => setPropForm(f => ({ ...f, received_by_name: e.target.value }))} className={inputCls} maxLength={120} required /></div>
-                      <div><label className={labelCls}>Date</label><input type="date" value={propForm.received_by_date} onChange={e => setPropForm(f => ({ ...f, received_by_date: e.target.value }))} max={todayISO} className={inputCls} required /></div>
-                    </div>
-                    <SignatureUpload label="Signature" value={propForm.received_by_sig} onChange={v => setPropForm(f => ({ ...f, received_by_sig: v }))} />
-                  </div>
-                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 uppercase">Audited by:</div>
-                    <div className="grid grid-cols-2 gap-3 mb-2">
-                      <div><label className={labelCls}>Printed Name</label><input type="text" value={propForm.audited_by_name} onChange={e => setPropForm(f => ({ ...f, audited_by_name: e.target.value }))} className={inputCls} maxLength={120} required /></div>
-                      <div><label className={labelCls}>Date</label><input type="date" value={propForm.audited_by_date} onChange={e => setPropForm(f => ({ ...f, audited_by_date: e.target.value }))} max={todayISO} className={inputCls} required /></div>
-                    </div>
-                    <SignatureUpload label="Signature" value={propForm.audited_by_sig} onChange={v => setPropForm(f => ({ ...f, audited_by_sig: v }))} />
-                  </div>
+                <div className="border border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-3 bg-slate-50 dark:bg-slate-800/40">
+                  <p className="text-xs text-slate-500 dark:text-slate-300">
+                    Signature fields (Turnover, Noted, Received, Audited) are completed after saving from the <span className="font-bold">Signature Queue</span>.
+                  </p>
                 </div>
               </div>
 
