@@ -415,6 +415,8 @@ async function initDb() {
       preparer_signature_date TEXT,
       supervisor_signature TEXT,
       supervisor_signature_date TEXT,
+      preparer_user_id INTEGER,
+      supervisor_user_id INTEGER,
       FOREIGN KEY(employee_id) REFERENCES employees(id)
     )`,
     `CREATE TABLE IF NOT EXISTS property_accountability (
@@ -739,6 +741,8 @@ async function initDb() {
       'ALTER TABLE discipline_records ADD COLUMN preparer_signature_date TEXT',
       'ALTER TABLE discipline_records ADD COLUMN supervisor_signature TEXT',
       'ALTER TABLE discipline_records ADD COLUMN supervisor_signature_date TEXT',
+      'ALTER TABLE discipline_records ADD COLUMN preparer_user_id INTEGER',
+      'ALTER TABLE discipline_records ADD COLUMN supervisor_user_id INTEGER',
     ];
     for (const sql of disciplineMigrations) {
       try {
@@ -3977,15 +3981,33 @@ async function startServer() {
         copy_distribution,
         prev_first_date, prev_first_type, prev_second_date, prev_second_type, prev_third_date, prev_third_type,
         employee_signature, employee_signature_date,
-        preparer_signature, preparer_signature_date,
-        supervisor_signature, supervisor_signature_date,
       } = req.body;
+
+      const targetEmployeeId = normalizeEmployeeId(employee_id);
+      if (!targetEmployeeId) return res.status(400).json({ error: 'Invalid employee_id' });
+
+      const empRows: any = await query("SELECT id, dept FROM employees WHERE id = ? LIMIT 1", [targetEmployeeId]);
+      const emp = Array.isArray(empRows) ? empRows[0] : empRows;
+      if (!emp) return res.status(404).json({ error: 'Employee not found' });
+      const employeeDept = String(emp.dept || '').trim();
 
       if (role === 'Manager') {
         const actorCtx = await getActorOrgContext(Number(actor.id || 0));
-        const allowed = await canActorAccessEmployeeByDept(actorCtx.dept, normalizeEmployeeId(employee_id));
+        const allowed = await canActorAccessEmployeeByDept(actorCtx.dept, targetEmployeeId);
         if (!allowed) return res.status(403).json({ error: 'Managers can only create disciplinary records for their own department' });
       }
+
+      let supervisorUserId: number | null = null;
+      const supervisorName = String(supervisor || '').trim();
+      if (supervisorName) {
+        const supUserRows: any = await query(
+          "SELECT id FROM users WHERE LOWER(TRIM(COALESCE(full_name, ''))) = LOWER(TRIM(?)) AND LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?)) LIMIT 1",
+          [supervisorName, employeeDept]
+        );
+        supervisorUserId = Number((Array.isArray(supUserRows) ? supUserRows[0] : supUserRows)?.id || 0) || null;
+      }
+
+      const preparerUserId = Number(actor.id || 0) || null;
 
       await query(
         `INSERT INTO discipline_records (
@@ -3997,18 +4019,20 @@ async function startServer() {
           prev_first_date, prev_first_type, prev_second_date, prev_second_type, prev_third_date, prev_third_type,
           employee_signature, employee_signature_date,
           preparer_signature, preparer_signature_date,
-          supervisor_signature, supervisor_signature_date
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          supervisor_signature, supervisor_signature_date,
+          preparer_user_id, supervisor_user_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          employee_id, violation_type, warning_level, date_of_warning,
+          targetEmployeeId, violation_type, warning_level, date_of_warning,
           violation_date, violation_time, violation_place,
           employer_statement, employee_statement, action_taken,
           supervisor, approved_by_name, approved_by_title, approved_by_date,
           copy_distribution,
           prev_first_date, prev_first_type, prev_second_date, prev_second_type, prev_third_date, prev_third_type,
-          employee_signature, employee_signature_date,
-          preparer_signature, preparer_signature_date,
-          supervisor_signature, supervisor_signature_date,
+          employee_signature || null, employee_signature_date || null,
+          null, null,
+          null, null,
+          preparerUserId, supervisorUserId,
         ]
       );
       res.json({ success: true });
@@ -4025,10 +4049,11 @@ async function startServer() {
       const id = Number(req.params.id);
       if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Invalid record id' });
 
-      const rows = await query("SELECT id, employee_id, supervisor_signature FROM discipline_records WHERE id = ?", [id]) as any[];
+      const rows = await query("SELECT id, employee_id, preparer_signature, supervisor_signature FROM discipline_records WHERE id = ?", [id]) as any[];
       const rec = Array.isArray(rows) ? rows[0] : rows;
       if (!rec) return res.status(404).json({ error: 'Record not found' });
       if (Number(rec.employee_id) !== Number(employeeId)) return res.status(403).json({ error: 'You can only sign your own disciplinary records' });
+      if (!String(rec.preparer_signature || '').trim()) return res.status(400).json({ error: 'Preparer signature is required before employee signing' });
       if (!String(rec.supervisor_signature || '').trim()) return res.status(400).json({ error: 'Supervisor signature is required before employee signing' });
 
       const employee_signature = String(req.body?.employee_signature || '').trim();
@@ -4052,6 +4077,42 @@ async function startServer() {
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
+
+  app.put("/api/discipline_records/:id/preparer-sign", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = String(actor.role || '');
+      if (!['HR', 'Manager'].includes(role)) return res.status(403).json({ error: 'Only HR or Manager accounts can sign as preparer' });
+
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Invalid record id' });
+
+      const rows = await query("SELECT id, employee_id, preparer_user_id FROM discipline_records WHERE id = ?", [id]) as any[];
+      const rec = Array.isArray(rows) ? rows[0] : rows;
+      if (!rec) return res.status(404).json({ error: 'Record not found' });
+
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      const allowed = await canActorAccessEmployeeByDept(actorCtx.dept, normalizeEmployeeId(rec.employee_id));
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      const assignedPreparer = Number(rec.preparer_user_id || 0);
+      if (assignedPreparer && Number(actor.id || 0) !== assignedPreparer) {
+        return res.status(403).json({ error: 'This preparer signature is assigned to a different user' });
+      }
+
+      const preparer_signature = String(req.body?.preparer_signature || '').trim();
+      const preparer_signature_date = String(req.body?.preparer_signature_date || '').trim() || new Date().toISOString().split('T')[0];
+      if (!preparer_signature) return res.status(400).json({ error: 'Preparer signature is required' });
+
+      await query(
+        "UPDATE discipline_records SET preparer_signature = ?, preparer_signature_date = ?, preparer_user_id = COALESCE(preparer_user_id, ?) WHERE id = ?",
+        [preparer_signature, preparer_signature_date, Number(actor.id || 0) || null, id]
+      );
+
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
   app.put("/api/discipline_records/:id/supervisor-sign", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
@@ -4063,12 +4124,21 @@ async function startServer() {
       const id = Number(req.params.id);
       if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Invalid record id' });
 
-      const rows = await query("SELECT id, employee_id FROM discipline_records WHERE id = ?", [id]) as any[];
+      const rows = await query("SELECT id, employee_id, preparer_signature, supervisor_user_id FROM discipline_records WHERE id = ?", [id]) as any[];
       const rec = Array.isArray(rows) ? rows[0] : rows;
       if (!rec) return res.status(404).json({ error: 'Record not found' });
 
+      if (!String(rec.preparer_signature || '').trim()) {
+        return res.status(400).json({ error: 'Preparer signature is required before supervisor signing' });
+      }
+
       const allowed = await canActorAccessEmployeeByDept(actorCtx.dept, normalizeEmployeeId(rec.employee_id));
       if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      const assignedSupervisor = Number(rec.supervisor_user_id || 0);
+      if (assignedSupervisor && Number(actor.id || 0) !== assignedSupervisor) {
+        return res.status(403).json({ error: 'This supervisor signature is assigned to a different user' });
+      }
 
       const supervisor_signature = String(req.body?.supervisor_signature || '').trim();
       const supervisor_signature_date = String(req.body?.supervisor_signature_date || '').trim() || new Date().toISOString().split('T')[0];

@@ -7,7 +7,6 @@ import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
-import { SignatureUpload } from '../../common/SignatureUpload';
 import { sigBlockHtml } from '../../../utils/print';
 import { appConfirm } from '../../../utils/appDialog';
 
@@ -192,14 +191,6 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
       }
     }
 
-    if (!cleaned.preparer_signature || !cleaned.preparer_signature_date) {
-      window.notify?.('Preparer signature and date are required', 'error');
-      return;
-    }
-    if (!cleaned.supervisor_signature || !cleaned.supervisor_signature_date) {
-      window.notify?.('Supervisor signature and date are required', 'error');
-      return;
-    }
     if (cleaned.copy_distribution.length === 0) {
       window.notify?.('Please select at least one copy distribution recipient', 'error');
       return;
@@ -511,24 +502,11 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
                   "I have read this warning decision. My signature does not necessarily indicate agreement. I understand that continued violation may result in further disciplinary action."
                 </p>
                 <p className="text-xs text-amber-700 dark:text-amber-400 mb-4">
-                  Employee signature is completed by the employee in their Verification of Review screen after this disciplinary action is saved.
+                  Preparer, supervisor, and employee signatures are completed from each assigned user's Signature Queue after this disciplinary action is saved.
                 </p>
-                {([
-                  { label: 'Signature of Person Who Prepared Warning', sigKey: 'preparer_signature', dateKey: 'preparer_signature_date' },
-                  { label: "Supervisor's Signature", sigKey: 'supervisor_signature', dateKey: 'supervisor_signature_date' },
-                ] as const).map(sig => (
-                  <div key={sig.label} className="grid grid-cols-2 gap-4 mb-3">
-                    <SignatureUpload
-                      label={sig.label}
-                      value={(form as any)[sig.sigKey]}
-                      onChange={dataUrl => setForm(prev => ({ ...prev, [sig.sigKey]: dataUrl }))}
-                    />
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
-                      <input type="date" value={(form as any)[sig.dateKey]} onChange={e => setForm(prev => ({ ...prev, [sig.dateKey]: e.target.value }))} max={todayISO} required className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" />
-                    </div>
-                  </div>
-                ))}
+                <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3 text-[11px] text-amber-700 dark:text-amber-300">
+                  This form no longer captures preparer/supervisor signatures directly. Save first, then signatures will appear in the assigned users' Signature Queue.
+                </div>
               </div>
 
               <div className="flex justify-end pt-4">

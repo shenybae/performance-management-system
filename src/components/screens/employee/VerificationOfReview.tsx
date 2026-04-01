@@ -243,6 +243,27 @@ export const VerificationOfReview = () => {
     }
   };
 
+  const signPreparerDiscipline = async (id: number) => {
+    if (!signature) return window.notify?.('Please provide your signature', 'error');
+    try {
+      const res = await fetch(`/api/discipline_records/${id}/preparer-sign`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          preparer_signature: signature,
+          preparer_signature_date: new Date().toISOString().split('T')[0],
+        }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.('Preparer disciplinary signature saved', 'success');
+      setActiveId(null);
+      setSignature('');
+      fetchDisciplineRecords();
+    } catch {
+      window.notify?.('Failed to sign disciplinary record', 'error');
+    }
+  };
+
   const signSupervisorSuggestion = async (s: any) => {
     if (!signature) return window.notify?.('Please provide your signature', 'error');
     try {
@@ -392,7 +413,7 @@ export const VerificationOfReview = () => {
   }), [appraisals]);
 
   const pendingEmployeeDiscipline = useMemo(
-    () => disciplineRecords.filter((d) => !!d.supervisor_signature && !d.employee_signature),
+    () => disciplineRecords.filter((d) => !!d.preparer_signature && !!d.supervisor_signature && !d.employee_signature),
     [disciplineRecords]
   );
 
@@ -416,8 +437,20 @@ export const VerificationOfReview = () => {
   );
 
   const pendingSupervisorDiscipline = useMemo(
-    () => disciplineRecords.filter((d) => !d.supervisor_signature && sameDept(d)),
-    [disciplineRecords, queueDept]
+    () => disciplineRecords.flatMap((d) => {
+      if (!sameDept(d)) return [] as any[];
+      const tasks: any[] = [];
+      const assignedPreparerId = Number(d.preparer_user_id || 0);
+      const assignedSupervisorId = Number(d.supervisor_user_id || 0);
+      if (!d.preparer_signature && (!assignedPreparerId || assignedPreparerId === Number(user?.id || 0))) {
+        tasks.push({ ...d, queueStage: 'preparer', queueKey: `sup-disc-prep-${d.id}` });
+      }
+      if (!!d.preparer_signature && !d.supervisor_signature && (!assignedSupervisorId || assignedSupervisorId === Number(user?.id || 0))) {
+        tasks.push({ ...d, queueStage: 'supervisor', queueKey: `sup-disc-sup-${d.id}` });
+      }
+      return tasks;
+    }),
+    [disciplineRecords, queueDept, user?.id]
   );
   const doneSupervisorDiscipline = useMemo(
     () => disciplineRecords.filter((d) => !!d.supervisor_signature && sameDept(d)),
@@ -757,15 +790,15 @@ export const VerificationOfReview = () => {
             <h3 className="text-sm font-bold mb-3">Disciplinary Records Needing Management Signature</h3>
             {pendingSupervisorDiscipline.length === 0 && <p className="text-sm text-slate-400">No pending management disciplinary signatures.</p>}
             {pendingSupervisorDiscipline.map((d) => (
-              <div key={`sup-disc-${d.id}`} className="border rounded-lg p-3 mb-2">
+              <div key={d.queueKey || `sup-disc-${d.id}`} className="border rounded-lg p-3 mb-2">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="font-semibold">{d.employee_name || 'Employee'} - {d.warning_level || 'Warning'}</p>
-                    <p className="text-xs text-slate-500">{d.violation_type || 'Disciplinary Action'}</p>
+                    <p className="text-xs text-slate-500">{d.violation_type || 'Disciplinary Action'} • Stage: {d.queueStage === 'preparer' ? 'Preparer' : 'Supervisor'}</p>
                   </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`sup-disc-${d.id}`)}>Sign</button>
+                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(d.queueKey || `sup-disc-${d.id}`)}>Sign</button>
                 </div>
-                {activeId === `sup-disc-${d.id}` && renderSignBox(() => signSupervisorDiscipline(d.id))}
+                {activeId === (d.queueKey || `sup-disc-${d.id}`) && renderSignBox(() => d.queueStage === 'preparer' ? signPreparerDiscipline(d.id) : signSupervisorDiscipline(d.id))}
               </div>
             ))}
             <p className="mt-2 text-xs text-emerald-600">Finished: {doneSupervisorDiscipline.length}</p>
