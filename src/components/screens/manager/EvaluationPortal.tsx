@@ -114,9 +114,10 @@ interface EvaluationPortalProps {
 }
 
 export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalProps) => {
-  const [view, setView] = useState<'dashboard' | 'achievement' | 'performance' | 'detail'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'achievement' | 'performance' | 'detail' | 'locked'>('dashboard');
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [detailRecord, setDetailRecord] = useState<any>(null);
+  const [lockedFormMessage, setLockedFormMessage] = useState<{ type: 'achievement' | 'performance'; employee: string } | null>(null);
 
   /* ── Achievement Measure form state ─────────────────────────────── */
   const freshAch = () => ({
@@ -438,10 +439,49 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   /* ════════════════════════════════════════════════════════════════ */
   /* ── Achievement Measure full-screen view ─────────────────────── */
   /* ════════════════════════════════════════════════════════════════ */
-  if (view === 'achievement') return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-      <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-sm text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors mb-4">
-        <ArrowLeft size={16} /> Back to Dashboard
+  if (view === 'achievement') {
+    // Check if this is an already-submitted form being reopened
+    if (achForm.employee_id) {
+      const existingRecord = appraisals.find(a => 
+        a.employee_id === parseInt(achForm.employee_id) && 
+        a.form_type === 'Achievement Measure' &&
+        (a.supervisor_signature || a.employee_signature)
+      );
+      if (existingRecord) {
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            <button onClick={() => { setView('dashboard'); setAchForm(freshAch()); }} className="flex items-center gap-2 text-sm text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors mb-4">
+              <ArrowLeft size={16} /> Back to Dashboard
+            </button>
+            <Card>
+              <div className="flex items-center gap-3 mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <FileText size={24} className="text-amber-700 dark:text-amber-400 flex-shrink-0" />
+                <div>
+                  <h3 className="font-bold text-amber-900 dark:text-amber-100">Form Already Submitted</h3>
+                  <p className="text-sm text-amber-800 dark:text-amber-200">This achievement measure cannot be edited after submission.</p>
+                </div>
+              </div>
+              <p className="text-slate-600 dark:text-slate-400 mb-4">
+                All signature work and form completion happens through the <strong>Signature Queue</strong>. Review the form details and manage signatures from there.
+              </p>
+              <button
+                onClick={() => {
+                  setView('detail');
+                  setDetailRecord(existingRecord);
+                }}
+                className="px-6 py-2.5 rounded-lg bg-teal-deep text-white font-bold hover:bg-teal-green transition-colors"
+              >
+                View Form Details
+              </button>
+            </Card>
+          </motion.div>
+        );
+      }
+    }
+    return (
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-sm text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors mb-4">
+          <ArrowLeft size={16} /> Back to Dashboard
       </button>
       <Card>
         <div className="flex items-center justify-between mb-1">
@@ -557,24 +597,64 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
           </div>
         </form>
       </Card>
-    </motion.div>
-  );
+      </motion.div>
+    );
+  }
 
   /* ════════════════════════════════════════════════════════════════ */
   /* ── Performance Evaluation full-screen view  (PDF-based)──────── */
   /* ════════════════════════════════════════════════════════════════ */
-  if (view === 'performance') return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-      <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-sm text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors mb-4">
-        <ArrowLeft size={16} /> Back to Dashboard
-      </button>
-      <Card>
-        <h2 className="screen-heading mb-0">Employee Performance Evaluation Form</h2>
-        <p className="screen-subheading mt-1 mb-5 border-b dark:border-slate-800 pb-3">
-          The following evaluation of your work performance has been completed by your supervisor. This evaluation was based on factors applicable to your duties and responsibilities.
-        </p>
+  if (view === 'performance') {
+    // Check if this is an already-submitted form being reopened
+    if (perfForm.employee_id) {
+      const existingRecord = appraisals.find(a => 
+        a.employee_id === parseInt(perfForm.employee_id) && 
+        a.form_type === 'Performance Evaluation' &&
+        (a.supervisor_signature || a.reviewer_signature || a.employee_signature || a.hr_signature)
+      );
+      if (existingRecord) {
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            <button onClick={() => { setView('dashboard'); setPerfForm(freshPerf()); }} className="flex items-center gap-2 text-sm text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors mb-4">
+              <ArrowLeft size={16} /> Back to Dashboard
+            </button>
+            <Card>
+              <div className="flex items-center gap-3 mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <FileText size={24} className="text-amber-700 dark:text-amber-400 flex-shrink-0" />
+                <div>
+                  <h3 className="font-bold text-amber-900 dark:text-amber-100">Form Already Submitted</h3>
+                  <p className="text-sm text-amber-800 dark:text-amber-200">This performance evaluation cannot be edited after submission.</p>
+                </div>
+              </div>
+              <p className="text-slate-600 dark:text-slate-400 mb-4">
+                All signature work and form completion happens through the <strong>Signature Queue</strong>. Review the form details and manage signatures from there.
+              </p>
+              <button
+                onClick={() => {
+                  setView('detail');
+                  setDetailRecord(existingRecord);
+                }}
+                className="px-6 py-2.5 rounded-lg bg-teal-deep text-white font-bold hover:bg-teal-green transition-colors"
+              >
+                View Form Details
+              </button>
+            </Card>
+          </motion.div>
+        );
+      }
+    }
+    return (
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-sm text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors mb-4">
+          <ArrowLeft size={16} /> Back to Dashboard
+        </button>
+        <Card>
+          <h2 className="screen-heading mb-0">Employee Performance Evaluation Form</h2>
+          <p className="screen-subheading mt-1 mb-5 border-b dark:border-slate-800 pb-3">
+            The following evaluation of your work performance has been completed by your supervisor. This evaluation was based on factors applicable to your duties and responsibilities.
+          </p>
 
-        <form className="space-y-6" onSubmit={e => { e.preventDefault(); submitPerformance(); }}>
+          <form className="space-y-6" onSubmit={e => { e.preventDefault(); submitPerformance(); }}>
 
           {/* ── Header Info ──────────────────────────────────────── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -806,8 +886,9 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
           </div>
         </form>
       </Card>
-    </motion.div>
-  );
+      </motion.div>
+    );
+  }
 
   /* ════════════════════════════════════════════════════════════════ */
   /* ── Detail view — read-only record preview ───────────────────── */
@@ -934,6 +1015,46 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
             </div>
           )}
         </Card>
+      </motion.div>
+    );
+  }
+
+  /* ════════════════════════════════════════════════════════════════ */
+  /* ── Locked Form View (form submitted, all work happens in queue) */
+  /* ════════════════════════════════════════════════════════════════ */
+  if (view === 'locked' && lockedFormMessage) {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+        <button onClick={() => { setView('dashboard'); setLockedFormMessage(null); }} className="flex items-center gap-2 text-sm text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors mb-6">
+          <ArrowLeft size={16} /> Back to Dashboard
+        </button>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Card className="max-w-md text-center p-8">
+            <div className="mb-4 flex justify-center">
+              <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <FileText size={32} className="text-amber-700 dark:text-amber-400" />
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">Form Submitted</h2>
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
+              The <strong>{lockedFormMessage.type === 'achievement' ? 'Achievement Measure' : 'Performance Evaluation'}</strong> for <strong>{lockedFormMessage.employee}</strong> has been submitted and is now locked for editing.
+            </p>
+            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <p className="text-sm text-blue-700 dark:text-blue-400">
+                <strong>All signature work happens in your Signature Queue.</strong>
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
+                Review the submitted form and complete required signatures through your assigned tasks in the queue.
+              </p>
+            </div>
+            <button
+              onClick={() => { setView('dashboard'); setLockedFormMessage(null); }}
+              className="w-full px-6 py-3 rounded-lg bg-teal-deep text-white font-bold hover:bg-teal-green transition-colors"
+            >
+              Return to Dashboard
+            </button>
+          </Card>
+        </div>
       </motion.div>
     );
   }
