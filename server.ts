@@ -1650,8 +1650,8 @@ async function initDb() {
         const supervisorUserId = Number(supervisorRows?.[0]?.id || 0);
         if (supervisorUserId) {
           await query(
-            "UPDATE users SET role = 'Employee', dept = ?, position = 'Supervisor', employee_id = ?, full_name = ?, deleted_at = NULL WHERE id = ?",
-            [dept, supervisorEmpId || null, supervisorName, supervisorUserId]
+            "UPDATE users SET username = ?, email = ?, password = ?, role = 'Employee', dept = ?, position = 'Supervisor', employee_id = ?, full_name = ?, deleted_at = NULL WHERE id = ?",
+            [supervisorUsername, supervisorEmail, hash('demo_supervisor_pass'), dept, supervisorEmpId || null, supervisorName, supervisorUserId]
           );
         } else {
           await ensureUserAccount({
