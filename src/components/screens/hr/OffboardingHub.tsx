@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
-import { SignatureUpload } from '../../common/SignatureUpload';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { Plus, X, Box, LogOut, Download, Trash2, ChevronDown, ChevronUp, Package, FileText, Search, Eye, Archive } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
@@ -255,10 +254,6 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
       would_recommend: trimText(exitForm.would_recommend),
       improvement_suggestions: trimText(exitForm.improvement_suggestions),
       additional_comments: trimText(exitForm.additional_comments),
-      employee_sig: trimText(exitForm.employee_sig),
-      interviewer_name: trimText(exitForm.interviewer_name),
-      interviewer_sig: trimText(exitForm.interviewer_sig),
-      interviewer_date: trimText(exitForm.interviewer_date),
     };
 
     if (!cleaned.employee_name || !cleaned.department || !cleaned.supervisor || !cleaned.interview_date) {
@@ -298,15 +293,6 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
       window.notify?.('Please complete Part IV additional comments', 'error');
       return;
     }
-    if (!cleaned.employee_sig) {
-      window.notify?.('Employee signature is required', 'error');
-      return;
-    }
-    if (!cleaned.interviewer_name || !cleaned.interviewer_sig || !cleaned.interviewer_date) {
-      window.notify?.('Interviewer name, signature, and date are required', 'error');
-      return;
-    }
-
     try {
       const res = await fetch('/api/exit_interviews', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({
         employee_name: cleaned.employee_name, department: cleaned.department, supervisor: cleaned.supervisor,
@@ -318,8 +304,8 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
         satisfaction_ratings: JSON.stringify(cleaned.satisfaction_ratings),
         would_recommend: cleaned.would_recommend, improvement_suggestions: cleaned.improvement_suggestions,
         additional_comments: cleaned.additional_comments,
-        employee_sig: cleaned.employee_sig, interviewer_name: cleaned.interviewer_name,
-        interviewer_sig: cleaned.interviewer_sig, interviewer_date: cleaned.interviewer_date,
+        employee_sig: null, interviewer_name: null,
+        interviewer_sig: null, interviewer_date: null,
         dismissal_details: cleaned.dismissal_details
       }) });
       if (!res.ok) throw new Error('Failed');
@@ -496,7 +482,15 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                     <SearchableSelect
                       options={employees.map(e => ({ value: e.name, label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                       value={propForm.employee_name}
-                      onChange={v => setPropForm({ ...propForm, employee_name: String(v) })}
+                      onChange={v => {
+                        const employeeName = String(v);
+                        const selected = employees.find(e => String(e.name || '') === employeeName);
+                        setPropForm(prev => ({
+                          ...prev,
+                          employee_name: employeeName,
+                          position_dept: String((selected as any)?.dept || prev.position_dept || ''),
+                        }));
+                      }}
                       placeholder="Select Employee..."
                       dropdownVariant="pills-horizontal"
                     />
@@ -740,22 +734,10 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
               {/* Signatures */}
               <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                 <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3 flex items-center gap-2"><FileText size={14} /> Signatures</h4>
-                <div className="grid grid-cols-2 gap-6">
-                  {/* Employee Signature */}
-                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-3 uppercase">Employee Signature</div>
-                    <SignatureUpload label="Sign or upload" value={exitForm.employee_sig} onChange={v => setExitForm(f => ({ ...f, employee_sig: v }))} />
-                    <p className="text-[10px] text-slate-400 mt-2 italic">I acknowledge that I have read and completed this form voluntarily.</p>
-                  </div>
-                  {/* Interviewer Signature */}
-                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 uppercase">Interviewer / HR Admin Representative</div>
-                    <div className="grid grid-cols-2 gap-3 mb-2">
-                      <div><label className={labelCls}>Printed Name</label><input type="text" value={exitForm.interviewer_name} onChange={e => setExitForm(f => ({ ...f, interviewer_name: e.target.value }))} className={inputCls} maxLength={120} required /></div>
-                      <div><label className={labelCls}>Date</label><input type="date" value={exitForm.interviewer_date} onChange={e => setExitForm(f => ({ ...f, interviewer_date: e.target.value }))} max={todayISO} className={inputCls} required /></div>
-                    </div>
-                    <SignatureUpload label="Sign or upload" value={exitForm.interviewer_sig} onChange={v => setExitForm(f => ({ ...f, interviewer_sig: v }))} />
-                  </div>
+                <div className="border border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-3 bg-slate-50 dark:bg-slate-800/40">
+                  <p className="text-xs text-slate-500 dark:text-slate-300">
+                    Signature fields (Employee and Interviewer/HR) are completed after saving from the <span className="font-bold">Signature Queue</span>.
+                  </p>
                 </div>
               </div>
 
