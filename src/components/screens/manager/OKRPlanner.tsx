@@ -7,7 +7,6 @@ import { SectionHeader } from '../../common/SectionHeader';
 import { PIPManager } from './PIPManager';
 import { GoalScopePlanManager } from './GoalScopePlanManager';
 import { SearchableSelect } from '../../common/SearchableSelect';
-import { ChoicePills } from '../../common/ChoicePills';
 import { CircularProgress } from '../../common/CircularProgress';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
@@ -1100,10 +1099,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 {/* Employee filter */}
                 <div className="flex flex-wrap items-center gap-3">
                   <Filter size={14} className="text-slate-400" />
-                  <ChoicePills
+                  <SearchableSelect
                     value={empFilter}
-                    onChange={setEmpFilter}
-                    wrap={false}
+                    onChange={(v) => setEmpFilter(String(v))}
+                    searchable
+                    dropdownVariant="pills-horizontal"
                     options={[
                       { value: 'All', label: `All Employees (${underperforming.length})` },
                       ...uniqueEmployees.map(n => ({
@@ -1111,24 +1111,24 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         label: `${n} (${underperforming.filter(g => (g.employee_name || g.delegation || '') === n).length})`,
                       })),
                     ]}
+                    placeholder="Filter by employee..."
+                    className="w-80"
                   />
-                  {empFilter !== 'All' && <button onClick={() => setEmpFilter('All')} className="text-xs font-bold text-slate-400 hover:text-red-500"><X size={14} /></button>}
-                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
-                    {[
-                      { key: 'all', label: `All (${baseDisplayGoals.length})` },
-                      { key: 'overdue', label: `Overdue (${baseDisplayGoals.filter(g => g.target_date && new Date(g.target_date) < now).length})` },
-                      { key: 'highPriority', label: `High Priority (${baseDisplayGoals.filter(g => g.priority === 'Critical' || g.priority === 'High').length})` },
-                      { key: 'stalled', label: `Stalled (${baseDisplayGoals.filter(g => (g.progress || 0) <= 10 && g.status === 'In Progress').length})` },
-                    ].map((f) => (
-                      <button
-                        key={f.key}
-                        onClick={() => setUnderperfQuickFilter(f.key as 'all' | 'overdue' | 'highPriority' | 'stalled')}
-                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-colors ${underperfQuickFilter === f.key ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
+                  
+                  <SearchableSelect
+                    value={underperfQuickFilter}
+                    onChange={(v) => setUnderperfQuickFilter(v as 'all' | 'overdue' | 'highPriority' | 'stalled')}
+                    searchable={false}
+                    dropdownVariant="pills-horizontal"
+                    options={[
+                      { value: 'all', label: `All (${baseDisplayGoals.length})` },
+                      { value: 'overdue', label: `Overdue (${baseDisplayGoals.filter(g => g.target_date && new Date(g.target_date) < now).length})` },
+                      { value: 'highPriority', label: `High Priority (${baseDisplayGoals.filter(g => g.priority === 'Critical' || g.priority === 'High').length})` },
+                      { value: 'stalled', label: `Stalled (${baseDisplayGoals.filter(g => (g.progress || 0) <= 10 && g.status === 'In Progress').length})` },
+                    ]}
+                    placeholder="Filter by status..."
+                    className="w-72"
+                  />
                 </div>
 
                 {/* Table */}
@@ -2310,7 +2310,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         <div onClick={e => e.stopPropagation()} className="flex items-center gap-2 min-w-max">
                           <select
                             value={g.status || 'Not Started'}
-                            onChange={(e) => updateGoal(g.id, { status: e.target.value, progress: e.target.value === 'Completed' ? 100 : g.progress || 0 })}
+                            onChange={(e) => {
+                              const newStatus = e.target.value;
+                              let newProgress = g.progress || 0;
+                              if (newStatus === 'Completed') newProgress = 100;
+                              else if (newStatus === 'Not Started') newProgress = 0;
+                              else if (newStatus === 'In Progress' && (g.progress || 0) === 0) newProgress = 25;
+                              updateGoal(g.id, { status: newStatus, progress: newProgress });
+                            }}
                             className={`text-[10px] font-bold px-2 py-1 rounded-full border outline-none cursor-pointer ${statusColor(g.status || 'Not Started')}`}
                           >
                             {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}

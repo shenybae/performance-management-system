@@ -1318,6 +1318,22 @@ async function initDb() {
       } catch {}
     }
 
+    // Safe migrations for department scoping on plan tables
+    const departmentPlanMigrations = [
+      'ALTER TABLE pip_plans ADD COLUMN department TEXT',
+      'ALTER TABLE development_plans ADD COLUMN department TEXT',
+      'ALTER TABLE goal_improvement_plans ADD COLUMN department TEXT',
+      'ALTER TABLE goal_development_plans ADD COLUMN department TEXT',
+    ];
+    for (const sql of departmentPlanMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
     // Payroll adjustments table
     const payrollAdjTable = `CREATE TABLE IF NOT EXISTS payroll_adjustments (
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
@@ -4328,9 +4344,25 @@ async function startServer() {
   });
   app.post("/api/development_plans", authenticateToken, async (req, res) => {
     try {
+      const actor = (req as any).user || {};
+      const actorRole = String(actor.role || '').toLowerCase();
       const { employee_id, skill_gap, growth_step, step_order, status, goal_id } = req.body;
       const employeeId = normalizeEmployeeId(employee_id);
       if (!employeeId) return res.status(400).json({ error: 'employee_id is required' });
+
+      // Fetch employee dept
+      const empRows: any = await query('SELECT dept FROM employees WHERE id = ?', [employeeId]);
+      const employeeDept = empRows && empRows[0] ? String(empRows[0].dept || '').trim() : null;
+
+      // Check department scope (managers can only create for their dept, HR can do all)
+      if (actorRole === 'manager') {
+        const actorDept = String(actor.dept || '').trim();
+        if (!employeeDept || !actorDept || employeeDept.toLowerCase() !== actorDept.toLowerCase()) {
+          return res.status(403).json({ error: 'Managers can only create plans for their own department' });
+        }
+      } else if (!isPrivilegedRole(actorRole)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
 
       const goalId = normalizeEmployeeId(goal_id);
       if (goalId) {
@@ -4346,8 +4378,8 @@ async function startServer() {
         }
       }
 
-      await query("INSERT INTO development_plans (employee_id, skill_gap, growth_step, step_order, status, goal_id) VALUES (?, ?, ?, ?, ?, ?)",
-        [employeeId, skill_gap, growth_step, step_order || 0, status || 'Not Started', goalId || null]);
+      await query("INSERT INTO development_plans (employee_id, skill_gap, growth_step, step_order, status, goal_id, department) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [employeeId, skill_gap, growth_step, step_order || 0, status || 'Not Started', goalId || null, employeeDept]);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -4387,16 +4419,25 @@ async function startServer() {
       const goalId = normalizeEmployeeId(req.body.goal_id);
       if (!goalId) return res.status(400).json({ error: 'goal_id is required' });
 
-      const goalRows: any = await query('SELECT id, scope, title, statement FROM goals WHERE id = ?', [goalId]);
+      const goalRows: any = await query('SELECT id, scope, title, statement, department FROM goals WHERE id = ?', [goalId]);
       const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
       if (!goal) return res.status(400).json({ error: 'Invalid goal_id' });
       if (!['Team', 'Department'].includes(goal.scope || 'Individual')) {
         return res.status(400).json({ error: 'goal_id must reference a Team or Department goal' });
       }
 
+      // Check department scope (managers can only create for their dept, HR can do all)
+      if (role === 'manager') {
+        const actorDept = String(actor.dept || '').trim();
+        const goalDept = String(goal.department || '').trim();
+        if (!goalDept || !actorDept || goalDept.toLowerCase() !== actorDept.toLowerCase()) {
+          return res.status(403).json({ error: 'Managers can only create improvement plans for their own department' });
+        }
+      }
+
       await query(
-        `INSERT INTO goal_improvement_plans (goal_id, goal_scope, plan_title, issue_summary, improvement_objective, action_steps, review_date, status, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+        `INSERT INTO goal_improvement_plans (goal_id, goal_scope, plan_title, issue_summary, improvement_objective, action_steps, review_date, status, created_by, department)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
         [
           goalId,
           goal.scope,
@@ -4407,6 +4448,7 @@ async function startServer() {
           req.body.review_date || null,
           req.body.status || 'Not Started',
           actor.id || null,
+          goal.department || null,
         ]
       );
       res.json({ success: true });
@@ -4467,16 +4509,25 @@ async function startServer() {
       const goalId = normalizeEmployeeId(req.body.goal_id);
       if (!goalId) return res.status(400).json({ error: 'goal_id is required' });
 
-      const goalRows: any = await query('SELECT id, scope, title, statement FROM goals WHERE id = ?', [goalId]);
+      const goalRows: any = await query('SELECT id, scope, title, statement, department FROM goals WHERE id = ?', [goalId]);
       const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
       if (!goal) return res.status(400).json({ error: 'Invalid goal_id' });
       if (!['Team', 'Department'].includes(goal.scope || 'Individual')) {
         return res.status(400).json({ error: 'goal_id must reference a Team or Department goal' });
       }
 
+      // Check department scope (managers can only create for their dept, HR can do all)
+      if (role === 'manager') {
+        const actorDept = String(actor.dept || '').trim();
+        const goalDept = String(goal.department || '').trim();
+        if (!goalDept || !actorDept || goalDept.toLowerCase() !== actorDept.toLowerCase()) {
+          return res.status(403).json({ error: 'Managers can only create development plans for their own department' });
+        }
+      }
+
       await query(
-        `INSERT INTO goal_development_plans (goal_id, goal_scope, plan_title, skill_focus, development_actions, review_date, status, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO goal_development_plans (goal_id, goal_scope, plan_title, skill_focus, development_actions, review_date, status, created_by, department)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           goalId,
           goal.scope,
@@ -4486,6 +4537,7 @@ async function startServer() {
           req.body.review_date || null,
           req.body.status || 'Not Started',
           actor.id || null,
+          goal.department || null,
         ]
       );
       res.json({ success: true });
@@ -4590,6 +4642,10 @@ async function startServer() {
       const employeeId = normalizeEmployeeId(b.employee_id);
       if (!employeeId) return res.status(400).json({ error: 'employee_id is required' });
 
+      // Fetch employee dept
+      const empRows: any = await query('SELECT dept FROM employees WHERE id = ?', [employeeId]);
+      const employeeDept = empRows && empRows[0] ? String(empRows[0].dept || '').trim() : null;
+
       const goalId = normalizeEmployeeId(b.goal_id);
       if (goalId) {
         const goalRows: any = await query('SELECT id, scope, employee_id FROM goals WHERE id = ?', [goalId]);
@@ -4609,8 +4665,8 @@ async function startServer() {
         if (!allowed) return res.status(403).json({ error: 'Forbidden' });
       }
 
-      await query(`INSERT INTO pip_plans (employee_id, appraisal_id, goal_id, start_date, end_date, deficiency, improvement_objective, action_steps, support_provided, progress_check_date, progress_notes, outcome, supervisor_name, supervisor_signature, employee_signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [employeeId, b.appraisal_id || null, goalId || null, b.start_date, b.end_date, b.deficiency, b.improvement_objective, b.action_steps, b.support_provided || null, b.progress_check_date || null, b.progress_notes || null, b.outcome || 'In Progress', b.supervisor_name || null, b.supervisor_signature || null, b.employee_signature || null]);
+      await query(`INSERT INTO pip_plans (employee_id, appraisal_id, goal_id, start_date, end_date, deficiency, improvement_objective, action_steps, support_provided, progress_check_date, progress_notes, outcome, supervisor_name, supervisor_signature, employee_signature, department) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [employeeId, b.appraisal_id || null, goalId || null, b.start_date, b.end_date, b.deficiency, b.improvement_objective, b.action_steps, b.support_provided || null, b.progress_check_date || null, b.progress_notes || null, b.outcome || 'In Progress', b.supervisor_name || null, b.supervisor_signature || null, b.employee_signature || null, employeeDept]);
       // Notify the employee about the new PIP
       const pipEmpUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employeeId]);
       const pipEmpUser = Array.isArray(pipEmpUsers) ? pipEmpUsers[0] : pipEmpUsers;
