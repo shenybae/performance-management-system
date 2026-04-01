@@ -212,16 +212,6 @@ export const RecruitmentBoard = () => {
     if (!cleaned.q_experience || cleaned.q_experience.length < 10) { window.notify?.('Please provide response for question 1 (minimum 10 characters)', 'error'); return; }
     if (!cleaned.q_why_interested || cleaned.q_why_interested.length < 10) { window.notify?.('Please provide response for question 2 (minimum 10 characters)', 'error'); return; }
     if (!cleaned.recommendation) { window.notify?.('Please select a recommendation', 'error'); return; }
-    if (!cleaned.interviewer_name) { window.notify?.('Please enter interviewer name', 'error'); return; }
-    if (!cleaned.interviewer_signature) { window.notify?.('Please provide interviewer signature', 'error'); return; }
-    if (cleaned.hr_reviewer_signature && (!cleaned.hr_reviewer_name || !cleaned.hr_reviewer_date)) {
-      window.notify?.('HR reviewer signature requires printed name and date', 'error');
-      return;
-    }
-    if ((cleaned.hr_reviewer_name || cleaned.hr_reviewer_date) && !cleaned.hr_reviewer_signature) {
-      window.notify?.('Please provide HR reviewer signature when reviewer details are entered', 'error');
-      return;
-    }
 
     const criteriaKeys = ['job_skills', 'communication_skills', 'interview_impression', 'previous_qualifications', 'teamwork', 'dept_fit', 'asset_value'];
     const hasMissingCriteria = criteriaKeys.some((k) => !['1', '2', '3', '4', '5'].includes(String((cleaned as any)[k])));
@@ -717,55 +707,11 @@ export const RecruitmentBoard = () => {
                 </div>
               </div>
 
-              {/* Part IV: Signatures */}
               <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                 <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Part IV — Signatures</h4>
-                {/* Interviewer */}
-                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 mb-3">
-                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">Interviewer</p>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Printed Name</label>
-                      <input type="text" value={appForm.interviewer_name} onChange={e => setAppForm({ ...appForm, interviewer_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Title</label>
-                      <input type="text" value={appForm.interviewer_title} onChange={e => setAppForm({ ...appForm, interviewer_title: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} />
-                    </div>
-                    <div>
-                      <SignatureUpload
-                        label="Interviewer Signature"
-                        value={appForm.interviewer_signature}
-                        onChange={dataUrl => setAppForm(prev => ({ ...prev, interviewer_signature: dataUrl }))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
-                      <input type="date" value={appForm.interview_date} onChange={e => setAppForm({ ...appForm, interview_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" max={todayISO} required />
-                    </div>
-                  </div>
-                </div>
-                {/* HR Admin Reviewer */}
-                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">HR Admin Reviewer</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Printed Name</label>
-                      <input type="text" value={appForm.hr_reviewer_name} onChange={e => setAppForm({ ...appForm, hr_reviewer_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} />
-                    </div>
-                    <div>
-                      <SignatureUpload
-                        label="HR Admin Reviewer Signature"
-                        value={appForm.hr_reviewer_signature}
-                        onChange={dataUrl => setAppForm(prev => ({ ...prev, hr_reviewer_signature: dataUrl }))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
-                      <input type="date" value={appForm.hr_reviewer_date} onChange={e => setAppForm({ ...appForm, hr_reviewer_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" max={todayISO} />
-                    </div>
-                  </div>
-                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-300">
+                  Signature fields are completed in the <span className="font-bold">Signature Queue</span> after this appraisal is saved.
+                </p>
               </div>
 
               <div className="flex justify-end gap-3 pt-4">

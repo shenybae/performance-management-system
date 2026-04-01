@@ -38,6 +38,9 @@ export const VerificationOfReview = () => {
   const [supervisorOverallRating, setSupervisorOverallRating] = useState<'Satisfactory' | 'Unsatisfactory' | ''>('');
   const [supervisorRecommendation, setSupervisorRecommendation] = useState('');
   const [supervisorComments, setSupervisorComments] = useState('');
+  const [applicantSignerName, setApplicantSignerName] = useState('');
+  const [applicantSignerTitle, setApplicantSignerTitle] = useState('');
+  const [applicantSignerDate, setApplicantSignerDate] = useState(new Date().toISOString().split('T')[0]);
 
   const resetQueueSignerState = () => {
     setActiveId(null);
@@ -52,6 +55,9 @@ export const VerificationOfReview = () => {
     setSupervisorOverallRating('');
     setSupervisorRecommendation('');
     setSupervisorComments('');
+    setApplicantSignerName('');
+    setApplicantSignerTitle('');
+    setApplicantSignerDate(new Date().toISOString().split('T')[0]);
   };
 
   useEffect(() => {
@@ -363,7 +369,11 @@ export const VerificationOfReview = () => {
     }
   };
 
-  const signApplicant = async (id: number, field: 'interviewer_signature' | 'hr_reviewer_signature') => {
+  const signApplicant = async (
+    id: number,
+    field: 'interviewer_signature' | 'hr_reviewer_signature',
+    details?: { name?: string; date?: string; title?: string }
+  ) => {
     if (!signature) return window.notify?.('Please provide your signature', 'error');
     try {
       const res = await fetch(`/api/applicants/${id}/signature`, {
@@ -372,14 +382,14 @@ export const VerificationOfReview = () => {
         body: JSON.stringify({
           field,
           signature,
-          name: user?.full_name || user?.employee_name || null,
-          date: new Date().toISOString().split('T')[0],
+          name: details?.name || user?.full_name || user?.employee_name || null,
+          date: details?.date || new Date().toISOString().split('T')[0],
+          title: details?.title || null,
         }),
       });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Applicant signature saved', 'success');
-      setActiveId(null);
-      setSignature('');
+      resetQueueSignerState();
       fetchApplicants();
     } catch {
       window.notify?.('Failed to sign applicant record', 'error');
@@ -717,6 +727,68 @@ export const VerificationOfReview = () => {
           type="button"
           onClick={action}
           disabled={!signature}
+          className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold disabled:opacity-50"
+        >
+          Sign
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderApplicantSignBox = (
+    action: () => void,
+    stage: 'interviewer' | 'hr',
+  ) => (
+    <div className="mt-3 border-t dark:border-slate-700 pt-3 space-y-3">
+      <label className="inline-flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+        <input
+          type="checkbox"
+          checked={reviewConfirmed}
+          onChange={(e) => setReviewConfirmed(e.target.checked)}
+          className="accent-amber-600"
+        />
+        I have reviewed this applicant appraisal before signing.
+      </label>
+      <div className={`grid gap-3 ${stage === 'interviewer' ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+        <input
+          type="text"
+          value={applicantSignerName}
+          onChange={(e) => setApplicantSignerName(e.target.value)}
+          className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+          placeholder="Printed Name"
+          maxLength={120}
+        />
+        {stage === 'interviewer' && (
+          <input
+            type="text"
+            value={applicantSignerTitle}
+            onChange={(e) => setApplicantSignerTitle(e.target.value)}
+            className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+            placeholder="Title"
+            maxLength={120}
+          />
+        )}
+        <input
+          type="date"
+          value={applicantSignerDate}
+          onChange={(e) => setApplicantSignerDate(e.target.value)}
+          className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+          max={new Date().toISOString().split('T')[0]}
+        />
+      </div>
+      <SignatureUpload label="Digital Signature" value={signature} onChange={setSignature} showQueueReminder={false} />
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={resetQueueSignerState}
+          className="px-3 py-1.5 text-sm text-slate-500"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={action}
+          disabled={!reviewConfirmed || !applicantSignerName.trim() || !applicantSignerDate || !signature}
           className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold disabled:opacity-50"
         >
           Sign
@@ -1108,9 +1180,24 @@ export const VerificationOfReview = () => {
                     <p className="font-semibold">{a.name || 'Applicant'} - {a.position || 'Position'}</p>
                     <p className="text-xs text-slate-500">Interview appraisal</p>
                   </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`mgmt-app-${a.id}`)}>Sign</button>
+                  <button
+                    className="text-sm font-bold text-teal-deep"
+                    onClick={() => {
+                      setActiveId(`mgmt-app-${a.id}`);
+                      setReviewConfirmed(false);
+                      setApplicantSignerName(String(a?.interviewer_name || user?.full_name || user?.employee_name || user?.username || ''));
+                      setApplicantSignerTitle(String(a?.interviewer_title || user?.position || ''));
+                      setApplicantSignerDate(String(a?.interview_date || new Date().toISOString().split('T')[0]));
+                    }}
+                  >
+                    Sign
+                  </button>
                 </div>
-                {activeId === `mgmt-app-${a.id}` && renderSignBox(() => signApplicant(a.id, 'interviewer_signature'))}
+                {activeId === `mgmt-app-${a.id}` && renderApplicantSignBox(() => signApplicant(a.id, 'interviewer_signature', {
+                  name: applicantSignerName.trim(),
+                  title: applicantSignerTitle.trim(),
+                  date: applicantSignerDate,
+                }), 'interviewer')}
               </div>
             ))}
           </Card>
@@ -1247,9 +1334,23 @@ export const VerificationOfReview = () => {
                     <p className="font-semibold">{a.name || 'Applicant'} - {a.position || 'Position'}</p>
                     <p className="text-xs text-slate-500">HR reviewer signature needed</p>
                   </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`hr-applicant-${a.id}`)}>Sign</button>
+                  <button
+                    className="text-sm font-bold text-teal-deep"
+                    onClick={() => {
+                      setActiveId(`hr-applicant-${a.id}`);
+                      setReviewConfirmed(false);
+                      setApplicantSignerName(String(a?.hr_reviewer_name || user?.full_name || user?.employee_name || user?.username || ''));
+                      setApplicantSignerTitle('');
+                      setApplicantSignerDate(String(a?.hr_reviewer_date || new Date().toISOString().split('T')[0]));
+                    }}
+                  >
+                    Sign
+                  </button>
                 </div>
-                {activeId === `hr-applicant-${a.id}` && renderSignBox(() => signApplicant(a.id, 'hr_reviewer_signature'))}
+                {activeId === `hr-applicant-${a.id}` && renderApplicantSignBox(() => signApplicant(a.id, 'hr_reviewer_signature', {
+                  name: applicantSignerName.trim(),
+                  date: applicantSignerDate,
+                }), 'hr')}
               </div>
             ))}
           </Card>

@@ -5756,7 +5756,7 @@ async function startServer() {
     try {
       const actor: any = (req as any).user || {};
       const actorCtx = await getActorOrgContext(Number(actor.id || 0));
-      const { field, signature, name, date } = req.body || {};
+      const { field, signature, name, date, title } = req.body || {};
       if (field !== 'interviewer_signature' && field !== 'hr_reviewer_signature') {
         return res.status(400).json({ error: 'Invalid signature field' });
       }
@@ -5766,8 +5766,8 @@ async function startServer() {
       if (!canInterviewer && !canHrReview) return res.status(403).json({ error: 'Forbidden' });
 
       if (field === 'interviewer_signature') {
-        await query('UPDATE applicants SET interviewer_signature = ?, interviewer_name = COALESCE(?, interviewer_name), interview_date = COALESCE(?, interview_date) WHERE id = ?',
-          [signature || null, name || null, date || new Date().toISOString().split('T')[0], req.params.id]);
+        await query('UPDATE applicants SET interviewer_signature = ?, interviewer_name = COALESCE(?, interviewer_name), interviewer_title = COALESCE(?, interviewer_title), interview_date = COALESCE(?, interview_date) WHERE id = ?',
+          [signature || null, name || null, title || null, date || new Date().toISOString().split('T')[0], req.params.id]);
       } else {
         await query('UPDATE applicants SET hr_reviewer_signature = ?, hr_reviewer_name = COALESCE(?, hr_reviewer_name), hr_reviewer_date = COALESCE(?, hr_reviewer_date) WHERE id = ?',
           [signature || null, name || null, date || new Date().toISOString().split('T')[0], req.params.id]);
