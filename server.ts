@@ -2200,6 +2200,11 @@ async function startServer() {
       const explicitLinkedUserId = Number(linked_user_id);
       const resolvedLinkedUserId = Number.isFinite(explicitLinkedUserId) && explicitLinkedUserId > 0 ? explicitLinkedUserId : null;
       const shouldStoreOrgMeta = normalizedRole === 'HR' || normalizedRole === 'Manager';
+      let effectiveDept = normalizedDept;
+      if (shouldStoreOrgMeta && !effectiveDept) {
+        const creatorCtx = await getActorOrgContext(Number(creatorPayload?.id || 0));
+        effectiveDept = String(creatorCtx?.dept || '').trim();
+      }
 
       const hashed = bcrypt.hashSync(password, 10);
       // Username is required by DB schema; derive one when not provided by the client.
@@ -2213,13 +2218,13 @@ async function startServer() {
           normalizedFullName || null,
           resolvedLinkedUserId,
           shouldStoreOrgMeta ? (normalizedPosition || null) : null,
-          shouldStoreOrgMeta ? (normalizedDept || null) : null,
+          shouldStoreOrgMeta ? (effectiveDept || null) : null,
           creatorPayload?.id || null,
           new Date().toISOString(),
         ]);
 
       try {
-        await recordAudit(creatorPayload, 'create', 'users', null, null, { email: normalizedEmail || null, username: finalUsername, role: normalizedRole, employee_id: resolvedEmployeeId, full_name: normalizedFullName || null, linked_user_id: resolvedLinkedUserId, position: shouldStoreOrgMeta ? (normalizedPosition || null) : null, dept: shouldStoreOrgMeta ? (normalizedDept || null) : null });
+        await recordAudit(creatorPayload, 'create', 'users', null, null, { email: normalizedEmail || null, username: finalUsername, role: normalizedRole, employee_id: resolvedEmployeeId, full_name: normalizedFullName || null, linked_user_id: resolvedLinkedUserId, position: shouldStoreOrgMeta ? (normalizedPosition || null) : null, dept: shouldStoreOrgMeta ? (effectiveDept || null) : null });
       } catch (e) { /* ignore audit errors */ }
 
       res.json({ success: true });
@@ -2903,20 +2908,6 @@ async function startServer() {
           full_name: sanitizeUserFullName(u?.full_name, u?.email)
         }));
 
-        const actorRole = normalizeUserRole(payload.role);
-        if (actorRole === 'HR' || actorRole === 'Manager') {
-          const actorCtx = await getActorOrgContext(Number(payload.id));
-          const actorDeptNorm = normalizeDept(actorCtx?.dept || '');
-          if (actorDeptNorm) {
-            sanitizedUsers = sanitizedUsers.filter((u: any) => {
-              if (Number(u?.id) === Number(payload.id)) return true;
-              const targetDeptNorm = normalizeDept(u?.employee_dept || u?.dept || '');
-              return !!targetDeptNorm && targetDeptNorm === actorDeptNorm;
-            });
-          } else {
-            sanitizedUsers = sanitizedUsers.filter((u: any) => Number(u?.id) === Number(payload.id));
-          }
-        }
         res.json(sanitizedUsers);
       } catch (err) { res.status(500).json({ error: 'Database error' }); }
     });

@@ -48,9 +48,10 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const currentRoleNormalized = normalizeRoleValue(currentUser?.role || '');
   const isHR = currentRoleNormalized === 'HR';
   const actorDeptNormalized = normalizeDeptValue(currentUser?.dept || '');
+  const creatorDept = (currentUser?.dept || '').toString().trim();
   const [createRole, setCreateRole] = useState('');
   const [createPosition, setCreatePosition] = useState('');
-  const [createDept, setCreateDept] = useState('');
+  const [createDept, setCreateDept] = useState(creatorDept);
 
   // Controlled password state for create form
   const [createPassword, setCreatePassword] = useState('');
@@ -208,7 +209,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
         form.reset();
         setCreateRole('');
         setCreatePosition('');
-        setCreateDept('');
+        setCreateDept(creatorDept);
         setCreatePassword('');
         setConfirmPassword('');
         setCreateErrors({});
@@ -339,8 +340,10 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                 if (createErrors.role) setCreateErrors(p => ({ ...p, role: '' }));
                 if (nextRole !== 'Manager' && nextRole !== 'HR') {
                   setCreatePosition('');
-                  setCreateDept('');
+                  setCreateDept(creatorDept);
                   setCreateErrors(p => ({ ...p, position: '', dept: '' }));
+                } else if (!createDept.trim() && creatorDept) {
+                  setCreateDept(creatorDept);
                 }
               }} className={`w-full mt-1 p-2 bg-white dark:bg-black border ${createErrors.role ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} required>
                 <option value="">Select Role...</option>
