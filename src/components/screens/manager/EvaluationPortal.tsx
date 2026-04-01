@@ -556,7 +556,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
             </p>
             <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3">
               <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                Review check: confirm employee, review period, and all ratings before the manager signature is captured.
+                Review check: confirm employee, review period, and all ratings before routing this record to Signature Queue.
               </p>
               <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
                 <input
@@ -565,24 +565,17 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                   onChange={(e) => setAchievementReviewed(e.target.checked)}
                   className="accent-amber-600"
                 />
-                I have reviewed this achievement evaluation before signing.
+                I have reviewed this achievement evaluation before submitting.
               </label>
             </div>
             <div className="space-y-3">
               <div><label className={lbl}>Manager Print Name / Title</label><input type="text" value={achForm.supervisor_print_name} onChange={e => setAchForm({ ...achForm, supervisor_print_name: e.target.value })} className={inp} placeholder="e.g. John Doe / Senior Manager" maxLength={120} /></div>
-              {achievementReviewed ? (
-                <>
-                  <SignatureUpload label="Manager Signature" value={achForm.supervisor_signature} onChange={v => setAchForm({ ...achForm, supervisor_signature: v })} />
-                  <div><label className={lbl}>Manager Signature Date</label><input type="date" value={achForm.supervisor_signature_date} onChange={e => setAchForm({ ...achForm, supervisor_signature_date: e.target.value })} className={inp} /></div>
-                </>
-              ) : (
-                <div className="text-[11px] text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-lg px-3 py-2">
-                  Review confirmation is required before manager signature capture.
-                </div>
-              )}
+              <div className="text-[11px] text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-lg px-3 py-2">
+                Manager signature is completed in the assigned manager's Signature Queue after this form is saved.
+              </div>
             </div>
             <p className="text-xs text-slate-400 dark:text-slate-500 italic mt-2">
-              The employee will sign this evaluation through their Verification of Review screen.
+              Signatures are completed through Signature Queue by assigned users (manager/reviewer/employee/HR).
             </p>
           </div>
 
