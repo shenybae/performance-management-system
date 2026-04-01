@@ -59,6 +59,16 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
 
   const currentManagerName = String(currentUser?.full_name || currentUser?.username || '').trim();
 
+  const findDepartmentSupervisorName = (deptRaw: string) => {
+    const deptNorm = String(deptRaw || '').trim().toLowerCase();
+    if (!deptNorm) return '';
+    const deptPeople = scopedEmployees.filter((e) => String(e.dept || '').trim().toLowerCase() === deptNorm);
+    const byPosition = deptPeople.find((e) => String(e.position || '').toLowerCase().includes('supervisor'));
+    if (byPosition?.name) return byPosition.name;
+    const byName = deptPeople.find((e) => String(e.name || '').toLowerCase().includes('supervisor'));
+    return byName?.name || '';
+  };
+
   const supervisorOptions = useMemo(
     () => scopedEmployees.filter((e) => String(e.id) !== String(form.employee_id || '')),
     [scopedEmployees, form.employee_id]
@@ -79,9 +89,10 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
   useEffect(() => {
     if (!showForm) return;
     if (!isManager) return;
-    if (!currentManagerName) return;
-    setForm((prev) => (prev.supervisor ? prev : { ...prev, supervisor: currentManagerName }));
-  }, [showForm, isManager, currentManagerName]);
+    const defaultSupervisor = findDepartmentSupervisorName(managerDept) || currentManagerName;
+    if (!defaultSupervisor) return;
+    setForm((prev) => (prev.supervisor ? prev : { ...prev, supervisor: defaultSupervisor }));
+  }, [showForm, isManager, managerDept, currentManagerName, scopedEmployees]);
 
   const fetchRecords = async () => {
     try {
@@ -354,9 +365,10 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
                     onChange={v => {
                       const emp = scopedEmployees.find(e => String(e.id) === String(v));
                       const fallbackSupervisor = String(currentUser?.full_name || currentUser?.username || '').trim();
-                      let supervisorName = fallbackSupervisor;
-                      if (emp?.manager) supervisorName = String(emp.manager);
-                      else if ((emp as any)?.manager_id) {
+                      const deptSupervisor = findDepartmentSupervisorName(String(emp?.dept || managerDept || ''));
+                      let supervisorName = deptSupervisor || fallbackSupervisor;
+                      if (!supervisorName && emp?.manager) supervisorName = String(emp.manager);
+                      else if (!supervisorName && (emp as any)?.manager_id) {
                         const mgr = scopedEmployees.find(e => e.id === (emp as any).manager_id) || employees.find(e => e.id === (emp as any).manager_id);
                         if (mgr?.name) supervisorName = mgr.name;
                       }
