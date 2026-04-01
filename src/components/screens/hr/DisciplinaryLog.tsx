@@ -57,14 +57,31 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
     [scopedEmployees, form.employee_id]
   );
 
+  const currentManagerName = String(currentUser?.full_name || currentUser?.username || '').trim();
+
   const supervisorOptions = useMemo(
     () => scopedEmployees.filter((e) => String(e.id) !== String(form.employee_id || '')),
     [scopedEmployees, form.employee_id]
   );
 
+  const supervisorNameOptions = useMemo(() => {
+    const names = supervisorOptions.map((e) => e.name).filter(Boolean);
+    if (currentManagerName && !names.some((n) => n.toLowerCase() === currentManagerName.toLowerCase())) {
+      names.unshift(currentManagerName);
+    }
+    return names.map((name) => ({ value: name, label: name }));
+  }, [supervisorOptions, currentManagerName]);
+
   const trimText = (value: string) => value.trim();
 
   useEffect(() => { fetchRecords(); }, []);
+
+  useEffect(() => {
+    if (!showForm) return;
+    if (!isManager) return;
+    if (!currentManagerName) return;
+    setForm((prev) => (prev.supervisor ? prev : { ...prev, supervisor: currentManagerName }));
+  }, [showForm, isManager, currentManagerName]);
 
   const fetchRecords = async () => {
     try {
@@ -359,7 +376,13 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Supervisor</label>
-                  <SearchableSelect options={supervisorOptions.map(e => ({ value: e.id, label: e.name, avatarUrl: (e as any).profile_picture || null }))} value={supervisorOptions.find(e => e.name === form.supervisor)?.id || ''} onChange={(id: any) => setForm({ ...form, supervisor: supervisorOptions.find(e => e.id === id)?.name || '' })} placeholder="Select supervisor..." dropdownVariant="pills-horizontal" />
+                  <SearchableSelect
+                    options={supervisorNameOptions}
+                    value={form.supervisor}
+                    onChange={(name: any) => setForm({ ...form, supervisor: String(name || '') })}
+                    placeholder="Select supervisor..."
+                    dropdownVariant="pills-horizontal"
+                  />
                 </div>
               </div>
 
