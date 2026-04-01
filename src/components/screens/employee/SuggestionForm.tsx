@@ -26,6 +26,11 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
   const user = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
   const isManagement = user.role === 'HR' || user.role === 'Manager';
   const actorDept = String(user?.dept || '').trim().toLowerCase();
+  const employeeNameFromUser = String(
+    user?.name || `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || ''
+  ).trim();
+  const employeePositionFromUser = String(user?.position || user?.title || '').trim();
+  const employeeDeptFromUser = String(user?.dept || '').trim();
 
   // Employee form fields
   const emptyForm = {
@@ -37,6 +42,26 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
     planning_step_1: '', planning_step_2: '', planning_step_3: '', estimated_time: '',
   };
   const [form, setForm] = useState(emptyForm);
+
+  useEffect(() => {
+    if (view !== 'newForm' || isManagement) return;
+    setForm((prev) => {
+      const next = {
+        ...prev,
+        employee_name: employeeNameFromUser || prev.employee_name,
+        position: employeePositionFromUser || prev.position,
+        dept: employeeDeptFromUser || prev.dept,
+      };
+      if (
+        next.employee_name === prev.employee_name &&
+        next.position === prev.position &&
+        next.dept === prev.dept
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, [view, isManagement, employeeNameFromUser, employeePositionFromUser, employeeDeptFromUser]);
 
   // Management review fields
   const emptyMgmt = {
@@ -293,12 +318,12 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
               ) : (
                 <div>
                   <label className={labelClass}>Employee Name</label>
-                  <input type="text" value={form.employee_name} onChange={e => setForm({ ...form, employee_name: e.target.value })} className={inputClass} placeholder="Full name" />
+                  <input type="text" value={form.employee_name} onChange={e => setForm({ ...form, employee_name: e.target.value })} className={inputClass} placeholder="Full name" readOnly={!isManagement} />
                 </div>
               )}
               <div>
                 <label className={labelClass}>Position / Title</label>
-                <input type="text" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} className={inputClass} placeholder="Job title" />
+                <input type="text" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} className={inputClass} placeholder="Job title" readOnly={!isManagement} />
               </div>
               <div>
                 <label className={labelClass}>Date</label>
@@ -306,7 +331,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
               </div>
               <div>
                 <label className={labelClass}>Department</label>
-                <input type="text" value={form.dept} onChange={e => setForm({ ...form, dept: e.target.value })} className={inputClass} placeholder="Department" />
+                <input type="text" value={form.dept} onChange={e => setForm({ ...form, dept: e.target.value })} className={inputClass} placeholder="Department" readOnly={!isManagement} />
               </div>
             </div>
           </Card>
