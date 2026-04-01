@@ -245,8 +245,22 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
     const selectedEmployee = scopedEmployees.find((e) => String(e.id) === employeeId);
     if (!selectedEmployee) return;
 
+    const employeeDept = String((selectedEmployee as any).dept || '').trim().toLowerCase();
     let supervisorName = String((selectedEmployee as any).manager || '').trim();
     let supervisorTitle = '';
+
+    // Primary: find supervisor from the same department (e.g., Engineering -> Engineering Supervisor)
+    if (employeeDept) {
+      const deptSupervisor = scopedEmployees.find((e) => {
+        const dept = String((e as any).dept || '').trim().toLowerCase();
+        const pos = String((e as any).position || '').trim().toLowerCase();
+        return dept === employeeDept && pos.includes('supervisor');
+      });
+      if (deptSupervisor) {
+        supervisorName = String(deptSupervisor.name || '').trim();
+        supervisorTitle = String(deptSupervisor.position || '').trim();
+      }
+    }
 
     if (!supervisorName && selectedEmployee.manager_id) {
       const managerEmp = employees.find((e) => Number(e.id) === Number(selectedEmployee.manager_id));
