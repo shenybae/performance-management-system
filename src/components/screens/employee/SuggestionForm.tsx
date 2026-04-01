@@ -26,6 +26,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
   const [filterEmployee, setFilterEmployee] = useState('');
   const user = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
   const isManagement = user.role === 'HR' || user.role === 'Manager';
+  const actorDept = String(user?.dept || '').trim().toLowerCase();
 
   // Employee form fields
   const emptyForm = {
@@ -218,8 +219,11 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
 
   const inputClass = "w-full p-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40 transition-all";
   const labelClass = "block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5";
-  const normalizedSupervisorCandidates = employees.filter(e => String(e?.position || '').toLowerCase().includes('supervisor'));
-  const supervisorCandidates = normalizedSupervisorCandidates.length > 0 ? normalizedSupervisorCandidates : employees;
+  const scopedEmployees = isManagement && actorDept
+    ? employees.filter((e) => String(e?.dept || '').trim().toLowerCase() === actorDept)
+    : employees;
+  const normalizedSupervisorCandidates = scopedEmployees.filter(e => String(e?.position || '').toLowerCase().includes('supervisor'));
+  const supervisorCandidates = normalizedSupervisorCandidates.length > 0 ? normalizedSupervisorCandidates : scopedEmployees;
   const supervisorOptions = supervisorCandidates.map(e => ({
     value: e.name,
     label: e.name,
@@ -238,7 +242,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
 
   const initializeSupervisorForEmployee = (employeeIdRaw: any) => {
     const employeeId = String(employeeIdRaw || '');
-    const selectedEmployee = employees.find((e) => String(e.id) === employeeId);
+    const selectedEmployee = scopedEmployees.find((e) => String(e.id) === employeeId);
     if (!selectedEmployee) return;
 
     let supervisorName = String((selectedEmployee as any).manager || '').trim();
@@ -289,7 +293,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
           <div className="max-w-sm">
             <label className={labelClass}>Select Employee</label>
             <SearchableSelect
-              options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
+              options={scopedEmployees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
               value={reviewEmployee}
               onChange={v => {
                 const selectedId = String(v || '');
@@ -435,11 +439,11 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                 <div>
                   <label className={labelClass}>Employee</label>
                   <SearchableSelect
-                    options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
+                    options={scopedEmployees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                     value={form.employee_name}
                     onChange={v => {
                       const selectedValue = String(v);
-                      const emp = employees.find(e => String(e.id) === selectedValue);
+                      const emp = scopedEmployees.find(e => String(e.id) === selectedValue);
                       setForm({ ...form, employee_name: emp?.name || selectedValue, position: emp?.position || form.position, dept: emp?.dept || form.dept });
                       initializeSupervisorForEmployee(selectedValue);
                     }}

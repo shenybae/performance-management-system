@@ -4323,7 +4323,16 @@ async function startServer() {
       const actorCtx = await getActorOrgContext(Number(actor.id || 0));
 
       if (role === 'Manager') {
-        const rows = await query("SELECT s.* FROM suggestions s ORDER BY s.created_at DESC");
+        const managerDept = normalizeDept(actorCtx.dept);
+        if (!managerDept) return res.json([]);
+        const rows = await query(
+          `SELECT s.*
+           FROM suggestions s
+           LEFT JOIN employees e ON e.id = s.employee_id
+           WHERE LOWER(TRIM(COALESCE(e.dept, s.dept, ''))) = LOWER(TRIM(?))
+           ORDER BY s.created_at DESC`,
+          [managerDept]
+        );
         return res.json(rows);
       }
 
@@ -4368,9 +4377,17 @@ async function startServer() {
   app.post("/api/suggestions", authenticateToken, async (req, res) => {
     try {
       const b = req.body;
-      const userRole = (req as any).user?.role;
+      const actor = (req as any).user || {};
+      const userRole = actor?.role;
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
       // Managers/HR can specify a target employee_id from the body; employees use their own
-      const empId = (userRole === 'Manager' || userRole === 'HR') && b.employee_id ? b.employee_id : ((req as any).user?.employee_id || null);
+      const empId = (userRole === 'Manager' || userRole === 'HR') && b.employee_id ? b.employee_id : (actor?.employee_id || null);
+      if (userRole === 'Manager' && empId) {
+        const actorDept = normalizeDept(actorCtx.dept);
+        if (!actorDept) return res.status(403).json({ error: 'Manager department not set' });
+        const allowed = await canActorAccessEmployeeByDept(actorDept, normalizeEmployeeId(empId));
+        if (!allowed) return res.status(403).json({ error: 'Managers can only create suggestions for employees in their own department' });
+      }
       await query(`INSERT INTO suggestions (employee_id, employee_name, position, dept, date, concern, labor_needed, materials_needed, equipment_needed, capital_needed, estimated_cost, desired_benefit, estimated_financial_benefit, planning_steps, estimated_time, title, other_resource_needed, planning_step_1, planning_step_2, planning_step_3, total_financial_benefit, employee_signature, employee_signature_date, supervisor_name, supervisor_title, date_received, follow_up_date, suggestion_merit, benefit_to_company, cost_to_company, cost_efficient_explanation, suggestion_priority, action_to_be_taken, suggested_reward, supervisor_signature, supervisor_signature_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [empId, b.employee_name || null, b.position || null, b.dept || null, b.date || null, b.concern || null,
          b.labor_needed || null, b.materials_needed || null, b.equipment_needed || null, b.capital_needed || null,
@@ -4404,6 +4421,22 @@ async function startServer() {
       }
 
       if (role === 'HR' || (role === 'Employee' && actorCtx.isSupervisor)) {
+        const sRows: any = await query(
+          `SELECT s.id, s.employee_id, COALESCE(e.dept, s.dept, '') as dept
+           FROM suggestions s
+           LEFT JOIN employees e ON e.id = s.employee_id
+           WHERE s.id = ?
+           LIMIT 1`,
+          [req.params.id]
+        );
+        const sRow = Array.isArray(sRows) ? sRows[0] : sRows;
+        if (!sRow) return res.status(404).json({ error: 'Suggestion not found' });
+        const actorDept = normalizeDept(actorCtx.dept);
+        const targetDept = normalizeDept(sRow.dept);
+        if (!actorDept || actorDept !== targetDept) return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      if (role === 'Manager') {
         const sRows: any = await query(
           `SELECT s.id, s.employee_id, COALESCE(e.dept, s.dept, '') as dept
            FROM suggestions s
