@@ -136,6 +136,23 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
     }
   }, [view, chatEmployee, chatMessages.length]);
 
+  // Department-scoped employee filtering for managers
+  const managerDept = String(
+    currentUser?.dept ||
+    currentUser?.department ||
+    currentUser?.employee?.dept ||
+    currentUser?.employee_department ||
+    ''
+  ).trim();
+  const isManager = currentUser?.role === 'Manager';
+  const filteredEmployees = useMemo(() => {
+    if (!isManager || !managerDept) return employees;
+    return employees.filter(e => {
+      const empDept = String(e.dept || '').trim();
+      return empDept.toLowerCase() === managerDept.toLowerCase();
+    });
+  }, [employees, isManager, managerDept]);
+
   const fetchLogs = async () => {
     try { const res = await fetch('/api/coaching_logs', { headers: getAuthHeaders() }); const data = await res.json(); setLogs(Array.isArray(data) ? data : []); } catch { setLogs([]); }
   };
@@ -146,22 +163,6 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
         for (const c of DEFAULT_COURSES) {
           await fetch('/api/elearning_courses', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(c) });
         }
-          // Department-scoped employee filtering for managers
-          const managerDept = String(
-            currentUser?.dept ||
-            currentUser?.department ||
-            currentUser?.employee?.dept ||
-            currentUser?.employee_department ||
-            ''
-          ).trim();
-          const isManager = currentUser?.role === 'Manager';
-          const filteredEmployees = useMemo(() => {
-            if (!isManager || !managerDept) return employees;
-            return employees.filter(e => {
-              const empDept = String(e.dept || '').trim();
-              return empDept.toLowerCase() === managerDept.toLowerCase();
-            });
-          }, [employees, isManager, managerDept]);
         const res2 = await fetch('/api/elearning_courses', { headers: getAuthHeaders() }); const data2 = await res2.json();
         setCourses(Array.isArray(data2) ? data2 : []);
       } else { setCourses(Array.isArray(data) ? data : []); }

@@ -3491,7 +3491,7 @@ async function startServer() {
   });
 
   // ---- Coaching Logs CRUD ----
-  app.get("/api/coaching_logs", async (req, res) => {
+  app.get("/api/coaching_logs", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
       const role = actor.role;
