@@ -2,15 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Modal } from '../../common/Modal';
-import { AnimatePresence, motion } from 'motion/react';
-import { Building2, CalendarClock, Crown, Search, Sparkles, Users } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Building2, CalendarClock, Crown, Plus, Search, Users } from 'lucide-react';
 
 export const Departments = () => {
   const [depts, setDepts] = useState<any[]>([]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmMode, setConfirmMode] = useState<'add' | 'archive'>('archive');
   const [pendingName, setPendingName] = useState('');
   const [pendingId, setPendingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,31 +31,22 @@ export const Departments = () => {
 
   useEffect(() => { fetchDepts(); }, [showArchived]);
 
-  const handleAdd = (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return (window as any).notify('Enter a department name', 'error');
-    setConfirmMode('add');
-    setPendingName(name.trim());
-    setPendingDescription(description.trim());
-    setConfirmOpen(true);
-  };
-
-  const handleConfirmAdd = async () => {
-    setConfirmOpen(false);
     setLoading(true);
     try {
       const token = localStorage.getItem('talentflow_token');
       const res = await fetch('/api/departments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ name: pendingName, description: (pendingDescription || null) })
+        body: JSON.stringify({ name: name.trim(), description: (description.trim() || null) })
       });
       if (res.ok) {
         (window as any).notify('Department created', 'success');
         setName('');
         setDescription('');
-        setPendingName('');
-        setPendingDescription('');
+        setAddOpen(false);
         await fetchDepts();
       } else {
         const err = await res.json().catch(() => ({}));
@@ -81,8 +72,6 @@ export const Departments = () => {
       }
     } catch (e) { (window as any).notify('Server error', 'error'); }
   };
-
-  const [pendingDescription, setPendingDescription] = useState('');
 
   const visibleDepts = depts
     .filter(d => (d.name || '').toLowerCase().includes(query.toLowerCase()))
@@ -130,31 +119,43 @@ export const Departments = () => {
           </div>
         </div>
       </Card>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6">
+        <Card>
           <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Department Directory</h3>
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 w-72 p-2 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900">
               <Search className="text-slate-400" />
               <input placeholder="Search departments" value={query} onChange={e=>setQuery(e.target.value)} className="w-full text-sm bg-transparent outline-none" />
             </div>
             <label className="text-sm inline-flex items-center gap-2"><input type="checkbox" checked={showArchived} onChange={e=>{ setShowArchived(e.target.checked); }} /> Show archived</label>
+            </div>
+            <button type="button" onClick={() => setAddOpen(true)} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl gradient-bg text-white font-semibold text-sm">
+              <Plus size={16} />
+              Add Department
+            </button>
           </div>
           <div>
             {depts.length === 0 ? <p className="text-sm text-slate-500">No departments found.</p> : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-4">
-                <AnimatePresence mode="popLayout">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   {visibleDepts.map((d, idx) => (
-                    <motion.button
+                    <motion.div
                       key={d.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => { setSelectedDept(d); setDetailOpen(true); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedDept(d);
+                          setDetailOpen(true);
+                        }
+                      }}
                       initial={{ opacity: 0, y: 16, scale: 0.98 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -12, scale: 0.98 }}
                       transition={{ duration: 0.28, delay: idx * 0.03 }}
                       whileHover={{ y: -4 }}
-                      className={`text-left p-5 rounded-2xl border cursor-pointer transition-all duration-300 ${d.deleted_at ? 'opacity-65 bg-slate-50/60 dark:bg-slate-900/50' : 'bg-gradient-to-br from-white to-teal-50/50 dark:from-slate-900 dark:to-slate-900/90 hover:shadow-lg'} border-slate-200 dark:border-slate-700 min-h-[198px]`}
+                      className={`text-left p-5 rounded-2xl border cursor-pointer transition-all duration-300 overflow-hidden flex flex-col ${d.deleted_at ? 'opacity-65 bg-slate-50/60 dark:bg-slate-900/50' : 'bg-gradient-to-br from-white to-teal-50/50 dark:from-slate-900 dark:to-slate-900/90 hover:shadow-lg'} border-slate-200 dark:border-slate-700 min-h-[220px]`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">
@@ -180,44 +181,39 @@ export const Departments = () => {
                         </div>
                       </div>
 
-                      <div className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-teal-700 dark:text-teal-300">
+                      <div className="mt-4 text-sm font-semibold text-teal-700 dark:text-teal-300">
                         Open profile
-                        <Sparkles size={14} />
                       </div>
-                    </motion.button>
+                    </motion.div>
                   ))}
-                </AnimatePresence>
               </div>
             )}
           </div>
         </Card>
-
-        <Card>
-          <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Add Department</h3>
-          <form onSubmit={handleAdd} className="space-y-3">
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Name</label>
-              <input value={name} onChange={e => setName(e.target.value)} className="w-full mt-1 p-2 border rounded-lg text-sm" placeholder="e.g. Human Resources" />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description</label>
-              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="w-full mt-1 p-2 border rounded-lg text-sm" placeholder="Short description or responsibilities (optional)" />
-            </div>
-            <button type="submit" disabled={loading} className="w-full gradient-bg text-white py-2 rounded-lg font-bold text-sm">Add</button>
-          </form>
-        </Card>
       </div>
     </div>
-    <Modal open={confirmOpen} title={confirmMode === 'add' ? 'Confirm department creation' : 'Confirm archive'} onClose={() => setConfirmOpen(false)}>
+    <Modal open={addOpen} title="Add Department" maxWidthClassName="max-w-2xl" onClose={() => setAddOpen(false)}>
+      <form onSubmit={handleAdd} className="space-y-4">
+        <div>
+          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Name</label>
+          <input value={name} onChange={e => setName(e.target.value)} className="w-full mt-1 p-2.5 border rounded-lg text-sm" placeholder="e.g. Human Resources" />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description</label>
+          <textarea value={description} onChange={e => setDescription(e.target.value)} rows={5} className="w-full mt-1 p-2.5 border rounded-lg text-sm" placeholder="Short description or responsibilities (optional)" />
+        </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => setAddOpen(false)} className="px-4 py-2 rounded-lg border">Cancel</button>
+          <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg gradient-bg text-white font-semibold">{loading ? 'Adding...' : 'Add Department'}</button>
+        </div>
+      </form>
+    </Modal>
+    <Modal open={confirmOpen} title="Confirm archive" onClose={() => setConfirmOpen(false)}>
       <div className="space-y-4">
-        {confirmMode === 'add' ? (
-          <p>Create the department <strong>{pendingName}</strong>{pendingDescription ? ` with description: "${pendingDescription}"` : ''}?</p>
-        ) : (
-          <p>Are you sure you want to archive the department <strong>{pendingName}</strong>?</p>
-        )}
+        <p>Are you sure you want to archive the department <strong>{pendingName}</strong>?</p>
         <div className="flex gap-2 justify-end">
           <button onClick={() => setConfirmOpen(false)} className="px-3 py-2 rounded-lg border">Cancel</button>
-          <button onClick={confirmMode === 'add' ? handleConfirmAdd : handleConfirmArchive} className="px-3 py-2 rounded-lg gradient-bg text-white">{confirmMode === 'add' ? 'Create' : 'Archive'}</button>
+          <button onClick={handleConfirmArchive} className="px-3 py-2 rounded-lg gradient-bg text-white">Archive</button>
         </div>
       </div>
     </Modal>
@@ -288,7 +284,7 @@ export const Departments = () => {
 
           <div className="flex justify-end gap-2">
             {!selectedDept.deleted_at ? (
-              <button onClick={() => { setConfirmMode('archive'); setPendingName(selectedDept.name); setPendingId(selectedDept.id); setConfirmOpen(true); setDetailOpen(false); }} className="px-3 py-2 rounded-lg border text-red-600">Archive</button>
+              <button onClick={() => { setPendingName(selectedDept.name); setPendingId(selectedDept.id); setConfirmOpen(true); setDetailOpen(false); }} className="px-3 py-2 rounded-lg border text-red-600">Archive</button>
             ) : (
               <button onClick={async () => { if (!confirm('Restore this department?')) return; try { const token = localStorage.getItem('talentflow_token'); const res = await fetch(`/api/departments/${selectedDept.id}/restore`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} }); if (res.ok) { (window as any).notify('Restored', 'success'); fetchDepts(); setDetailOpen(false); } else { (window as any).notify('Restore failed','error'); } } catch (e) { (window as any).notify('Server error','error'); } }} className="px-3 py-2 rounded-lg gradient-bg text-white">Restore</button>
             )}
