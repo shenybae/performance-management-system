@@ -753,18 +753,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
 
             <div><label className={lbl}>Supervisor's Comments</label><textarea rows={3} value={perfForm.supervisors_overall_comment} onChange={e => setPerfForm({ ...perfForm, supervisors_overall_comment: e.target.value })} className={inp} placeholder="Summarize the employee's overall performance..." maxLength={2000} /></div>
 
-            <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3">
-              <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                Review check: confirm Section I ratings, comments, and recommendation before routing this record to Signature Queue.
-              </p>
-              <p className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                Supervisor signature is completed in Signature Queue after this form is submitted.
-              </p>
-            </div>
 
-            <div className="md:col-span-2 text-[11px] text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-lg px-3 py-2">
-              Supervisor signature fields are removed from this form and handled in Signature Queue.
-            </div>
           </div>
 
           {/* ── Section II: Reviewer's Comments ──────────────────── */}
@@ -797,9 +786,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
 
             <div><label className={lbl}>Comments (attach additional pages if necessary)</label><textarea rows={3} value={perfForm.reviewers_comment} onChange={e => setPerfForm({ ...perfForm, reviewers_comment: e.target.value })} className={inp} placeholder="Reviewer's comments..." maxLength={2000} /></div>
 
-            <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3 text-[11px] text-amber-700 dark:text-amber-300">
-              Reviewer signature is completed in Signature Queue after this form is submitted.
-            </div>
+
           </div>
 
           {/* ── Section III: Employee's Acknowledgement ──────────── */}
@@ -809,11 +796,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
               I have reviewed this report on the date indicated and have had the opportunity to discuss it with my rating supervisor(s).
               My signature does not necessarily signify agreement. I understand that I may submit a written rebuttal, which will be attached to this evaluation and placed in my personnel file.
             </p>
-            <div className="rounded-lg border border-blue-200 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-900/10 p-3">
-              <p className="text-[11px] text-blue-700 dark:text-blue-300">
-                Employee signature is completed on the employee side in Verification of Review after this evaluation is submitted.
-              </p>
-            </div>
+
           </div>
 
           {/* ── Section IV: HR Admin Certification ── */}
@@ -822,11 +805,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
             <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
               I have reviewed the supervisor's evaluation, reviewer's comments, and the employee's statement (if any). I believe this form to be complete and in accordance with the guidelines provided for evaluations of employees serving in this title. This form shall be made part of the employee's official Personnel File.
             </p>
-            <div className="rounded-lg border border-blue-200 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-900/10 p-3">
-              <p className="text-[11px] text-blue-700 dark:text-blue-300">
-                HR certification is completed on the HR side (Employee Jacket) after employee acknowledgement is available.
-              </p>
-            </div>
+
           </div>
 
           {/* ── Submit ───────────────────────────────────────────── */}
