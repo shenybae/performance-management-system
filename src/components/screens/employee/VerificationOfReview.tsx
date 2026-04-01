@@ -31,6 +31,22 @@ export const VerificationOfReview = () => {
   const [remarks, setRemarks] = useState('');
   const [signerPrintTitle, setSignerPrintTitle] = useState('');
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const [reviewerAgree, setReviewerAgree] = useState<'agree' | 'disagree' | ''>('');
+  const [reviewerRevisedRating, setReviewerRevisedRating] = useState<'Satisfactory' | 'Unsatisfactory' | ''>('');
+  const [reviewerComments, setReviewerComments] = useState('');
+  const [employeeAcknowledgement, setEmployeeAcknowledgement] = useState('');
+
+  const resetQueueSignerState = () => {
+    setActiveId(null);
+    setSignature('');
+    setRemarks('');
+    setSignerPrintTitle('');
+    setReviewConfirmed(false);
+    setReviewerAgree('');
+    setReviewerRevisedRating('');
+    setReviewerComments('');
+    setEmployeeAcknowledgement('');
+  };
 
   useEffect(() => {
     fetchAppraisals();
@@ -135,6 +151,9 @@ export const VerificationOfReview = () => {
   };
 
   const signEmployeeAppraisal = async (id: number) => {
+    if (!reviewConfirmed) return window.notify?.('Please confirm you reviewed the form before signing', 'error');
+    if (!signerPrintTitle.trim()) return window.notify?.('Please provide print name / title', 'error');
+    if (!employeeAcknowledgement.trim()) return window.notify?.('Please provide acknowledgement statement', 'error');
     if (!signature) return window.notify?.('Please provide your signature', 'error');
     try {
       const res = await fetch(`/api/appraisals/${id}`, {
@@ -143,15 +162,13 @@ export const VerificationOfReview = () => {
         body: JSON.stringify({
           employee_signature: signature,
           employee_signature_date: new Date().toISOString().split('T')[0],
-          employee_acknowledgement: remarks || 'Acknowledged',
-          employee_print_name: user?.full_name || user?.employee_name || null,
+          employee_acknowledgement: employeeAcknowledgement.trim(),
+          employee_print_name: signerPrintTitle.trim(),
         }),
       });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Employee signature saved', 'success');
-      setActiveId(null);
-      setSignature('');
-      setRemarks('');
+      resetQueueSignerState();
       fetchAppraisals();
     } catch {
       window.notify?.('Failed to sign appraisal', 'error');
@@ -163,11 +180,18 @@ export const VerificationOfReview = () => {
     if (!signerPrintTitle.trim()) return window.notify?.('Please provide print name / title', 'error');
     if (!signature) return window.notify?.('Please provide your signature', 'error');
     const stage = String(a?.queueStage || 'supervisor');
+    if (stage === 'reviewer' && !reviewerAgree) return window.notify?.('Please select reviewer agreement', 'error');
+    if (stage === 'reviewer' && reviewerAgree === 'disagree' && !reviewerRevisedRating) {
+      return window.notify?.('Please select revised rating for disagreement', 'error');
+    }
     const payload: any = {};
     if (stage === 'reviewer') {
       payload.reviewer_signature = signature;
       payload.reviewer_signature_date = new Date().toISOString().split('T')[0];
       payload.reviewer_print_name = signerPrintTitle.trim();
+      payload.reviewer_agree = reviewerAgree;
+      payload.revised_rating = reviewerAgree === 'disagree' ? reviewerRevisedRating : null;
+      payload.reviewers_comment = reviewerComments.trim() || null;
     } else {
       payload.supervisor_signature = signature;
       payload.supervisor_signature_date = new Date().toISOString().split('T')[0];
@@ -181,10 +205,7 @@ export const VerificationOfReview = () => {
       });
       if (!res.ok) throw new Error('Failed');
       window.notify?.(`${stage === 'reviewer' ? 'Reviewer' : 'Supervisor'} signature saved`, 'success');
-      setActiveId(null);
-      setSignature('');
-      setSignerPrintTitle('');
-      setReviewConfirmed(false);
+      resetQueueSignerState();
       fetchAppraisals();
     } catch {
       window.notify?.('Failed to sign appraisal', 'error');
@@ -192,6 +213,8 @@ export const VerificationOfReview = () => {
   };
 
   const signHrAppraisal = async (id: number) => {
+    if (!reviewConfirmed) return window.notify?.('Please confirm you reviewed the form before signing', 'error');
+    if (!signerPrintTitle.trim()) return window.notify?.('Please provide print name / title', 'error');
     if (!signature) return window.notify?.('Please provide your signature', 'error');
     try {
       const res = await fetch(`/api/appraisals/${id}`, {
@@ -200,13 +223,12 @@ export const VerificationOfReview = () => {
         body: JSON.stringify({
           hr_signature: signature,
           hr_signature_date: new Date().toISOString().split('T')[0],
-          hr_print_name: user?.full_name || user?.employee_name || null,
+          hr_print_name: signerPrintTitle.trim(),
         }),
       });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('HR signature saved', 'success');
-      setActiveId(null);
-      setSignature('');
+      resetQueueSignerState();
       fetchAppraisals();
     } catch {
       window.notify?.('Failed to sign appraisal', 'error');
@@ -674,7 +696,7 @@ export const VerificationOfReview = () => {
       <div className="flex justify-end gap-2">
         <button
           type="button"
-          onClick={() => { setActiveId(null); setSignature(''); setRemarks(''); setSignerPrintTitle(''); setReviewConfirmed(false); }}
+          onClick={resetQueueSignerState}
           className="px-3 py-1.5 text-sm text-slate-500"
         >
           Cancel
@@ -691,7 +713,7 @@ export const VerificationOfReview = () => {
     </div>
   );
 
-  const renderAppraisalSignBox = (action: () => void) => (
+  const renderAppraisalSignBox = (action: () => void, stage: 'supervisor' | 'reviewer' | 'employee' | 'hr') => (
     <div className="mt-3 border-t dark:border-slate-700 pt-3 space-y-3">
       <label className="inline-flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
         <input
@@ -710,11 +732,79 @@ export const VerificationOfReview = () => {
         placeholder="Print Name / Title"
         maxLength={120}
       />
+
+      {stage === 'reviewer' && (
+        <>
+          <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+            <label className="inline-flex items-center gap-2 mr-5">
+              <input
+                type="radio"
+                name="queue-reviewer-agree"
+                checked={reviewerAgree === 'agree'}
+                onChange={() => { setReviewerAgree('agree'); setReviewerRevisedRating(''); }}
+                className="accent-teal-600"
+              />
+              I agree with the overall rating
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="queue-reviewer-agree"
+                checked={reviewerAgree === 'disagree'}
+                onChange={() => setReviewerAgree('disagree')}
+                className="accent-teal-600"
+              />
+              I do not agree with the overall rating
+            </label>
+          </div>
+
+          {reviewerAgree === 'disagree' && (
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Revised Overall Rating</label>
+              <div className="flex gap-4 text-sm text-slate-700 dark:text-slate-300">
+                {['Satisfactory', 'Unsatisfactory'].map((r) => (
+                  <label key={r} className="inline-flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="queue-revised-rating"
+                      checked={reviewerRevisedRating === r}
+                      onChange={() => setReviewerRevisedRating(r as 'Satisfactory' | 'Unsatisfactory')}
+                      className="accent-teal-600"
+                    />
+                    {r}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <textarea
+            rows={3}
+            value={reviewerComments}
+            onChange={(e) => setReviewerComments(e.target.value)}
+            className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+            placeholder="Reviewer comments (optional)"
+            maxLength={2000}
+          />
+        </>
+      )}
+
+      {stage === 'employee' && (
+        <textarea
+          rows={3}
+          value={employeeAcknowledgement}
+          onChange={(e) => setEmployeeAcknowledgement(e.target.value)}
+          className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+          placeholder="Employee acknowledgement statement"
+          maxLength={2000}
+        />
+      )}
+
       <SignatureUpload label="Digital Signature" value={signature} onChange={setSignature} showQueueReminder={false} />
       <div className="flex justify-end gap-2">
         <button
           type="button"
-          onClick={() => { setActiveId(null); setSignature(''); setSignerPrintTitle(''); setReviewConfirmed(false); }}
+          onClick={resetQueueSignerState}
           className="px-3 py-1.5 text-sm text-slate-500"
         >
           Cancel
@@ -722,7 +812,14 @@ export const VerificationOfReview = () => {
         <button
           type="button"
           onClick={action}
-          disabled={!signature || !reviewConfirmed || !signerPrintTitle.trim()}
+          disabled={
+            !signature
+            || !reviewConfirmed
+            || !signerPrintTitle.trim()
+            || (stage === 'employee' && !employeeAcknowledgement.trim())
+            || (stage === 'reviewer' && !reviewerAgree)
+            || (stage === 'reviewer' && reviewerAgree === 'disagree' && !reviewerRevisedRating)
+          }
           className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold disabled:opacity-50"
         >
           Sign
@@ -785,11 +882,19 @@ export const VerificationOfReview = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => setActivePreviewId(activePreviewId === `emp-app-${a.id}` ? null : `emp-app-${a.id}`)}>View Form</button>
-                    <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-app-${a.id}`)}>Sign</button>
+                    <button
+                      className="text-sm font-bold text-teal-deep"
+                      onClick={() => {
+                        setActiveId(`emp-app-${a.id}`);
+                        setSignerPrintTitle(String(user?.full_name || user?.employee_name || user?.username || ''));
+                      }}
+                    >
+                      Sign
+                    </button>
                   </div>
                 </div>
                 {activePreviewId === `emp-app-${a.id}` && renderAppraisalPreview(a)}
-                {activeId === `emp-app-${a.id}` && renderSignBox(() => signEmployeeAppraisal(a.id), true)}
+                {activeId === `emp-app-${a.id}` && renderAppraisalSignBox(() => signEmployeeAppraisal(a.id), 'employee')}
               </div>
             ))}
           </Card>
@@ -873,7 +978,7 @@ export const VerificationOfReview = () => {
                   </div>
                 </div>
                 {activePreviewId === (a.queueKey || `sup-app-${a.id}`) && renderAppraisalPreview(a)}
-                {activeId === (a.queueKey || `sup-app-${a.id}`) && renderAppraisalSignBox(() => signManagementAppraisal(a))}
+                {activeId === (a.queueKey || `sup-app-${a.id}`) && renderAppraisalSignBox(() => signManagementAppraisal(a), a.queueStage === 'reviewer' ? 'reviewer' : 'supervisor')}
               </div>
             ))}
             <p className="mt-2 text-xs text-emerald-600">Finished: {doneSupervisorAppraisals.length}</p>
@@ -1020,7 +1125,10 @@ export const VerificationOfReview = () => {
                     <button 
                       disabled={!canSign} 
                       className="text-sm font-bold text-teal-deep disabled:text-slate-400 disabled:cursor-not-allowed" 
-                      onClick={() => setActiveId(`hr-app-${a.id}`)}
+                      onClick={() => {
+                        setActiveId(`hr-app-${a.id}`);
+                        setSignerPrintTitle(String(user?.full_name || user?.employee_name || user?.username || ''));
+                      }}
                       title={!canSign ? 'Assigned to another HR user' : 'Sign this appraisal'}
                     >
                       Sign
@@ -1028,7 +1136,7 @@ export const VerificationOfReview = () => {
                   </div>
                 </div>
                 {activePreviewId === `hr-app-${a.id}` && renderAppraisalPreview(a)}
-                {activeId === `hr-app-${a.id}` && renderSignBox(() => signHrAppraisal(a.id))}
+                {activeId === `hr-app-${a.id}` && renderAppraisalSignBox(() => signHrAppraisal(a.id), 'hr')}
               </div>
             )})}
             <div className="mt-3 flex items-center gap-2 text-emerald-600 text-sm font-semibold">

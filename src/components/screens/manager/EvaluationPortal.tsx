@@ -292,11 +292,6 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
       window.notify?.('One or more comment fields exceed the 2000-character limit', 'error');
       return;
     }
-    const nameFields = [perfForm.supervisor_print_name, perfForm.reviewer_print_name, perfForm.employee_print_name, perfForm.hr_print_name];
-    if (nameFields.some((txt) => (txt || '').trim().length > 120)) {
-      window.notify?.('Print name/title fields must be 120 characters or less', 'error');
-      return;
-    }
     try {
       const productivity = parseFloat(((perfForm.work_quality + perfForm.quantity_of_work) / 2).toFixed(1));
       const overall = ((perfForm.work_quality + perfForm.quantity_of_work + perfForm.relationship_with_others + perfForm.work_habits + perfForm.job_knowledge + perfForm.attendance + perfForm.promotability) / 7).toFixed(1);
@@ -439,20 +434,6 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   /* ── Achievement Measure full-screen view ─────────────────────── */
   /* ════════════════════════════════════════════════════════════════ */
   if (view === 'achievement') {
-    // Check if this is an already-submitted form being reopened
-    if (achForm.employee_id) {
-      const existingRecord = appraisals.find(a => 
-        a.employee_id === parseInt(achForm.employee_id) && 
-        a.form_type === 'Achievement Measure' &&
-        (a.supervisor_signature || a.employee_signature)
-      );
-      if (existingRecord) {
-        // Open submitted form in read-only detail view
-        setDetailRecord(existingRecord);
-        setView('detail');
-        return null;
-      }
-    }
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-sm text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors mb-4">
@@ -580,20 +561,6 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   /* ── Performance Evaluation full-screen view  (PDF-based)──────── */
   /* ════════════════════════════════════════════════════════════════ */
   if (view === 'performance') {
-    // Check if this is an already-submitted form being reopened
-    if (perfForm.employee_id) {
-      const existingRecord = appraisals.find(a => 
-        a.employee_id === parseInt(perfForm.employee_id) && 
-        a.form_type === 'Performance Evaluation' &&
-        (a.supervisor_signature || a.reviewer_signature || a.employee_signature || a.hr_signature)
-      );
-      if (existingRecord) {
-        // Open submitted form in read-only detail view
-        setDetailRecord(existingRecord);
-        setView('detail');
-        return null;
-      }
-    }
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-sm text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors mb-4">
@@ -760,31 +727,9 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
           <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-5 space-y-4">
             <h3 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest">II. Reviewer's Comments</h3>
 
-            <div className="flex gap-6 text-sm text-slate-700 dark:text-slate-300">
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="radio" name="reviewer_agree" checked={perfForm.reviewer_agree === 'agree'} onChange={() => setPerfForm({ ...perfForm, reviewer_agree: 'agree', revised_rating: '' })} className="accent-teal-600" />
-                I agree with the overall rating
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="radio" name="reviewer_agree" checked={perfForm.reviewer_agree === 'disagree'} onChange={() => setPerfForm({ ...perfForm, reviewer_agree: 'disagree' })} className="accent-teal-600" />
-                I do not agree with the overall rating
-              </label>
-            </div>
-
-            {perfForm.reviewer_agree === 'disagree' && (
-              <div>
-                <label className={lbl}>Revised Overall Rating</label>
-                <div className="flex gap-4 mt-1 text-sm text-slate-700 dark:text-slate-300">
-                  {['Satisfactory', 'Unsatisfactory'].map(r => (
-                    <label key={r} className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="radio" name="revised_rating" checked={perfForm.revised_rating === r} onChange={() => setPerfForm({ ...perfForm, revised_rating: r })} className="accent-teal-600" /> {r}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div><label className={lbl}>Comments (attach additional pages if necessary)</label><textarea rows={3} value={perfForm.reviewers_comment} onChange={e => setPerfForm({ ...perfForm, reviewers_comment: e.target.value })} className={inp} placeholder="Reviewer's comments..." maxLength={2000} /></div>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
+              Reviewer agreement, revised rating (if any), and reviewer comments are completed only in the assigned reviewer's Signature Queue after submission.
+            </p>
 
 
           </div>
@@ -868,6 +813,12 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
             <span className={`text-xs font-bold uppercase px-3 py-1 rounded-full ${allSigned ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
               {allSigned ? 'Verified' : 'Pending'}
             </span>
+          </div>
+
+          <div className={`mb-4 rounded-lg border px-3 py-2 text-xs ${allSigned ? 'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-300' : 'border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-300'}`}>
+            {allSigned
+              ? 'Reminder: this form is completed and acknowledged because all required signatures were finished in Signature Queue.'
+              : 'Reminder: this form will only be completed and acknowledged after all required signatures are finished in Signature Queue.'}
           </div>
 
           {/* Info row */}
