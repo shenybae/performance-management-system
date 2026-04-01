@@ -26,8 +26,11 @@ export const VerificationOfReview = () => {
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeQueueSection, setActiveQueueSection] = useState<string>('');
+  const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
   const [signature, setSignature] = useState('');
   const [remarks, setRemarks] = useState('');
+  const [signerPrintTitle, setSignerPrintTitle] = useState('');
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
 
   useEffect(() => {
     fetchAppraisals();
@@ -155,22 +158,33 @@ export const VerificationOfReview = () => {
     }
   };
 
-  const signSupervisorAppraisal = async (id: number) => {
+  const signManagementAppraisal = async (a: any) => {
+    if (!reviewConfirmed) return window.notify?.('Please confirm you reviewed the form before signing', 'error');
+    if (!signerPrintTitle.trim()) return window.notify?.('Please provide print name / title', 'error');
     if (!signature) return window.notify?.('Please provide your signature', 'error');
+    const stage = String(a?.queueStage || 'supervisor');
+    const payload: any = {};
+    if (stage === 'reviewer') {
+      payload.reviewer_signature = signature;
+      payload.reviewer_signature_date = new Date().toISOString().split('T')[0];
+      payload.reviewer_print_name = signerPrintTitle.trim();
+    } else {
+      payload.supervisor_signature = signature;
+      payload.supervisor_signature_date = new Date().toISOString().split('T')[0];
+      payload.supervisor_print_name = signerPrintTitle.trim();
+    }
     try {
-      const res = await fetch(`/api/appraisals/${id}`, {
+      const res = await fetch(`/api/appraisals/${a.id}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
-        body: JSON.stringify({
-          supervisor_signature: signature,
-          supervisor_signature_date: new Date().toISOString().split('T')[0],
-          supervisor_print_name: user?.full_name || user?.employee_name || null,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Failed');
-      window.notify?.('Supervisor signature saved', 'success');
+      window.notify?.(`${stage === 'reviewer' ? 'Reviewer' : 'Supervisor'} signature saved`, 'success');
       setActiveId(null);
       setSignature('');
+      setSignerPrintTitle('');
+      setReviewConfirmed(false);
       fetchAppraisals();
     } catch {
       window.notify?.('Failed to sign appraisal', 'error');
@@ -428,11 +442,30 @@ export const VerificationOfReview = () => {
   );
 
   const pendingSupervisorAppraisals = useMemo(
-    () => appraisals.filter((a) => !a.supervisor_signature && sameDept(a)),
-    [appraisals, queueDept]
+    () => appraisals.flatMap((a) => {
+      if (!sameDept(a)) return [] as any[];
+      const isPerformance = String(a.form_type || a.eval_type || '').toLowerCase().includes('performance');
+      const tasks: any[] = [];
+      const assignedSupervisor = Number(a.supervisor_user_id || 0);
+      const assignedReviewer = Number(a.reviewer_user_id || 0);
+      const me = Number(user?.id || 0);
+
+      if (!a.supervisor_signature && (!assignedSupervisor || assignedSupervisor === me)) {
+        tasks.push({ ...a, queueStage: isPerformance ? 'supervisor' : 'manager', queueKey: `sup-app-sup-${a.id}` });
+      } else if (isPerformance && !!a.supervisor_signature && !a.reviewer_signature && (!assignedReviewer || assignedReviewer === me)) {
+        tasks.push({ ...a, queueStage: 'reviewer', queueKey: `sup-app-rev-${a.id}` });
+      }
+
+      return tasks;
+    }),
+    [appraisals, queueDept, user?.id]
   );
   const doneSupervisorAppraisals = useMemo(
-    () => appraisals.filter((a) => !!a.supervisor_signature && sameDept(a)),
+    () => appraisals.filter((a) => {
+      if (!sameDept(a)) return false;
+      const isPerformance = String(a.form_type || a.eval_type || '').toLowerCase().includes('performance');
+      return isPerformance ? (!!a.supervisor_signature && !!a.reviewer_signature) : !!a.supervisor_signature;
+    }),
     [appraisals, queueDept]
   );
 
@@ -641,7 +674,7 @@ export const VerificationOfReview = () => {
       <div className="flex justify-end gap-2">
         <button
           type="button"
-          onClick={() => { setActiveId(null); setSignature(''); setRemarks(''); }}
+          onClick={() => { setActiveId(null); setSignature(''); setRemarks(''); setSignerPrintTitle(''); setReviewConfirmed(false); }}
           className="px-3 py-1.5 text-sm text-slate-500"
         >
           Cancel
@@ -655,6 +688,60 @@ export const VerificationOfReview = () => {
           Sign
         </button>
       </div>
+    </div>
+  );
+
+  const renderAppraisalSignBox = (action: () => void) => (
+    <div className="mt-3 border-t dark:border-slate-700 pt-3 space-y-3">
+      <label className="inline-flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+        <input
+          type="checkbox"
+          checked={reviewConfirmed}
+          onChange={(e) => setReviewConfirmed(e.target.checked)}
+          className="accent-amber-600"
+        />
+        I have reviewed this evaluation before signing.
+      </label>
+      <input
+        type="text"
+        value={signerPrintTitle}
+        onChange={(e) => setSignerPrintTitle(e.target.value)}
+        className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+        placeholder="Print Name / Title"
+        maxLength={120}
+      />
+      <SignatureUpload label="Digital Signature" value={signature} onChange={setSignature} showQueueReminder={false} />
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => { setActiveId(null); setSignature(''); setSignerPrintTitle(''); setReviewConfirmed(false); }}
+          className="px-3 py-1.5 text-sm text-slate-500"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={action}
+          disabled={!signature || !reviewConfirmed || !signerPrintTitle.trim()}
+          className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold disabled:opacity-50"
+        >
+          Sign
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderAppraisalPreview = (a: any) => (
+    <div className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3 text-xs text-slate-700 dark:text-slate-300 space-y-1">
+      <div><span className="font-bold">Form:</span> {a.form_type || a.eval_type || 'Appraisal'}</div>
+      <div><span className="font-bold">Employee:</span> {a.employee_name || '—'}</div>
+      <div><span className="font-bold">Period:</span> {a.eval_period_from || '—'} to {a.eval_period_to || '—'}</div>
+      <div><span className="font-bold">Overall:</span> {a.overall ?? '—'}</div>
+      {(a.supervisors_overall_comment || a.reviewers_comment || a.additional_comments) && (
+        <div className="pt-1 border-t border-slate-200 dark:border-slate-700">
+          <span className="font-bold">Notes:</span> {a.supervisors_overall_comment || a.reviewers_comment || a.additional_comments}
+        </div>
+      )}
     </div>
   );
 
@@ -696,8 +783,12 @@ export const VerificationOfReview = () => {
                     <p className="font-semibold">{a.form_type || a.eval_type || 'Appraisal'}</p>
                     <p className="text-xs text-slate-500">{a.employee_name || 'Employee'} • {a.sign_off_date || a.created_at?.split('T')[0] || '—'}</p>
                   </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-app-${a.id}`)}>Sign</button>
+                  <div className="flex items-center gap-3">
+                    <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => setActivePreviewId(activePreviewId === `emp-app-${a.id}` ? null : `emp-app-${a.id}`)}>View Form</button>
+                    <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-app-${a.id}`)}>Sign</button>
+                  </div>
                 </div>
+                {activePreviewId === `emp-app-${a.id}` && renderAppraisalPreview(a)}
                 {activeId === `emp-app-${a.id}` && renderSignBox(() => signEmployeeAppraisal(a.id), true)}
               </div>
             ))}
@@ -770,15 +861,19 @@ export const VerificationOfReview = () => {
             <h3 className="text-sm font-bold mb-3">Appraisals Needing Management Signature</h3>
             {pendingSupervisorAppraisals.length === 0 && <p className="text-sm text-slate-400">No pending management signatures.</p>}
             {pendingSupervisorAppraisals.map((a) => (
-              <div key={`sup-app-${a.id}`} className="border rounded-lg p-3 mb-2">
+              <div key={a.queueKey || `sup-app-${a.id}`} className="border rounded-lg p-3 mb-2">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="font-semibold">{a.employee_name || 'Employee'} - {a.form_type || a.eval_type || 'Appraisal'}</p>
-                    <p className="text-xs text-slate-500">Department: {a.employee_department || a.dept || user?.dept || '—'}</p>
+                    <p className="text-xs text-slate-500">Department: {a.employee_department || a.dept || user?.dept || '—'} • Stage: {a.queueStage === 'reviewer' ? 'Reviewer' : 'Supervisor'}</p>
                   </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`sup-app-${a.id}`)}>Sign</button>
+                  <div className="flex items-center gap-3">
+                    <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => setActivePreviewId(activePreviewId === (a.queueKey || `sup-app-${a.id}`) ? null : (a.queueKey || `sup-app-${a.id}`))}>View Form</button>
+                    <button className="text-sm font-bold text-teal-deep" onClick={() => { setActiveId(a.queueKey || `sup-app-${a.id}`); setSignerPrintTitle(String(user?.full_name || user?.employee_name || user?.username || '')); }}>Sign</button>
+                  </div>
                 </div>
-                {activeId === `sup-app-${a.id}` && renderSignBox(() => signSupervisorAppraisal(a.id))}
+                {activePreviewId === (a.queueKey || `sup-app-${a.id}`) && renderAppraisalPreview(a)}
+                {activeId === (a.queueKey || `sup-app-${a.id}`) && renderAppraisalSignBox(() => signManagementAppraisal(a))}
               </div>
             ))}
             <p className="mt-2 text-xs text-emerald-600">Finished: {doneSupervisorAppraisals.length}</p>
@@ -920,15 +1015,19 @@ export const VerificationOfReview = () => {
                     <p className="text-xs text-slate-500">All previous signatures complete. Awaiting HR signature.</p>
                     {a.hr_owner_user_id && <p className="text-xs text-orange-600 font-semibold mt-1">🔒 Assigned to specific HR user (ID: {a.hr_owner_user_id})</p>}
                   </div>
-                  <button 
-                    disabled={!canSign} 
-                    className="text-sm font-bold text-teal-deep disabled:text-slate-400 disabled:cursor-not-allowed" 
-                    onClick={() => setActiveId(`hr-app-${a.id}`)}
-                    title={!canSign ? 'Assigned to another HR user' : 'Sign this appraisal'}
-                  >
-                    Sign
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => setActivePreviewId(activePreviewId === `hr-app-${a.id}` ? null : `hr-app-${a.id}`)}>View Form</button>
+                    <button 
+                      disabled={!canSign} 
+                      className="text-sm font-bold text-teal-deep disabled:text-slate-400 disabled:cursor-not-allowed" 
+                      onClick={() => setActiveId(`hr-app-${a.id}`)}
+                      title={!canSign ? 'Assigned to another HR user' : 'Sign this appraisal'}
+                    >
+                      Sign
+                    </button>
+                  </div>
                 </div>
+                {activePreviewId === `hr-app-${a.id}` && renderAppraisalPreview(a)}
                 {activeId === `hr-app-${a.id}` && renderSignBox(() => signHrAppraisal(a.id))}
               </div>
             )})}

@@ -852,6 +852,8 @@ async function initDb() {
       'ALTER TABLE appraisals ADD COLUMN reviewer_print_name TEXT',
       'ALTER TABLE appraisals ADD COLUMN hr_print_name TEXT',
       'ALTER TABLE appraisals ADD COLUMN employee_print_name TEXT',
+      'ALTER TABLE appraisals ADD COLUMN supervisor_user_id INTEGER',
+      'ALTER TABLE appraisals ADD COLUMN reviewer_user_id INTEGER',
       'ALTER TABLE appraisals ADD COLUMN job_knowledge_comment TEXT',
       'ALTER TABLE appraisals ADD COLUMN work_quality_comment TEXT',
       'ALTER TABLE appraisals ADD COLUMN attendance_comment TEXT',
@@ -2930,6 +2932,40 @@ async function startServer() {
       }
 
       const b = req.body;
+      const appraisalFormType = String(appraisal.form_type || appraisal.eval_type || '').toLowerCase();
+      const isPerformanceAppraisal = appraisalFormType.includes('performance');
+
+      if (b.reviewer_signature !== undefined) {
+        if (!isPerformanceAppraisal) return res.status(400).json({ error: 'Reviewer signature is only valid for performance evaluations' });
+        if (!String(appraisal.supervisor_signature || '').trim()) return res.status(400).json({ error: 'Supervisor signature is required before reviewer signing' });
+        if (appraisal.reviewer_user_id && Number(appraisal.reviewer_user_id) !== Number(actor.id || 0)) {
+          return res.status(403).json({ error: 'This reviewer signature is assigned to a different user' });
+        }
+      }
+
+      if (b.supervisor_signature !== undefined) {
+        if (appraisal.supervisor_user_id && Number(appraisal.supervisor_user_id) !== Number(actor.id || 0)) {
+          return res.status(403).json({ error: 'This supervisor signature is assigned to a different user' });
+        }
+      }
+
+      if (b.employee_signature !== undefined) {
+        if (isPerformanceAppraisal) {
+          if (!String(appraisal.supervisor_signature || '').trim() || !String(appraisal.reviewer_signature || '').trim()) {
+            return res.status(400).json({ error: 'Supervisor and reviewer signatures are required before employee acknowledgement' });
+          }
+        } else if (!String(appraisal.supervisor_signature || '').trim()) {
+          return res.status(400).json({ error: 'Manager signature is required before employee acknowledgement' });
+        }
+      }
+
+      if (b.hr_signature !== undefined) {
+        if (!isPerformanceAppraisal) return res.status(400).json({ error: 'HR signature is only valid for performance evaluations' });
+        if (!String(appraisal.supervisor_signature || '').trim() || !String(appraisal.reviewer_signature || '').trim() || !String(appraisal.employee_signature || '').trim()) {
+          return res.status(400).json({ error: 'Supervisor, reviewer, and employee signatures are required before HR certification' });
+        }
+      }
+
       const sets: string[] = [];
       const vals: any[] = [];
       for (const k of ['statement','metric','target_date','title','status','progress','scope','department','team_name','delegation','priority','quarter','frequency','leader_id']) {
@@ -3008,6 +3044,8 @@ async function startServer() {
 
       const formType = (b.form_type || '').toString().toLowerCase();
       const isPerformanceEval = formType.includes('performance');
+      const supervisorUserId = Number(actor.id || 0) || null;
+      const reviewerUserId = Number(actor.id || 0) || null;
       const requiredSignatures = isPerformanceEval
         ? ['supervisor_signature', 'reviewer_signature', 'employee_signature', 'hr_signature']
         : ['supervisor_signature', 'employee_signature'];
@@ -3023,8 +3061,9 @@ async function startServer() {
           hr_signature, hr_signature_date, overall_rating, recommendation, reviewer_agree, revised_rating,
           status, employee_department, employee_title, probationary_period,
           supervisor_print_name, reviewer_print_name, hr_print_name, employee_print_name,
+          supervisor_user_id, reviewer_user_id,
           job_knowledge_comment, work_quality_comment, attendance_comment, productivity_comment, communication_comment, dependability_comment)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [employeeId, b.job_knowledge, b.productivity, b.attendance, b.overall, b.promotability_status, b.sign_off_date,
           b.form_type || null, b.eval_type || null, b.eval_period_from || null, b.eval_period_to || null,
           b.work_quality || null, b.communication || null, b.dependability || null,
@@ -3038,6 +3077,7 @@ async function startServer() {
           b.overall_rating || null, b.recommendation || null, b.reviewer_agree || null, b.revised_rating || null,
           b.status || null, b.employee_department || null, b.employee_title || null, b.probationary_period || null,
           b.supervisor_print_name || null, b.reviewer_print_name || null, b.hr_print_name || null, b.employee_print_name || null,
+          supervisorUserId, reviewerUserId,
           b.job_knowledge_comment || null, b.work_quality_comment || null, b.attendance_comment || null, b.productivity_comment || null, b.communication_comment || null, b.dependability_comment || null]);
 
       const eUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employeeId]);
@@ -3121,6 +3161,15 @@ async function startServer() {
 
       for (const k of updatable) {
         if (b[k] !== undefined) { sets.push(`${k} = ?`); vals.push(b[k]); }
+      }
+
+      if (b.supervisor_signature !== undefined && !appraisal.supervisor_user_id) {
+        sets.push('supervisor_user_id = ?');
+        vals.push(Number(actor.id || 0) || null);
+      }
+      if (b.reviewer_signature !== undefined && !appraisal.reviewer_user_id) {
+        sets.push('reviewer_user_id = ?');
+        vals.push(Number(actor.id || 0) || null);
       }
 
       if (sets.length === 0) return res.status(400).json({ error: "No fields to update" });

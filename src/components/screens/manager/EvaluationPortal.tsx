@@ -117,7 +117,6 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   const [view, setView] = useState<'dashboard' | 'achievement' | 'performance' | 'detail'>('dashboard');
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [detailRecord, setDetailRecord] = useState<any>(null);
-  const [achievementReviewed, setAchievementReviewed] = useState(false);
 
   /* ── Achievement Measure form state ─────────────────────────────── */
   const freshAch = () => ({
@@ -245,14 +244,6 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
       window.notify?.('One or more comment fields exceed the 2000-character limit', 'error');
       return;
     }
-    if (achForm.supervisor_print_name.trim().length > 120) {
-      window.notify?.('Manager print name/title must be 120 characters or less', 'error');
-      return;
-    }
-    if (!achievementReviewed) {
-      window.notify?.('Please review the evaluation details before manager sign-off', 'error');
-      return;
-    }
     try {
       const overall = ((achForm.job_knowledge + achForm.productivity + achForm.attendance + achForm.work_quality + achForm.communication + achForm.dependability) / 6).toFixed(1);
       const res = await fetch('/api/appraisals', {
@@ -274,7 +265,6 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
       }
       window.notify?.('Achievement measure saved', 'success');
       setAchForm(freshAch());
-      setAchievementReviewed(false);
       setView('dashboard');
       fetchAppraisals();
     } catch (e: any) { window.notify?.(e?.message || 'Failed to save', 'error'); }
@@ -547,20 +537,10 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
             </p>
             <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3">
               <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                Review check: confirm employee, review period, and all ratings before routing this record to Signature Queue.
+                Review check is completed in Signature Queue by the assigned signers.
               </p>
-              <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                <input
-                  type="checkbox"
-                  checked={achievementReviewed}
-                  onChange={(e) => setAchievementReviewed(e.target.checked)}
-                  className="accent-amber-600"
-                />
-                I have reviewed this achievement evaluation before submitting.
-              </label>
             </div>
             <div className="space-y-3">
-              <div><label className={lbl}>Manager Print Name / Title</label><input type="text" value={achForm.supervisor_print_name} onChange={e => setAchForm({ ...achForm, supervisor_print_name: e.target.value })} className={inp} placeholder="e.g. John Doe / Senior Manager" maxLength={120} /></div>
               <div className="text-[11px] text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-lg px-3 py-2">
                 Manager signature is completed in the assigned manager's Signature Queue after this form is saved.
               </div>
@@ -742,8 +722,6 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
 
             <div><label className={lbl}>Supervisor's Comments</label><textarea rows={3} value={perfForm.supervisors_overall_comment} onChange={e => setPerfForm({ ...perfForm, supervisors_overall_comment: e.target.value })} className={inp} placeholder="Summarize the employee's overall performance..." maxLength={2000} /></div>
 
-            <div><label className={lbl}>Print Name / Title</label><input type="text" value={perfForm.supervisor_print_name} onChange={e => setPerfForm({ ...perfForm, supervisor_print_name: e.target.value })} className={inp} placeholder="e.g. John Doe / Senior Manager" maxLength={120} /></div>
-
             <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3">
               <p className="text-[11px] text-slate-600 dark:text-slate-300">
                 Review check: confirm Section I ratings, comments, and recommendation before routing this record to Signature Queue.
@@ -787,8 +765,6 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
             )}
 
             <div><label className={lbl}>Comments (attach additional pages if necessary)</label><textarea rows={3} value={perfForm.reviewers_comment} onChange={e => setPerfForm({ ...perfForm, reviewers_comment: e.target.value })} className={inp} placeholder="Reviewer's comments..." maxLength={2000} /></div>
-
-            <div><label className={lbl}>Print Name / Title</label><input type="text" value={perfForm.reviewer_print_name} onChange={e => setPerfForm({ ...perfForm, reviewer_print_name: e.target.value })} className={inp} placeholder="e.g. Jane Smith / Department Head" maxLength={120} /></div>
 
             <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3 text-[11px] text-amber-700 dark:text-amber-300">
               Reviewer signature is completed in Signature Queue after this form is submitted.
