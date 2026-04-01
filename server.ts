@@ -2729,7 +2729,25 @@ async function startServer() {
 
   app.post("/api/coaching_logs", authenticateToken, async (req, res) => {
     try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+
       const { employee_id, category, notes, is_positive, logged_by } = req.body;
+      
+      // Enforce department scoping for managers
+      if (role === 'Manager') {
+        const actorDept = String(actor.dept || '').trim();
+        if (!actorDept) return res.status(403).json({ error: 'Manager department not set' });
+        const empRows: any = await query('SELECT dept FROM employees WHERE id = ? LIMIT 1', [employee_id]);
+        const emp = Array.isArray(empRows) ? empRows[0] : empRows;
+        if (!emp || !emp.dept) return res.status(404).json({ error: 'Employee not found' });
+        const empDept = String(emp.dept || '').trim();
+        if (empDept.toLowerCase() !== actorDept.toLowerCase()) {
+          return res.status(403).json({ error: 'Managers can only log coaching for employees in their own department' });
+        }
+      }
+
       await query("INSERT INTO coaching_logs (employee_id, category, notes, is_positive, logged_by) VALUES (?, ?, ?, ?, ?)", 
         [employee_id, category, notes, is_positive ? 1 : 0, logged_by]);
       const empUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employee_id]);
@@ -3474,7 +3492,34 @@ async function startServer() {
 
   // ---- Coaching Logs CRUD ----
   app.get("/api/coaching_logs", async (req, res) => {
-    try { const rows = await query("SELECT c.*, e.name as employee_name FROM coaching_logs c LEFT JOIN employees e ON c.employee_id = e.id ORDER BY c.created_at DESC"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+
+      // HR/Admin see all coaching logs
+      if (isPrivilegedRole(role)) {
+        const rows = await query("SELECT c.*, e.name as employee_name FROM coaching_logs c LEFT JOIN employees e ON c.employee_id = e.id ORDER BY c.created_at DESC");
+        return res.json(rows);
+      }
+
+      // Managers see only logs for their department's employees
+      if (role === 'Manager') {
+        const actorDept = String(actor.dept || '').trim();
+        if (!actorDept) return res.json([]);
+        const rows = await query("SELECT c.*, e.name as employee_name FROM coaching_logs c LEFT JOIN employees e ON c.employee_id = e.id WHERE LOWER(e.dept) = LOWER(?) ORDER BY c.created_at DESC", [actorDept]);
+        return res.json(Array.isArray(rows) ? rows : []);
+      }
+
+      // Employees see logs about them
+      if (role === 'Employee') {
+        const empId = normalizeEmployeeId(actor.employee_id);
+        if (!empId) return res.json([]);
+        const rows = await query("SELECT c.*, e.name as employee_name FROM coaching_logs c LEFT JOIN employees e ON c.employee_id = e.id WHERE c.employee_id = ? ORDER BY c.created_at DESC", [empId]);
+        return res.json(Array.isArray(rows) ? rows : []);
+      }
+
+      return res.json([]);
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/coaching_logs/:id", authenticateToken, async (req, res) => {
     try { await softDeleteById('coaching_logs', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }

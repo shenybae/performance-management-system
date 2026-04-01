@@ -35,13 +35,14 @@ const DEFAULT_COURSES = [
 
 interface CoachingJournalProps {
   employees: Employee[];
+  currentUser?: any | null;
   navContext?: { source?: string; employee_id?: number } | null;
   onNavContextClear?: () => void;
 }
 
 type ViewMode = 'dashboard' | 'chat' | 'elearning' | 'addEntry' | 'weaknessAnalysis';
 
-export const CoachingJournal = ({ employees, navContext, onNavContextClear }: CoachingJournalProps) => {
+export const CoachingJournal = ({ employees, currentUser, navContext, onNavContextClear }: CoachingJournalProps) => {
   const [view, setView] = useState<ViewMode>('dashboard');
   const [logs, setLogs] = useState<any[]>([]);
   const [form, setForm] = useState({ employee_id: '', category: '', notes: '', is_positive: true, logged_by: '', weakness_tags: '' as string });
@@ -145,6 +146,22 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
         for (const c of DEFAULT_COURSES) {
           await fetch('/api/elearning_courses', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(c) });
         }
+          // Department-scoped employee filtering for managers
+          const managerDept = String(
+            currentUser?.dept ||
+            currentUser?.department ||
+            currentUser?.employee?.dept ||
+            currentUser?.employee_department ||
+            ''
+          ).trim();
+          const isManager = currentUser?.role === 'Manager';
+          const filteredEmployees = useMemo(() => {
+            if (!isManager || !managerDept) return employees;
+            return employees.filter(e => {
+              const empDept = String(e.dept || '').trim();
+              return empDept.toLowerCase() === managerDept.toLowerCase();
+            });
+          }, [employees, isManager, managerDept]);
         const res2 = await fetch('/api/elearning_courses', { headers: getAuthHeaders() }); const data2 = await res2.json();
         setCourses(Array.isArray(data2) ? data2 : []);
       } else { setCourses(Array.isArray(data) ? data : []); }
@@ -504,7 +521,7 @@ export const CoachingJournal = ({ employees, navContext, onNavContextClear }: Co
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Employee *</label>
                 <SearchableSelect
-                  options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
+                  options={filteredEmployees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                   value={form.employee_id}
                   onChange={v => setForm({ ...form, employee_id: String(v) })}
                   placeholder="Select Employee..."
