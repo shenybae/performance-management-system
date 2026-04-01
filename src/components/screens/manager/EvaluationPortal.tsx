@@ -4,7 +4,6 @@ import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
-import { SignatureUpload } from '../../common/SignatureUpload';
 import { Star, FileText, X, Download, ArrowLeft, Eye, CheckCircle, Archive } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
@@ -119,7 +118,6 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [detailRecord, setDetailRecord] = useState<any>(null);
   const [achievementReviewed, setAchievementReviewed] = useState(false);
-  const [performanceSupervisorReviewed, setPerformanceSupervisorReviewed] = useState(false);
 
   /* ── Achievement Measure form state ─────────────────────────────── */
   const freshAch = () => ({
@@ -215,10 +213,8 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   const isPerformanceFormValid = () => {
     if (!perfForm.employee_id || !perfForm.eval_period_from || !perfForm.eval_period_to) return false;
     if (new Date(perfForm.eval_period_to) < new Date(perfForm.eval_period_from)) return false;
-    if (!performanceSupervisorReviewed) return false;
     const perfRatingKeys = ['work_quality','quantity_of_work','relationship_with_others','work_habits','job_knowledge','attendance','promotability'] as const;
     if (perfRatingKeys.some(k => (perfForm as any)[k] === 0)) return false;
-    if (!perfForm.supervisor_print_name.trim() || !perfForm.supervisor_signature || !perfForm.supervisor_signature_date) return false;
     return true;
   };
 
@@ -311,10 +307,6 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
       window.notify?.('Print name/title fields must be 120 characters or less', 'error');
       return;
     }
-    if (!performanceSupervisorReviewed) {
-      window.notify?.('Please review and sign the supervisor section before submitting', 'error');
-      return;
-    }
     try {
       const productivity = parseFloat(((perfForm.work_quality + perfForm.quantity_of_work) / 2).toFixed(1));
       const overall = ((perfForm.work_quality + perfForm.quantity_of_work + perfForm.relationship_with_others + perfForm.work_habits + perfForm.job_knowledge + perfForm.attendance + perfForm.promotability) / 7).toFixed(1);
@@ -339,7 +331,6 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
       }
       window.notify?.('Performance evaluation saved', 'success');
       setPerfForm(freshPerf());
-      setPerformanceSupervisorReviewed(false);
       setView('dashboard');
       fetchAppraisals();
     } catch (e: any) { window.notify?.(e?.message || 'Failed to save', 'error'); }
@@ -755,30 +746,15 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
 
             <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3">
               <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                Review check: confirm Section I ratings, comments, and recommendation before supervisor signature.
+                Review check: confirm Section I ratings, comments, and recommendation before routing this record to Signature Queue.
               </p>
-              <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                <input
-                  type="checkbox"
-                  checked={performanceSupervisorReviewed}
-                  onChange={(e) => setPerformanceSupervisorReviewed(e.target.checked)}
-                  className="accent-amber-600"
-                />
-                I have reviewed the supervisor section before signing.
-              </label>
+              <p className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                Supervisor signature is completed in Signature Queue after this form is submitted.
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {performanceSupervisorReviewed ? (
-                <>
-                  <SignatureUpload label="Supervisor Signature" value={perfForm.supervisor_signature} onChange={v => setPerfForm({ ...perfForm, supervisor_signature: v })} />
-                  <div><label className={lbl}>Signature Date</label><input type="date" value={perfForm.supervisor_signature_date} onChange={e => setPerfForm({ ...perfForm, supervisor_signature_date: e.target.value })} className={inp} /></div>
-                </>
-              ) : (
-                <div className="md:col-span-2 text-[11px] text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-lg px-3 py-2">
-                  Complete the review check to enable supervisor signature fields.
-                </div>
-              )}
+            <div className="md:col-span-2 text-[11px] text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-lg px-3 py-2">
+              Supervisor signature fields are removed from this form and handled in Signature Queue.
             </div>
           </div>
 
@@ -814,9 +790,8 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
 
             <div><label className={lbl}>Print Name / Title</label><input type="text" value={perfForm.reviewer_print_name} onChange={e => setPerfForm({ ...perfForm, reviewer_print_name: e.target.value })} className={inp} placeholder="e.g. Jane Smith / Department Head" maxLength={120} /></div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <SignatureUpload label="Reviewer Signature" value={perfForm.reviewer_signature} onChange={v => setPerfForm({ ...perfForm, reviewer_signature: v })} />
-              <div><label className={lbl}>Signature Date</label><input type="date" value={perfForm.reviewer_signature_date} onChange={e => setPerfForm({ ...perfForm, reviewer_signature_date: e.target.value })} className={inp} /></div>
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3 text-[11px] text-amber-700 dark:text-amber-300">
+              Reviewer signature is completed in Signature Queue after this form is submitted.
             </div>
           </div>
 
