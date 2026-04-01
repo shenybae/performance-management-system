@@ -13,7 +13,7 @@ import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { Employee } from '../../../types';
 import { appConfirm } from '../../../utils/appDialog';
 
-type ViewMode = 'dashboard' | 'newForm' | 'viewDetail' | 'newReview';
+type ViewMode = 'dashboard' | 'newForm' | 'viewDetail';
 
 interface SuggestionFormProps {
   employees?: Employee[];
@@ -88,13 +88,6 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
   };
 
   const isEmployeeFormValid = () => !validateSuggestionForm();
-  
-  const isNewReviewFormValid = () => {
-    const concern = form.concern.trim();
-    if (!concern || concern.length < 20) return false;
-    if (!isValidMoneyInput(form.estimated_cost) || !isValidMoneyInput(form.total_financial_benefit)) return false;
-    return true;
-  };
 
   useEffect(() => { fetchSuggestions(); }, []);
 
@@ -148,33 +141,6 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
     } catch { window.notify?.('Failed to save review', 'error'); }
   };
 
-  const [reviewEmployee, setReviewEmployee] = useState('');
-  const submitNewReview = async () => {
-    if (!reviewEmployee) { window.notify?.('Please select an employee', 'error'); return; }
-    const managementErr = validateManagementForm(mgmtForm);
-    if (managementErr) { window.notify?.(managementErr, 'error'); return; }
-    try {
-      const emp = employees.find(e => String(e.id) === reviewEmployee);
-      const payload = {
-        employee_id: reviewEmployee,
-        employee_name: emp?.name || '',
-        position: emp?.position || '',
-        dept: emp?.dept || '',
-        ...mgmtForm,
-        status: mgmtForm.status || 'Under Review',
-      };
-      const res = await fetch('/api/suggestions', {
-        method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error('Failed');
-      window.notify?.('Management review submitted', 'success');
-      setMgmtForm(emptyMgmt);
-      setReviewEmployee('');
-      setView('dashboard');
-      fetchSuggestions();
-    } catch { window.notify?.('Failed to submit review', 'error'); }
-  };
 
   const deleteSuggestion = async (id: number) => {
     if (!(await appConfirm('Archive this suggestion?', { title: 'Archive Suggestion', confirmText: 'Archive' }))) return;
@@ -282,147 +248,6 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
     }));
   };
 
-  /* ──────────────────── NEW MANAGEMENT REVIEW (managers only) ──────────────────── */
-  if (view === 'newReview' && isManagement) {
-    return (
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="flex items-center gap-3 mb-5">
-          <button onClick={() => { setView('dashboard'); setMgmtForm(emptyMgmt); setReviewEmployee(''); }} className="flex items-center gap-1.5 text-sm font-bold text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors">
-            <ArrowLeft size={18} /> Back
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><Star size={18} className="text-amber-600" /></div>
-            <div>
-              <h2 className="text-lg font-black text-slate-800 dark:text-slate-100">For Management Use Only</h2>
-              <p className="text-xs text-slate-400">Complete the management review form for an employee suggestion</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Select Employee */}
-        <Card>
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
-            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">Employee</h3>
-          </div>
-          <div className="max-w-sm">
-            <label className={labelClass}>Select Employee</label>
-            <SearchableSelect
-              options={scopedEmployees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
-              value={reviewEmployee}
-              onChange={v => {
-                const selectedId = String(v || '');
-                setReviewEmployee(selectedId);
-                initializeSupervisorForEmployee(selectedId);
-              }}
-              placeholder="Select Employee..."
-              dropdownVariant="pills-horizontal"
-            />
-          </div>
-        </Card>
-
-        {/* Management Form */}
-        <Card>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className={labelClass}>Supervisor Name</label>
-              <SearchableSelect
-                options={supervisorOptions}
-                value={mgmtForm.supervisor_name}
-                onChange={applySupervisorSelection}
-                placeholder="Select Supervisor..."
-                dropdownVariant="pills-horizontal"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Title</label>
-              <input type="text" value={mgmtForm.supervisor_title} onChange={e => setMgmtForm({ ...mgmtForm, supervisor_title: e.target.value })} className={inputClass} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div>
-              <label className={labelClass}>Date Received</label>
-              <input type="date" value={mgmtForm.date_received} onChange={e => setMgmtForm({ ...mgmtForm, date_received: e.target.value })} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Follow-up Date</label>
-              <input type="date" value={mgmtForm.follow_up_date} onChange={e => setMgmtForm({ ...mgmtForm, follow_up_date: e.target.value })} className={inputClass} min={mgmtForm.date_received || undefined} />
-            </div>
-          </div>
-          <div className="mb-4">
-            <label className={labelClass}>Suggestion Merit (Please explain pros and cons in detail)</label>
-            <textarea rows={4} value={mgmtForm.suggestion_merit} onChange={e => setMgmtForm({ ...mgmtForm, suggestion_merit: e.target.value })} className={inputClass} placeholder="Describe the merits of this suggestion..." />
-          </div>
-          <div className="mb-4">
-            <label className={labelClass}>Benefit to Company</label>
-            <textarea rows={3} value={mgmtForm.benefit_to_company} onChange={e => setMgmtForm({ ...mgmtForm, benefit_to_company: e.target.value })} className={inputClass} placeholder="Benefit to the company..." />
-          </div>
-          <div className="mb-4">
-            <label className={labelClass}>Cost to Company (include Capital, Equipment, Manpower, etc.)</label>
-            <textarea rows={3} value={mgmtForm.cost_to_company} onChange={e => setMgmtForm({ ...mgmtForm, cost_to_company: e.target.value })} className={inputClass} placeholder="Cost to the company..." />
-          </div>
-          <div className="mb-4">
-            <label className={labelClass}>Is this suggestion cost efficient and related to the company mission (Please explain in detail)</label>
-            <textarea rows={4} value={mgmtForm.cost_efficient_explanation} onChange={e => setMgmtForm({ ...mgmtForm, cost_efficient_explanation: e.target.value })} className={inputClass} placeholder="Explain cost efficiency and mission relevance..." />
-          </div>
-          <div className="mb-4">
-            <label className={labelClass}>Suggestion Priority <span className="font-normal normal-case">(1 = Low, 5 = High)</span></label>
-            <div className="flex items-center gap-4 mt-2">
-              {[1, 2, 3, 4, 5].map(n => (
-                <label key={n} className="flex items-center gap-1.5 cursor-pointer group">
-                  <input type="radio" name="new_review_priority" checked={mgmtForm.suggestion_priority === n}
-                    onChange={() => setMgmtForm({ ...mgmtForm, suggestion_priority: n })}
-                    className="sr-only" />
-                  <span className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold transition-all ${
-                    mgmtForm.suggestion_priority === n
-                      ? 'bg-teal-deep text-white shadow-lg scale-110'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover:bg-teal-50 dark:group-hover:bg-teal-900/20 group-hover:text-teal-600'
-                  }`}>{n}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="mb-4">
-            <label className={labelClass}>Action to be Taken</label>
-            <textarea rows={3} value={mgmtForm.action_to_be_taken} onChange={e => setMgmtForm({ ...mgmtForm, action_to_be_taken: e.target.value })} className={inputClass} placeholder="Describe the action to be taken..." />
-          </div>
-          <div className="mb-4">
-            <label className={labelClass}>Status</label>
-            <select value={mgmtForm.status} onChange={e => setMgmtForm({ ...mgmtForm, status: e.target.value })} className={inputClass}>
-              <option value="">Select Status...</option>
-              <option value="Under Review">Under Review</option>
-              <option value="Reviewed">Reviewed</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-            </select>
-          </div>
-        </Card>
-
-        {/* Suggested Employee Reward */}
-        <Card>
-          <div className="mb-4">
-            <label className="block text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider mb-1">Suggested Employee Reward</label>
-            <textarea rows={2} value={mgmtForm.suggested_reward} onChange={e => setMgmtForm({ ...mgmtForm, suggested_reward: e.target.value })} className={inputClass} placeholder="Recommended reward for the employee..." />
-          </div>
-          <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-            <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-900/10 p-3">
-              <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                Supervisor signature, supervisor identity, and signature date are completed by the assigned supervisor in Signature Queue.
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <div className="flex justify-end gap-3 mt-2 mb-6">
-          <button onClick={() => { setView('dashboard'); setMgmtForm(emptyMgmt); setReviewEmployee(''); }} className="px-6 py-2.5 rounded-xl text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-            Cancel
-          </button>
-          <button onClick={submitNewReview} className="flex items-center gap-2 bg-amber-500 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-amber-600 transition-colors">
-            <CheckCircle2 size={16} /> Submit Management Review
-          </button>
-        </div>
-      </motion.div>
-    );
-  }
 
   /* ──────────────────── NEW FORM VIEW (employees only) ──────────────────── */
   if (view === 'newForm' && !isManagement) {
@@ -717,7 +542,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
             <button type="button" onClick={() => setView('dashboard')} className="px-6 py-2.5 rounded-xl text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
               Cancel
             </button>
-            <button type="submit" disabled={!isNewReviewFormValid()} className="flex items-center gap-2 bg-teal-deep text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <button type="submit" disabled={!isEmployeeFormValid()} className="flex items-center gap-2 bg-teal-deep text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               <Send size={16} /> Submit Suggestion
             </button>
           </div>
@@ -1040,15 +865,11 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
           <button onClick={() => exportToCSV(suggestions, 'suggestions')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
             <Download size={16} /> XLSX
           </button>
-          {isManagement ? (
-            <button onClick={() => { setMgmtForm(emptyMgmt); setReviewEmployee(''); setView('newReview'); }} className="flex items-center gap-2 bg-amber-500 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-amber-600 transition-colors">
-              <Plus size={16} /> New Review
-            </button>
-          ) : (
+          {!isManagement ? (
             <button onClick={() => setView('newForm')} className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">
               <Plus size={16} /> New Suggestion
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
