@@ -547,7 +547,7 @@ export default function App() {
               // Manager Screens (The Coach & Evaluator)
               case 'B1': return <OKRPlanner employees={employees} />;
               case 'B2': return <CoachingJournal employees={employees} currentUser={user} navContext={navContext} onNavContextClear={() => setNavContext(null)} />;
-              case 'B3': return <DisciplinaryLog employees={employees} />;
+              case 'B3': return <DisciplinaryLog employees={employees} currentUser={user} />;
               case 'B4': return <EvaluationPortal employees={employees} currentUser={user} />;
               case 'B5': return <Promotability employees={employees} />;
               case 'B7': return <SuggestionForm employees={employees} />;

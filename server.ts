@@ -3861,8 +3861,13 @@ async function startServer() {
       }
 
       if (role === 'Manager') {
-        const rows = await query("SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id");
-        return res.json(rows);
+        const managerDept = normalizeDept(actorCtx.dept);
+        if (!managerDept) return res.json([]);
+        const rows = await query(
+          "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+          [managerDept]
+        );
+        return res.json(Array.isArray(rows) ? rows : []);
       }
 
       if (role === 'Employee') {
@@ -3890,6 +3895,10 @@ async function startServer() {
   });
   app.post("/api/discipline_records", authenticateToken, async (req, res) => {
     try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+
       const {
         employee_id, violation_type, warning_level, date_of_warning,
         violation_date, violation_time, violation_place,
@@ -3901,6 +3910,13 @@ async function startServer() {
         preparer_signature, preparer_signature_date,
         supervisor_signature, supervisor_signature_date,
       } = req.body;
+
+      if (role === 'Manager') {
+        const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+        const allowed = await canActorAccessEmployeeByDept(actorCtx.dept, normalizeEmployeeId(employee_id));
+        if (!allowed) return res.status(403).json({ error: 'Managers can only create disciplinary records for their own department' });
+      }
+
       await query(
         `INSERT INTO discipline_records (
           employee_id, violation_type, warning_level, date_of_warning,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { ShieldAlert, Plus, X, Download, Search, FileText, Eye, Archive } from 'lucide-react';
 import { Employee } from '../../../types';
@@ -13,9 +13,10 @@ import { appConfirm } from '../../../utils/appDialog';
 
 interface DisciplinaryLogProps {
   employees: Employee[];
+  currentUser?: any | null;
 }
 
-export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
+export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps) => {
   const [showForm, setShowForm] = useState(false);
   const [records, setRecords] = useState<any[]>([]);
   const buildEmptyForm = () => ({
@@ -35,6 +36,31 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
   });
   const [form, setForm] = useState(buildEmptyForm);
   const todayISO = new Date().toISOString().split('T')[0];
+
+  const userRole = String(currentUser?.role || '').toLowerCase();
+  const isManager = userRole === 'manager';
+  const managerDept = String(
+    currentUser?.dept ||
+    currentUser?.department ||
+    currentUser?.employee?.dept ||
+    currentUser?.employee_department ||
+    ''
+  ).trim();
+
+  const scopedEmployees = useMemo(() => {
+    if (!isManager || !managerDept) return employees;
+    return employees.filter((e) => String(e.dept || '').trim().toLowerCase() === managerDept.toLowerCase());
+  }, [employees, isManager, managerDept]);
+
+  const selectedEmployee = useMemo(
+    () => scopedEmployees.find((e) => e.id === Number(form.employee_id)) || null,
+    [scopedEmployees, form.employee_id]
+  );
+
+  const supervisorOptions = useMemo(
+    () => scopedEmployees.filter((e) => String(e.id) !== String(form.employee_id || '')),
+    [scopedEmployees, form.employee_id]
+  );
 
   const trimText = (value: string) => value.trim();
 
@@ -105,7 +131,7 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
       window.notify?.('Please select the supervisor', 'error');
       return;
     }
-    const selectedEmployeeName = (employees.find(e => e.id === Number(cleaned.employee_id))?.name || '').trim().toLowerCase();
+    const selectedEmployeeName = (scopedEmployees.find(e => e.id === Number(cleaned.employee_id))?.name || '').trim().toLowerCase();
     if (selectedEmployeeName && cleaned.supervisor.trim().toLowerCase() === selectedEmployeeName) {
       window.notify?.('Employee and supervisor cannot be the same person', 'error');
       return;
@@ -306,9 +332,19 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Employee Name</label>
                   <SearchableSelect
-                    options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
+                    options={scopedEmployees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                     value={form.employee_id}
-                    onChange={v => setForm({ ...form, employee_id: String(v) })}
+                    onChange={v => {
+                      const emp = scopedEmployees.find(e => String(e.id) === String(v));
+                      const fallbackSupervisor = String(currentUser?.full_name || currentUser?.username || '').trim();
+                      let supervisorName = fallbackSupervisor;
+                      if (emp?.manager) supervisorName = String(emp.manager);
+                      else if ((emp as any)?.manager_id) {
+                        const mgr = scopedEmployees.find(e => e.id === (emp as any).manager_id) || employees.find(e => e.id === (emp as any).manager_id);
+                        if (mgr?.name) supervisorName = mgr.name;
+                      }
+                      setForm({ ...form, employee_id: String(v), supervisor: supervisorName });
+                    }}
                     placeholder="Select Employee..."
                     dropdownVariant="pills-horizontal"
                   />
@@ -319,11 +355,11 @@ export const DisciplinaryLog = ({ employees }: DisciplinaryLogProps) => {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department</label>
-                  <input type="text" value={form.employee_id ? (employees.find(e => e.id === parseInt(form.employee_id))?.dept || '') : ''} disabled className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-lg text-sm text-slate-500 dark:text-slate-400" />
+                  <input type="text" value={selectedEmployee?.dept || managerDept || ''} disabled className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-lg text-sm text-slate-500 dark:text-slate-400" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Supervisor</label>
-                  <SearchableSelect options={employees.filter(e => String(e.id) !== String(form.employee_id || '')).map(e => ({ value: e.id, label: e.name, avatarUrl: (e as any).profile_picture || null }))} value={employees.find(e => e.name === form.supervisor)?.id || ''} onChange={(id: any) => setForm({ ...form, supervisor: employees.find(e => e.id === id)?.name || '' })} placeholder="Select supervisor..." dropdownVariant="pills-horizontal" />
+                  <SearchableSelect options={supervisorOptions.map(e => ({ value: e.id, label: e.name, avatarUrl: (e as any).profile_picture || null }))} value={supervisorOptions.find(e => e.name === form.supervisor)?.id || ''} onChange={(id: any) => setForm({ ...form, supervisor: supervisorOptions.find(e => e.id === id)?.name || '' })} placeholder="Select supervisor..." dropdownVariant="pills-horizontal" />
                 </div>
               </div>
 
