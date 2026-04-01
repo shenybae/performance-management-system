@@ -53,6 +53,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [idpSavingGoal, setIdpSavingGoal] = useState<number | null>(null);
   const [improvementSavingGoal, setImprovementSavingGoal] = useState<number | null>(null);
   const [developmentSavingGoal, setDevelopmentSavingGoal] = useState<number | null>(null);
+  const [memberPickerValue, setMemberPickerValue] = useState<string>('');
   const [recoveryTaskDrafts, setRecoveryTaskDrafts] = useState<Record<number, { member_employee_id: string; title: string; description: string; due_date: string; priority: string }>>({});
   const [proofReviewOpenGoal, setProofReviewOpenGoal] = useState<number | null>(null);
   const [proofReviewLoadingGoal, setProofReviewLoadingGoal] = useState<number | null>(null);
@@ -99,17 +100,62 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     return Number.isFinite(eid) && eid > 0 ? eid : null;
   }, [usersList, form.leader_id]);
 
+  const userRole = String(currentUser?.role || '').toLowerCase();
+  const isManager = userRole === 'manager';
+  const managerDept = String(
+    currentUser?.dept ||
+    currentUser?.department ||
+    currentUser?.employee?.dept ||
+    currentUser?.employee_department ||
+    ''
+  ).trim();
+  const isDepartmentLocked = isManager && !!managerDept;
+
+  useEffect(() => {
+    if (!isDepartmentLocked) return;
+    setForm(prev => (prev.department === managerDept ? prev : { ...prev, department: managerDept }));
+  }, [isDepartmentLocked, managerDept]);
+
   const availableAssignees = useMemo(() => {
     let filtered = employees.filter(emp => {
       if (selectedLeaderEmployeeId && emp.id === selectedLeaderEmployeeId) return false;
       return true;
     });
-    const userRole = currentUser?.role || '';
-    if (String(userRole).toLowerCase() === 'manager' && currentUser?.dept) {
-      filtered = filtered.filter(emp => (emp.dept || '').toLowerCase() === (currentUser.dept || '').toLowerCase());
+    if (isDepartmentLocked) {
+      filtered = filtered.filter(emp => (emp.dept || '').toLowerCase() === managerDept.toLowerCase());
     }
     return filtered;
-  }, [employees, selectedLeaderEmployeeId, currentUser]);
+  }, [employees, selectedLeaderEmployeeId, isDepartmentLocked, managerDept]);
+
+  const teamLeaderOptions = useMemo(() => {
+    return usersList
+      .filter(u => String(u.role || '') === 'Employee' && Number(u.employee_id) > 0)
+      .filter(u => {
+        if (!form.department) return true;
+        return String(u.employee_dept || '').toLowerCase() === String(form.department).toLowerCase();
+      })
+      .map(u => ({
+        value: String(u.id),
+        label: `${u.full_name || u.username || `User ${u.id}`}${u.employee_name ? ` (${u.employee_name})` : ''}`,
+        avatarUrl: u.profile_picture || null,
+      }));
+  }, [usersList, form.department]);
+
+  const selectedAssignees = useMemo(() => {
+    const selected = new Set((form.assignee_ids || []).map(String));
+    return availableAssignees.filter(emp => selected.has(String(emp.id)));
+  }, [availableAssignees, form.assignee_ids]);
+
+  const assigneePickerOptions = useMemo(() => {
+    const selected = new Set((form.assignee_ids || []).map(String));
+    return availableAssignees
+      .filter(emp => !selected.has(String(emp.id)))
+      .map(emp => ({
+        value: String(emp.id),
+        label: `${emp.name}${emp.position ? ` (${emp.position})` : ''}`,
+        avatarUrl: (emp as any).profile_picture || null,
+      }));
+  }, [availableAssignees, form.assignee_ids]);
 
   useEffect(() => {
     setForm(prev => {
@@ -221,7 +267,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       }
 
       window.notify?.('Goal created successfully', 'success');
-      setForm({ ...defaultForm });
+      setForm({ ...defaultForm, department: isDepartmentLocked ? managerDept : '' });
+      setMemberPickerValue('');
       setShowForm(false);
       fetchGoals();
     } catch { window.notify?.('Failed to create goal', 'error'); }
@@ -1584,17 +1631,24 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department *</label>
-                <SearchableSelect
-                  options={DEPARTMENTS.map(d => ({ value: d, label: d }))}
-                  value={form.department}
-                  onChange={v => setForm({ ...form, department: String(v) })}
-                  placeholder="Select Department..."
-                  allowEmpty
-                  emptyLabel="Select Department..."
-                  searchable
-                  dropdownVariant="pills-horizontal"
-                  className="w-full"
-                />
+                {isDepartmentLocked ? (
+                  <>
+                    <div className={`${inp} bg-slate-100 dark:bg-slate-800/70 text-slate-700 dark:text-slate-200 cursor-not-allowed`}>{managerDept}</div>
+                    <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-1">Locked to your department.</p>
+                  </>
+                ) : (
+                  <SearchableSelect
+                    options={DEPARTMENTS.map(d => ({ value: d, label: d }))}
+                    value={form.department}
+                    onChange={v => setForm({ ...form, department: String(v) })}
+                    placeholder="Select Department..."
+                    allowEmpty
+                    emptyLabel="Select Department..."
+                    searchable
+                    dropdownVariant="pills-horizontal"
+                    className="w-full"
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Quarter</label>
@@ -1644,16 +1698,18 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               {(form.scope === 'Team' || form.scope === 'Department') && (
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Team Leader</label>
-                  <select value={form.leader_id} onChange={e => setForm({ ...form, leader_id: e.target.value })} className={inp}>
-                    <option value="">Select Team Leader...</option>
-                    {usersList
-                      .filter(u => String(u.role || '') === 'Employee' && Number(u.employee_id) > 0)
-                      .map(u => (
-                        <option key={u.id} value={u.id}>
-                          {(u.full_name || u.username || `User ${u.id}`) + (u.employee_name ? ` (${u.employee_name})` : '')}
-                        </option>
-                      ))}
-                  </select>
+                  <SearchableSelect
+                    options={teamLeaderOptions}
+                    value={form.leader_id}
+                    onChange={v => {
+                      setForm({ ...form, leader_id: String(v), assignee_ids: [] });
+                      setMemberPickerValue('');
+                    }}
+                    placeholder="Select Team Leader..."
+                    searchable
+                    dropdownVariant="pills-horizontal"
+                    className="w-full"
+                  />
                   <p className="mt-1 text-[10px] text-slate-400">Choose the leader once here. Team members are assigned below and linked automatically.</p>
                 </div>
               )}
@@ -1676,31 +1732,50 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
                   Team Members <span className="text-slate-400 font-normal normal-case text-[11px]">— manager-defined roster for this leader</span>
                 </label>
-                <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-                  <div className="max-h-36 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-                    {availableAssignees.map(emp => (
-                      <label key={emp.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
-                        <input type="checkbox"
-                          disabled={!form.leader_id}
-                          checked={form.assignee_ids.includes(String(emp.id))}
-                          onChange={ev => {
-                            const id = String(emp.id);
-                            setForm({ ...form, assignee_ids: ev.target.checked
-                              ? [...form.assignee_ids, id]
-                              : form.assignee_ids.filter(x => x !== id)
-                            });
-                          }}
-                          className="accent-teal-600 w-3.5 h-3.5 shrink-0"
-                        />
-                        <span className="w-6 h-6 rounded-full bg-teal-100 dark:bg-teal-900/20 text-teal-600 text-[10px] font-black flex items-center justify-center shrink-0">{emp.name[0]}</span>
-                        <span className="text-sm text-slate-700 dark:text-slate-300 flex-1">{emp.name}</span>
-                      </label>
-                    ))}
-                    {availableAssignees.length === 0 && (
-                      <div className="px-3 py-3 text-xs text-slate-400">No eligible members available.</div>
+                <div className="space-y-2">
+                  <SearchableSelect
+                    options={assigneePickerOptions}
+                    value={memberPickerValue}
+                    onChange={v => {
+                      if (!form.leader_id) {
+                        window.notify?.('Select Team Leader first to enable member selection.', 'error');
+                        return;
+                      }
+                      const id = String(v);
+                      if (!id) return;
+                      if (form.assignee_ids.includes(id)) return;
+                      setForm({ ...form, assignee_ids: [...form.assignee_ids, id] });
+                      setMemberPickerValue('');
+                    }}
+                    placeholder={!form.leader_id ? 'Select Team Leader first...' : 'Search and add team member...'}
+                    allowEmpty
+                    emptyLabel="Select team member..."
+                    searchable
+                    dropdownVariant="pills-horizontal"
+                    className="w-full"
+                  />
+
+                  <div className="min-h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/30 p-2">
+                    {selectedAssignees.length === 0 ? (
+                      <div className="text-xs text-slate-400 px-1 py-1">No assignees selected</div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedAssignees.map(emp => (
+                          <button
+                            key={emp.id}
+                            type="button"
+                            onClick={() => setForm({ ...form, assignee_ids: form.assignee_ids.filter(x => x !== String(emp.id)) })}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 dark:border-teal-700 bg-teal-50 dark:bg-teal-900/20 px-3 py-1 text-xs font-bold text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/30"
+                          >
+                            <span>{emp.name}</span>
+                            <X size={12} />
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 text-xs font-bold text-slate-500 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+
+                  <div className="px-1 text-xs font-bold text-slate-500 flex items-center justify-between">
                     <span>{form.assignee_ids.length === 0 ? 'No assignees selected' : `${form.assignee_ids.length} assignee${form.assignee_ids.length !== 1 ? 's' : ''} selected`}</span>
                     {form.assignee_ids.length > 0 && (
                       <button type="button" onClick={() => setForm({ ...form, assignee_ids: [] })} className="text-red-400 hover:text-red-600 text-[10px] font-bold">Clear all</button>

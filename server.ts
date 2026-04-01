@@ -1410,6 +1410,34 @@ async function initDb() {
       await query("UPDATE users SET full_name = 'Jane Smith' WHERE username = 'employee_jane' AND (full_name IS NULL OR full_name = '')");
     } catch (e) { console.error('full_name migration fallback error:', e); }
 
+    // Ensure manager_bob is department-scoped and has Engineering employees to delegate.
+    try {
+      const managerDept = 'Engineering';
+      await query("UPDATE users SET dept = ? WHERE username = 'manager_bob'", [managerDept]);
+      const mgrRows = await query("SELECT id FROM users WHERE username = 'manager_bob' LIMIT 1") as any[];
+      const managerId = Number(mgrRows?.[0]?.id || 0);
+
+      const ensureManagedEmployee = async (name: string, position: string, status: string, hireDate: string) => {
+        let rows = await query("SELECT id FROM employees WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1", [name]) as any[];
+        let employeeId = Number(rows?.[0]?.id || 0);
+        if (!employeeId) {
+          await query("INSERT INTO employees (name, status, position, dept, hire_date) VALUES (?, ?, ?, ?, ?)", [name, status, position, managerDept, hireDate]);
+          rows = await query("SELECT id FROM employees WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) ORDER BY id DESC LIMIT 1", [name]) as any[];
+          employeeId = Number(rows?.[0]?.id || 0);
+        }
+        if (employeeId && managerId) {
+          await query("UPDATE employees SET dept = ?, manager_id = ? WHERE id = ?", [managerDept, managerId, employeeId]);
+        } else if (employeeId) {
+          await query("UPDATE employees SET dept = ? WHERE id = ?", [managerDept, employeeId]);
+        }
+      };
+
+      await ensureManagedEmployee('John Doe', 'Software Engineer', 'Regular', '2025-01-15');
+      await ensureManagedEmployee('Jane Smith', 'QA Analyst', 'Probationary', '2025-06-01');
+      await ensureManagedEmployee('Alex Ramos', 'Backend Engineer', 'Regular', '2025-02-15');
+      await ensureManagedEmployee('Mia Santos', 'Frontend Engineer', 'Regular', '2025-03-20');
+    } catch (e) { console.error('manager_bob department/employee setup error:', e); }
+
     // Backfill full_name for any users still missing it â€” format username into display name
     try {
       const nameless = await query("SELECT id, username FROM users WHERE (full_name IS NULL OR full_name = '') AND username IS NOT NULL") as any[];
