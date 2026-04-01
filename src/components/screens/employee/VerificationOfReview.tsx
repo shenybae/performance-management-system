@@ -35,6 +35,9 @@ export const VerificationOfReview = () => {
   const [reviewerRevisedRating, setReviewerRevisedRating] = useState<'Satisfactory' | 'Unsatisfactory' | ''>('');
   const [reviewerComments, setReviewerComments] = useState('');
   const [employeeAcknowledgement, setEmployeeAcknowledgement] = useState('');
+  const [supervisorOverallRating, setSupervisorOverallRating] = useState<'Satisfactory' | 'Unsatisfactory' | ''>('');
+  const [supervisorRecommendation, setSupervisorRecommendation] = useState('');
+  const [supervisorComments, setSupervisorComments] = useState('');
 
   const resetQueueSignerState = () => {
     setActiveId(null);
@@ -46,6 +49,9 @@ export const VerificationOfReview = () => {
     setReviewerRevisedRating('');
     setReviewerComments('');
     setEmployeeAcknowledgement('');
+    setSupervisorOverallRating('');
+    setSupervisorRecommendation('');
+    setSupervisorComments('');
   };
 
   useEffect(() => {
@@ -180,6 +186,9 @@ export const VerificationOfReview = () => {
     if (!signerPrintTitle.trim()) return window.notify?.('Please provide print name / title', 'error');
     if (!signature) return window.notify?.('Please provide your signature', 'error');
     const stage = String(a?.queueStage || 'supervisor');
+    if (stage !== 'reviewer' && !supervisorOverallRating) {
+      return window.notify?.('Please select supervisor overall rating', 'error');
+    }
     if (stage === 'reviewer' && !reviewerAgree) return window.notify?.('Please select reviewer agreement', 'error');
     if (stage === 'reviewer' && reviewerAgree === 'disagree' && !reviewerRevisedRating) {
       return window.notify?.('Please select revised rating for disagreement', 'error');
@@ -196,6 +205,9 @@ export const VerificationOfReview = () => {
       payload.supervisor_signature = signature;
       payload.supervisor_signature_date = new Date().toISOString().split('T')[0];
       payload.supervisor_print_name = signerPrintTitle.trim();
+      payload.overall_rating = supervisorOverallRating;
+      payload.recommendation = supervisorRecommendation || null;
+      payload.supervisors_overall_comment = supervisorComments.trim() || null;
     }
     try {
       const res = await fetch(`/api/appraisals/${a.id}`, {
@@ -733,6 +745,51 @@ export const VerificationOfReview = () => {
         maxLength={120}
       />
 
+      {stage === 'supervisor' && (
+        <>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Overall Rating</label>
+            <div className="flex gap-4 text-sm text-slate-700 dark:text-slate-300">
+              {['Satisfactory', 'Unsatisfactory'].map((r) => (
+                <label key={r} className="inline-flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="queue-supervisor-overall-rating"
+                    checked={supervisorOverallRating === r}
+                    onChange={() => setSupervisorOverallRating(r as 'Satisfactory' | 'Unsatisfactory')}
+                    className="accent-teal-600"
+                  />
+                  {r}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Recommendation</label>
+            <select
+              value={supervisorRecommendation}
+              onChange={(e) => setSupervisorRecommendation(e.target.value)}
+              className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+            >
+              <option value="">Optional — select if applicable</option>
+              <option value="Continued employment">Continued employment</option>
+              <option value="Employment be discontinued">Employment be discontinued</option>
+              <option value="Tenure">Tenure (for final report only)</option>
+            </select>
+          </div>
+
+          <textarea
+            rows={3}
+            value={supervisorComments}
+            onChange={(e) => setSupervisorComments(e.target.value)}
+            className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+            placeholder="Supervisor comments"
+            maxLength={2000}
+          />
+        </>
+      )}
+
       {stage === 'reviewer' && (
         <>
           <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
@@ -816,6 +873,7 @@ export const VerificationOfReview = () => {
             !signature
             || !reviewConfirmed
             || !signerPrintTitle.trim()
+            || (stage === 'supervisor' && !supervisorOverallRating)
             || (stage === 'employee' && !employeeAcknowledgement.trim())
             || (stage === 'reviewer' && !reviewerAgree)
             || (stage === 'reviewer' && reviewerAgree === 'disagree' && !reviewerRevisedRating)
@@ -974,7 +1032,21 @@ export const VerificationOfReview = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => setActivePreviewId(activePreviewId === (a.queueKey || `sup-app-${a.id}`) ? null : (a.queueKey || `sup-app-${a.id}`))}>View Form</button>
-                    <button className="text-sm font-bold text-teal-deep" onClick={() => { setActiveId(a.queueKey || `sup-app-${a.id}`); setSignerPrintTitle(String(user?.full_name || user?.employee_name || user?.username || '')); }}>Sign</button>
+                    <button
+                      className="text-sm font-bold text-teal-deep"
+                      onClick={() => {
+                        setActiveId(a.queueKey || `sup-app-${a.id}`);
+                        setSignerPrintTitle(String(user?.full_name || user?.employee_name || user?.username || ''));
+                        setSupervisorOverallRating((a?.overall_rating || '') as 'Satisfactory' | 'Unsatisfactory' | '');
+                        setSupervisorRecommendation(String(a?.recommendation || ''));
+                        setSupervisorComments(String(a?.supervisors_overall_comment || ''));
+                        setReviewerAgree((a?.reviewer_agree || '') as 'agree' | 'disagree' | '');
+                        setReviewerRevisedRating((a?.revised_rating || '') as 'Satisfactory' | 'Unsatisfactory' | '');
+                        setReviewerComments(String(a?.reviewers_comment || ''));
+                      }}
+                    >
+                      Sign
+                    </button>
                   </div>
                 </div>
                 {activePreviewId === (a.queueKey || `sup-app-${a.id}`) && renderAppraisalPreview(a)}

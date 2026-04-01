@@ -687,70 +687,11 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
             </div>
           </div>
 
-          {/* ── Section I: Supervisor's Overall Rating & Recommendation ── */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-5 space-y-4">
-            <h3 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest">I. Supervisor's Overall Rating and Recommendation</h3>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={lbl}>Overall Rating</label>
-                <div className="flex gap-4 mt-1 text-sm text-slate-700 dark:text-slate-300">
-                  {['Satisfactory', 'Unsatisfactory'].map(r => (
-                    <label key={r} className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="radio" name="overall_rating" checked={perfForm.overall_rating === r} onChange={() => setPerfForm({ ...perfForm, overall_rating: r })} className="accent-teal-600" /> {r}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className={lbl}>Recommendation</label>
-                <select value={perfForm.recommendation} onChange={e => setPerfForm({ ...perfForm, recommendation: e.target.value })} className={inp}>
-                  <option value="">Optional — select if applicable</option>
-                  <option value="Continued employment">Continued employment</option>
-                  <option value="Employment be discontinued">Employment be discontinued</option>
-                  <option value="Tenure">Tenure (for final report only)</option>
-                </select>
-              </div>
-            </div>
-
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
-              This employee performance evaluation is based on demonstrated job skills observed by me during the indicated evaluation period.
-              The overall rating and recommendation (if any) were determined by assessing all factors listed. I have discussed the evaluation with the employee.
+          <div className="rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-900/10 p-4">
+            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Sections I–IV are completed in Signature Queue after submission.</p>
+            <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
+              Input fields and signatures for Supervisor, Reviewer, Employee Acknowledgement, and HR Certification are assigned to specific users in their queues. Each signer can review the submitted form before signing.
             </p>
-
-            <div><label className={lbl}>Supervisor's Comments</label><textarea rows={3} value={perfForm.supervisors_overall_comment} onChange={e => setPerfForm({ ...perfForm, supervisors_overall_comment: e.target.value })} className={inp} placeholder="Summarize the employee's overall performance..." maxLength={2000} /></div>
-
-
-          </div>
-
-          {/* ── Section II: Reviewer's Comments ──────────────────── */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-5 space-y-4">
-            <h3 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest">II. Reviewer's Comments</h3>
-
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
-              Reviewer agreement, revised rating (if any), and reviewer comments are completed only in the assigned reviewer's Signature Queue after submission.
-            </p>
-
-
-          </div>
-
-          {/* ── Section III: Employee's Acknowledgement ──────────── */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-5 space-y-4">
-            <h3 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest">III. Employee's Acknowledgement</h3>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
-              I have reviewed this report on the date indicated and have had the opportunity to discuss it with my rating supervisor(s).
-              My signature does not necessarily signify agreement. I understand that I may submit a written rebuttal, which will be attached to this evaluation and placed in my personnel file.
-            </p>
-
-          </div>
-
-          {/* ── Section IV: HR Admin Certification ── */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-5 space-y-4">
-            <h3 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest">IV. HR Admin Certification</h3>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
-              I have reviewed the supervisor's evaluation, reviewer's comments, and the employee's statement (if any). I believe this form to be complete and in accordance with the guidelines provided for evaluations of employees serving in this title. This form shall be made part of the employee's official Personnel File.
-            </p>
-
           </div>
 
           {/* ── Submit ───────────────────────────────────────────── */}
