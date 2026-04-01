@@ -473,6 +473,125 @@ export const RecruitmentBoard = () => {
     }
   };
 
+  const exportApplicantAppraisalPDF = async (a: any, shouldPrint = true) => {
+    if (shouldPrint && !(await appConfirm('Export this applicant appraisal as PDF?', { title: 'Export Applicant Appraisal PDF', confirmText: 'Export', icon: 'export' }))) return;
+
+    const row = (label: string, value: string) => value ? `
+      <tr>
+        <td style="padding:6px 10px;font-weight:600;color:#475569;width:220px;white-space:nowrap;vertical-align:top;">${label}</td>
+        <td style="padding:6px 10px;color:#1e293b;">${value}</td>
+      </tr>` : '';
+
+    const section = (title: string, content: string) => `
+      <div style="margin-bottom:18px;">
+        <div style="background:#0f766e;color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 10px;text-transform:uppercase;border-radius:4px 4px 0 0;">${title}</div>
+        <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 4px 4px;">${content}</table>
+      </div>`;
+
+    const scoreCell = (v: any) => {
+      const n = Number(v || 0);
+      return Number.isFinite(n) && n > 0 ? String(n) : '—';
+    };
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Applicant Appraisal — ${a.name || 'Applicant'}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #1e293b; margin: 0; padding: 24px 32px; }
+    h1 { font-size: 20px; color: #0f766e; margin: 0 0 2px 0; }
+    .subtitle { font-size: 11px; color: #64748b; margin-bottom: 18px; }
+    table tr:nth-child(even) { background: #f8fafc; }
+    @media print { body { padding: 0; } button { display: none; } }
+  </style>
+</head>
+<body>
+  <h1>Applicant Appraisal Form</h1>
+  <div class="subtitle">Maptech Information Solutions Inc. &mdash; Performance Management System &mdash; Generated ${new Date().toLocaleDateString()}</div>
+
+  ${section('Applicant Information', `
+    ${row('Applicant Name', a.name || '')}
+    ${row('Position Applied For', a.position || '')}
+    ${row('Interview Date', a.interview_date || '')}
+    ${row('Status', a.status || '')}
+    ${row('Recommendation', a.recommendation || '')}
+  `)}
+
+  ${section('Part I — Interview Questions', `
+    ${row('1. Relevant experience and qualifications', a.q_experience || '')}
+    ${row('2. Why interested in this position / organization', a.q_why_interested || '')}
+    ${row('3. Greatest strengths', a.q_strengths || '')}
+    ${row('4. Areas for improvement', a.q_weakness || '')}
+    ${row('5. Conflict handling at work', a.q_conflict || '')}
+    ${row('6. Professional goals (3-5 years)', a.q_goals || '')}
+    ${row('7. Teamwork example', a.q_teamwork || '')}
+    ${row('8. Handling pressure / deadlines', a.q_pressure || '')}
+    ${row('9. Unique contribution to role', a.q_contribution || '')}
+    ${row('10. Applicant questions', a.q_questions || '')}
+  `)}
+
+  ${section('Part II — Evaluation Criteria (1-5)', `
+    ${row('Job Skills / Technical Knowledge', scoreCell(a.job_skills))}
+    ${row('Communication Skills', scoreCell(a.communication_skills))}
+    ${row('Interview Impression / Professionalism', scoreCell(a.interview_impression))}
+    ${row('Previous Experience & Qualifications', scoreCell(a.previous_qualifications))}
+    ${row('Teamwork & Interpersonal Skills', scoreCell(a.teamwork))}
+    ${row('Department / Organizational Fit', scoreCell(a.dept_fit))}
+    ${row('Potential Value / Growth Capacity', scoreCell(a.asset_value))}
+  `)}
+
+  ${section('Part III — Overall Rating & Notes', `
+    ${row('Overall Rating', String(a.overall_rating || a.score || ''))}
+    ${row('Recommendation', a.recommendation || a.status || '')}
+    ${row('Additional Comments', a.additional_comments || '')}
+  `)}
+
+  <div style="margin-bottom:18px;">
+    <div style="background:#0f766e;color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 10px;text-transform:uppercase;border-radius:4px 4px 0 0;">Part IV — Signatures</div>
+    <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none;table-layout:fixed;">
+      <thead><tr style="background:#f1f5f9;">
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:160px;">Role</th>
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:220px;">Printed Name</th>
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:140px;">Title</th>
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:120px;">Date</th>
+        <th style="padding:6px 10px;text-align:center;font-size:11px;color:#64748b;width:160px;">Signature</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td style="padding:8px 10px;font-weight:600;color:#475569;">Interviewer</td>
+          <td style="padding:8px 10px;color:#1e293b;">${a.interviewer_name || '—'}</td>
+          <td style="padding:8px 10px;color:#1e293b;">${a.interviewer_title || '—'}</td>
+          <td style="padding:8px 10px;color:#64748b;">${a.interview_date || '—'}</td>
+          <td style="padding:8px 10px;text-align:center;">${a.interviewer_signature ? sigBlockHtml(a.interviewer_signature, '', a.interview_date || '', a.interviewer_name || '', 140) : '—'}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 10px;font-weight:600;color:#475569;">HR Admin Reviewer</td>
+          <td style="padding:8px 10px;color:#1e293b;">${a.hr_reviewer_name || '—'}</td>
+          <td style="padding:8px 10px;color:#1e293b;">—</td>
+          <td style="padding:8px 10px;color:#64748b;">${a.hr_reviewer_date || '—'}</td>
+          <td style="padding:8px 10px;text-align:center;">${a.hr_reviewer_signature ? sigBlockHtml(a.hr_reviewer_signature, '', a.hr_reviewer_date || '', a.hr_reviewer_name || '', 140) : '—'}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</body>
+</html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) { window.notify?.('Please allow popups to export PDF', 'error'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    if (shouldPrint) {
+      setTimeout(() => {
+        win.print();
+        try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'export_pdf', description: `Applicant Appraisal PDF — ${a?.name || 'Export'}`, entity: 'applicant', entity_id: a?.id || null, meta: { source: 'RecruitmentBoard' } }) }).catch(() => {}); } catch {};
+      }, 500);
+    }
+  };
+
   const statusCounts = applicants.reduce((acc: any, curr) => { acc[curr.status] = (acc[curr.status] || 0) + 1; return acc; }, {});
   const chartData = Object.keys(statusCounts).map(key => ({ status: key, count: statusCounts[key] }));
 
@@ -743,6 +862,8 @@ export const RecruitmentBoard = () => {
                   <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{app.name}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-teal-green">{app.score || app.overall_rating}/5</span>
+                    <button onClick={() => exportApplicantAppraisalPDF(app, false)} title="View Report" className="text-blue-500 hover:text-blue-700"><Eye size={14} /></button>
+                    <button onClick={() => exportApplicantAppraisalPDF(app)} title="Export PDF" className="text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300"><FileText size={14} /></button>
                     <button onClick={() => startEditApplicant(app)} title="Edit" className="text-teal-500 hover:text-teal-700"><Pencil size={12} /></button>
                     <button onClick={() => deleteApplicant(app.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                   </div>
