@@ -1602,6 +1602,76 @@ async function initDb() {
           employeeId: empBId || null,
         });
       }
+
+      // Transfer department ownership to the new manager accounts and stop using legacy manager_bob.
+      const legacyMgrRows = await query("SELECT id FROM users WHERE username = 'manager_bob' OR LOWER(email) = LOWER('manager.bob@example.com') LIMIT 1") as any[];
+      const legacyManagerId = Number(legacyMgrRows?.[0]?.id || 0);
+
+      for (const dept of DEPARTMENT_SEED_LIST) {
+        const deptSlug = toSlug(dept);
+        const deptLabel = toLabel(dept);
+
+        const managerRows = await query(
+          "SELECT id FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?) LIMIT 1",
+          [`manager_${deptSlug}`, `manager.${deptSlug}@example.com`]
+        ) as any[];
+        const managerUserId = Number(managerRows?.[0]?.id || 0);
+        if (!managerUserId) continue;
+
+        // Canonical manager profile for this department.
+        await query(
+          "UPDATE users SET role = 'Manager', dept = ?, position = 'Manager', deleted_at = NULL WHERE id = ?",
+          [dept, managerUserId]
+        );
+
+        // Reassign every employee in this department to the new department manager.
+        await query(
+          "UPDATE employees SET manager_id = ?, dept = ? WHERE LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?))",
+          [managerUserId, dept, dept]
+        );
+
+        // Ensure the department supervisor employee record exists and is managed by the department manager.
+        const supervisorName = `${deptLabel} Supervisor`;
+        const supervisorEmpId = await ensureEmployee(supervisorName, dept, 'Supervisor', managerUserId, '2025-01-10');
+
+        // Ensure supervisor account is linked to the supervisor employee record and scoped to the department.
+        const supervisorUsername = `supervisor_${deptSlug}`;
+        const supervisorEmail = `supervisor.${deptSlug}@example.com`;
+        const supervisorRows = await query(
+          "SELECT id FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?) OR LOWER(TRIM(COALESCE(full_name, ''))) = LOWER(TRIM(?)) LIMIT 1",
+          [supervisorUsername, supervisorEmail, supervisorName]
+        ) as any[];
+        const supervisorUserId = Number(supervisorRows?.[0]?.id || 0);
+        if (supervisorUserId) {
+          await query(
+            "UPDATE users SET role = 'Employee', dept = ?, position = 'Supervisor', employee_id = ?, full_name = ?, deleted_at = NULL WHERE id = ?",
+            [dept, supervisorEmpId || null, supervisorName, supervisorUserId]
+          );
+        } else {
+          await ensureUserAccount({
+            username: supervisorUsername,
+            email: supervisorEmail,
+            password: 'demo_supervisor_pass',
+            role: 'Employee',
+            fullName: supervisorName,
+            dept,
+            position: 'Supervisor',
+            employeeId: supervisorEmpId || null,
+          });
+        }
+
+        // Sync all linked employee users in this department to correct dept metadata.
+        await query(
+          "UPDATE users SET dept = ?, role = 'Employee', deleted_at = NULL WHERE role = 'Employee' AND employee_id IN (SELECT id FROM employees WHERE LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?)))",
+          [dept, dept]
+        );
+      }
+
+      // Explicitly phase out legacy manager ownership.
+      if (legacyManagerId) {
+        await query("UPDATE employees SET manager_id = NULL WHERE manager_id = ?", [legacyManagerId]);
+        await query("UPDATE users SET dept = NULL, position = COALESCE(position, 'Legacy Manager') WHERE id = ?", [legacyManagerId]);
+      }
     } catch (e) { console.error('department-wide account seed error:', e); }
 
     // Backfill full_name for any users still missing it â€” format username into display name
