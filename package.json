@@ -7,6 +7,7 @@
     "dev": "tsx server.ts",
     "seed": "tsx scripts/seed_accounts.ts",
     "seed:linked": "cross-env RUN_ADD_LINKED_ACCOUNTS=1 tsx scripts/add_linked_accounts.ts",
+    "seed:employees": "cross-env RUN_SEED_TEST_EMPLOYEES=1 tsx scripts/seed_test_employees.ts",
     "export:tables": "node scripts/export_tables.cjs",
     "build": "vite build",
     "preview": "vite preview",

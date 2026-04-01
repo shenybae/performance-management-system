@@ -29,6 +29,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [goals, setGoals] = useState<any[]>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'Department' | 'Team' | 'Individual'>('Department');
   const [plannerView, setPlannerView] = useState<'overview' | 'analytics' | 'goals'>('goals');
   const [filterDept, setFilterDept] = useState<string>('All');
@@ -74,9 +75,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
   useEffect(() => { fetchGoals(); }, [showArchived]);
 
-  useEffect(() => { // fetch users for Team Leader selection
+  useEffect(() => { // fetch current user and all users for Team Leader selection
     (async () => {
       try {
+        const acctRes = await fetch('/api/account-info', { headers: getAuthHeaders() });
+        if (acctRes.ok) {
+          const acctData = await acctRes.json();
+          setCurrentUser(acctData);
+        }
         const usersRes = await fetch('/api/users', { headers: getAuthHeaders() });
         const usersData = await usersRes.json();
         setUsersList(Array.isArray(usersData) ? usersData : []);
@@ -94,11 +100,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   }, [usersList, form.leader_id]);
 
   const availableAssignees = useMemo(() => {
-    return employees.filter(emp => {
+    let filtered = employees.filter(emp => {
       if (selectedLeaderEmployeeId && emp.id === selectedLeaderEmployeeId) return false;
       return true;
     });
-  }, [employees, selectedLeaderEmployeeId]);
+    const userRole = currentUser?.role || '';
+    if (String(userRole).toLowerCase() === 'manager' && currentUser?.dept) {
+      filtered = filtered.filter(emp => (emp.dept || '').toLowerCase() === (currentUser.dept || '').toLowerCase());
+    }
+    return filtered;
+  }, [employees, selectedLeaderEmployeeId, currentUser]);
 
   useEffect(() => {
     setForm(prev => {
@@ -1654,6 +1665,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             {/* Assignees for Team/Department goals */}
             {(form.scope === 'Team' || form.scope === 'Department') && (
               <div>
+                {String(currentUser?.role || '').toLowerCase() === 'manager' && (
+                  <div className="mb-3 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-2">
+                    <span className="text-blue-600 dark:text-blue-400 font-bold text-sm leading-none mt-0.5">ℹ️</span>
+                    <p className="text-[10px] font-md text-blue-700 dark:text-blue-300">
+                      <span className="font-bold">Department Scope:</span> Managers may only assign employees within their department (<strong>{currentUser?.dept || 'your department'}</strong>). Employees from other departments are not shown.
+                    </p>
+                  </div>
+                )}
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
                   Team Members <span className="text-slate-400 font-normal normal-case text-[11px]">— manager-defined roster for this leader</span>
                 </label>
