@@ -548,7 +548,7 @@ export default function App() {
               case 'B1': return <OKRPlanner employees={employees} />;
               case 'B2': return <CoachingJournal employees={employees} currentUser={user} navContext={navContext} onNavContextClear={() => setNavContext(null)} />;
               case 'B3': return <DisciplinaryLog employees={employees} />;
-              case 'B4': return <EvaluationPortal employees={employees} />;
+              case 'B4': return <EvaluationPortal employees={employees} currentUser={user} />;
               case 'B5': return <Promotability employees={employees} />;
               case 'B7': return <SuggestionForm employees={employees} />;
               case 'B8': return <FeedbackBox employees={searchableEmployees} users={searchableUsers} />;

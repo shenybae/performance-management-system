@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
@@ -111,9 +111,10 @@ const lbl = 'block text-xs font-bold text-slate-500 dark:text-slate-400 uppercas
 
 interface EvaluationPortalProps {
   employees: Employee[];
+  currentUser?: any | null;
 }
 
-export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
+export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalProps) => {
   const [view, setView] = useState<'dashboard' | 'achievement' | 'performance' | 'detail'>('dashboard');
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [detailRecord, setDetailRecord] = useState<any>(null);
@@ -160,6 +161,36 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
     hr_signature: '', hr_signature_date: '',
   });
   const [perfForm, setPerfForm] = useState(freshPerf());
+
+  const userRole = String(currentUser?.role || '').toLowerCase();
+  const isManager = userRole === 'manager';
+  const managerDept = String(
+    currentUser?.dept ||
+    currentUser?.department ||
+    currentUser?.employee?.dept ||
+    currentUser?.employee_department ||
+    ''
+  ).trim();
+
+  const scopedEmployees = useMemo(() => {
+    if (!isManager || !managerDept) return employees;
+    return employees.filter((e) => String(e.dept || '').trim().toLowerCase() === managerDept.toLowerCase());
+  }, [employees, isManager, managerDept]);
+
+  const achSelectedEmployee = useMemo(
+    () => scopedEmployees.find((e) => String(e.id) === achForm.employee_id) || null,
+    [scopedEmployees, achForm.employee_id]
+  );
+
+  const getManagerNameForEmployee = (emp: Employee | null) => {
+    if (!emp) return '';
+    if ((emp as any).manager) return String((emp as any).manager);
+    if ((emp as any).manager_id) {
+      const mgr = employees.find((e) => e.id === (emp as any).manager_id);
+      if (mgr?.name) return mgr.name;
+    }
+    return String(currentUser?.full_name || currentUser?.username || '').trim();
+  };
 
   /* ── data fetch ─────────────────────────────────────────────────── */
   useEffect(() => { fetchAppraisals(); }, []);
@@ -446,18 +477,22 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
               <div>
                 <label className={lbl}>Employee Name</label>
                 <SearchableSelect
-                  options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
+                  options={scopedEmployees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                   value={achForm.employee_id}
-                  onChange={v => setAchForm({ ...achForm, employee_id: String(v) })}
+                  onChange={v => setAchForm({
+                    ...achForm,
+                    employee_id: String(v),
+                    supervisor_print_name: achForm.supervisor_print_name || String(currentUser?.full_name || currentUser?.username || '').trim(),
+                  })}
                   placeholder="Select Employee..."
                   dropdownVariant="pills-horizontal"
                 />
               </div>
               <div><label className={lbl}>Employee ID</label><input type="text" value={achForm.employee_id ? `#${achForm.employee_id}` : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
-              <div><label className={lbl}>Job Title</label><input type="text" value={achForm.employee_id ? (employees.find(e => String(e.id) === achForm.employee_id)?.position || employees.find(e => String(e.id) === achForm.employee_id)?.title || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
+              <div><label className={lbl}>Job Title</label><input type="text" value={achSelectedEmployee ? (achSelectedEmployee.position || (achSelectedEmployee as any).title || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
               <div><label className={lbl}>Date</label><input type="date" value={achForm.date} onChange={e => setAchForm({ ...achForm, date: e.target.value })} className={inp} required /></div>
-              <div><label className={lbl}>Department</label><input type="text" value={achForm.employee_id ? (employees.find(e => String(e.id) === achForm.employee_id)?.dept || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
-              <div><label className={lbl}>Manager</label><input type="text" value={(() => { if (!achForm.employee_id) return ''; const emp = employees.find(e => String(e.id) === achForm.employee_id); if (emp?.manager) return emp.manager; if (emp?.manager_id) { const mgr = employees.find(e => e.id === emp.manager_id); return mgr?.name || ''; } return ''; })()} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
+              <div><label className={lbl}>Department</label><input type="text" value={achSelectedEmployee ? (achSelectedEmployee.dept || '') : managerDept} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
+              <div><label className={lbl}>Manager</label><input type="text" value={getManagerNameForEmployee(achSelectedEmployee)} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4">
               <div><label className={lbl}>Review Period From</label><input type="date" value={achForm.review_period_from} onChange={e => setAchForm({ ...achForm, review_period_from: e.target.value })} className={inp} required /></div>
@@ -582,9 +617,19 @@ export const EvaluationPortal = ({ employees }: EvaluationPortalProps) => {
             <div>
               <label className={lbl}>Name of Employee</label>
               <SearchableSelect
-                options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
+                options={scopedEmployees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                 value={perfForm.employee_id}
-                onChange={v => setPerfForm({ ...perfForm, employee_id: String(v) })}
+                onChange={v => {
+                  const selected = scopedEmployees.find((e) => String(e.id) === String(v));
+                  setPerfForm({
+                    ...perfForm,
+                    employee_id: String(v),
+                    employee_department: selected?.dept || managerDept,
+                    employee_title: selected?.position || (selected as any)?.title || '',
+                    status: selected?.status || perfForm.status,
+                    supervisor_print_name: perfForm.supervisor_print_name || String(currentUser?.full_name || currentUser?.username || '').trim(),
+                  });
+                }}
                 placeholder="Select Employee..."
                 dropdownVariant="pills-horizontal"
               />
