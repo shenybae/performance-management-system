@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../../common/Card';
+import { Modal } from '../../common/Modal';
 import { SectionHeader } from '../../common/SectionHeader';
 import { CircularProgress } from '../../common/CircularProgress';
 import { ProofAttachment } from '../../common/ProofAttachment';
@@ -33,6 +34,7 @@ export const CareerDashboard = () => {
   const [taskDrafts, setTaskDrafts] = useState<Record<number, any>>({});
   const [taskProgressEdits, setTaskProgressEdits] = useState<Record<number, number>>({});
   const [taskReviewNotes, setTaskReviewNotes] = useState<Record<number, string>>({});
+  const [proofViewerTaskId, setProofViewerTaskId] = useState<number | null>(null);
   const [taskProgressOpenTaskId, setTaskProgressOpenTaskId] = useState<number | null>(null);
   const [taskSavingGoal, setTaskSavingGoal] = useState<number | null>(null);
   const [myMemberTasks, setMyMemberTasks] = useState<any[]>([]);
@@ -46,7 +48,7 @@ export const CareerDashboard = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       void fetchData();
-    }, 5000);
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -296,12 +298,19 @@ export const CareerDashboard = () => {
         headers: getAuthHeaders(),
         body: JSON.stringify(updates)
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        let msg = 'Failed to update task';
+        try {
+          const err = await res.json();
+          if (err?.error) msg = String(err.error);
+        } catch {}
+        throw new Error(msg);
+      }
       window.notify?.(successMessage, 'success');
       setTaskProgressOpenTaskId(prev => (prev === taskId ? null : prev));
       fetchData();
-    } catch {
-      window.notify?.('Failed to update task', 'error');
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to update task', 'error');
     }
   };
 
@@ -422,6 +431,20 @@ export const CareerDashboard = () => {
     }
     return ids;
   }, [leaderTeamMembers]);
+
+  const allLeaderTasks = useMemo(() => {
+    const tasks: any[] = [];
+    for (const g of leaderGoals) {
+      const gTasks = Array.isArray(g?.member_tasks) ? g.member_tasks : [];
+      for (const t of gTasks) tasks.push(t);
+    }
+    return tasks;
+  }, [leaderGoals]);
+
+  const proofViewerTask = useMemo(() => {
+    if (!proofViewerTaskId) return null;
+    return allLeaderTasks.find((t: any) => Number(t?.id) === proofViewerTaskId) || null;
+  }, [allLeaderTasks, proofViewerTaskId]);
 
   // Self assessment scores over time
   const assessmentTrend = selfAssessments
@@ -1105,12 +1128,17 @@ export const CareerDashboard = () => {
 
                                   {hasProof ? (
                                     <>
-                                      <ProofAttachment
-                                        src={t.proof_image}
-                                        fileName={t.proof_file_name}
-                                        mimeType={t.proof_file_type}
-                                        compact
-                                      />
+                                      <div className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
+                                        <p className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">
+                                          {t.proof_file_name || 'Submitted proof'}
+                                        </p>
+                                        <button
+                                          onClick={() => setProofViewerTaskId(Number(t.id))}
+                                          className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
+                                        >
+                                          View Proof
+                                        </button>
+                                      </div>
                                       <textarea
                                         rows={2}
                                         value={reviewNoteValue}
@@ -1234,6 +1262,23 @@ export const CareerDashboard = () => {
         )}
       </Card>
       )}
+
+      <Modal
+        open={!!proofViewerTask}
+        title={proofViewerTask ? `Proof: ${proofViewerTask.proof_file_name || proofViewerTask.title || 'Task proof'}` : 'Proof Viewer'}
+        onClose={() => setProofViewerTaskId(null)}
+        maxWidthClassName="max-w-4xl"
+      >
+        {proofViewerTask?.proof_image ? (
+          <ProofAttachment
+            src={proofViewerTask.proof_image}
+            fileName={proofViewerTask.proof_file_name}
+            mimeType={proofViewerTask.proof_file_type}
+          />
+        ) : (
+          <p className="text-sm text-slate-500">No proof file available.</p>
+        )}
+      </Modal>
     </motion.div>
   );
 };

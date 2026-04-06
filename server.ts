@@ -3711,7 +3711,7 @@ async function startServer() {
   app.put('/api/member-tasks/:id', authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
-      const role = actor.role;
+      const role = normalizeUserRole(actor.role) || String(actor.role || '');
       const taskId = parseInt(String(req.params.id));
       if (!taskId) return res.status(400).json({ error: 'Invalid task id' });
 
