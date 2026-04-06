@@ -670,19 +670,27 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Course *</label>
-                    <select value={recForm.course_title} onChange={e => setRecForm({ ...recForm, course_title: e.target.value })} className={inp}>
-                      <option value="">Select Course...</option>
-                      {courses.map((c: any) => <option key={c.id} value={c.title}>{c.title}</option>)}
-                    </select>
+                    <SearchableSelect
+                      options={courses.map((c: any) => ({ value: c.title, label: c.title }))}
+                      value={recForm.course_title}
+                      onChange={v => setRecForm({ ...recForm, course_title: String(v) })}
+                      placeholder="Select Course..."
+                      dropdownVariant="pills-horizontal"
+                    />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Weakness Area</label>
-                    <select value={recForm.weakness} onChange={e => setRecForm({ ...recForm, weakness: e.target.value })} className={inp}>
-                      <option value="">Select Weakness...</option>
-                      {WEAKNESS_CATEGORIES.map(w => <option key={w} value={w}>{w}</option>)}
-                    </select>
+                    <SearchableSelect
+                      options={WEAKNESS_CATEGORIES.map(w => ({ value: w, label: w }))}
+                      value={recForm.weakness}
+                      onChange={v => setRecForm({ ...recForm, weakness: String(v) })}
+                      placeholder="Select Weakness..."
+                      allowEmpty
+                      emptyLabel="No Weakness"
+                      dropdownVariant="pills-horizontal"
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Reason / Notes</label>
