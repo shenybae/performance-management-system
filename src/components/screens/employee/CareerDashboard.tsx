@@ -24,7 +24,7 @@ export const CareerDashboard = () => {
   const [myMemberTasks, setMyMemberTasks] = useState<any[]>([]);
   const [proofDrafts, setProofDrafts] = useState<Record<number, { proof_image: string; proof_note: string }>>({});
   const [proofSubmittingTaskId, setProofSubmittingTaskId] = useState<number | null>(null);
-  const user = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
+  const localUser = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
 
   useEffect(() => { fetchData(); }, []);
 
@@ -56,13 +56,67 @@ export const CareerDashboard = () => {
   }, [myMemberTasks]);
 
   const fetchData = async () => {
-    try { const r = await fetch('/api/appraisals', { headers: getAuthHeaders() }); const d = await r.json(); setAppraisals(Array.isArray(d) ? d.filter((a: any) => a.employee_id === (user.employee_id || user.id)) : []); } catch { setAppraisals([]); }
-    try { const r = await fetch('/api/goals', { headers: getAuthHeaders() }); const d = await r.json(); const empId = String(user.employee_id || user.id || ''); setGoals(Array.isArray(d) ? d.filter((g: any) => String(g.employee_id) === empId || (g.assignees || []).some((a: any) => String(a.employee_id) === empId)) : []); } catch { setGoals([]); }
-    setLeaderGoals([]);
-    setLeaderTeamMembers([]);
-    try { const r = await fetch('/api/pip_plans', { headers: getAuthHeaders() }); const d = await r.json(); setPips(Array.isArray(d) ? d.filter((p: any) => p.employee_id === (user.employee_id || user.id)) : []); } catch { setPips([]); }
-    try { const r = await fetch('/api/development_plans', { headers: getAuthHeaders() }); const d = await r.json(); setIdps(Array.isArray(d) ? d.filter((i: any) => i.employee_id === (user.employee_id || user.id)) : []); } catch { setIdps([]); }
-    try { const r = await fetch('/api/self_assessments', { headers: getAuthHeaders() }); const d = await r.json(); setSelfAssessments(Array.isArray(d) ? d.filter((s: any) => s.employee_id === (user.employee_id || user.id)) : []); } catch { setSelfAssessments([]); }
+    let account: any = {};
+    try {
+      const accountRes = await fetch('/api/account-info', { headers: getAuthHeaders() });
+      account = accountRes.ok ? await accountRes.json() : {};
+    } catch {
+      account = {};
+    }
+
+    const employeeId = Number(account?.employee_id || localUser?.employee_id || localUser?.id || 0) || null;
+
+    // Goals endpoint already enforces access control for Employee role; do not over-filter with potentially stale local IDs.
+    try {
+      const r = await fetch('/api/goals', { headers: getAuthHeaders() });
+      const d = await r.json();
+      setGoals(Array.isArray(d) ? d : []);
+    } catch {
+      setGoals([]);
+    }
+
+    try {
+      const r = await fetch('/api/leader-goals', { headers: getAuthHeaders() });
+      const d = await r.json();
+      setLeaderGoals(Array.isArray(d?.goals) ? d.goals : []);
+      setLeaderTeamMembers(Array.isArray(d?.teamMembers) ? d.teamMembers : []);
+    } catch {
+      setLeaderGoals([]);
+      setLeaderTeamMembers([]);
+    }
+
+    try {
+      const r = await fetch('/api/appraisals', { headers: getAuthHeaders() });
+      const d = await r.json();
+      setAppraisals(Array.isArray(d) ? d.filter((a: any) => !employeeId || Number(a.employee_id) === employeeId) : []);
+    } catch {
+      setAppraisals([]);
+    }
+
+    try {
+      const r = await fetch('/api/pip_plans', { headers: getAuthHeaders() });
+      const d = await r.json();
+      setPips(Array.isArray(d) ? d.filter((p: any) => !employeeId || Number(p.employee_id) === employeeId) : []);
+    } catch {
+      setPips([]);
+    }
+
+    try {
+      const r = await fetch('/api/development_plans', { headers: getAuthHeaders() });
+      const d = await r.json();
+      setIdps(Array.isArray(d) ? d.filter((i: any) => !employeeId || Number(i.employee_id) === employeeId) : []);
+    } catch {
+      setIdps([]);
+    }
+
+    try {
+      const r = await fetch('/api/self_assessments', { headers: getAuthHeaders() });
+      const d = await r.json();
+      setSelfAssessments(Array.isArray(d) ? d.filter((s: any) => !employeeId || Number(s.employee_id) === employeeId) : []);
+    } catch {
+      setSelfAssessments([]);
+    }
+
     try {
       const r = await fetch('/api/member-tasks/my', { headers: getAuthHeaders() });
       const d = await r.json();
@@ -70,7 +124,17 @@ export const CareerDashboard = () => {
     } catch {
       setMyMemberTasks([]);
     }
-    if (user.employee_id) { try { const r = await fetch(`/api/employees/${user.employee_id}`, { headers: getAuthHeaders() }); const d = await r.json(); setSalary(d.salary_base || null); } catch { /* ignore */ } }
+    if (employeeId) {
+      try {
+        const r = await fetch(`/api/employees/${employeeId}`, { headers: getAuthHeaders() });
+        const d = await r.json();
+        setSalary(d.salary_base || null);
+      } catch {
+        setSalary(null);
+      }
+    } else {
+      setSalary(null);
+    }
   };
 
   const handleProofDraftChange = (taskId: number, patch: Partial<{ proof_image: string; proof_note: string }>) => {
