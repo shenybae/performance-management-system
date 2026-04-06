@@ -55,6 +55,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [proofReviewTasksByGoal, setProofReviewTasksByGoal] = useState<Record<number, any[]>>({});
   const [proofUploadingTaskId, setProofUploadingTaskId] = useState<number | null>(null);
   const [proofUploadNotes, setProofUploadNotes] = useState<Record<number, string>>({});
+  const [lastRealtimeSyncAt, setLastRealtimeSyncAt] = useState<number>(Date.now());
   const [form, setForm] = useState({
     employee_id: '', title: '', statement: '', metric: '', target_date: '',
     status: '', progress: 0, scope: '' as string,
@@ -188,9 +189,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       } else {
         setRecoveryTaskCount7d(0);
       }
+      setLastRealtimeSyncAt(Date.now());
     } catch {
       setGoals([]);
       setRecoveryTaskCount7d(0);
+      setLastRealtimeSyncAt(Date.now());
     }
   };
 
@@ -1231,6 +1234,19 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
                 {/* Table */}
                 <Card>
+                  <div className="mb-3 flex items-center justify-between rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 px-3 py-2">
+                    <div className="flex items-center gap-2 text-[11px] font-bold text-blue-700 dark:text-blue-300">
+                      <motion.span
+                        animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
+                        transition={{ repeat: Infinity, duration: 1.6 }}
+                        className="inline-block h-2 w-2 rounded-full bg-blue-500"
+                      />
+                      Live Goal Monitor
+                    </div>
+                    <div className="text-[10px] text-blue-600 dark:text-blue-300">
+                      Sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - lastRealtimeSyncAt) / 1000))}s ago
+                    </div>
+                  </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead><tr className="bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/50">
@@ -1239,7 +1255,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Department</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Owner</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Priority</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Progress</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Progress / Status</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Due</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Overdue</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Issue</th>
@@ -1277,11 +1293,30 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 </td>
                                 <td className="py-2.5 px-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority)}`}>{g.priority || 'Medium'}</span></td>
                                 <td className="py-2.5 px-3">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-20 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden relative">
-                                      <motion.div initial={{ width: 0 }} animate={{ width: `${g.progress || 0}%` }} transition={{ duration: 0.5 }} className="bg-red-500 h-2.5 rounded-full" />
+                                  <div className="space-y-1.5 min-w-[160px]">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden relative">
+                                        <motion.div
+                                          initial={{ width: 0 }}
+                                          animate={{ width: `${g.progress || 0}%` }}
+                                          transition={{ duration: 0.45 }}
+                                          className="bg-red-500 h-2.5 rounded-full"
+                                        />
+                                      </div>
+                                      <span className="text-[10px] font-black text-red-500 w-8">{g.progress || 0}%</span>
+                                      <motion.span
+                                        animate={{ opacity: [1, 0.45, 1] }}
+                                        transition={{ repeat: Infinity, duration: 1.4 }}
+                                        className="text-[9px] font-bold text-blue-600 dark:text-blue-300"
+                                      >
+                                        LIVE
+                                      </motion.span>
                                     </div>
-                                    <span className="text-[10px] font-black text-red-500 w-8">{g.progress || 0}%</span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${statusColor(g.status || 'Not Started')}`}>
+                                        {g.status || 'Not Started'}
+                                      </span>
+                                    </div>
                                   </div>
                                 </td>
                                 <td className={`py-2.5 px-3 text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '\u2014'}</td>
@@ -1335,7 +1370,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                       </div>
                                     );
                                   })() : (
-                                    <div className="flex items-center justify-center">
+                                    <div className="flex items-center justify-center gap-1.5">
                                       <select
                                         defaultValue=""
                                         onChange={(e) => {
@@ -1345,7 +1380,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                           e.target.value = '';
                                         }}
                                         title={disabledReason}
-                                        className="h-8 min-w-[160px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[10px] font-bold text-slate-700 dark:text-slate-200 px-2"
+                                        className="h-8 min-w-[148px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[10px] font-bold text-slate-700 dark:text-slate-200 px-2"
                                       >
                                         <option value="">Quick actions...</option>
                                         <option value="update">Update Progress/Status</option>
@@ -1354,8 +1389,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                         {isScopeGoal && <option value="perf">Create Performance Plan</option>}
                                         {isScopeGoal && <option value="dev">Create Development Plan</option>}
                                         {hasAssignees && <option value="recovery">Create Recovery Task</option>}
-                                        <option value="proofs">Open Proof Reviews</option>
                                       </select>
+                                      <button
+                                        onClick={() => openProofReview(g.id)}
+                                        className={`h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}
+                                      >
+                                        {proofReviewOpenGoal === g.id ? 'Hide Proofs' : 'View Proofs'}
+                                      </button>
                                     </div>
                                   )}
                                 </td>
@@ -1433,11 +1473,20 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 <tr className="border-b border-slate-100 dark:border-slate-800/50 bg-blue-50/40 dark:bg-blue-900/10">
                                   <td colSpan={10} className="px-3 py-3">
                                     {proofReviewLoadingGoal === g.id ? (
-                                      <p className="text-xs text-slate-500">Loading proofs...</p>
+                                      <p className="text-xs text-slate-500">Loading Task Proof Viewer...</p>
                                     ) : ((proofReviewTasksByGoal[g.id] || []).length === 0 ? (
                                       <p className="text-xs text-slate-500">No delegated tasks found for this goal yet.</p>
                                     ) : (
                                       <div className="space-y-2">
+                                        <div className="flex items-center justify-between rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 px-3 py-2">
+                                          <p className="text-[11px] font-bold text-blue-700 dark:text-blue-300">Task Proof Viewer</p>
+                                          <button
+                                            onClick={() => refreshProofReviewTasks(g.id)}
+                                            className="text-[10px] font-bold px-2 py-1 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                                          >
+                                            Refresh proofs
+                                          </button>
+                                        </div>
                                         {(proofReviewTasksByGoal[g.id] || []).map((t: any) => {
                                           const reviewStatus = t.proof_review_status || 'Not Submitted';
                                           const uploadNote = proofUploadNotes[t.id] || '';
