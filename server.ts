@@ -3672,7 +3672,14 @@ async function startServer() {
           if (allowedMgr) allowed = true;
         } else {
           // Team/Department goals can be department-level and may not have a single goal owner.
-          const actorDept = String(actor.dept || '').trim().toLowerCase();
+          const actorDept = String(
+            actor.dept ||
+            actor.department ||
+            actor.employee_dept ||
+            actor.employee_department ||
+            actor.employee?.dept ||
+            ''
+          ).trim().toLowerCase();
           const goalDept = String(goal.department || '').trim().toLowerCase();
           if (actorDept && goalDept && actorDept === goalDept) allowed = true;
         }
@@ -3720,7 +3727,14 @@ async function startServer() {
           const allowedMgr = await canManagerAccessEmployee(actor.id, goalEmployeeId);
           if (allowedMgr) allowed = true;
         } else {
-          const actorDept = String(actor.dept || '').trim().toLowerCase();
+          const actorDept = String(
+            actor.dept ||
+            actor.department ||
+            actor.employee_dept ||
+            actor.employee_department ||
+            actor.employee?.dept ||
+            ''
+          ).trim().toLowerCase();
           const goalDept = String(task.goal_department || '').trim().toLowerCase();
           if (actorDept && goalDept && actorDept === goalDept) allowed = true;
         }
@@ -3804,7 +3818,14 @@ async function startServer() {
           const allowedMgr = await canManagerAccessEmployee(actor.id, goalEmployeeId);
           if (allowedMgr) allowed = true;
         } else {
-          const actorDept = String(actor.dept || '').trim().toLowerCase();
+          const actorDept = String(
+            actor.dept ||
+            actor.department ||
+            actor.employee_dept ||
+            actor.employee_department ||
+            actor.employee?.dept ||
+            ''
+          ).trim().toLowerCase();
           const goalDept = String(task.goal_department || '').trim().toLowerCase();
           if (actorDept && goalDept && actorDept === goalDept) allowed = true;
         }

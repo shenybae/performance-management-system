@@ -20,6 +20,7 @@ export const CareerDashboard = () => {
   const [dashboardTab, setDashboardTab] = useState<'overview' | 'goals' | 'leaderGoals' | 'pips' | 'idps'>('overview');
   const [taskDrafts, setTaskDrafts] = useState<Record<number, any>>({});
   const [taskProgressEdits, setTaskProgressEdits] = useState<Record<number, number>>({});
+  const [taskProgressOpenTaskId, setTaskProgressOpenTaskId] = useState<number | null>(null);
   const [taskSavingGoal, setTaskSavingGoal] = useState<number | null>(null);
   const [myMemberTasks, setMyMemberTasks] = useState<any[]>([]);
   const [proofDrafts, setProofDrafts] = useState<Record<number, { proof_image: string; proof_note: string }>>({});
@@ -280,6 +281,7 @@ export const CareerDashboard = () => {
       });
       if (!res.ok) throw new Error('Failed');
       window.notify?.(successMessage, 'success');
+      setTaskProgressOpenTaskId(prev => (prev === taskId ? null : prev));
       fetchData();
     } catch {
       window.notify?.('Failed to update task', 'error');
@@ -989,6 +991,7 @@ export const CareerDashboard = () => {
                         <div className="space-y-2">
                           {memberTasks.map((t: any) => {
                             const progressValue = taskProgressEdits[t.id] ?? Number(t.progress || 0);
+                            const isProgressOpen = taskProgressOpenTaskId === t.id;
                             return (
                               <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-900/40">
                                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1010,36 +1013,60 @@ export const CareerDashboard = () => {
                                   </button>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
-                                  <select
-                                    value={t.status || 'Not Started'}
-                                    onChange={(e) => handleUpdateLeaderTask(Number(t.id), { status: e.target.value }, 'Task status updated')}
-                                    className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
-                                  >
-                                    <option value="Not Started">Not Started</option>
-                                    <option value="In Progress">In Progress</option>
-                                    <option value="Blocked">Blocked</option>
-                                    <option value="Completed">Completed</option>
-                                  </select>
-
-                                  <div className="flex items-center gap-2 md:col-span-2">
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      max={100}
-                                      value={progressValue}
-                                      onChange={(e) => setTaskProgressEdits(prev => ({ ...prev, [t.id]: Math.max(0, Math.min(100, Number(e.target.value) || 0)) }))}
-                                      className="w-24 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
-                                    />
-                                    <span className="text-xs text-slate-500">%</span>
+                                {!isProgressOpen ? (
+                                  <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                      <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden max-w-[220px]">
+                                        <div className={`h-2 rounded-full ${progressValue >= 100 ? 'bg-emerald-500' : progressValue >= 50 ? 'bg-teal-500' : 'bg-amber-500'}`} style={{ width: `${progressValue}%` }} />
+                                      </div>
+                                      <span className="text-sm font-bold text-slate-700 dark:text-slate-200 w-10 text-right">{progressValue}%</span>
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColors[t.status || 'Not Started']}`}>{t.status || 'Not Started'}</span>
+                                    </div>
                                     <button
-                                      onClick={() => handleUpdateLeaderTask(Number(t.id), { progress: progressValue }, 'Task progress updated')}
-                                      className="px-2.5 py-2 rounded-lg bg-teal-deep text-white text-xs font-bold inline-flex items-center gap-1"
+                                      onClick={() => setTaskProgressOpenTaskId(t.id)}
+                                      className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
                                     >
-                                      <Save size={12} /> Save Progress
+                                      Update
                                     </button>
                                   </div>
-                                </div>
+                                ) : (
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                                    <select
+                                      value={t.status || 'Not Started'}
+                                      onChange={(e) => handleUpdateLeaderTask(Number(t.id), { status: e.target.value }, 'Task status updated')}
+                                      className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                                    >
+                                      <option value="Not Started">Not Started</option>
+                                      <option value="In Progress">In Progress</option>
+                                      <option value="Blocked">Blocked</option>
+                                      <option value="Completed">Completed</option>
+                                    </select>
+
+                                    <div className="flex items-center gap-2 md:col-span-2">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        value={progressValue}
+                                        onChange={(e) => setTaskProgressEdits(prev => ({ ...prev, [t.id]: Math.max(0, Math.min(100, Number(e.target.value) || 0)) }))}
+                                        className="w-24 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                                      />
+                                      <span className="text-xs text-slate-500">%</span>
+                                      <button
+                                        onClick={() => handleUpdateLeaderTask(Number(t.id), { progress: progressValue }, 'Task progress updated')}
+                                        className="px-2.5 py-2 rounded-lg bg-teal-deep text-white text-xs font-bold inline-flex items-center gap-1"
+                                      >
+                                        <Save size={12} /> Save Progress
+                                      </button>
+                                      <button
+                                        onClick={() => setTaskProgressOpenTaskId(null)}
+                                        className="px-2.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold"
+                                      >
+                                        Close
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

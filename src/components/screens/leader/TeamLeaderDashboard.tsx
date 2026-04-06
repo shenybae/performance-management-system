@@ -199,6 +199,14 @@ export const TeamLeaderDashboard = () => {
   const inProgressGoals = leaderGoals.filter(g => g.status === 'In Progress');
   const completedGoals = leaderGoals.filter(g => g.status === 'Completed');
   const atRiskGoals = leaderGoals.filter(g => g.status === 'At Risk');
+  const proofReviewQueue = leaderGoals.flatMap(goal => {
+    const tasks = Array.isArray(goal.member_tasks) ? goal.member_tasks : [];
+    return tasks.map((task: any) => ({ ...task, goal_title: goal.title || goal.statement || 'Untitled Goal' }));
+  }).filter((task: any) => {
+    const status = String(task.proof_review_status || 'Not Submitted');
+    return status === 'Pending Review' || status === 'Needs Revision' || status === 'Rejected' || !!task.proof_image;
+  });
+  const pendingProofCount = proofReviewQueue.filter((task: any) => String(task.proof_review_status || 'Not Submitted') === 'Pending Review').length;
 
   const overallProgress = leaderGoals.length > 0
     ? Math.round(leaderGoals.reduce((sum, g) => sum + (g.progress || 0), 0) / leaderGoals.length)
@@ -230,6 +238,57 @@ export const TeamLeaderDashboard = () => {
           Last sync {Math.max(0, Math.floor((Date.now() - lastSyncAt) / 1000))}s ago
         </div>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="glass-card p-4">
+          <div className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Proofs waiting</div>
+          <div className="text-2xl font-black text-slate-800 dark:text-slate-100">{pendingProofCount}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Submitted by employees and ready for your review.</div>
+        </div>
+        <div className="glass-card p-4">
+          <div className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Proofs with files</div>
+          <div className="text-2xl font-black text-slate-800 dark:text-slate-100">{proofReviewQueue.filter((task: any) => !!task.proof_image).length}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Click a goal and review the uploaded proof image.</div>
+        </div>
+        <div className="glass-card p-4">
+          <div className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Review workflow</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Pending Review means the employee submitted proof. Approve, request revision, or reject it here.
+          </div>
+        </div>
+      </div>
+
+      {proofReviewQueue.length > 0 && (
+        <div className="glass-card p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Recent Proof Submissions</h3>
+            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-300">Auto-updates every 5 seconds</span>
+          </div>
+          <div className="space-y-2">
+            {proofReviewQueue.slice(0, 5).map((task: any) => (
+              <button
+                key={task.id}
+                type="button"
+                onClick={() => {
+                  const goal = leaderGoals.find(g => Array.isArray(g.member_tasks) && g.member_tasks.some((t: any) => t.id === task.id));
+                  if (goal) toggleGoalExpansion(goal.id);
+                }}
+                className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{task.title || 'Untitled Task'}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{task.goal_title} • {task.member_name || `#${task.member_employee_id}`}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${String(task.proof_review_status || 'Not Submitted') === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : String(task.proof_review_status || 'Not Submitted') === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'}`}>
+                    {task.proof_review_status || 'Not Submitted'}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Summary Cards Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
