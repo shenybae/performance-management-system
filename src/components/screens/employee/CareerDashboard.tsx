@@ -24,6 +24,7 @@ export const CareerDashboard = () => {
   const [myMemberTasks, setMyMemberTasks] = useState<any[]>([]);
   const [proofDrafts, setProofDrafts] = useState<Record<number, { proof_image: string; proof_note: string }>>({});
   const [proofSubmittingTaskId, setProofSubmittingTaskId] = useState<number | null>(null);
+  const [closedProofEditors, setClosedProofEditors] = useState<Record<number, boolean>>({});
   const localUser = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
 
   useEffect(() => { fetchData(); }, []);
@@ -49,6 +50,19 @@ export const CareerDashboard = () => {
             proof_image: t.proof_image || '',
             proof_note: t.proof_note || '',
           };
+        }
+      }
+      return next;
+    });
+  }, [myMemberTasks]);
+
+  useEffect(() => {
+    setClosedProofEditors(prev => {
+      const next = { ...prev };
+      for (const t of myMemberTasks) {
+        const rs = String(t?.proof_review_status || 'Not Submitted');
+        if (rs === 'Pending Review' || rs === 'Approved') {
+          next[t.id] = true;
         }
       }
       return next;
@@ -183,6 +197,7 @@ export const CareerDashboard = () => {
       });
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Proof submitted for review', 'success');
+      setClosedProofEditors(prev => ({ ...prev, [taskId]: true }));
       fetchData();
     } catch {
       window.notify?.('Failed to submit proof', 'error');
@@ -770,6 +785,7 @@ export const CareerDashboard = () => {
               {myMemberTasks.map((t: any) => {
                 const draft = proofDrafts[t.id] || { proof_image: t.proof_image || '', proof_note: t.proof_note || '' };
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
+                const isEditorClosed = !!closedProofEditors[t.id] || reviewStatus === 'Pending Review' || reviewStatus === 'Approved';
                 return (
                   <div key={t.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-900/40">
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -782,6 +798,25 @@ export const CareerDashboard = () => {
                       </span>
                     </div>
 
+                    <div className="mt-2 flex justify-end">
+                      {isEditorClosed ? (
+                        <button
+                          onClick={() => setClosedProofEditors(prev => ({ ...prev, [t.id]: false }))}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300"
+                        >
+                          Open Proof Details
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setClosedProofEditors(prev => ({ ...prev, [t.id]: true }))}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300"
+                        >
+                          Close
+                        </button>
+                      )}
+                    </div>
+
+                    {!isEditorClosed && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                       <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-3 bg-white/70 dark:bg-slate-900/50">
                         {draft.proof_image ? (
@@ -814,6 +849,7 @@ export const CareerDashboard = () => {
                         </div>
                       </div>
                     </div>
+                    )}
                   </div>
                 );
               })}

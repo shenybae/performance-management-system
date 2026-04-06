@@ -3537,7 +3537,7 @@ async function startServer() {
 
       if (!goalId || !memberId || !title) return res.status(400).json({ error: 'Invalid task payload' });
 
-      const goalRows: any = await query('SELECT id, employee_id, leader_id FROM goals WHERE id = ?', [goalId]);
+      const goalRows: any = await query('SELECT id, employee_id, leader_id, department FROM goals WHERE id = ?', [goalId]);
       const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
       if (!goal) return res.status(404).json({ error: 'Goal not found' });
 
@@ -3666,8 +3666,16 @@ async function startServer() {
       let allowed = false;
       if (isPrivilegedRole(role)) allowed = true;
       else if (role === 'Manager') {
-        const allowedMgr = await canManagerAccessEmployee(actor.id, normalizeEmployeeId(goal.employee_id));
-        if (allowedMgr) allowed = true;
+        const goalEmployeeId = normalizeEmployeeId(goal.employee_id);
+        if (goalEmployeeId) {
+          const allowedMgr = await canManagerAccessEmployee(actor.id, goalEmployeeId);
+          if (allowedMgr) allowed = true;
+        } else {
+          // Team/Department goals can be department-level and may not have a single goal owner.
+          const actorDept = String(actor.dept || '').trim().toLowerCase();
+          const goalDept = String(goal.department || '').trim().toLowerCase();
+          if (actorDept && goalDept && actorDept === goalDept) allowed = true;
+        }
       } else if (role === 'Employee') {
         if (Number(goal.leader_id) === Number(actor.id)) allowed = true;
       }
@@ -3697,7 +3705,7 @@ async function startServer() {
       if (!taskId) return res.status(400).json({ error: 'Invalid task id' });
 
       const taskRows: any = await query(
-        'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
+        'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
         [taskId]
       );
       const task = Array.isArray(taskRows) ? taskRows[0] : taskRows;
@@ -3707,8 +3715,15 @@ async function startServer() {
       let allowed = false;
       if (isPrivilegedRole(role)) allowed = true;
       else if (role === 'Manager') {
-        const allowedMgr = await canManagerAccessEmployee(actor.id, normalizeEmployeeId(task.goal_employee_id));
-        if (allowedMgr) allowed = true;
+        const goalEmployeeId = normalizeEmployeeId(task.goal_employee_id);
+        if (goalEmployeeId) {
+          const allowedMgr = await canManagerAccessEmployee(actor.id, goalEmployeeId);
+          if (allowedMgr) allowed = true;
+        } else {
+          const actorDept = String(actor.dept || '').trim().toLowerCase();
+          const goalDept = String(task.goal_department || '').trim().toLowerCase();
+          if (actorDept && goalDept && actorDept === goalDept) allowed = true;
+        }
       } else if (role === 'Employee') {
         const actorEmployeeId = normalizeEmployeeId(actor.employee_id);
         if (isGoalLeader || (actorEmployeeId && actorEmployeeId === normalizeEmployeeId(task.member_employee_id))) allowed = true;
@@ -3775,7 +3790,7 @@ async function startServer() {
       if (!taskId) return res.status(400).json({ error: 'Invalid task id' });
 
       const taskRows: any = await query(
-        'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
+        'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
         [taskId]
       );
       const task = Array.isArray(taskRows) ? taskRows[0] : taskRows;
@@ -3784,8 +3799,15 @@ async function startServer() {
       let allowed = false;
       if (isPrivilegedRole(role)) allowed = true;
       else if (role === 'Manager') {
-        const allowedMgr = await canManagerAccessEmployee(actor.id, normalizeEmployeeId(task.goal_employee_id));
-        if (allowedMgr) allowed = true;
+        const goalEmployeeId = normalizeEmployeeId(task.goal_employee_id);
+        if (goalEmployeeId) {
+          const allowedMgr = await canManagerAccessEmployee(actor.id, goalEmployeeId);
+          if (allowedMgr) allowed = true;
+        } else {
+          const actorDept = String(actor.dept || '').trim().toLowerCase();
+          const goalDept = String(task.goal_department || '').trim().toLowerCase();
+          if (actorDept && goalDept && actorDept === goalDept) allowed = true;
+        }
       } else if (role === 'Employee') {
         if (Number(task.leader_id) === Number(actor.id)) allowed = true;
       }
