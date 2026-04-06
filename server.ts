@@ -353,6 +353,8 @@ async function initDb() {
       status TEXT DEFAULT 'Not Started',
       progress INTEGER DEFAULT 0,
       proof_image TEXT,
+      proof_file_name TEXT,
+      proof_file_type TEXT,
       proof_note TEXT,
       proof_submitted_at TEXT,
       proof_review_status TEXT DEFAULT 'Not Submitted',
@@ -916,6 +918,8 @@ async function initDb() {
       'ALTER TABLE goal_member_tasks ADD COLUMN status TEXT DEFAULT \'Not Started\'',
       'ALTER TABLE goal_member_tasks ADD COLUMN progress INTEGER DEFAULT 0',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_image TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_file_name TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_file_type TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_note TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_submitted_at TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_status TEXT DEFAULT \'Not Submitted\'',
@@ -3747,7 +3751,7 @@ async function startServer() {
       const b = req.body || {};
       const leaderUpdatable = ['title', 'description', 'due_date', 'priority', 'status', 'progress'];
       const leaderReviewUpdatable = ['proof_review_status', 'proof_review_note'];
-      const assigneeUpdatable = ['status', 'progress', 'proof_image', 'proof_note'];
+      const assigneeUpdatable = ['status', 'progress', 'proof_image', 'proof_file_name', 'proof_file_type', 'proof_note'];
       const updatable = role === 'Employee' && !isGoalLeader ? assigneeUpdatable : leaderUpdatable;
 
       const sets: string[] = [];
@@ -3779,10 +3783,17 @@ async function startServer() {
       const assigneeSubmittedProof = role === 'Employee' && !isGoalLeader && (b.proof_image !== undefined || b.proof_note !== undefined);
       if (assigneeSubmittedProof) {
         const hasProofImage = typeof b.proof_image === 'string' && b.proof_image.trim().length > 0;
+        const nextProgress = Math.max(0, Math.min(100, Math.max(Number(task.progress || 0), hasProofImage ? 75 : 0)));
         sets.push('proof_submitted_at = ?');
         vals.push(hasProofImage ? new Date().toISOString() : null);
         sets.push('proof_review_status = ?');
         vals.push(hasProofImage ? 'Pending Review' : 'Not Submitted');
+        if (hasProofImage) {
+          sets.push('status = ?');
+          vals.push('In Progress');
+          sets.push('progress = ?');
+          vals.push(nextProgress);
+        }
       }
 
       const reviewerSetStatus = !(role === 'Employee' && !isGoalLeader) && b.proof_review_status !== undefined;

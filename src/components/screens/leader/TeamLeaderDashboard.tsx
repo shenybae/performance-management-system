@@ -5,6 +5,7 @@ import { SectionHeader } from '../../common/SectionHeader';
 import Modal from '../../common/Modal';
 import { getAuthHeaders } from '../../../utils/csv';
 import { appAlert } from '../../../utils/appDialog';
+import { ProofAttachment } from '../../common/ProofAttachment';
 
 interface Goal {
   id: number;
@@ -667,9 +668,9 @@ export const TeamLeaderDashboard = () => {
                                         </div>
 
                                       {task.proof_image ? (
-                                        <a href={task.proof_image} target="_blank" rel="noreferrer" className="mt-2 inline-block">
-                                          <img src={task.proof_image} alt="Task proof" className="w-44 h-28 object-cover rounded border border-slate-200 dark:border-slate-700" />
-                                        </a>
+                                        <div className="mt-2 max-w-xl">
+                                          <ProofAttachment src={task.proof_image} fileName={task.proof_file_name} mimeType={task.proof_file_type} />
+                                        </div>
                                       ) : (
                                         <div className="mt-2 text-[10px] text-slate-400 inline-flex items-center gap-1"><ImageIcon size={12} /> No proof uploaded yet</div>
                                       )}

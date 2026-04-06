@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { CircularProgress } from '../../common/CircularProgress';
+import { ProofAttachment } from '../../common/ProofAttachment';
 import { Download, Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTriangle, DollarSign, Building2, Users, User, ClipboardList, CalendarDays, Flag, Save, Archive, Upload, Image as ImageIcon, CheckCircle2 } from 'lucide-react';
 import { LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
@@ -34,7 +35,7 @@ export const CareerDashboard = () => {
   const [taskProgressOpenTaskId, setTaskProgressOpenTaskId] = useState<number | null>(null);
   const [taskSavingGoal, setTaskSavingGoal] = useState<number | null>(null);
   const [myMemberTasks, setMyMemberTasks] = useState<any[]>([]);
-  const [proofDrafts, setProofDrafts] = useState<Record<number, { proof_image: string; proof_note: string }>>({});
+  const [proofDrafts, setProofDrafts] = useState<Record<number, { proof_image: string; proof_file_name: string; proof_file_type: string; proof_note: string }>>({});
   const [proofSubmittingTaskId, setProofSubmittingTaskId] = useState<number | null>(null);
   const [closedProofEditors, setClosedProofEditors] = useState<Record<number, boolean>>({});
   const localUser = safeParseSession(localStorage.getItem('talentflow_user') || localStorage.getItem('user'));
@@ -67,6 +68,8 @@ export const CareerDashboard = () => {
         if (!next[t.id]) {
           next[t.id] = {
             proof_image: t.proof_image || '',
+            proof_file_name: t.proof_file_name || '',
+            proof_file_type: t.proof_file_type || '',
             proof_note: t.proof_note || '',
           };
         }
@@ -170,11 +173,13 @@ export const CareerDashboard = () => {
     }
   };
 
-  const handleProofDraftChange = (taskId: number, patch: Partial<{ proof_image: string; proof_note: string }>) => {
+  const handleProofDraftChange = (taskId: number, patch: Partial<{ proof_image: string; proof_file_name: string; proof_file_type: string; proof_note: string }>) => {
     setProofDrafts(prev => ({
       ...prev,
       [taskId]: {
         proof_image: prev[taskId]?.proof_image || '',
+        proof_file_name: prev[taskId]?.proof_file_name || '',
+        proof_file_type: prev[taskId]?.proof_file_type || '',
         proof_note: prev[taskId]?.proof_note || '',
         ...patch,
       }
@@ -183,23 +188,23 @@ export const CareerDashboard = () => {
 
   const handleProofImageUpload = async (taskId: number, file?: File | null) => {
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      window.notify?.('Please upload an image file', 'error');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      window.notify?.('Image must be under 5 MB', 'error');
+    if (file.size > 10 * 1024 * 1024) {
+      window.notify?.('File must be under 10 MB', 'error');
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => handleProofDraftChange(taskId, { proof_image: String(reader.result || '') });
+    reader.onload = () => handleProofDraftChange(taskId, {
+      proof_image: String(reader.result || ''),
+      proof_file_name: file.name,
+      proof_file_type: file.type || 'application/octet-stream',
+    });
     reader.readAsDataURL(file);
   };
 
   const submitTaskProof = async (taskId: number) => {
-    const draft = proofDrafts[taskId] || { proof_image: '', proof_note: '' };
+    const draft = proofDrafts[taskId] || { proof_image: '', proof_file_name: '', proof_file_type: '', proof_note: '' };
     if (!draft.proof_image) {
-      window.notify?.('Please upload proof image first', 'error');
+      window.notify?.('Please attach a proof file first', 'error');
       return;
     }
     setProofSubmittingTaskId(taskId);
@@ -209,6 +214,8 @@ export const CareerDashboard = () => {
         headers: getAuthHeaders(),
         body: JSON.stringify({
           proof_image: draft.proof_image,
+          proof_file_name: draft.proof_file_name,
+          proof_file_type: draft.proof_file_type,
           proof_note: draft.proof_note,
         })
       });
@@ -804,7 +811,7 @@ export const CareerDashboard = () => {
           <div className="mb-4 rounded-xl border border-teal-100 dark:border-teal-900/40 bg-teal-50/70 dark:bg-teal-900/20 px-4 py-3">
             <p className="text-xs font-black uppercase text-teal-700 dark:text-teal-300 tracking-wider">How real-time proof tracking works</p>
             <p className="text-[11px] text-teal-700/80 dark:text-teal-300/80 mt-1">
-              Upload proof here, submit it for review, and the status updates to Pending Review automatically. Your leader or manager can approve it on their dashboard, and this screen refreshes every 5 seconds.
+              Attach any proof file, submit it for review, and the task moves into review so progress updates right away. Your leader or manager can open the file and review it on their dashboard, and this screen refreshes every 5 seconds.
             </p>
           </div>
           {myMemberTasks.length === 0 ? (
@@ -815,7 +822,7 @@ export const CareerDashboard = () => {
           ) : (
             <div className="space-y-3">
               {myMemberTasks.map((t: any) => {
-                const draft = proofDrafts[t.id] || { proof_image: t.proof_image || '', proof_note: t.proof_note || '' };
+                const draft = proofDrafts[t.id] || { proof_image: t.proof_image || '', proof_file_name: t.proof_file_name || '', proof_file_type: t.proof_file_type || '', proof_note: t.proof_note || '' };
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
                 const isEditorClosed = !!closedProofEditors[t.id] || reviewStatus === 'Pending Review' || reviewStatus === 'Approved';
                 return (
@@ -851,15 +858,14 @@ export const CareerDashboard = () => {
                     {!isEditorClosed && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                       <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-3 bg-white/70 dark:bg-slate-900/50">
-                        {draft.proof_image ? (
-                          <img src={draft.proof_image} alt="Task proof" className="w-full max-h-44 object-cover rounded" />
-                        ) : (
-                          <div className="h-32 flex items-center justify-center text-xs text-slate-400"><ImageIcon size={14} className="mr-1" /> No proof image uploaded</div>
-                        )}
+                        <ProofAttachment src={draft.proof_image} fileName={draft.proof_file_name} mimeType={draft.proof_file_type} compact />
                         <label className="mt-2 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
-                          <Upload size={12} /> Upload Proof
-                          <input type="file" accept="image/*" className="hidden" onChange={(e) => handleProofImageUpload(t.id, e.target.files?.[0])} />
+                          <Upload size={12} /> Attach Proof File
+                          <input type="file" accept="*/*" className="hidden" onChange={(e) => handleProofImageUpload(t.id, e.target.files?.[0])} />
                         </label>
+                        {draft.proof_file_name && (
+                          <p className="mt-2 text-[10px] text-slate-500 truncate">Selected file: {draft.proof_file_name}</p>
+                        )}
                       </div>
 
                       <div>
@@ -868,7 +874,7 @@ export const CareerDashboard = () => {
                           value={draft.proof_note}
                           onChange={(e) => handleProofDraftChange(t.id, { proof_note: e.target.value })}
                           className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
-                          placeholder="Add notes explaining how this task was completed"
+                          placeholder="Add notes explaining the attached proof"
                         />
                         <div className="mt-2 flex justify-end">
                           <button

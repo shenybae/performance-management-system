@@ -8,6 +8,7 @@ import { PIPManager } from './PIPManager';
 import { GoalScopePlanManager } from './GoalScopePlanManager';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { CircularProgress } from '../../common/CircularProgress';
+import { ProofAttachment } from '../../common/ProofAttachment';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { appConfirm } from '../../../utils/appDialog';
@@ -624,6 +625,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           headers: getAuthHeaders(),
           body: JSON.stringify({
             proof_image: base64,
+            proof_file_name: file.name,
+            proof_file_type: file.type || 'application/octet-stream',
             proof_note: note,
             proof_submitted_at: new Date().toISOString()
           })
@@ -1517,11 +1520,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
                                               {!t.proof_image && (
                                                 <div className="mb-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                                                  <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Upload Proof</label>
+                                                  <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Attach Proof File</label>
                                                   <div className="flex gap-1.5 items-end">
                                                     <input
                                                       type="file"
-                                                      accept="image/*"
+                                                      accept="*/*"
                                                       id={`proof-file-${t.id}`}
                                                       className="hidden"
                                                       disabled={proofUploadingTaskId === t.id}
@@ -1549,9 +1552,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                               )}
 
                                               {t.proof_image && (
-                                                <a href={t.proof_image} target="_blank" rel="noreferrer" className="inline-block mb-2">
-                                                  <img src={t.proof_image} alt="Proof" className="w-48 h-28 object-cover rounded border border-slate-200 dark:border-slate-700" />
-                                                </a>
+                                                <div className="mb-2 max-w-xl">
+                                                  <ProofAttachment src={t.proof_image} fileName={t.proof_file_name} mimeType={t.proof_file_type} />
+                                                </div>
                                               )}
 
                                               {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
@@ -2613,9 +2616,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                             </div>
 
                                             {t.proof_image ? (
-                                              <a href={t.proof_image} target="_blank" rel="noreferrer" className="inline-block mb-2">
-                                                <img src={t.proof_image} alt="Proof" className="w-48 h-28 object-cover rounded border border-slate-200 dark:border-slate-700" />
-                                              </a>
+                                              <div className="mb-2 max-w-xl">
+                                                <ProofAttachment src={t.proof_image} fileName={t.proof_file_name} mimeType={t.proof_file_type} />
+                                              </div>
                                             ) : (
                                               <p className="mb-2 text-[10px] text-slate-500">No proof uploaded yet.</p>
                                             )}
