@@ -32,6 +32,7 @@ export const CareerDashboard = () => {
   const [dashboardTab, setDashboardTab] = useState<'overview' | 'goals' | 'leaderGoals' | 'pips' | 'idps'>('overview');
   const [taskDrafts, setTaskDrafts] = useState<Record<number, any>>({});
   const [taskProgressEdits, setTaskProgressEdits] = useState<Record<number, number>>({});
+  const [taskReviewNotes, setTaskReviewNotes] = useState<Record<number, string>>({});
   const [taskProgressOpenTaskId, setTaskProgressOpenTaskId] = useState<number | null>(null);
   const [taskSavingGoal, setTaskSavingGoal] = useState<number | null>(null);
   const [myMemberTasks, setMyMemberTasks] = useState<any[]>([]);
@@ -1015,6 +1016,9 @@ export const CareerDashboard = () => {
                           {memberTasks.map((t: any, index: number) => {
                             const progressValue = taskProgressEdits[t.id] ?? Number(t.progress || 0);
                             const isProgressOpen = taskProgressOpenTaskId === t.id;
+                            const proofReviewStatus = String(t.proof_review_status || 'Not Submitted');
+                            const hasProof = !!t.proof_image;
+                            const reviewNoteValue = taskReviewNotes[t.id] ?? String(t.proof_review_note || '');
                             return (
                               <div key={t.id || `task-${g.id}-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-900/40">
                                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1090,6 +1094,55 @@ export const CareerDashboard = () => {
                                     </div>
                                   </div>
                                 )}
+
+                                <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Proof Review</p>
+                                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${proofReviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : proofReviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : proofReviewStatus === 'Needs Revision' || proofReviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
+                                      {proofReviewStatus}
+                                    </span>
+                                  </div>
+
+                                  {hasProof ? (
+                                    <>
+                                      <ProofAttachment
+                                        src={t.proof_image}
+                                        fileName={t.proof_file_name}
+                                        mimeType={t.proof_file_type}
+                                        compact
+                                      />
+                                      <textarea
+                                        rows={2}
+                                        value={reviewNoteValue}
+                                        onChange={(e) => setTaskReviewNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
+                                        className="w-full mt-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                                        placeholder="Add review note (optional)"
+                                      />
+                                      <div className="mt-2 flex flex-wrap gap-2">
+                                        <button
+                                          onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Approved', proof_review_note: reviewNoteValue }, 'Proof approved')}
+                                          className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold"
+                                        >
+                                          Approve
+                                        </button>
+                                        <button
+                                          onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Needs Revision', proof_review_note: reviewNoteValue }, 'Revision requested')}
+                                          className="px-2.5 py-1.5 rounded-lg bg-amber-500 text-white text-[11px] font-bold"
+                                        >
+                                          Needs Revision
+                                        </button>
+                                        <button
+                                          onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Rejected', proof_review_note: reviewNoteValue }, 'Proof rejected')}
+                                          className="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white text-[11px] font-bold"
+                                        >
+                                          Reject
+                                        </button>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <p className="text-xs text-slate-400">No proof submitted yet by assignee.</p>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
