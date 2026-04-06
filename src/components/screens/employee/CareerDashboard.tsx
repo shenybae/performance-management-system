@@ -16,6 +16,8 @@ const safeParseSession = (raw: string | null) => {
   }
 };
 
+const normalizeArray = (value: any) => (Array.isArray(value) ? value.filter((item) => item && typeof item === 'object') : []);
+
 export const CareerDashboard = () => {
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
@@ -101,7 +103,7 @@ export const CareerDashboard = () => {
     try {
       const r = await fetch('/api/goals', { headers: getAuthHeaders() });
       const d = await r.json();
-      setGoals(Array.isArray(d) ? d : []);
+      setGoals(normalizeArray(d));
     } catch {
       setGoals([]);
     }
@@ -109,8 +111,8 @@ export const CareerDashboard = () => {
     try {
       const r = await fetch('/api/leader-goals', { headers: getAuthHeaders() });
       const d = await r.json();
-      setLeaderGoals(Array.isArray(d?.goals) ? d.goals : []);
-      setLeaderTeamMembers(Array.isArray(d?.teamMembers) ? d.teamMembers : []);
+      setLeaderGoals(normalizeArray(d?.goals));
+      setLeaderTeamMembers(normalizeArray(d?.teamMembers));
     } catch {
       setLeaderGoals([]);
       setLeaderTeamMembers([]);
@@ -119,7 +121,7 @@ export const CareerDashboard = () => {
     try {
       const r = await fetch('/api/appraisals', { headers: getAuthHeaders() });
       const d = await r.json();
-      setAppraisals(Array.isArray(d) ? d.filter((a: any) => !employeeId || Number(a.employee_id) === employeeId) : []);
+      setAppraisals(normalizeArray(d).filter((a: any) => !employeeId || Number(a.employee_id) === employeeId));
     } catch {
       setAppraisals([]);
     }
@@ -127,7 +129,7 @@ export const CareerDashboard = () => {
     try {
       const r = await fetch('/api/pip_plans', { headers: getAuthHeaders() });
       const d = await r.json();
-      setPips(Array.isArray(d) ? d.filter((p: any) => !employeeId || Number(p.employee_id) === employeeId) : []);
+      setPips(normalizeArray(d).filter((p: any) => !employeeId || Number(p.employee_id) === employeeId));
     } catch {
       setPips([]);
     }
@@ -135,7 +137,7 @@ export const CareerDashboard = () => {
     try {
       const r = await fetch('/api/development_plans', { headers: getAuthHeaders() });
       const d = await r.json();
-      setIdps(Array.isArray(d) ? d.filter((i: any) => !employeeId || Number(i.employee_id) === employeeId) : []);
+      setIdps(normalizeArray(d).filter((i: any) => !employeeId || Number(i.employee_id) === employeeId));
     } catch {
       setIdps([]);
     }
@@ -143,7 +145,7 @@ export const CareerDashboard = () => {
     try {
       const r = await fetch('/api/self_assessments', { headers: getAuthHeaders() });
       const d = await r.json();
-      setSelfAssessments(Array.isArray(d) ? d.filter((s: any) => !employeeId || Number(s.employee_id) === employeeId) : []);
+      setSelfAssessments(normalizeArray(d).filter((s: any) => !employeeId || Number(s.employee_id) === employeeId));
     } catch {
       setSelfAssessments([]);
     }
@@ -151,7 +153,7 @@ export const CareerDashboard = () => {
     try {
       const r = await fetch('/api/member-tasks/my', { headers: getAuthHeaders() });
       const d = await r.json();
-      setMyMemberTasks(Array.isArray(d) ? d : []);
+      setMyMemberTasks(normalizeArray(d));
     } catch {
       setMyMemberTasks([]);
     }

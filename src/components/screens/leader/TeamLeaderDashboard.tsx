@@ -56,6 +56,8 @@ const safeParseSession = (raw: string | null) => {
   }
 };
 
+const normalizeArray = (value: any) => (Array.isArray(value) ? value.filter((item) => item && typeof item === 'object') : []);
+
 export const TeamLeaderDashboard = () => {
   const [leaderGoals, setLeaderGoals] = useState<Goal[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -93,8 +95,8 @@ export const TeamLeaderDashboard = () => {
       const res = await fetch('/api/leader-goals', { headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Failed to fetch leader goals');
       const data = await res.json();
-      setLeaderGoals(Array.isArray(data?.goals) ? data.goals : Array.isArray(data) ? data : []);
-      setTeamMembers(Array.isArray(data?.teamMembers) ? data.teamMembers : []);
+      setLeaderGoals(normalizeArray(data?.goals).length > 0 ? normalizeArray(data?.goals) : normalizeArray(data));
+      setTeamMembers(normalizeArray(data?.teamMembers));
       setLastSyncAt(Date.now());
     } catch (error) {
       console.error('Error fetching leader goals:', error);
