@@ -3000,43 +3000,9 @@ async function startServer() {
       }
 
       const b = req.body;
-      const appraisalFormType = String(appraisal.form_type || appraisal.eval_type || '').toLowerCase();
-      const isPerformanceAppraisal = appraisalFormType.includes('performance');
-
-      if (b.reviewer_signature !== undefined) {
-        if (!isPerformanceAppraisal) return res.status(400).json({ error: 'Reviewer signature is only valid for performance evaluations' });
-        if (!String(appraisal.supervisor_signature || '').trim()) return res.status(400).json({ error: 'Supervisor signature is required before reviewer signing' });
-        if (appraisal.reviewer_user_id && Number(appraisal.reviewer_user_id) !== Number(actor.id || 0)) {
-          return res.status(403).json({ error: 'This reviewer signature is assigned to a different user' });
-        }
-      }
-
-      if (b.supervisor_signature !== undefined) {
-        if (appraisal.supervisor_user_id && Number(appraisal.supervisor_user_id) !== Number(actor.id || 0)) {
-          return res.status(403).json({ error: 'This supervisor signature is assigned to a different user' });
-        }
-      }
-
-      if (b.employee_signature !== undefined) {
-        if (isPerformanceAppraisal) {
-          if (!String(appraisal.supervisor_signature || '').trim() || !String(appraisal.reviewer_signature || '').trim()) {
-            return res.status(400).json({ error: 'Supervisor and reviewer signatures are required before employee acknowledgement' });
-          }
-        } else if (!String(appraisal.supervisor_signature || '').trim()) {
-          return res.status(400).json({ error: 'Manager signature is required before employee acknowledgement' });
-        }
-      }
-
-      if (b.hr_signature !== undefined) {
-        if (!isPerformanceAppraisal) return res.status(400).json({ error: 'HR signature is only valid for performance evaluations' });
-        if (!String(appraisal.supervisor_signature || '').trim() || !String(appraisal.reviewer_signature || '').trim() || !String(appraisal.employee_signature || '').trim()) {
-          return res.status(400).json({ error: 'Supervisor, reviewer, and employee signatures are required before HR certification' });
-        }
-      }
-
       const sets: string[] = [];
       const vals: any[] = [];
-      for (const k of ['statement','metric','target_date','title','status','progress','scope','department','team_name','delegation','priority','quarter','frequency','leader_id']) {
+      for (const k of ['statement', 'metric', 'target_date', 'title', 'status', 'progress', 'scope', 'department', 'team_name', 'delegation', 'priority', 'quarter', 'frequency', 'leader_id']) {
         if (b[k] !== undefined) { sets.push(`${k} = ?`); vals.push(b[k]); }
       }
       if (sets.length === 0) return res.status(400).json({ error: "No fields to update" });
