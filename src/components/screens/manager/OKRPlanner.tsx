@@ -56,6 +56,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [proofUploadingTaskId, setProofUploadingTaskId] = useState<number | null>(null);
   const [proofUploadNotes, setProofUploadNotes] = useState<Record<number, string>>({});
   const [lastRealtimeSyncAt, setLastRealtimeSyncAt] = useState<number>(Date.now());
+  const [proofRealtimeSyncAt, setProofRealtimeSyncAt] = useState<number>(Date.now());
   const [form, setForm] = useState({
     employee_id: '', title: '', statement: '', metric: '', target_date: '',
     status: '', progress: 0, scope: '' as string,
@@ -579,10 +580,24 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   };
 
   const refreshProofReviewTasks = async (goalId: number) => {
-    const res = await fetch(`/api/goals/${goalId}/member-tasks`, { headers: getAuthHeaders() });
-    const data = await res.json();
-    setProofReviewTasksByGoal(prev => ({ ...prev, [goalId]: Array.isArray(data) ? data : [] }));
+    try {
+      const res = await fetch(`/api/goals/${goalId}/member-tasks`, { headers: getAuthHeaders() });
+      const data = await res.json();
+      setProofReviewTasksByGoal(prev => ({ ...prev, [goalId]: Array.isArray(data) ? data : [] }));
+      setProofRealtimeSyncAt(Date.now());
+    } catch {
+      // Keep existing panel data if refresh fails.
+    }
   };
+
+  // Keep proof review panel synced in real time while it is open.
+  useEffect(() => {
+    if (!proofReviewOpenGoal) return;
+    const interval = setInterval(() => {
+      void refreshProofReviewTasks(proofReviewOpenGoal);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [proofReviewOpenGoal]);
 
   const reviewTaskProof = async (taskId: number, goalId: number, status: 'Approved' | 'Needs Revision' | 'Rejected') => {
     const note = status === 'Approved' ? '' : (prompt('Add review note (optional):') || '');
@@ -2442,19 +2457,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       <td className="py-3 px-4"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority || 'Medium')}`}>{g.priority || 'Medium'}</span></td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2 min-w-[160px]">
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="5"
-                            value={g.progress || 0}
-                            onChange={(e) => {
-                              const newProgress = Number(e.target.value);
-                              const newStatus = autoStatusFromProgress(newProgress);
-                              updateGoal(g.id, { progress: newProgress, status: newStatus }, true);
-                            }}
-                            className="flex-1 h-2 rounded-full cursor-pointer accent-teal-600 outline-none"
-                          />
+                          <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                            <div
+                              className={`h-2 rounded-full transition-all ${progressBarColor(g.progress || 0)}`}
+                              style={{ width: `${g.progress || 0}%` }}
+                            ></div>
+                          </div>
                           <span className="text-xs font-bold text-slate-600 dark:text-slate-300 w-10 text-right">{g.progress || 0}%</span>
                         </div>
                       </td>
@@ -2483,6 +2491,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
                           <button onClick={() => setExpandedGoal(isExpanded ? null : g.id)} className="text-slate-500 hover:text-blue-700 p-1" title="View"><Eye size={14} /></button>
+                          <button
+                            onClick={() => {
+                              void openProofReview(g.id);
+                              if (!isExpanded) setExpandedGoal(g.id);
+                            }}
+                            className={`p-1 rounded ${proofReviewOpenGoal === g.id ? 'text-blue-700 bg-blue-100 dark:bg-blue-900/30' : 'text-blue-500 hover:text-blue-700'}`}
+                            title={proofReviewOpenGoal === g.id ? 'Hide Proof Review' : 'Open Proof Review'}
+                          >
+                            <Check size={14} />
+                          </button>
                           <button onClick={() => exportGoalPdf(g)} className="text-blue-500 hover:text-blue-700 p-1" title="Export PDF"><FileText size={14} /></button>
                           {!isArchived && <button onClick={() => handleDelete(g.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>}
                         </div>
@@ -2540,10 +2558,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                   <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Progress</span>
                                   <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
                                     <div className="flex items-center gap-3">
-                                      <input type="range" min={0} max={100} step={5} defaultValue={g.progress || 0}
-                                        onPointerUp={e => { const v = Number((e.target as HTMLInputElement).value); updateGoal(g.id, { progress: v, status: v === 100 ? 'Completed' : v > 0 ? 'In Progress' : 'Not Started' }); }}
-                                        onKeyUp={e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const v = Number((e.target as HTMLInputElement).value); updateGoal(g.id, { progress: v, status: v === 100 ? 'Completed' : v > 0 ? 'In Progress' : 'Not Started' }); } }}
-                                        className="flex-1 accent-teal-600" />
+                                      <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                        <div
+                                          className={`h-2 rounded-full transition-all ${progressBarColor(g.progress || 0)}`}
+                                          style={{ width: `${g.progress || 0}%` }}
+                                        ></div>
+                                      </div>
                                       <span className="text-sm font-bold text-slate-700 dark:text-slate-200 w-10 text-right">{g.progress || 0}%</span>
                                     </div>
                                     <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mt-2">
@@ -2551,6 +2571,77 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                     </div>
                                   </div>
                                 </div>
+                              </div>
+
+                              {/* Proof Review for any goal */}
+                              <div className="mt-1">
+                                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs">Task Proof Review</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-blue-600 dark:text-blue-300">
+                                      Live sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - proofRealtimeSyncAt) / 1000))}s ago
+                                    </span>
+                                    <button
+                                      onClick={() => void openProofReview(g.id)}
+                                      className={`text-[10px] font-bold px-2 py-1 rounded border ${proofReviewOpenGoal === g.id ? 'bg-blue-600 border-blue-600 text-white' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'}`}
+                                    >
+                                      {proofReviewOpenGoal === g.id ? 'Hide Proofs' : 'View Proofs'}
+                                    </button>
+                                    <button
+                                      onClick={() => void refreshProofReviewTasks(g.id)}
+                                      className="text-[10px] font-bold px-2 py-1 rounded border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+                                    >
+                                      Refresh
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {proofReviewOpenGoal === g.id && (
+                                  <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-blue-50/40 dark:bg-blue-900/10 p-3 space-y-2">
+                                    {proofReviewLoadingGoal === g.id ? (
+                                      <p className="text-xs text-slate-500">Loading task proofs...</p>
+                                    ) : ((proofReviewTasksByGoal[g.id] || []).length === 0 ? (
+                                      <p className="text-xs text-slate-500">No delegated tasks found for this goal yet.</p>
+                                    ) : (
+                                      (proofReviewTasksByGoal[g.id] || []).map((t: any) => {
+                                        const reviewStatus = t.proof_review_status || 'Not Submitted';
+                                        return (
+                                          <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                                            <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                                              <div>
+                                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
+                                                <p className="text-[10px] text-slate-500">{t.member_name || `#${t.member_employee_id}`} • Status: <span className="font-bold">{t.status || 'Not Started'}</span> • Progress: <span className="font-bold">{t.progress || 0}%</span></p>
+                                              </div>
+                                              <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full whitespace-nowrap ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
+                                                {reviewStatus}
+                                              </span>
+                                            </div>
+
+                                            {t.proof_image ? (
+                                              <a href={t.proof_image} target="_blank" rel="noreferrer" className="inline-block mb-2">
+                                                <img src={t.proof_image} alt="Proof" className="w-48 h-28 object-cover rounded border border-slate-200 dark:border-slate-700" />
+                                              </a>
+                                            ) : (
+                                              <p className="mb-2 text-[10px] text-slate-500">No proof uploaded yet.</p>
+                                            )}
+
+                                            {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
+                                            {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
+                                            {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
+
+                                            {t.proof_image && (
+                                              <div className="flex gap-2">
+                                                <button onClick={() => reviewTaskProof(Number(t.id), g.id, 'Approved')} className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50">Approve</button>
+                                                <button onClick={() => reviewTaskProof(Number(t.id), g.id, 'Needs Revision')} className="text-[10px] font-bold px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50">Needs Revision</button>
+                                                <button onClick={() => reviewTaskProof(Number(t.id), g.id, 'Rejected')} className="text-[10px] font-bold px-2 py-1 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50">Reject</button>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </motion.div>
