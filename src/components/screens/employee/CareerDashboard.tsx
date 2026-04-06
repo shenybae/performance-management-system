@@ -292,6 +292,27 @@ export const CareerDashboard = () => {
   };
 
   const handleUpdateLeaderTask = async (taskId: number, updates: Record<string, any>, successMessage = 'Task updated') => {
+    const applyReviewOutcomeLocally = (task: any) => {
+      const reviewStatus = String(updates?.proof_review_status || '');
+      if (reviewStatus === 'Approved') {
+        return { ...task, ...updates, status: 'Completed', progress: 100 };
+      }
+      if (reviewStatus === 'Needs Revision') {
+        const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));
+        return {
+          ...task,
+          ...updates,
+          status: 'In Progress',
+          progress: currentProgress >= 100 ? 75 : Math.max(currentProgress, 50),
+        };
+      }
+      if (reviewStatus === 'Rejected') {
+        const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));
+        return { ...task, ...updates, status: 'Blocked', progress: Math.min(currentProgress, 50) };
+      }
+      return { ...task, ...updates };
+    };
+
     try {
       const res = await fetch(`/api/member-tasks/${taskId}`, {
         method: 'PUT',
@@ -306,6 +327,14 @@ export const CareerDashboard = () => {
         } catch {}
         throw new Error(msg);
       }
+
+      setLeaderGoals(prev => prev.map((goal: any) => ({
+        ...goal,
+        member_tasks: Array.isArray(goal?.member_tasks)
+          ? goal.member_tasks.map((task: any) => (Number(task?.id) === Number(taskId) ? applyReviewOutcomeLocally(task) : task))
+          : goal.member_tasks,
+      })));
+
       window.notify?.(successMessage, 'success');
       setTaskProgressOpenTaskId(prev => (prev === taskId ? null : prev));
       fetchData();

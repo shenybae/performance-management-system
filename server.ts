@@ -3715,10 +3715,21 @@ async function startServer() {
       const taskId = parseInt(String(req.params.id));
       if (!taskId) return res.status(400).json({ error: 'Invalid task id' });
 
-      const taskRows: any = await query(
-        'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
-        [taskId]
-      );
+      let taskRows: any;
+      try {
+        taskRows = await query(
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
+          [taskId]
+        );
+      } catch (e: any) {
+        const msg = String(e?.message || '').toLowerCase();
+        const missingGoalDeptColumn = String(e?.code || '') === '42703' || msg.includes('g.department') || msg.includes('goal_department');
+        if (!missingGoalDeptColumn) throw e;
+        taskRows = await query(
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
+          [taskId]
+        );
+      }
       const task = Array.isArray(taskRows) ? taskRows[0] : taskRows;
       if (!task) return res.status(404).json({ error: 'Task not found' });
 
@@ -3772,14 +3783,6 @@ async function startServer() {
         }
       }
 
-      const reviewerApproved = !(role === 'Employee' && !isGoalLeader) && String(b.proof_review_status || '') === 'Approved';
-      if (reviewerApproved) {
-        sets.push('status = ?');
-        vals.push('Completed');
-        sets.push('progress = ?');
-        vals.push(100);
-      }
-
       const assigneeSubmittedProof = role === 'Employee' && !isGoalLeader && (b.proof_image !== undefined || b.proof_note !== undefined);
       if (assigneeSubmittedProof) {
         const hasProofImage = typeof b.proof_image === 'string' && b.proof_image.trim().length > 0;
@@ -3800,6 +3803,26 @@ async function startServer() {
       if (reviewerSetStatus) {
         const reviewedStatus = String(b.proof_review_status || '');
         const isReviewed = reviewedStatus === 'Approved' || reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected';
+
+        if (reviewedStatus === 'Approved') {
+          sets.push('status = ?');
+          vals.push('Completed');
+          sets.push('progress = ?');
+          vals.push(100);
+        } else if (reviewedStatus === 'Needs Revision') {
+          const currentProgress = Math.max(0, Math.min(100, Number(task.progress || 0)));
+          sets.push('status = ?');
+          vals.push('In Progress');
+          sets.push('progress = ?');
+          vals.push(currentProgress >= 100 ? 75 : Math.max(currentProgress, 50));
+        } else if (reviewedStatus === 'Rejected') {
+          const currentProgress = Math.max(0, Math.min(100, Number(task.progress || 0)));
+          sets.push('status = ?');
+          vals.push('Blocked');
+          sets.push('progress = ?');
+          vals.push(Math.min(currentProgress, 50));
+        }
+
         sets.push('proof_reviewed_by = ?');
         vals.push(isReviewed ? (actor.id || null) : null);
         sets.push('proof_reviewed_at = ?');
@@ -3820,21 +3843,35 @@ async function startServer() {
       await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, task.goal_id]);
 
       await recordAudit(actor, 'update_goal_member_task', 'goal_member_tasks', taskId, null, b, { route: req.originalUrl });
-      res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+      res.json({ success: true, task_id: taskId });
+    } catch (err: any) {
+      console.error('PUT /api/member-tasks/:id error:', err);
+      res.status(500).json({ error: 'Database error', detail: String(err?.message || '') });
+    }
   });
 
   app.delete('/api/member-tasks/:id', authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
-      const role = actor.role;
+      const role = normalizeUserRole(actor.role) || String(actor.role || '');
       const taskId = parseInt(String(req.params.id));
       if (!taskId) return res.status(400).json({ error: 'Invalid task id' });
 
-      const taskRows: any = await query(
-        'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
-        [taskId]
-      );
+      let taskRows: any;
+      try {
+        taskRows = await query(
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
+          [taskId]
+        );
+      } catch (e: any) {
+        const msg = String(e?.message || '').toLowerCase();
+        const missingGoalDeptColumn = String(e?.code || '') === '42703' || msg.includes('g.department') || msg.includes('goal_department');
+        if (!missingGoalDeptColumn) throw e;
+        taskRows = await query(
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
+          [taskId]
+        );
+      }
       const task = Array.isArray(taskRows) ? taskRows[0] : taskRows;
       if (!task) return res.status(404).json({ error: 'Task not found' });
 
@@ -3865,7 +3902,10 @@ async function startServer() {
       await softDeleteById('goal_member_tasks', taskId);
       await recordAudit(actor, 'delete_goal_member_task', 'goal_member_tasks', taskId, null, null, { route: req.originalUrl });
       res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: 'Database error' }); }
+    } catch (err: any) {
+      console.error('DELETE /api/member-tasks/:id error:', err);
+      res.status(500).json({ error: 'Database error', detail: String(err?.message || '') });
+    }
   });
 
   // ---- Coaching Logs CRUD ----
