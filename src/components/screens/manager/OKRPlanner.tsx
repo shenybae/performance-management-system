@@ -48,10 +48,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [recoveryTaskCount7d, setRecoveryTaskCount7d] = useState(0);
   const [recoveryTaskOpenGoal, setRecoveryTaskOpenGoal] = useState<number | null>(null);
   const [recoveryTaskSavingGoal, setRecoveryTaskSavingGoal] = useState<number | null>(null);
-  const [pipSavingGoal, setPipSavingGoal] = useState<number | null>(null);
-  const [idpSavingGoal, setIdpSavingGoal] = useState<number | null>(null);
-  const [improvementSavingGoal, setImprovementSavingGoal] = useState<number | null>(null);
-  const [developmentSavingGoal, setDevelopmentSavingGoal] = useState<number | null>(null);
   const [memberPickerValue, setMemberPickerValue] = useState<string>('');
   const [recoveryTaskDrafts, setRecoveryTaskDrafts] = useState<Record<number, { member_employee_id: string; title: string; description: string; due_date: string; priority: string }>>({});
   const [proofReviewOpenGoal, setProofReviewOpenGoal] = useState<number | null>(null);
@@ -422,144 +418,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       window.notify?.(err?.message || 'Failed to upload proof', 'error');
     } finally {
       setProofUploadingTaskId(null);
-    }
-  };
-
-  const handleCreatePIPFromGoal = async (goal: any) => {
-    const goalId = Number(goal?.id || 0);
-    if ((goal?.scope || 'Individual') !== 'Individual') { window.notify?.('PIP can only be created from individual goals', 'error'); return; }
-    const employeeId = Number(goal?.employee_id || 0);
-    if (!employeeId) { window.notify?.('Goal has no assigned employee', 'error'); return; }
-    setPipSavingGoal(goalId);
-    try {
-      const now = new Date();
-      const start = now.toISOString().slice(0,10);
-      const end = new Date(now);
-      end.setDate(end.getDate() + 30);
-      const payload = {
-        employee_id: employeeId,
-        appraisal_id: null,
-        goal_id: goalId,
-        start_date: start,
-        end_date: end.toISOString().slice(0,10),
-        deficiency: `Underperforming goal: ${goal.title || goal.statement || ''}`,
-        improvement_objective: `Raise progress on goal "${goal.title || goal.statement || ''}"`,
-        action_steps: `Review goal tasks; assign recovery tasks; weekly check-ins.`,
-        support_provided: 'Manager coaching',
-        progress_check_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0,10),
-        progress_notes: '',
-        outcome: 'In Progress',
-        supervisor_name: ''
-      };
-      const res = await fetch('/api/pip_plans', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-      if (!res.ok) {
-        let msg = 'Failed to create PIP';
-        try { const j = await res.json(); msg = j.error || msg; } catch {}
-        throw new Error(msg);
-      }
-      window.notify?.('PIP created', 'success');
-      fetchGoals();
-    } catch (e: any) {
-      window.notify?.(e?.message || 'Failed to create PIP', 'error');
-    } finally { setPipSavingGoal(null); }
-  };
-
-  const handleCreateIDPFromGoal = async (goal: any) => {
-    const goalId = Number(goal?.id || 0);
-    if ((goal?.scope || 'Individual') !== 'Individual') { window.notify?.('IDP can only be created from individual goals', 'error'); return; }
-    const employeeId = Number(goal?.employee_id || 0);
-    if (!employeeId) { window.notify?.('Goal has no assigned employee', 'error'); return; }
-    setIdpSavingGoal(goalId);
-    try {
-      const payload = {
-        employee_id: employeeId,
-        skill_gap: `Development needed for goal: ${goal.title || goal.statement || ''}`,
-        growth_step: 'Training / mentoring',
-        step_order: 1,
-        status: 'Not Started',
-        goal_id: goalId
-      };
-      const res = await fetch('/api/development_plans', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-      if (!res.ok) {
-        let msg = 'Failed to create IDP';
-        try { const j = await res.json(); msg = j.error || msg; } catch {}
-        throw new Error(msg);
-      }
-      window.notify?.('IDP created', 'success');
-      fetchGoals();
-    } catch (e: any) {
-      window.notify?.(e?.message || 'Failed to create IDP', 'error');
-    } finally { setIdpSavingGoal(null); }
-  };
-
-  const handleCreateImprovementPlanFromGoal = async (goal: any) => {
-    const goalId = Number(goal?.id || 0);
-    const scope = (goal?.scope || 'Individual');
-    if (!['Team', 'Department'].includes(scope)) {
-      window.notify?.('Improvement plan is only available for Team/Department goals', 'error');
-      return;
-    }
-    setImprovementSavingGoal(goalId);
-    try {
-      const review = new Date();
-      review.setDate(review.getDate() + 14);
-      const payload = {
-        goal_id: goalId,
-        plan_title: `${scope} improvement plan: ${goal.title || goal.statement || 'Goal'}`,
-        issue_summary: `Underperforming ${scope.toLowerCase()} goal: ${goal.title || goal.statement || ''}`,
-        improvement_objective: `Raise progress and reduce risk for this ${scope.toLowerCase()} goal`,
-        action_steps: 'Break down blockers, assign targeted recovery tasks, and review weekly progress.',
-        review_date: review.toISOString().slice(0, 10),
-        status: 'Not Started',
-      };
-      const res = await fetch('/api/goal_improvement_plans', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-      if (!res.ok) {
-        let msg = 'Failed to create improvement plan';
-        try { const j = await res.json(); msg = j.error || msg; } catch {}
-        throw new Error(msg);
-      }
-      window.notify?.(`${scope} improvement plan created`, 'success');
-      setUnderperfTopTab('plans');
-      setPlansNavigator('scope');
-    } catch (e: any) {
-      window.notify?.(e?.message || 'Failed to create improvement plan', 'error');
-    } finally {
-      setImprovementSavingGoal(null);
-    }
-  };
-
-  const handleCreateDevelopmentPlanFromGoal = async (goal: any) => {
-    const goalId = Number(goal?.id || 0);
-    const scope = (goal?.scope || 'Individual');
-    if (!['Team', 'Department'].includes(scope)) {
-      window.notify?.('Development plan is only available for Team/Department goals', 'error');
-      return;
-    }
-    setDevelopmentSavingGoal(goalId);
-    try {
-      const review = new Date();
-      review.setDate(review.getDate() + 30);
-      const payload = {
-        goal_id: goalId,
-        plan_title: `${scope} development plan: ${goal.title || goal.statement || 'Goal'}`,
-        skill_focus: `Capability gaps affecting this ${scope.toLowerCase()} goal`,
-        development_actions: 'Cross-team coaching, shared training sessions, and milestone reviews.',
-        review_date: review.toISOString().slice(0, 10),
-        status: 'Not Started',
-      };
-      const res = await fetch('/api/goal_development_plans', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-      if (!res.ok) {
-        let msg = 'Failed to create development plan';
-        try { const j = await res.json(); msg = j.error || msg; } catch {}
-        throw new Error(msg);
-      }
-      window.notify?.(`${scope} development plan created`, 'success');
-      setUnderperfTopTab('plans');
-      setPlansNavigator('scope');
-    } catch (e: any) {
-      window.notify?.(e?.message || 'Failed to create development plan', 'error');
-    } finally {
-      setDevelopmentSavingGoal(null);
     }
   };
 
@@ -1190,9 +1048,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           const stalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
                           const days = isOverdue ? daysOverdue(g.target_date) : 0;
                           const isIndividualGoal = (g.scope || 'Individual') === 'Individual';
-                          const canCreatePlanFromGoal = isIndividualGoal && Number(g.employee_id || 0) > 0;
                           const isScopeGoal = ['Team', 'Department'].includes(g.scope || '');
-                          const canCreateScopePlanFromGoal = isScopeGoal && Number(g.id || 0) > 0;
                           const scopeLabel = g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual';
                           const assignees = Array.isArray(g.assignees) ? g.assignees : [];
                           const hasAssignees = assignees.length > 0;
@@ -1308,45 +1164,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                       >
                                         <Eye size={11} /> Proofs
                                       </button>
-                                      {isIndividualGoal ? (
-                                        <>
-                                          <button
-                                            onClick={() => handleCreatePIPFromGoal(g)}
-                                            disabled={pipSavingGoal === g.id || !canCreatePlanFromGoal}
-                                            title={canCreatePlanFromGoal ? 'Create PIP for this employee goal' : 'PIP is only available for individual goals'}
-                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 inline-flex items-center gap-1"
-                                          >
-                                            {pipSavingGoal === g.id ? 'Saving...' : <><AlertTriangle size={11} /> PIP</>}
-                                          </button>
-                                          <button
-                                            onClick={() => handleCreateIDPFromGoal(g)}
-                                            disabled={idpSavingGoal === g.id || !canCreatePlanFromGoal}
-                                            title={canCreatePlanFromGoal ? 'Create IDP for this employee goal' : 'IDP is only available for individual goals'}
-                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-teal-deep text-white hover:bg-teal-green disabled:opacity-50 inline-flex items-center gap-1"
-                                          >
-                                            {idpSavingGoal === g.id ? 'Saving...' : <><TrendingUp size={11} /> IDP</>}
-                                          </button>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <button
-                                            onClick={() => handleCreateImprovementPlanFromGoal(g)}
-                                            disabled={improvementSavingGoal === g.id || !canCreateScopePlanFromGoal}
-                                            title={canCreateScopePlanFromGoal ? 'Create team/department improvement plan' : 'Improvement plan is only available for Team/Department goals'}
-                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 inline-flex items-center gap-1"
-                                          >
-                                            {improvementSavingGoal === g.id ? 'Saving...' : <><AlertTriangle size={11} /> Improvement</>}
-                                          </button>
-                                          <button
-                                            onClick={() => handleCreateDevelopmentPlanFromGoal(g)}
-                                            disabled={developmentSavingGoal === g.id || !canCreateScopePlanFromGoal}
-                                            title={canCreateScopePlanFromGoal ? 'Create team/department development plan' : 'Development plan is only available for Team/Department goals'}
-                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-50 inline-flex items-center gap-1"
-                                          >
-                                            {developmentSavingGoal === g.id ? 'Saving...' : <><TrendingUp size={11} /> Development</>}
-                                          </button>
-                                        </>
-                                      )}
                                     </div>
                                   )}
                                 </td>
