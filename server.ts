@@ -3832,13 +3832,60 @@ async function startServer() {
   });
 
   // ---- Coaching Logs CRUD ----
+  const canAccessCoachingEmployee = async (actor: any, employeeId: number): Promise<boolean> => {
+    const role = actor?.role;
+    const normalizedRole = normalizeUserRole(role);
+    const actorCtx = await getActorOrgContext(Number(actor?.id || 0));
+
+    if (!employeeId) return false;
+
+    if (isPrivilegedRole(role)) {
+      if (normalizedRole === 'HR') {
+        const hrDept = normalizeDept(actorCtx.dept);
+        if (!hrDept) return false;
+        return await canActorAccessEmployeeByDept(hrDept, employeeId);
+      }
+      return true;
+    }
+
+    if (role === 'Manager') {
+      const allowedByManagerLink = await canManagerAccessEmployee(actor.id, employeeId);
+      if (allowedByManagerLink) return true;
+      const managerDept = normalizeDept(actorCtx.dept);
+      if (!managerDept) return false;
+      return await canActorAccessEmployeeByDept(managerDept, employeeId);
+    }
+
+    if (role === 'Employee') {
+      if (actorCtx.isSupervisor) {
+        const supervisorDept = normalizeDept(actorCtx.dept);
+        if (!supervisorDept) return false;
+        return await canActorAccessEmployeeByDept(supervisorDept, employeeId);
+      }
+      return normalizeEmployeeId(actor.employee_id) === employeeId;
+    }
+
+    return false;
+  };
+
   app.get("/api/coaching_logs", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
       const role = actor.role;
+      const normalizedRole = normalizeUserRole(role);
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
 
-      // HR/Admin see all coaching logs
+      // HR is department-scoped; Admin can see all.
       if (isPrivilegedRole(role)) {
+        if (normalizedRole === 'HR') {
+          const hrDept = normalizeDept(actorCtx.dept);
+          if (!hrDept) return res.json([]);
+          const rows = await query(
+            "SELECT c.*, e.name as employee_name FROM coaching_logs c LEFT JOIN employees e ON c.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?)) ORDER BY c.created_at DESC",
+            [hrDept]
+          );
+          return res.json(Array.isArray(rows) ? rows : []);
+        }
         const rows = await query("SELECT c.*, e.name as employee_name FROM coaching_logs c LEFT JOIN employees e ON c.employee_id = e.id ORDER BY c.created_at DESC");
         return res.json(rows);
       }
@@ -3863,25 +3910,52 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/coaching_logs/:id", authenticateToken, async (req, res) => {
-    try { await softDeleteById('coaching_logs', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+
+      const rows: any = await query('SELECT id, employee_id FROM coaching_logs WHERE id = ?', [req.params.id]);
+      const log = Array.isArray(rows) ? rows[0] : rows;
+      if (!log) return res.status(404).json({ error: 'Coaching log not found' });
+
+      const employeeId = normalizeEmployeeId(log.employee_id);
+      const allowed = await canAccessCoachingEmployee(actor, employeeId);
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      await softDeleteById('coaching_logs', req.params.id);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Coaching Chat Messages ----
-  app.get("/api/coaching_chats/:employee_id", async (req, res) => {
+  app.get("/api/coaching_chats/:employee_id", authenticateToken, async (req, res) => {
     try {
-      const rows = await query("SELECT * FROM coaching_chats WHERE employee_id = ? ORDER BY created_at ASC", [req.params.employee_id]);
+      const actor = (req as any).user || {};
+      const employeeId = normalizeEmployeeId(req.params.employee_id);
+      if (!employeeId) return res.status(400).json({ error: 'Invalid employee_id' });
+      const allowed = await canAccessCoachingEmployee(actor, employeeId);
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      const rows = await query("SELECT * FROM coaching_chats WHERE employee_id = ? ORDER BY created_at ASC", [employeeId]);
       res.json(rows);
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.post("/api/coaching_chats", authenticateToken, async (req, res) => {
     try {
+      const actor = (req as any).user || {};
+      const employeeId = normalizeEmployeeId(req.body?.employee_id);
+      if (!employeeId) return res.status(400).json({ error: 'Invalid employee_id' });
+      const allowed = await canAccessCoachingEmployee(actor, employeeId);
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
       const { employee_id, sender_role, sender_name, message } = req.body;
       await query("INSERT INTO coaching_chats (employee_id, sender_role, sender_name, message) VALUES (?, ?, ?, ?)",
-        [employee_id, sender_role, sender_name, message]);
+        [employeeId, sender_role, sender_name, message]);
       // Notify the other party
       if (sender_role === 'Employee') {
         // Find the user linked to this employee's manager
-        const emp: any = await query("SELECT e.name, e.manager_id FROM employees e WHERE e.id = ?", [employee_id]);
+        const emp: any = await query("SELECT e.name, e.manager_id FROM employees e WHERE e.id = ?", [employeeId]);
         const empRow = Array.isArray(emp) ? emp[0] : emp;
         if (empRow) {
           const mgrUsers: any = await query("SELECT id FROM users WHERE employee_id = ? AND role = 'Manager'", [empRow.manager_id]);
@@ -3894,7 +3968,7 @@ async function startServer() {
         }
       } else {
         // Manager sent â€” notify the employee
-        const empUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employee_id]);
+        const empUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employeeId]);
         const empUser = Array.isArray(empUsers) ? empUsers[0] : empUsers;
         if (empUser) {
           await createNotification({ user_id: empUser.id, type: 'info', message: `New chat message from ${sender_name || 'your Manager'}`, source: 'coaching_chat' });
@@ -3904,7 +3978,16 @@ async function startServer() {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.delete("/api/coaching_chats/:employee_id", authenticateToken, async (req, res) => {
-    try { await softDeleteWhere('coaching_chats', 'employee_id = ?', [req.params.employee_id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try {
+      const actor = (req as any).user || {};
+      const employeeId = normalizeEmployeeId(req.params.employee_id);
+      if (!employeeId) return res.status(400).json({ error: 'Invalid employee_id' });
+      const allowed = await canAccessCoachingEmployee(actor, employeeId);
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      await softDeleteWhere('coaching_chats', 'employee_id = ?', [employeeId]);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- E-Learning Courses & Recommendations ----
@@ -3922,19 +4005,75 @@ async function startServer() {
   app.delete("/api/elearning_courses/:id", authenticateToken, async (req, res) => {
     try { await softDeleteById('elearning_courses', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
-  app.get("/api/elearning_recommendations/:employee_id", async (req, res) => {
-    try { const rows = await query("SELECT * FROM elearning_recommendations WHERE employee_id = ? ORDER BY created_at DESC", [req.params.employee_id]); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
-  });
-  app.get("/api/elearning_recommendations", async (req, res) => {
-    try { const rows = await query("SELECT r.*, e.name as employee_name FROM elearning_recommendations r LEFT JOIN employees e ON r.employee_id = e.id ORDER BY r.created_at DESC"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
-  });
-  app.post("/api/elearning_recommendations", async (req, res) => {
+  app.get("/api/elearning_recommendations/:employee_id", authenticateToken, async (req, res) => {
     try {
+      const actor = (req as any).user || {};
+      const employeeId = normalizeEmployeeId(req.params.employee_id);
+      if (!employeeId) return res.status(400).json({ error: 'Invalid employee_id' });
+      const allowed = await canAccessCoachingEmployee(actor, employeeId);
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      const rows = await query("SELECT * FROM elearning_recommendations WHERE employee_id = ? ORDER BY created_at DESC", [employeeId]);
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+  app.get("/api/elearning_recommendations", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      const normalizedRole = normalizeUserRole(role);
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+
+      if (isPrivilegedRole(role)) {
+        if (normalizedRole === 'HR') {
+          const hrDept = normalizeDept(actorCtx.dept);
+          if (!hrDept) return res.json([]);
+          const rows = await query(
+            "SELECT r.*, e.name as employee_name FROM elearning_recommendations r LEFT JOIN employees e ON r.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?)) ORDER BY r.created_at DESC",
+            [hrDept]
+          );
+          return res.json(Array.isArray(rows) ? rows : []);
+        }
+        const rows = await query("SELECT r.*, e.name as employee_name FROM elearning_recommendations r LEFT JOIN employees e ON r.employee_id = e.id ORDER BY r.created_at DESC");
+        return res.json(rows);
+      }
+
+      if (role === 'Manager') {
+        const managerDept = normalizeDept(actorCtx.dept);
+        if (!managerDept) return res.json([]);
+        const rows = await query(
+          "SELECT r.*, e.name as employee_name FROM elearning_recommendations r LEFT JOIN employees e ON r.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?)) ORDER BY r.created_at DESC",
+          [managerDept]
+        );
+        return res.json(Array.isArray(rows) ? rows : []);
+      }
+
+      if (role === 'Employee') {
+        const actorEmployeeId = normalizeEmployeeId(actor.employee_id);
+        if (!actorEmployeeId) return res.json([]);
+        const rows = await query(
+          "SELECT r.*, e.name as employee_name FROM elearning_recommendations r LEFT JOIN employees e ON r.employee_id = e.id WHERE r.employee_id = ? ORDER BY r.created_at DESC",
+          [actorEmployeeId]
+        );
+        return res.json(Array.isArray(rows) ? rows : []);
+      }
+
+      return res.status(403).json({ error: 'Forbidden' });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+  app.post("/api/elearning_recommendations", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
       const { employee_id, course_id, course_title, reason, weakness, recommended_by } = req.body;
+      const employeeId = normalizeEmployeeId(employee_id);
+      if (!employeeId) return res.status(400).json({ error: 'Invalid employee_id' });
+      const allowed = await canAccessCoachingEmployee(actor, employeeId);
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
       await query("INSERT INTO elearning_recommendations (employee_id, course_id, course_title, reason, weakness, recommended_by) VALUES (?, ?, ?, ?, ?, ?)",
-        [employee_id, course_id, course_title, reason, weakness, recommended_by]);
+        [employeeId, course_id, course_title, reason, weakness, recommended_by]);
       // Notify the employee about the new course recommendation
-      const recEmpUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employee_id]);
+      const recEmpUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employeeId]);
       const recEmpUser = Array.isArray(recEmpUsers) ? recEmpUsers[0] : recEmpUsers;
       if (recEmpUser) {
         await createNotification({ user_id: recEmpUser.id, type: 'info', message: `New e-learning recommendation: ${course_title}`, source: 'elearning' });
@@ -3942,8 +4081,15 @@ async function startServer() {
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
-  app.put("/api/elearning_recommendations/:id", async (req, res) => {
+  app.put("/api/elearning_recommendations/:id", authenticateToken, async (req, res) => {
     try {
+      const actor = (req as any).user || {};
+      const recRows: any = await query('SELECT id, employee_id FROM elearning_recommendations WHERE id = ?', [req.params.id]);
+      const rec = Array.isArray(recRows) ? recRows[0] : recRows;
+      if (!rec) return res.status(404).json({ error: 'Recommendation not found' });
+      const allowed = await canAccessCoachingEmployee(actor, normalizeEmployeeId(rec.employee_id));
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
       const { status } = req.body;
       await query("UPDATE elearning_recommendations SET status = ? WHERE id = ?", [status, req.params.id]);
       res.json({ success: true });

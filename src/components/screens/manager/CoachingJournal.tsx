@@ -347,7 +347,7 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
           <Card>
             <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">Select Employee to Start Chat</h3>
             <div className="grid grid-cols-3 gap-2">
-              {employees.map(e => {
+              {filteredEmployees.map(e => {
                 const isOnline = employeeOnlineIds.has(e.id);
                 return (
                   <button key={e.id} onClick={() => setChatEmployee(e)}
@@ -661,7 +661,7 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Employee *</label>
                     <SearchableSelect
-                      options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
+                      options={filteredEmployees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                       value={recForm.employee_id}
                       onChange={v => setRecForm({ ...recForm, employee_id: String(v) })}
                       placeholder="Select Employee..."
@@ -778,7 +778,7 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
         {/* Employee Filter */}
         <div className="mb-4">
           <SearchableSelect
-            options={employees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
+            options={filteredEmployees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
             value={analysisEmployee}
             onChange={v => setAnalysisEmployee(String(v))}
             placeholder="All Employees"
