@@ -54,6 +54,7 @@ export const TeamLeaderDashboard = () => {
   const [showSubtaskModal, setShowSubtaskModal] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lastSyncAt, setLastSyncAt] = useState<number>(Date.now());
 
   const [subtaskForm, setSubtaskForm] = useState({
     title: '',
@@ -68,22 +69,29 @@ export const TeamLeaderDashboard = () => {
 
   useEffect(() => {
     fetchLeaderGoals();
-    fetchTeamMembers();
   }, []);
 
-  const fetchLeaderGoals = async () => {
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void fetchLeaderGoals(true);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchLeaderGoals = async (quiet = false) => {
     try {
-      setLoading(true);
+      if (!quiet) setLoading(true);
       const res = await fetch('/api/leader-goals', { headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Failed to fetch leader goals');
       const data = await res.json();
       setLeaderGoals(Array.isArray(data?.goals) ? data.goals : Array.isArray(data) ? data : []);
       setTeamMembers(Array.isArray(data?.teamMembers) ? data.teamMembers : []);
+      setLastSyncAt(Date.now());
     } catch (error) {
       console.error('Error fetching leader goals:', error);
       setLeaderGoals([]);
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   };
 
@@ -207,6 +215,21 @@ export const TeamLeaderDashboard = () => {
         title="Team Leadership Dashboard"
         subtitle="Manage goals, delegate tasks, and track team progress"
       />
+
+      <div className="rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase text-blue-700 dark:text-blue-300 tracking-wider">Real-Time Proof Tracker</p>
+          <p className="text-[11px] text-blue-700/80 dark:text-blue-300/80 mt-1">
+            Employee uploads proof on a delegated task. The task turns Pending Review, then you approve, request revision, or reject it here.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-[10px] font-bold text-blue-700 dark:text-blue-300">
+          <span className="inline-flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+          Live sync every 5 seconds
+          <span className="text-blue-500/70 dark:text-blue-300/70">•</span>
+          Last sync {Math.max(0, Math.floor((Date.now() - lastSyncAt) / 1000))}s ago
+        </div>
+      </div>
 
       {/* Summary Cards Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -401,6 +424,16 @@ export const TeamLeaderDashboard = () => {
                             <Plus size={14} />
                             Add Subtask
                           </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleGoalExpansion(goal.id);
+                            }}
+                            className="shrink-0 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 text-[11px] font-bold uppercase tracking-wide transition-colors flex items-center gap-1.5"
+                          >
+                            <ImageIcon size={14} />
+                            {expandedGoals.has(goal.id) ? 'Hide Proofs' : 'Review Proofs'}
+                          </button>
                         </div>
 
                         {/* Progress Bar */}
@@ -557,6 +590,11 @@ export const TeamLeaderDashboard = () => {
                                           {reviewStatus}
                                         </span>
                                       </div>
+
+                                        <div className="mt-2 flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                                          <span className={`h-2 w-2 rounded-full ${reviewStatus === 'Approved' ? 'bg-emerald-500' : reviewStatus === 'Pending Review' ? 'bg-amber-500' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-500' : 'bg-slate-300'}`} />
+                                          {reviewStatus === 'Pending Review' ? 'Waiting for your review' : reviewStatus === 'Approved' ? 'Approved and reflected in progress' : reviewStatus === 'Needs Revision' ? 'Needs employee changes' : reviewStatus === 'Rejected' ? 'Rejected and returned' : 'No proof submitted yet'}
+                                        </div>
 
                                       {task.proof_image ? (
                                         <a href={task.proof_image} target="_blank" rel="noreferrer" className="mt-2 inline-block">

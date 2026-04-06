@@ -10,14 +10,15 @@ interface Option {
 
 interface SearchableSelectProps {
   options: Option[];
-  value: string | number;
-  onChange: (value: string | number) => void;
+  value: string | number | Array<string | number>;
+  onChange: (value: string | number | Array<string | number>) => void;
   placeholder?: string;
   className?: string;
   allowEmpty?: boolean;
   emptyLabel?: string;
   pill?: boolean;
   searchable?: boolean;
+  multiSelect?: boolean;
   dropdownVariant?: 'list' | 'pills-horizontal';
 }
 
@@ -40,6 +41,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   emptyLabel = 'All',
   pill = false,
   searchable = true,
+  multiSelect = false,
   dropdownVariant = 'list',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -56,12 +58,18 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   }, [portalStyle.maxHeight, searchable]);
 
   const selectedOption = useMemo(() => {
+    if (multiSelect && Array.isArray(value)) {
+      return options.filter(o => value.map(String).includes(String(o.value)));
+    }
     return options.find(o => String(o.value) === String(value));
   }, [value, options]);
 
   const selectedLabel = useMemo(() => {
     if (!value && allowEmpty) return emptyLabel;
-    return selectedOption?.label || '';
+    if (multiSelect && Array.isArray(selectedOption)) {
+      return selectedOption.map(opt => opt.label).join(', ');
+    }
+    return (selectedOption as Option | undefined)?.label || '';
   }, [value, allowEmpty, emptyLabel, selectedOption]);
 
   const hasAvatarInOptions = useMemo(() => {
@@ -76,8 +84,31 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   }, [options, search, searchable]);
 
   const filteredOptionsOnly = useMemo(() => {
+    if (multiSelect && Array.isArray(value)) {
+      const selectedSet = new Set(value.map(String));
+      return filtered.filter(opt => !selectedSet.has(String(opt.value)));
+    }
     return filtered.filter(opt => String(opt.value) !== String(value));
-  }, [filtered, value]);
+  }, [filtered, value, multiSelect]);
+
+  const isSelected = (optionValue: string | number) => {
+    if (multiSelect && Array.isArray(value)) return value.map(String).includes(String(optionValue));
+    return String(optionValue) === String(value);
+  };
+
+  const toggleMultiValue = (optionValue: string | number) => {
+    if (!multiSelect) {
+      onChange(optionValue);
+      setIsOpen(false);
+      setSearch('');
+      return;
+    }
+    const current = Array.isArray(value) ? value.map(String) : [];
+    const next = current.includes(String(optionValue))
+      ? current.filter(v => v !== String(optionValue))
+      : [...current, String(optionValue)];
+    onChange(next);
+  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -188,23 +219,55 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
         onClick={() => { setIsOpen(!isOpen); setSearch(''); }}
         className={`w-full flex items-center justify-between border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-left transition-colors hover:border-slate-300 dark:hover:border-slate-600 focus:ring-2 focus:ring-teal-green/50 outline-none ${pill ? 'rounded-full px-3 py-2' : 'rounded-lg p-2'}`}
       >
-        <span className="flex items-center gap-2 min-w-0">
-          {hasAvatarInOptions && selectedOption && (
-            selectedOption.avatarUrl ? (
-              <img
-                src={selectedOption.avatarUrl}
-                alt={selectedOption.label}
-                className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-slate-700"
-              />
-            ) : (
-              <span className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold flex items-center justify-center border border-slate-200 dark:border-slate-700">
-                {getInitials(selectedOption.label)}
+        <span className="flex items-center gap-2 min-w-0 flex-1 pr-2">
+          {multiSelect && Array.isArray(value) ? (
+            value.length > 0 ? (
+              <span className="flex flex-wrap gap-1.5 max-w-full">
+                {value.slice(0, 3).map((v) => {
+                  const opt = options.find(o => String(o.value) === String(v));
+                  if (!opt) return null;
+                  return (
+                    <span key={String(v)} className="inline-flex items-center gap-1 rounded-full border border-teal-200 dark:border-teal-700 bg-teal-50 dark:bg-teal-900/20 px-2 py-1 text-[10px] font-bold text-teal-700 dark:text-teal-300">
+                      {hasAvatarInOptions && (
+                        opt.avatarUrl ? (
+                          <img src={opt.avatarUrl} alt={opt.label} className="w-4 h-4 rounded-full object-cover" />
+                        ) : (
+                          <span className="w-4 h-4 rounded-full bg-teal-200 dark:bg-teal-800 text-teal-700 dark:text-teal-200 text-[8px] font-black flex items-center justify-center">{getInitials(opt.label)}</span>
+                        )
+                      )}
+                      <span className="max-w-[120px] truncate">{opt.label}</span>
+                    </span>
+                  );
+                })}
+                {value.length > 3 && (
+                  <span className="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2 py-1 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                    +{value.length - 3}
+                  </span>
+                )}
               </span>
+            ) : (
+              <span className="text-slate-400 dark:text-slate-500 truncate">{placeholder}</span>
             )
+          ) : (
+            <>
+              {hasAvatarInOptions && selectedOption && !Array.isArray(selectedOption) && (
+                selectedOption.avatarUrl ? (
+                  <img
+                    src={selectedOption.avatarUrl}
+                    alt={selectedOption.label}
+                    className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                  />
+                ) : (
+                  <span className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold flex items-center justify-center border border-slate-200 dark:border-slate-700">
+                    {getInitials(selectedOption.label)}
+                  </span>
+                )
+              )}
+              <span className={`${value || allowEmpty ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'} truncate`}>
+                {selectedLabel || placeholder}
+              </span>
+            </>
           )}
-          <span className={`${value || allowEmpty ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'} truncate`}>
-            {selectedLabel || placeholder}
-          </span>
         </span>
         <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
@@ -282,20 +345,20 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   <div className="px-3 py-2 text-xs text-slate-400 italic col-span-full">No matches found</div>
                 )}
                 {filteredOptionsOnly.map(opt => {
-                  const isSelected = String(opt.value) === String(value);
+                  const selected = isSelected(opt.value);
                   return (
                     <button
                       key={String(opt.value)}
                       type="button"
-                      onClick={() => { onChange(opt.value); setIsOpen(false); setSearch(''); }}
+                      onClick={() => toggleMultiValue(opt.value)}
                       className={`inline-flex min-h-8 w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
-                        isSelected
+                        selected
                           ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/25 dark:text-blue-300'
                           : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'
                       }`}
                     >
-                      <span className={`h-3 w-3 rounded-full border ${isSelected ? 'border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400' : 'border-slate-300 dark:border-slate-600'}`}>
-                        {isSelected ? <span className="block h-full w-full text-center text-[8px] leading-[10px] text-white">✓</span> : null}
+                      <span className={`h-3 w-3 rounded-full border ${selected ? 'border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400' : 'border-slate-300 dark:border-slate-600'}`}>
+                        {selected ? <span className="block h-full w-full text-center text-[8px] leading-[10px] text-white">✓</span> : null}
                       </span>
                       <span className="truncate text-left">{opt.label}</span>
                     </button>
@@ -324,14 +387,14 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   <div className="px-3 py-4 text-center text-xs text-slate-400 italic col-span-full">No matches found</div>
                 )}
                 {filtered.map(opt => {
-                  const isSelected = String(opt.value) === String(value);
+                  const selected = isSelected(opt.value);
                   return (
                     <button
                       key={String(opt.value)}
                       type="button"
-                      onClick={() => { onChange(opt.value); setIsOpen(false); setSearch(''); }}
+                      onClick={() => toggleMultiValue(opt.value)}
                       className={`inline-flex min-h-9 w-full items-center rounded-lg border px-3 py-1.5 text-left text-sm transition-colors ${
-                        isSelected
+                        selected
                           ? 'border-teal-500 bg-teal-50 text-teal-700 dark:border-teal-400 dark:bg-teal-900/20 dark:text-teal-300 font-bold'
                           : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700'
                       }`}

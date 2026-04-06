@@ -30,6 +30,13 @@ export const CareerDashboard = () => {
   useEffect(() => { fetchData(); }, []);
 
   useEffect(() => {
+    const interval = setInterval(() => {
+      void fetchData();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     setTaskDrafts(prev => {
       const next = { ...prev };
       for (const g of leaderGoals) {
@@ -775,6 +782,12 @@ export const CareerDashboard = () => {
       {dashboardTab === 'goals' && (
         <Card className="mt-4">
           <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">Delegated Tasks Requiring Proof ({myMemberTasks.length})</h3>
+          <div className="mb-4 rounded-xl border border-teal-100 dark:border-teal-900/40 bg-teal-50/70 dark:bg-teal-900/20 px-4 py-3">
+            <p className="text-xs font-black uppercase text-teal-700 dark:text-teal-300 tracking-wider">How real-time proof tracking works</p>
+            <p className="text-[11px] text-teal-700/80 dark:text-teal-300/80 mt-1">
+              Upload proof here, submit it for review, and the status updates to Pending Review automatically. Your leader or manager can approve it on their dashboard, and this screen refreshes every 5 seconds.
+            </p>
+          </div>
           {myMemberTasks.length === 0 ? (
             <div className="py-8 text-center text-slate-400">
               <CheckCircle2 size={20} className="mx-auto mb-2 opacity-40" />

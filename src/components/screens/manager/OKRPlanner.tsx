@@ -152,6 +152,17 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     return availableAssignees.filter(emp => selected.has(String(emp.id)));
   }, [availableAssignees, form.assignee_ids]);
 
+  const assigneePickerOptions = useMemo(() => {
+    const selected = new Set((form.assignee_ids || []).map(String));
+    return availableAssignees
+      .filter(emp => !selected.has(String(emp.id)))
+      .map(emp => ({
+        value: String(emp.id),
+        label: `${emp.name}${emp.position ? ` (${emp.position})` : ''}`,
+        avatarUrl: (emp as any).profile_picture || null,
+      }));
+  }, [availableAssignees, form.assignee_ids]);
+
   useEffect(() => {
     setForm(prev => {
       if (!(prev.scope === 'Team' || prev.scope === 'Department')) return prev;
@@ -1895,25 +1906,25 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   Team Members <span className="text-slate-400 font-normal normal-case text-[11px]">— manager-defined roster for this leader</span>
                 </label>
                 <div className="space-y-2">
-                  <select
-                    multiple
-                    disabled={!form.leader_id}
+                  <SearchableSelect
+                    options={assigneePickerOptions}
                     value={form.assignee_ids}
-                    onChange={(e) => {
-                      const selected = Array.from(e.target.selectedOptions).map(opt => String(opt.value));
-                      setForm({ ...form, assignee_ids: selected });
+                    onChange={(v) => {
+                      if (!form.leader_id) {
+                        window.notify?.('Select Team Leader first to enable member selection.', 'error');
+                        return;
+                      }
+                      const selectedIds = Array.isArray(v) ? v.map(String) : [String(v)];
+                      setForm({ ...form, assignee_ids: selectedIds.filter(Boolean) });
                     }}
-                    className="w-full min-h-[150px] p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-200 disabled:opacity-60"
-                  >
-                    {availableAssignees.map((emp) => (
-                      <option key={emp.id} value={String(emp.id)}>
-                        {emp.name}{emp.position ? ` (${emp.position})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[10px] text-slate-400 px-1">
-                    Hold Ctrl (Windows) or Cmd (Mac), or use Shift to select multiple members at once.
-                  </p>
+                    placeholder={!form.leader_id ? 'Select Team Leader first...' : 'Search and add team members...'}
+                    allowEmpty
+                    emptyLabel="No members"
+                    searchable
+                    multiSelect
+                    dropdownVariant="pills-horizontal"
+                    className="w-full"
+                  />
 
                   <div className="min-h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/30 p-2">
                     {selectedAssignees.length === 0 ? (
