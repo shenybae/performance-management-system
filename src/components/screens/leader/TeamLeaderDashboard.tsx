@@ -47,6 +47,15 @@ const priorityColors = {
   'Low': 'text-slate-600 bg-slate-100 dark:bg-slate-800',
 };
 
+const safeParseSession = (raw: string | null) => {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+};
+
 export const TeamLeaderDashboard = () => {
   const [leaderGoals, setLeaderGoals] = useState<Goal[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -65,7 +74,7 @@ export const TeamLeaderDashboard = () => {
     priority: 'Medium',
   });
 
-  const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
+  const user = safeParseSession(localStorage.getItem('talentflow_user'));
 
   useEffect(() => {
     fetchLeaderGoals();

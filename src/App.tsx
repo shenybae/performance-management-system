@@ -124,10 +124,18 @@ const getHomeRouteForUser = (session: UserSession | null) => {
   return '/employee/career-dashboard';
 };
 
+const safeParseSession = (raw: string | null) => {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
 export default function App() {
   const [user, setUser] = useState<UserSession | null>(() => {
-    const saved = localStorage.getItem('talentflow_user');
-    return saved ? JSON.parse(saved) : null;
+    return safeParseSession(localStorage.getItem('talentflow_user'));
   });
   const [activeScreen, setActiveScreen] = useState<string>('');
   const [navContext, setNavContext] = useState<{ source?: string; employee_id?: number } | null>(null);

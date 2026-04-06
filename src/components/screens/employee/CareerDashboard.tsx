@@ -7,6 +7,15 @@ import { Download, Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTri
 import { LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 
+const safeParseSession = (raw: string | null) => {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+};
+
 export const CareerDashboard = () => {
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
@@ -26,7 +35,7 @@ export const CareerDashboard = () => {
   const [proofDrafts, setProofDrafts] = useState<Record<number, { proof_image: string; proof_note: string }>>({});
   const [proofSubmittingTaskId, setProofSubmittingTaskId] = useState<number | null>(null);
   const [closedProofEditors, setClosedProofEditors] = useState<Record<number, boolean>>({});
-  const localUser = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
+  const localUser = safeParseSession(localStorage.getItem('talentflow_user') || localStorage.getItem('user'));
 
   useEffect(() => { fetchData(); }, []);
 
@@ -199,8 +208,6 @@ export const CareerDashboard = () => {
         body: JSON.stringify({
           proof_image: draft.proof_image,
           proof_note: draft.proof_note,
-          status: 'Completed',
-          progress: 100,
         })
       });
       if (!res.ok) throw new Error('Failed');
@@ -749,7 +756,7 @@ export const CareerDashboard = () => {
                         onClick={async () => {
                           setRequesting(g.id);
                           try {
-                            const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
+                            const user = safeParseSession(localStorage.getItem('talentflow_user'));
                             await fetch('/api/goal_update_request', {
                               method: 'POST', headers: getAuthHeaders(),
                               body: JSON.stringify({ employee_id: user.employee_id, goal_id: g.id, goal_title: g.title || g.statement, proposed_status: g.status === 'In Progress' ? 'Completed' : 'In Progress', proposed_progress: g.status === 'In Progress' ? 100 : 50, reason: 'Progress update requested' }),

@@ -3768,6 +3768,14 @@ async function startServer() {
         }
       }
 
+      const reviewerApproved = !(role === 'Employee' && !isGoalLeader) && String(b.proof_review_status || '') === 'Approved';
+      if (reviewerApproved) {
+        sets.push('status = ?');
+        vals.push('Completed');
+        sets.push('progress = ?');
+        vals.push(100);
+      }
+
       const assigneeSubmittedProof = role === 'Employee' && !isGoalLeader && (b.proof_image !== undefined || b.proof_note !== undefined);
       if (assigneeSubmittedProof) {
         const hasProofImage = typeof b.proof_image === 'string' && b.proof_image.trim().length > 0;
@@ -3791,6 +3799,15 @@ async function startServer() {
       sets.push('updated_at = CURRENT_TIMESTAMP');
       vals.push(taskId);
       await query(`UPDATE goal_member_tasks SET ${sets.join(', ')} WHERE id = ?`, vals);
+
+      const progressRows: any = await query(
+        'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ?',
+        [task.goal_id]
+      );
+      const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
+      const avgProgress = Math.max(0, Math.min(100, Number(progressRow?.avg_progress || 0)));
+      await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, task.goal_id]);
+
       await recordAudit(actor, 'update_goal_member_task', 'goal_member_tasks', taskId, null, b, { route: req.originalUrl });
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
