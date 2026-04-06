@@ -362,6 +362,14 @@ export const CareerDashboard = () => {
     Individual: { iconBg: 'bg-indigo-500/15 dark:bg-indigo-400/15', text: 'text-indigo-600 dark:text-indigo-400', badgeBg: 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400' },
   };
 
+  const statusColors: Record<string, string> = {
+    'Not Started': 'text-slate-400 bg-slate-100 dark:bg-slate-800',
+    'In Progress': 'text-amber-600 bg-amber-100 dark:bg-amber-900/30',
+    'At Risk': 'text-red-600 bg-red-100 dark:bg-red-900/30',
+    'Blocked': 'text-red-600 bg-red-100 dark:bg-red-900/30',
+    'Completed': 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30',
+  };
+
   const progressBarColor = (p: number) => {
     if (p >= 100) return 'bg-emerald-500';
     if (p >= 50) return 'bg-teal-500';
@@ -915,8 +923,8 @@ export const CareerDashboard = () => {
                       <p className="text-xs text-slate-400">No team members are configured for this goal yet.</p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
-                        {assignees.map((a: any) => (
-                          <div key={a.employee_id} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs">
+                        {assignees.map((a: any, index: number) => (
+                          <div key={a.employee_id || `assignee-${g.id}-${index}`} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs">
                             <span className="text-slate-700 dark:text-slate-300">{getMemberDisplayName(a)}</span>
                           </div>
                         ))}
@@ -998,11 +1006,11 @@ export const CareerDashboard = () => {
                         <p className="text-xs text-slate-400">No detailed tasks yet.</p>
                       ) : (
                         <div className="space-y-2">
-                          {memberTasks.map((t: any) => {
+                          {memberTasks.map((t: any, index: number) => {
                             const progressValue = taskProgressEdits[t.id] ?? Number(t.progress || 0);
                             const isProgressOpen = taskProgressOpenTaskId === t.id;
                             return (
-                              <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-900/40">
+                              <div key={t.id || `task-${g.id}-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-900/40">
                                 <div className="flex flex-wrap items-start justify-between gap-2">
                                   <div>
                                     <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
