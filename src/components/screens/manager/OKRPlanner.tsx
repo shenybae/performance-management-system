@@ -503,6 +503,60 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     }
   };
 
+  const triggerQuickAction = async (action: string, goal: any, assignees: any[]) => {
+    const canEditProgressStatus = !isManager || !managerDept || String(goal?.department || '').trim().toLowerCase() === managerDept.toLowerCase();
+
+    if (action === 'update') {
+      if (!canEditProgressStatus) {
+        window.notify?.('Managers can only update goals in their own department', 'error');
+        return;
+      }
+      setQuickEdit(goal.id);
+      setEditProgress(goal.progress || 0);
+      setEditStatus(goal.status || 'In Progress');
+      return;
+    }
+
+    if (action === 'pip') {
+      await handleCreatePIPFromGoal(goal);
+      return;
+    }
+    if (action === 'idp') {
+      await handleCreateIDPFromGoal(goal);
+      return;
+    }
+    if (action === 'perf') {
+      await handleCreateImprovementPlanFromGoal(goal);
+      return;
+    }
+    if (action === 'dev') {
+      await handleCreateDevelopmentPlanFromGoal(goal);
+      return;
+    }
+    if (action === 'recovery') {
+      if (!assignees.length) {
+        window.notify?.('No assignees available for recovery task', 'error');
+        return;
+      }
+      if (!recoveryTaskDrafts[goal.id]) {
+        const due = new Date();
+        due.setDate(due.getDate() + 7);
+        updateRecoveryTaskDraft(goal.id, {
+          member_employee_id: String(assignees[0]?.employee_id || ''),
+          title: `Recovery: ${goal.title || goal.statement || 'Goal task'}`,
+          due_date: due.toISOString().slice(0, 10),
+          priority: 'High',
+          description: '',
+        });
+      }
+      setRecoveryTaskOpenGoal(prev => prev === goal.id ? null : goal.id);
+      return;
+    }
+    if (action === 'proofs') {
+      await openProofReview(goal.id);
+    }
+  };
+
   const openProofReview = async (goalId: number) => {
     if (proofReviewOpenGoal === goalId) {
       setProofReviewOpenGoal(null);
@@ -1198,6 +1252,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           const days = isOverdue ? daysOverdue(g.target_date) : 0;
                           const isIndividualGoal = (g.scope || 'Individual') === 'Individual';
                           const isScopeGoal = ['Team', 'Department'].includes(g.scope || '');
+                          const canEditProgressStatus = !isManager || !managerDept || String(g.department || '').trim().toLowerCase() === managerDept.toLowerCase();
+                          const disabledReason = !canEditProgressStatus ? 'Managers can only update goals in their own department' : '';
                           const scopeLabel = g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual';
                           const assignees = Array.isArray(g.assignees) ? g.assignees : [];
                           const hasAssignees = assignees.length > 0;
@@ -1243,8 +1299,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 </td>
                                 <td className="py-2.5 px-3 text-center">
                                   {quickEdit === g.id ? (() => {
-                                    const canEditProgressStatus = !isManager || !managerDept || String(g.department || '').trim().toLowerCase() === managerDept.toLowerCase();
-                                    const disabledReason = !canEditProgressStatus ? 'Managers can only update goals in their own department' : '';
                                     return (
                                       <div className="flex items-center gap-1.5">
                                         <input 
@@ -1259,14 +1313,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                           title={disabledReason || `${editProgress}%`} 
                                         />
                                         <span className="text-[9px] font-bold text-slate-500 w-7">{editProgress}%</span>
-                                        <ChoicePills
+                                        <select
                                           value={editStatus}
-                                          onChange={setEditStatus}
-                                          compact
-                                          wrap={false}
-                                          options={STATUSES.map(s => ({ value: s, label: s }))}
+                                          onChange={(e) => setEditStatus(e.target.value)}
                                           disabled={!canEditProgressStatus}
-                                        />
+                                          className="h-7 min-w-[110px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[10px] font-bold text-slate-700 dark:text-slate-200 px-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          {STATUSES.map((s) => (
+                                            <option key={s} value={s}>{s}</option>
+                                          ))}
+                                        </select>
                                         <button 
                                           onClick={() => { updateGoal(g.id, { progress: editProgress, status: editStatus }); setQuickEdit(null); }} 
                                           disabled={!canEditProgressStatus}
@@ -1279,72 +1335,27 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                       </div>
                                     );
                                   })() : (
-                                    <div className="flex items-center justify-center gap-1">
-                                      <button 
-                                        onClick={() => { setQuickEdit(g.id); setEditProgress(g.progress || 0); setEditStatus(g.status || 'In Progress'); }}
-                                        disabled={isManager && managerDept && String(g.department || '').trim().toLowerCase() !== managerDept.toLowerCase()}
-                                        title={isManager && managerDept && String(g.department || '').trim().toLowerCase() !== managerDept.toLowerCase() ? 'Managers can only update goals in their own department' : ''}
-                                        className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                        Update
-                                      </button>
-                                      {isIndividualGoal && (
-                                        <>
-                                          <button
-                                            onClick={() => handleCreatePIPFromGoal(g)}
-                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
-                                          >
-                                            + PIP
-                                          </button>
-                                          <button
-                                            onClick={() => handleCreateIDPFromGoal(g)}
-                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-teal-100 dark:bg-teal-900/30 text-teal-700 hover:bg-teal-200 dark:hover:bg-teal-900/50 transition-colors"
-                                          >
-                                            + IDP
-                                          </button>
-                                        </>
-                                      )}
-                                      {isScopeGoal && (
-                                        <>
-                                          <button
-                                            onClick={() => handleCreateImprovementPlanFromGoal(g)}
-                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-700 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
-                                          >
-                                            + Perf Plan
-                                          </button>
-                                          <button
-                                            onClick={() => handleCreateDevelopmentPlanFromGoal(g)}
-                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 hover:bg-cyan-200 dark:hover:bg-cyan-900/50 transition-colors"
-                                          >
-                                            + Dev Plan
-                                          </button>
-                                        </>
-                                      )}
-                                      <button
-                                        onClick={() => {
-                                          if (!recoveryTaskDrafts[g.id]) {
-                                            const due = new Date();
-                                            due.setDate(due.getDate() + 7);
-                                            updateRecoveryTaskDraft(g.id, {
-                                              member_employee_id: String(assignees[0]?.employee_id || ''),
-                                              title: `Recovery: ${g.title || g.statement || 'Goal task'}`,
-                                              due_date: due.toISOString().slice(0, 10),
-                                              priority: 'High',
-                                              description: '',
-                                            });
-                                          }
-                                          setRecoveryTaskOpenGoal(prev => prev === g.id ? null : g.id);
+                                    <div className="flex items-center justify-center">
+                                      <select
+                                        defaultValue=""
+                                        onChange={(e) => {
+                                          const action = e.target.value;
+                                          if (!action) return;
+                                          void triggerQuickAction(action, g, assignees);
+                                          e.target.value = '';
                                         }}
-                                        disabled={!hasAssignees}
-                                        className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1"
+                                        title={disabledReason}
+                                        className="h-8 min-w-[160px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[10px] font-bold text-slate-700 dark:text-slate-200 px-2"
                                       >
-                                        <MessageSquare size={11} /> Recovery Task
-                                      </button>
-                                      <button
-                                        onClick={() => openProofReview(g.id)}
-                                        className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors inline-flex items-center gap-1"
-                                      >
-                                        <Eye size={11} /> Proofs
-                                      </button>
+                                        <option value="">Quick actions...</option>
+                                        <option value="update">Update Progress/Status</option>
+                                        {isIndividualGoal && <option value="pip">Create PIP</option>}
+                                        {isIndividualGoal && <option value="idp">Create IDP</option>}
+                                        {isScopeGoal && <option value="perf">Create Performance Plan</option>}
+                                        {isScopeGoal && <option value="dev">Create Development Plan</option>}
+                                        {hasAssignees && <option value="recovery">Create Recovery Task</option>}
+                                        <option value="proofs">Open Proof Reviews</option>
+                                      </select>
                                     </div>
                                   )}
                                 </td>
