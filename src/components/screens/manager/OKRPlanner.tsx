@@ -354,6 +354,155 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     }
   };
 
+  const handleCreatePIPFromGoal = async (goal: any) => {
+    const goalId = Number(goal?.id || 0);
+    const employeeId = Number(goal?.employee_id || 0);
+    const title = String(goal?.title || goal?.statement || 'Goal').trim();
+    if (!goalId || !employeeId) {
+      window.notify?.('PIP can only be created from an individual goal with an owner', 'error');
+      return;
+    }
+
+    if (!(await appConfirm(`Create a PIP for \"${title}\"?`, { title: 'Create PIP', confirmText: 'Create', icon: 'warning' }))) return;
+
+    const start = new Date();
+    const end = new Date();
+    end.setDate(end.getDate() + 30);
+
+    try {
+      const res = await fetch('/api/pip_plans', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          employee_id: employeeId,
+          goal_id: goalId,
+          start_date: start.toISOString().slice(0, 10),
+          end_date: end.toISOString().slice(0, 10),
+          deficiency: `Underperforming goal: ${title}`,
+          improvement_objective: `Raise completion performance for ${title}`,
+          action_steps: '1) Weekly coaching checkpoints 2) Remove blockers 3) Track progress daily',
+          outcome: 'In Progress',
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as any));
+        throw new Error(err?.error || 'Failed to create PIP');
+      }
+      window.notify?.('PIP created from goal', 'success');
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to create PIP', 'error');
+    }
+  };
+
+  const handleCreateIDPFromGoal = async (goal: any) => {
+    const goalId = Number(goal?.id || 0);
+    const employeeId = Number(goal?.employee_id || 0);
+    const title = String(goal?.title || goal?.statement || 'Goal').trim();
+    if (!goalId || !employeeId) {
+      window.notify?.('IDP can only be created from an individual goal with an owner', 'error');
+      return;
+    }
+
+    if (!(await appConfirm(`Create an IDP for \"${title}\"?`, { title: 'Create IDP', confirmText: 'Create', icon: 'info' }))) return;
+
+    try {
+      const res = await fetch('/api/development_plans', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          employee_id: employeeId,
+          goal_id: goalId,
+          skill_gap: `Capability gap observed from goal: ${title}`,
+          growth_step: 'Define learning milestones and schedule coaching sessions.',
+          step_order: 1,
+          status: 'Not Started',
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as any));
+        throw new Error(err?.error || 'Failed to create IDP');
+      }
+      window.notify?.('IDP created from goal', 'success');
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to create IDP', 'error');
+    }
+  };
+
+  const handleCreateImprovementPlanFromGoal = async (goal: any) => {
+    const goalId = Number(goal?.id || 0);
+    const scope = String(goal?.scope || '');
+    const title = String(goal?.title || goal?.statement || 'Goal').trim();
+    if (!goalId || !['Team', 'Department'].includes(scope)) {
+      window.notify?.('Performance plan can only be created from Team or Department goals', 'error');
+      return;
+    }
+
+    if (!(await appConfirm(`Create a ${scope} performance plan for \"${title}\"?`, { title: 'Create Performance Plan', confirmText: 'Create', icon: 'warning' }))) return;
+
+    const review = new Date();
+    review.setDate(review.getDate() + 30);
+
+    try {
+      const res = await fetch('/api/goal_improvement_plans', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          goal_id: goalId,
+          plan_title: `${scope} Performance Plan: ${title}`,
+          issue_summary: `Underperformance indicators detected for ${title}`,
+          improvement_objective: 'Stabilize execution and return to expected progress trajectory.',
+          action_steps: '1) Assign ownership 2) Weekly checkpoints 3) Escalate blockers quickly',
+          review_date: review.toISOString().slice(0, 10),
+          status: 'Not Started',
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as any));
+        throw new Error(err?.error || 'Failed to create performance plan');
+      }
+      window.notify?.(`${scope} performance plan created`, 'success');
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to create performance plan', 'error');
+    }
+  };
+
+  const handleCreateDevelopmentPlanFromGoal = async (goal: any) => {
+    const goalId = Number(goal?.id || 0);
+    const scope = String(goal?.scope || '');
+    const title = String(goal?.title || goal?.statement || 'Goal').trim();
+    if (!goalId || !['Team', 'Department'].includes(scope)) {
+      window.notify?.('Development plan can only be created from Team or Department goals', 'error');
+      return;
+    }
+
+    if (!(await appConfirm(`Create a ${scope} development plan for \"${title}\"?`, { title: 'Create Development Plan', confirmText: 'Create', icon: 'info' }))) return;
+
+    const review = new Date();
+    review.setDate(review.getDate() + 30);
+
+    try {
+      const res = await fetch('/api/goal_development_plans', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          goal_id: goalId,
+          plan_title: `${scope} Development Plan: ${title}`,
+          skill_focus: `Development focus for ${title}`,
+          development_actions: '1) Skills workshops 2) Peer mentoring 3) Monthly capability review',
+          review_date: review.toISOString().slice(0, 10),
+          status: 'Not Started',
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as any));
+        throw new Error(err?.error || 'Failed to create development plan');
+      }
+      window.notify?.(`${scope} development plan created`, 'success');
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to create development plan', 'error');
+    }
+  };
+
   const openProofReview = async (goalId: number) => {
     if (proofReviewOpenGoal === goalId) {
       setProofReviewOpenGoal(null);
@@ -1138,6 +1287,38 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                         className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                         Update
                                       </button>
+                                      {isIndividualGoal && (
+                                        <>
+                                          <button
+                                            onClick={() => handleCreatePIPFromGoal(g)}
+                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
+                                          >
+                                            + PIP
+                                          </button>
+                                          <button
+                                            onClick={() => handleCreateIDPFromGoal(g)}
+                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-teal-100 dark:bg-teal-900/30 text-teal-700 hover:bg-teal-200 dark:hover:bg-teal-900/50 transition-colors"
+                                          >
+                                            + IDP
+                                          </button>
+                                        </>
+                                      )}
+                                      {isScopeGoal && (
+                                        <>
+                                          <button
+                                            onClick={() => handleCreateImprovementPlanFromGoal(g)}
+                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-700 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
+                                          >
+                                            + Perf Plan
+                                          </button>
+                                          <button
+                                            onClick={() => handleCreateDevelopmentPlanFromGoal(g)}
+                                            className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 hover:bg-cyan-200 dark:hover:bg-cyan-900/50 transition-colors"
+                                          >
+                                            + Dev Plan
+                                          </button>
+                                        </>
+                                      )}
                                       <button
                                         onClick={() => {
                                           if (!recoveryTaskDrafts[g.id]) {
