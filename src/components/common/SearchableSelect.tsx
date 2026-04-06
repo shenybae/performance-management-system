@@ -51,7 +51,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const optionsMaxHeight = useMemo(() => {
     const popupMax = Number(portalStyle.maxHeight || 0);
     if (!popupMax) return 224;
-    const reserved = searchable ? 164 : 120;
+    const reserved = searchable ? 156 : 108;
     return Math.max(96, popupMax - reserved);
   }, [portalStyle.maxHeight, searchable]);
 
@@ -126,8 +126,11 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     // Use viewport coordinates so the portal can be fixed and won't affect page layout
-    const desiredWidth = dropdownVariant === 'pills-horizontal' ? Math.max(360, Math.floor(rect.width)) : Math.max(180, Math.floor(rect.width));
-    const maxWidth = Math.max(220, window.innerWidth - 16);
+    const baseWidth = Math.floor(rect.width);
+    const desiredWidth = dropdownVariant === 'pills-horizontal'
+      ? Math.max(520, Math.floor(baseWidth * 1.45))
+      : Math.max(560, Math.floor(baseWidth * 1.7));
+    const maxWidth = Math.max(240, window.innerWidth - 16);
     const width = Math.min(desiredWidth, maxWidth);
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
 
@@ -135,7 +138,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     const gap = 6;
     const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - margin);
     const spaceAbove = Math.max(0, rect.top - margin);
-    const desiredHeight = dropdownVariant === 'pills-horizontal' ? 420 : 320;
+    const desiredHeight = dropdownVariant === 'pills-horizontal' ? 500 : 420;
     const shouldOpenUp = spaceBelow < 220 && spaceAbove > spaceBelow;
     const available = shouldOpenUp ? spaceAbove : spaceBelow;
     const maxHeight = Math.max(180, Math.min(desiredHeight, available));
@@ -274,9 +277,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 style={{ maxHeight: optionsMaxHeight }}
                 className="mt-1 min-h-[72px] overflow-y-auto overscroll-contain px-1 pb-1 pr-2 custom-scrollbar"
               >
-                <div className="flex flex-wrap items-center gap-2 pt-1">
+                <div className="grid gap-2 pt-1" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
                 {filteredOptionsOnly.length === 0 && (
-                  <div className="px-3 py-2 text-xs text-slate-400 italic">No matches found</div>
+                  <div className="px-3 py-2 text-xs text-slate-400 italic col-span-full">No matches found</div>
                 )}
                 {filteredOptionsOnly.map(opt => {
                   const isSelected = String(opt.value) === String(value);
@@ -285,7 +288,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                       key={String(opt.value)}
                       type="button"
                       onClick={() => { onChange(opt.value); setIsOpen(false); setSearch(''); }}
-                      className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-bold transition-colors ${
+                      className={`inline-flex min-h-8 w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
                         isSelected
                           ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/25 dark:text-blue-300'
                           : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'
@@ -294,7 +297,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                       <span className={`h-3 w-3 rounded-full border ${isSelected ? 'border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400' : 'border-slate-300 dark:border-slate-600'}`}>
                         {isSelected ? <span className="block h-full w-full text-center text-[8px] leading-[10px] text-white">✓</span> : null}
                       </span>
-                      <span>{opt.label}</span>
+                      <span className="truncate text-left">{opt.label}</span>
                     </button>
                   );
                 })}
@@ -302,53 +305,57 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
               </div>
             </div>
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
-              {allowEmpty && (
-                <button
-                  type="button"
-                  onClick={() => { onChange(''); setIsOpen(false); setSearch(''); }}
-                  className={`w-full text-left px-5 py-2 text-sm transition-colors ${
-                    !value ? 'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 font-bold' : 'text-slate-600 dark:text-teal-300 hover:bg-slate-50 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  {emptyLabel}
-                </button>
-              )}
-              {filtered.length === 0 && (
-                <div className="px-3 py-4 text-center text-xs text-slate-400 italic">No matches found</div>
-              )}
-              {filtered.map(opt => {
-                const isSelected = String(opt.value) === String(value);
-                return (
+            <div style={{ maxHeight: optionsMaxHeight }} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar">
+              <div className="grid gap-2 pt-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
+                {allowEmpty && (
                   <button
-                    key={String(opt.value)}
                     type="button"
-                    onClick={() => { onChange(opt.value); setIsOpen(false); setSearch(''); }}
-                    className={`w-full text-left px-5 py-2 text-sm transition-colors ${
-                      isSelected
-                        ? 'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 font-bold'
-                        : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    onClick={() => { onChange(''); setIsOpen(false); setSearch(''); }}
+                    className={`inline-flex min-h-9 w-full items-center rounded-lg border px-3 py-1.5 text-left text-sm transition-colors ${
+                      !value
+                        ? 'border-teal-500 bg-teal-50 text-teal-700 dark:border-teal-400 dark:bg-teal-900/20 dark:text-teal-300 font-bold'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-700'
                     }`}
                   >
-                    <span className="flex items-center gap-2 min-w-0">
-                      {hasAvatarInOptions && (
-                        opt.avatarUrl ? (
-                          <img
-                            src={opt.avatarUrl}
-                            alt={opt.label}
-                            className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-slate-700"
-                          />
-                        ) : (
-                          <span className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold flex items-center justify-center border border-slate-200 dark:border-slate-700">
-                            {getInitials(opt.label)}
-                          </span>
-                        )
-                      )}
-                      <span className="truncate">{opt.label}</span>
-                    </span>
+                    {emptyLabel}
                   </button>
-                );
-              })}
+                )}
+                {filtered.length === 0 && (
+                  <div className="px-3 py-4 text-center text-xs text-slate-400 italic col-span-full">No matches found</div>
+                )}
+                {filtered.map(opt => {
+                  const isSelected = String(opt.value) === String(value);
+                  return (
+                    <button
+                      key={String(opt.value)}
+                      type="button"
+                      onClick={() => { onChange(opt.value); setIsOpen(false); setSearch(''); }}
+                      className={`inline-flex min-h-9 w-full items-center rounded-lg border px-3 py-1.5 text-left text-sm transition-colors ${
+                        isSelected
+                          ? 'border-teal-500 bg-teal-50 text-teal-700 dark:border-teal-400 dark:bg-teal-900/20 dark:text-teal-300 font-bold'
+                          : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 min-w-0 w-full">
+                        {hasAvatarInOptions && (
+                          opt.avatarUrl ? (
+                            <img
+                              src={opt.avatarUrl}
+                              alt={opt.label}
+                              className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                            />
+                          ) : (
+                            <span className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold flex items-center justify-center border border-slate-200 dark:border-slate-700">
+                              {getInitials(opt.label)}
+                            </span>
+                          )
+                        )}
+                        <span className="truncate">{opt.label}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>,

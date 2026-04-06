@@ -19,12 +19,14 @@
     @apply bg-white transition-colors duration-500;
     --chart-tick: #64748b;
     --chart-grid: #e2e8f0;
+    color-scheme: light;
     scrollbar-gutter: auto;
   }
   html.dark {
     @apply bg-black;
     --chart-tick: #94a3b8;
     --chart-grid: #1e293b;
+    color-scheme: dark;
   }
   body {
     @apply font-sans bg-transparent text-slate-900 transition-colors duration-500 antialiased;
@@ -70,6 +72,41 @@
 
   input, select, textarea {
     @apply text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400;
+  }
+
+  /* Keep native date/time/calendar controls visible in both themes. */
+  input[type='date'],
+  input[type='datetime-local'],
+  input[type='time'],
+  input[type='month'],
+  input[type='week'] {
+    color-scheme: inherit;
+  }
+
+  input[type='date']::-webkit-calendar-picker-indicator,
+  input[type='datetime-local']::-webkit-calendar-picker-indicator,
+  input[type='time']::-webkit-calendar-picker-indicator,
+  input[type='month']::-webkit-calendar-picker-indicator,
+  input[type='week']::-webkit-calendar-picker-indicator {
+    opacity: 0.85;
+    cursor: pointer;
+  }
+
+  .dark input[type='date']::-webkit-calendar-picker-indicator,
+  .dark input[type='datetime-local']::-webkit-calendar-picker-indicator,
+  .dark input[type='time']::-webkit-calendar-picker-indicator,
+  .dark input[type='month']::-webkit-calendar-picker-indicator,
+  .dark input[type='week']::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(1.15);
+    opacity: 0.95;
+  }
+
+  input[type='date']::-webkit-clear-button,
+  input[type='datetime-local']::-webkit-clear-button,
+  input[type='time']::-webkit-clear-button,
+  input[type='month']::-webkit-clear-button,
+  input[type='week']::-webkit-clear-button {
+    cursor: pointer;
   }
 
   /* Show a visual marker for required fields without repeating asterisks in JSX. */
