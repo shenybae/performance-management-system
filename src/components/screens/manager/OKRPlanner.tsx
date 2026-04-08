@@ -1992,17 +1992,21 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         window.notify?.('Select Team Leader first to enable member selection.', 'error');
                         return;
                       }
-                      const selectedIds = Array.isArray(v) ? v.map(String) : [String(v)];
-                      setForm({ ...form, assignee_ids: selectedIds.filter(Boolean) });
+                      const allowedIds = new Set(availableAssignees.map(emp => String(emp.id)));
+                      const selectedIds = (Array.isArray(v) ? v.map(String) : [String(v)])
+                        .filter(id => allowedIds.has(id));
+                      setForm({ ...form, assignee_ids: selectedIds });
                     }}
                     placeholder={!form.leader_id ? 'Select Team Leader first...' : 'Search and add team members...'}
-                    allowEmpty
-                    emptyLabel="No members"
                     searchable
                     multiSelect
                     dropdownVariant="pills-horizontal"
                     className="w-full"
                   />
+
+                  {form.leader_id && assigneePickerOptions.length === 0 && (
+                    <p className="text-[10px] text-slate-400 px-1">No available members found for the selected leader/department.</p>
+                  )}
 
                   <div className="min-h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/30 p-2">
                     {selectedAssignees.length === 0 ? (
