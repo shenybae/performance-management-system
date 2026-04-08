@@ -2299,22 +2299,21 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       {/* GOALS TABLE */}
       <Card>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[1180px] table-fixed text-left border-collapse">
             <thead><tr className="border-b border-slate-100 dark:border-slate-800">
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-6"></th>
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Title</th>
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Department</th>
-              {activeTab === 'Team' && <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Team</th>}
-              {activeTab === 'Individual' && <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Employee</th>}
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Owner</th>
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Priority</th>
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Progress</th>
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Status</th>
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right">Actions</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[28%]">Title</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[14%]">Department</th>
+              {activeTab === 'Team' && <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[12%]">Team</th>}
+              {activeTab === 'Individual' && <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[12%]">Employee</th>}
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[14%]">Owner</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[10%]">Priority</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[13%]">Progress</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[9%]">Status</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right w-[10%]">Actions</th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={activeTab === 'Department' ? 7 : 8} className="py-12 text-center text-sm text-slate-400 italic">
+                <tr><td colSpan={activeTab === 'Department' ? 8 : 9} className="py-12 text-center text-sm text-slate-400 italic">
                   No {activeTab.toLowerCase()} goals found. Click &quot;Add Goal&quot; to create one.
                 </td></tr>
               )}
@@ -2324,21 +2323,21 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 return (
                   <React.Fragment key={g.id}>
                     <tr className={`border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors ${overdue ? 'bg-red-50/30 dark:bg-red-900/5' : ''} ${isArchived ? 'opacity-60' : ''}`}>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-slate-700 dark:text-slate-100 text-sm">{g.title || g.statement}</span>
+                      <td className="py-3 px-4 align-top">
+                        <div className="space-y-1 min-w-0">
+                          <span className="block min-w-0 truncate font-medium text-slate-700 dark:text-slate-100 text-sm" title={g.title || g.statement}>{g.title || g.statement}</span>
                           {overdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
                           {isArchived && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">ARCHIVED</span>}
                           {g.frequency && g.frequency !== 'One-time' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">{g.frequency}</span>}
-                        </div>
-                        {g.assignees && g.assignees.length > 0 && (
-                          <div className="flex items-center gap-1 mt-1">
+                          {g.assignees && g.assignees.length > 0 && (
+                            <div className="flex items-center gap-1 flex-wrap">
                             {(g.assignees as any[]).slice(0, 5).map((a: any) => (
                               <span key={a.employee_id} title={a.name} className="w-5 h-5 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 text-[9px] font-black flex items-center justify-center">{(a.name || '?')[0]}</span>
                             ))}
                             {g.assignees.length > 5 && <span className="text-[9px] text-slate-400 font-bold ml-0.5">+{g.assignees.length - 5}</span>}
-                          </div>
-                        )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{g.department || '\u2014'}</td>
                       {activeTab === 'Team' && <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{g.team_name || '\u2014'}</td>}
