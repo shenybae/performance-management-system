@@ -196,7 +196,6 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
             <div className="mb-5 text-center">
               <img src="/logo.png" alt="Maptech Logo" className="h-14 md:h-16 w-full object-contain mb-2" />
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Performance Management System</p>
-              <h2 className="mt-2 text-lg md:text-xl font-black text-slate-800 dark:text-slate-100">Sign in</h2>
             </div>
           <form onSubmit={handleSubmit} className="space-y-5">
             {isOffline && (
@@ -284,10 +283,11 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
           
           {/* Quick demo access removed — use seeded accounts and the main sign-in form. */}
         </div>
-        <p className="text-center text-[10px] text-slate-300/90 dark:text-slate-400 mt-6 font-medium">
-          © {new Date().getFullYear()} Maptech Information Solutions Inc. All rights reserved.
-        </p>
       </motion.div>
+
+      <p className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 text-center text-[10px] text-slate-300/90 dark:text-slate-400 font-medium whitespace-nowrap">
+        © {new Date().getFullYear()} Maptech Information Solutions Inc. All rights reserved.
+      </p>
 
       {forgotOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
