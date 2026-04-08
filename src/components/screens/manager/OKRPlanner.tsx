@@ -1102,11 +1102,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           team_name: 'Revenue Ops Team',
           delegation: 'Team Lead (Test)',
           employee_name: 'Team Lead (Test)',
+          assignees: [{ employee_id: -10002, name: 'Team Member (Test)' }],
           priority: 'High',
           progress: 18,
           status: 'In Progress',
           target_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-          assignees: [],
           __seedUnderperfRow: true,
           __syntheticScopeSeed: true,
         });
@@ -1822,19 +1822,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 </div>
                               </td>
                               <td className="py-2.5 px-3 text-center align-top">
-                                {g.__syntheticScopeSeed ? (
-                                  <span className="inline-flex items-center h-8 px-3 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-400">
-                                    Test Row
-                                  </span>
-                                ) : (
-                                  <button
-                                    title="Open quick actions"
-                                    onClick={() => setUnderperfActionsGoalId(g.id)}
-                                    className="h-8 px-3 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors inline-flex items-center gap-1.5"
-                                  >
-                                    <MoreHorizontal size={12} /> Actions
-                                  </button>
-                                )}
+                                <button
+                                  title="Open quick actions"
+                                  onClick={() => setUnderperfActionsGoalId(g.id)}
+                                  className="h-8 px-3 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors inline-flex items-center gap-1.5"
+                                >
+                                  <MoreHorizontal size={12} /> Actions
+                                </button>
                               </td>
                             </tr>
                             {recoveryTaskOpenGoal === g.id && (
