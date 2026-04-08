@@ -493,7 +493,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
   const handleCreateImprovementPlanFromGoal = async (goal: any) => {
     const goalId = Number(goal?.id || 0);
-    const scope = String(goal?.scope || '');
+    const scope = normalizeGoalScope(goal);
     const title = String(goal?.title || goal?.statement || 'Goal').trim();
     if (!goalId || !['Team', 'Department'].includes(scope)) {
       window.notify?.('Performance plan can only be created from Team or Department goals', 'error');
@@ -531,7 +531,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
   const handleCreateDevelopmentPlanFromGoal = async (goal: any) => {
     const goalId = Number(goal?.id || 0);
-    const scope = String(goal?.scope || '');
+    const scope = normalizeGoalScope(goal);
     const title = String(goal?.title || goal?.statement || 'Goal').trim();
     if (!goalId || !['Team', 'Department'].includes(scope)) {
       window.notify?.('Development plan can only be created from Team or Department goals', 'error');
@@ -592,7 +592,15 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       await handleCreateImprovementPlanFromGoal(goal);
       return;
     }
+    if (action === 'dpip') {
+      await handleCreateImprovementPlanFromGoal(goal);
+      return;
+    }
     if (action === 'dev') {
+      await handleCreateDevelopmentPlanFromGoal(goal);
+      return;
+    }
+    if (action === 'tdp') {
       await handleCreateDevelopmentPlanFromGoal(goal);
       return;
     }
@@ -795,6 +803,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const underperforming = useMemo(() => {
     const now = new Date();
     return goals.filter(g => {
+      const normalizedScope = normalizeGoalScope(g);
       if (g.status === 'Completed' || g.status === 'Cancelled') return false;
       const progress = g.progress || 0;
       if (g.status === 'At Risk') return true;
@@ -805,6 +814,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         const total = due.getTime() - created.getTime();
         const elapsed = now.getTime() - created.getTime();
         if (total > 0 && elapsed / total > 0.5) return true;
+      }
+      if ((normalizedScope === 'Team' || normalizedScope === 'Department') && g.target_date) {
+        const created = new Date(g.created_at || now);
+        const due = new Date(g.target_date);
+        const total = due.getTime() - created.getTime();
+        const elapsed = now.getTime() - created.getTime();
+        if (total > 0 && elapsed / total > 0.35 && progress < 35) return true;
       }
       if (progress < 10 && g.status === 'In Progress') return true;
       return false;
@@ -1267,6 +1283,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             const normalizedScope = normalizeGoalScope(goal);
             const assignees = (goal.assignees || []) as any[];
             const isScopeGoal = normalizedScope === 'Department' || normalizedScope === 'Team';
+            const isTeamGoal = normalizedScope === 'Team';
+            const isDepartmentGoal = normalizedScope === 'Department';
+            const isIndividualGoal = normalizedScope === 'Individual';
 
             return (
               <div className="space-y-3">
@@ -1275,25 +1294,45 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <button
-                    onClick={() => { void triggerQuickAction('pip', goal, assignees); setUnderperfPlanGoalId(null); }}
-                    className="h-9 px-3 rounded-lg text-xs font-bold border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors inline-flex items-center justify-center gap-1.5"
-                  >
-                    <FileText size={13} /> PIP
-                  </button>
-                  <button
-                    onClick={() => { void triggerQuickAction('idp', goal, assignees); setUnderperfPlanGoalId(null); }}
-                    className="h-9 px-3 rounded-lg text-xs font-bold border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors inline-flex items-center justify-center gap-1.5"
-                  >
-                    <Target size={13} /> IDP
-                  </button>
-                  {isScopeGoal && (
+                  {isIndividualGoal && (
+                    <>
+                      <button
+                        onClick={() => { void triggerQuickAction('pip', goal, assignees); setUnderperfPlanGoalId(null); }}
+                        className="h-9 px-3 rounded-lg text-xs font-bold border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors inline-flex items-center justify-center gap-1.5"
+                      >
+                        <FileText size={13} /> PIP
+                      </button>
+                      <button
+                        onClick={() => { void triggerQuickAction('idp', goal, assignees); setUnderperfPlanGoalId(null); }}
+                        className="h-9 px-3 rounded-lg text-xs font-bold border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors inline-flex items-center justify-center gap-1.5"
+                      >
+                        <Target size={13} /> IDP
+                      </button>
+                    </>
+                  )}
+                  {isTeamGoal && (
                     <>
                       <button
                         onClick={() => { void triggerQuickAction('perf', goal, assignees); setUnderperfPlanGoalId(null); }}
                         className="h-9 px-3 rounded-lg text-xs font-bold border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors inline-flex items-center justify-center gap-1.5"
                       >
                         <TrendingDown size={13} /> TPIP
+                      </button>
+                      <button
+                        onClick={() => { void triggerQuickAction('tdp', goal, assignees); setUnderperfPlanGoalId(null); }}
+                        className="h-9 px-3 rounded-lg text-xs font-bold border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors inline-flex items-center justify-center gap-1.5"
+                      >
+                        <TrendingUp size={13} /> TDP
+                      </button>
+                    </>
+                  )}
+                  {isDepartmentGoal && (
+                    <>
+                      <button
+                        onClick={() => { void triggerQuickAction('dpip', goal, assignees); setUnderperfPlanGoalId(null); }}
+                        className="h-9 px-3 rounded-lg text-xs font-bold border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors inline-flex items-center justify-center gap-1.5"
+                      >
+                        <TrendingDown size={13} /> DPIP
                       </button>
                       <button
                         onClick={() => { void triggerQuickAction('dev', goal, assignees); setUnderperfPlanGoalId(null); }}
@@ -1307,7 +1346,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
                 {!isScopeGoal && (
                   <p className="text-[11px] text-slate-400">
-                    Scope plans (TPIP/DDP) are available only for Team or Department goals.
+                    Scope plans (TPIP/TDP/DPIP/DDP) are available only for Team or Department goals.
                   </p>
                 )}
               </div>
