@@ -2491,21 +2491,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         {isArchived ? (
                           <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border text-slate-500 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700">Archived</span>
                         ) : (
-                        <div onClick={e => e.stopPropagation()} className="flex items-center gap-2 min-w-max">
-                          <select
-                            value={g.status || 'Not Started'}
-                            onChange={(e) => {
-                              const newStatus = e.target.value;
-                              let newProgress = g.progress || 0;
-                              if (newStatus === 'Completed') newProgress = 100;
-                              else if (newStatus === 'Not Started') newProgress = 0;
-                              else if (newStatus === 'In Progress' && (g.progress || 0) === 0) newProgress = 25;
-                              updateGoal(g.id, { status: newStatus, progress: newProgress });
-                            }}
-                            className={`text-[10px] font-bold px-2 py-1 rounded-full border outline-none cursor-pointer ${statusColor(g.status || 'Not Started')}`}
-                          >
-                            {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
+                        <div className="flex items-center gap-2 min-w-max">
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${statusColor(g.status || 'Not Started')}`}>
+                            {g.status || 'Not Started'}
+                          </span>
+                          <span className="text-[9px] font-bold text-blue-600 dark:text-blue-300">LIVE</span>
                         </div>
                         )}
                       </td>
@@ -2566,7 +2556,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.statement || '\u2014'}</p>
                               </div>
                               {/* Metrics & Delegation */}
-                              <div className="grid grid-cols-3 gap-4">
+                              <div className="grid grid-cols-2 gap-4">
                                 <div>
                                   <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Key Metric</span>
                                   <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.metric || '\u2014'}</p>
@@ -2574,23 +2564,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 <div>
                                   <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Goal Owner / Responsible</span>
                                   <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.delegation || '\u2014'}</p>
-                                </div>
-                                <div>
-                                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Progress</span>
-                                  <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                                    <div className="flex items-center gap-3">
-                                      <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                        <div
-                                          className={`h-2 rounded-full transition-all ${progressBarColor(g.progress || 0)}`}
-                                          style={{ width: `${g.progress || 0}%` }}
-                                        ></div>
-                                      </div>
-                                      <span className="text-sm font-bold text-slate-700 dark:text-slate-200 w-10 text-right">{g.progress || 0}%</span>
-                                    </div>
-                                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mt-2">
-                                      <div className={`h-2 rounded-full transition-all ${(g.progress || 0) >= 100 ? 'bg-emerald-500' : (g.progress || 0) >= 50 ? 'bg-teal-500' : 'bg-amber-500'}`} style={{ width: `${g.progress || 0}%` }}></div>
-                                    </div>
-                                  </div>
                                 </div>
                               </div>
 
