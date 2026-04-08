@@ -1063,7 +1063,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           </button>
         </div>
 
-        {underperfTopTab === 'plans' ? (
+        {underperfTopTab === 'plans' && (
           <div className="space-y-5">
             <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 w-fit">
               <button
@@ -1086,9 +1086,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               <GoalScopePlanManager />
             )}
           </div>
-        ) : (
+        )}
+
+        {underperfTopTab === 'summary' && (
           <div className="space-y-5">
-        {underperforming.length === 0 ? (
+        {underperforming.length === 0 && (
           <Card>
             <div className="py-16 text-center">
               <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}>
@@ -1098,7 +1100,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               <p className="text-sm text-slate-400">No underperforming goals detected. All targets are on track.</p>
             </div>
           </Card>
-        ) : (
+        )}
+        {underperforming.length > 0 && (
           <div className="space-y-5">
             {/* Summary metric cards */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
@@ -1263,8 +1266,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               </Card>
             </div>
 
+        )}
           </div>
-        ) : (
+        )}
+
+        {underperfTopTab === 'table' && (
           <>
 
             {/* View Tabs */}
@@ -1707,9 +1713,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   </Card>
                 )}
               </>
-            )
-          </div>
-        )
+            )}
+          </>
+        )}
       </motion.div>
     );
   }
