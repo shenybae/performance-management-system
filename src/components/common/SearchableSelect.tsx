@@ -64,13 +64,21 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     return options.find(o => String(o.value) === String(value));
   }, [value, options]);
 
+  const selectedOptions = useMemo(() => {
+    if (!multiSelect || !Array.isArray(value)) return [] as Option[];
+    const byValue = new Map(options.map((opt) => [String(opt.value), opt]));
+    return value
+      .map((v) => byValue.get(String(v)))
+      .filter((opt): opt is Option => Boolean(opt));
+  }, [multiSelect, value, options]);
+
   const selectedLabel = useMemo(() => {
     if (!value && allowEmpty) return emptyLabel;
-    if (multiSelect && Array.isArray(selectedOption)) {
-      return selectedOption.map(opt => opt.label).join(', ');
+    if (multiSelect && Array.isArray(value)) {
+      return selectedOptions.map(opt => opt.label).join(', ');
     }
     return (selectedOption as Option | undefined)?.label || '';
-  }, [value, allowEmpty, emptyLabel, selectedOption]);
+  }, [value, allowEmpty, emptyLabel, selectedOption, selectedOptions, multiSelect]);
 
   const hasAvatarInOptions = useMemo(() => {
     return options.some((o) => Object.prototype.hasOwnProperty.call(o, 'avatarUrl'));
@@ -319,7 +327,23 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     {emptyLabel}
                   </button>
                 )}
-                {!allowEmpty && selectedOption && (
+                {multiSelect && selectedOptions.length > 0 && selectedOptions.map((opt) => {
+                  const optValue = String(opt.value);
+                  return (
+                    <button
+                      key={optValue}
+                      type="button"
+                      onClick={() => toggleMultiValue(opt.value)}
+                      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-blue-500 bg-blue-50 px-3 text-xs font-bold text-blue-700 dark:border-blue-400 dark:bg-blue-900/25 dark:text-blue-300"
+                    >
+                      <span className="h-3 w-3 rounded-full border border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400">
+                        <span className="block h-full w-full text-center text-[8px] leading-[10px] text-white">✓</span>
+                      </span>
+                      <span className="max-w-[140px] truncate">{opt.label}</span>
+                    </button>
+                  );
+                })}
+                {!multiSelect && !allowEmpty && selectedOption && !Array.isArray(selectedOption) && (
                   <button
                     type="button"
                     onClick={() => { onChange(selectedOption.value); setIsOpen(false); setSearch(''); }}

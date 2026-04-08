@@ -1985,7 +1985,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 </label>
                 <div className="space-y-2">
                   <SearchableSelect
-                    options={assigneePickerOptions}
+                    options={availableAssignees.map(emp => ({
+                      value: String(emp.id),
+                      label: `${emp.name}${emp.position ? ` (${emp.position})` : ''}`,
+                      avatarUrl: (emp as any).profile_picture || null,
+                    }))}
                     value={form.assignee_ids}
                     onChange={(v) => {
                       if (!form.leader_id) {
