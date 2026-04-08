@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Lock, User, ShieldAlert, Sun, Moon, Eye, EyeOff, AlertCircle, WifiOff } from 'lucide-react';
-import { Card } from './Card';
 
 interface UserSession {
   id: number;
@@ -148,31 +147,40 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-transparent p-4 selection:bg-teal-green/30 selection:text-teal-deep transition-colors duration-300 overflow-hidden">
+    <div className="relative min-h-screen flex items-center justify-center bg-transparent px-4 py-6 md:px-8 md:py-10 selection:bg-teal-green/30 selection:text-teal-deep transition-colors duration-300 overflow-hidden">
       {/* Video background (public/loginBackground.mp4) */}
       <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none" aria-hidden="true">
         <source src="/loginBackground.mp4" type="video/mp4" />
       </video>
       {/* Dim overlay for contrast */}
       <div className="absolute inset-0 bg-black/40 dark:bg-black/60 z-10 pointer-events-none" />
+      <div className="absolute inset-0 z-10 pointer-events-none bg-[radial-gradient(circle_at_50%_20%,rgba(45,212,191,0.16),transparent_38%)]" />
+      <div className="absolute inset-0 z-10 pointer-events-none bg-[radial-gradient(circle_at_50%_120%,rgba(15,118,110,0.22),transparent_45%)]" />
 
       <div className="absolute top-4 right-4 z-30">
         <button 
           onClick={() => setIsDarkMode(!isDarkMode)}
-          className="p-2 system-bg border border-slate-200 dark:border-slate-800 rounded-full text-slate-500 transition-all hover:border-teal-green"
+          className="p-2.5 bg-white/75 dark:bg-black/45 backdrop-blur-md border border-slate-200/80 dark:border-slate-700 rounded-full text-slate-500 dark:text-slate-300 transition-all hover:border-teal-green"
         >
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
       </div>
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md relative z-20">
-        <div className="text-center mb-8">
-          <div className="flex flex-col items-center mb-2">
-            <img src="/logo.png" alt="Maptech Logo" className="h-24 w-full object-contain mb-4" />
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-[460px] relative z-20">
+        <div className="text-center mb-6 md:mb-7">
+          <div className="flex flex-col items-center mb-3">
+            <img src="/logo.png" alt="Maptech Logo" className="h-20 md:h-24 w-full object-contain" />
           </div>
-          <p className="text-slate-500 dark:text-slate-300 mt-6 font-bold uppercase tracking-widest text-[10px]">Performance Management System</p>
+          <p className="text-slate-200/95 dark:text-slate-300 font-extrabold uppercase tracking-[0.24em] text-[10px]">Performance Management System</p>
+          <p className="text-slate-300/80 dark:text-slate-400 text-xs mt-2">Secure sign-in for HR, managers, and employees</p>
         </div>
 
-        <div className="system-bg border border-slate-200 dark:border-slate-800 p-8 rounded-3xl shadow-xl shadow-slate-200/50 dark:shadow-none transition-colors duration-300">
+        <div className="relative border border-teal-400/25 dark:border-teal-500/20 bg-white/90 dark:bg-slate-950/72 backdrop-blur-xl p-6 md:p-7 rounded-3xl shadow-[0_24px_70px_-22px_rgba(15,118,110,0.55)] transition-colors duration-300">
+          <div className="absolute inset-0 rounded-3xl pointer-events-none bg-[linear-gradient(140deg,rgba(45,212,191,0.10),transparent_38%,rgba(14,116,144,0.10))]" />
+          <div className="relative">
+            <div className="mb-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-400">Portal Access</p>
+              <h2 className="text-lg md:text-xl font-black text-slate-800 dark:text-slate-100">Sign in to your account</h2>
+            </div>
           <form onSubmit={handleSubmit} className="space-y-5">
             {isOffline && (
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/30 text-amber-600 dark:text-amber-400 text-sm rounded-lg flex items-center gap-2">
@@ -233,11 +241,22 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
             >
               {isOffline ? 'No Connection' : loading ? 'Signing in...' : lockUntil && Date.now() < lockUntil ? `Locked (${lockDisplay}s)` : 'Sign In to Portal'}
             </button>
+
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={handleForgot}
+                className="text-xs font-bold text-teal-700 dark:text-teal-300 hover:underline underline-offset-4"
+              >
+                Forgot password?
+              </button>
+            </div>
           </form>
+          </div>
           
           {/* Quick demo access removed — use seeded accounts and the main sign-in form. */}
         </div>
-        <p className="text-center text-[10px] text-slate-500 dark:text-slate-400 mt-8 font-medium">
+        <p className="text-center text-[10px] text-slate-300/90 dark:text-slate-400 mt-6 font-medium">
           © {new Date().getFullYear()} Maptech Information Solutions Inc. All rights reserved.
         </p>
       </motion.div>
