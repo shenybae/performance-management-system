@@ -1393,63 +1393,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                   </div>
                                 </td>
                                 <td className="py-2.5 px-3 text-center">
-                                  {quickEdit === g.id ? (() => {
-                                    return (
-                                      <div className="flex items-center gap-1.5">
-                                        <input 
-                                          type="range" 
-                                          min={0} 
-                                          max={100} 
-                                          step={5} 
-                                          value={editProgress} 
-                                          onChange={e => setEditProgress(Number(e.target.value))} 
-                                          disabled={!canEditProgressStatus}
-                                          className="w-16 accent-teal-600 disabled:opacity-50 disabled:cursor-not-allowed" 
-                                          title={disabledReason || `${editProgress}%`} 
-                                        />
-                                        <span className="text-[9px] font-bold text-slate-500 w-7">{editProgress}%</span>
-                                        <select
-                                          value={editStatus}
-                                          onChange={(e) => setEditStatus(e.target.value)}
-                                          disabled={!canEditProgressStatus}
-                                          className="h-7 min-w-[110px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[10px] font-bold text-slate-700 dark:text-slate-200 px-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                          {STATUSES.map((s) => (
-                                            <option key={s} value={s}>{s}</option>
-                                          ))}
-                                        </select>
-                                        <button 
-                                          onClick={() => { updateGoal(g.id, { progress: editProgress, status: editStatus }); setQuickEdit(null); }} 
-                                          disabled={!canEditProgressStatus}
-                                          title={disabledReason}
-                                          className="text-[9px] font-bold px-2 py-0.5 rounded bg-teal-deep text-white hover:bg-teal-green disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                          Save
-                                        </button>
-                                        <button onClick={() => setQuickEdit(null)} className="text-[9px] font-bold px-1.5 py-0.5 rounded text-slate-400 hover:text-red-500"><X size={11} /></button>
-                                      </div>
-                                    );
-                                  })() : (
-                                    <div className="flex items-center justify-center gap-1.5">
-                                      <select
-                                        defaultValue=""
-                                        onChange={(e) => {
-                                          const action = e.target.value;
-                                          if (!action) return;
-                                          void triggerQuickAction(action, g, assignees);
-                                          e.target.value = '';
-                                        }}
-                                        title={disabledReason}
-                                        className="h-8 min-w-[148px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[10px] font-bold text-slate-700 dark:text-slate-200 px-2"
-                                      >
-                                        <option value="">Quick actions...</option>
-                                        <option value="update">Update Progress/Status</option>
-                                        {isIndividualGoal && <option value="pip">Create PIP</option>}
-                                        {isIndividualGoal && <option value="idp">Create IDP</option>}
-                                        {isScopeGoal && <option value="perf">Create Performance Plan</option>}
-                                        {isScopeGoal && <option value="dev">Create Development Plan</option>}
-                                        {hasAssignees && <option value="recovery">Create Recovery Task</option>}
-                                      </select>
+                                  <div className="flex flex-col items-center gap-1.5">
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${statusColor(g.status || 'Not Started')}`}>
+                                      <span className="w-2 h-2 rounded-full bg-current opacity-80" />
+                                      {g.status || 'Not Started'}
+                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[9px] font-bold text-slate-500">{g.progress || 0}%</span>
+                                      <span className="text-[9px] text-blue-600 dark:text-blue-300 font-bold">LIVE</span>
                                       <button
                                         onClick={() => openProofReview(g.id)}
                                         className={`h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}
@@ -1457,7 +1408,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                         {proofReviewOpenGoal === g.id ? 'Hide Proofs' : 'View Proofs'}
                                       </button>
                                     </div>
-                                  )}
+                                  </div>
                                 </td>
                               </tr>
 
