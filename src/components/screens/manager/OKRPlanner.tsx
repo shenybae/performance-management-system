@@ -1273,6 +1273,62 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               </div>
             </Card>
 
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              <Card className="xl:col-span-2">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-black uppercase tracking-wider text-slate-500">Priority Risk Heatmap</p>
+                  <button onClick={() => setUnderperfTopTab('table')} className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">Open Monitor Table</button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-700">
+                        <th className="py-2 px-2 text-[10px] font-bold uppercase text-slate-500">Priority</th>
+                        <th className="py-2 px-2 text-[10px] font-bold uppercase text-slate-500">Overdue</th>
+                        <th className="py-2 px-2 text-[10px] font-bold uppercase text-slate-500">At Risk</th>
+                        <th className="py-2 px-2 text-[10px] font-bold uppercase text-slate-500">Stalled</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(['Critical', 'High', 'Medium', 'Low'] as const).map((p) => (
+                        <tr key={p} className="border-b border-slate-100 dark:border-slate-800/60">
+                          <td className="py-2 px-2 text-xs font-bold text-slate-700 dark:text-slate-200">{p}</td>
+                          <td className="py-2 px-2"><span className={`inline-flex min-w-8 justify-center px-2 py-1 rounded text-[10px] font-bold ${heatColor(heatmapData[p]?.OVERDUE || 0)}`}>{heatmapData[p]?.OVERDUE || 0}</span></td>
+                          <td className="py-2 px-2"><span className={`inline-flex min-w-8 justify-center px-2 py-1 rounded text-[10px] font-bold ${heatColor(heatmapData[p]?.['AT RISK'] || 0)}`}>{heatmapData[p]?.['AT RISK'] || 0}</span></td>
+                          <td className="py-2 px-2"><span className={`inline-flex min-w-8 justify-center px-2 py-1 rounded text-[10px] font-bold ${heatColor(heatmapData[p]?.STALLED || 0)}`}>{heatmapData[p]?.STALLED || 0}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+
+              <Card>
+                <p className="text-xs font-black uppercase tracking-wider text-slate-500 mb-3">Hotspots</p>
+                <div className="space-y-2">
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-900/50">
+                    <p className="text-[10px] uppercase font-bold text-slate-400">Top Employee</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{underperfAggregations.employees[0]?.name || '—'}</p>
+                    <p className="text-[10px] text-red-500 font-bold">{underperfAggregations.employees[0]?.under || 0} underperforming goals</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-900/50">
+                    <p className="text-[10px] uppercase font-bold text-slate-400">Top Team</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{underperfAggregations.teams[0]?.name || '—'}</p>
+                    <p className="text-[10px] text-red-500 font-bold">{underperfAggregations.teams[0]?.under || 0} underperforming goals</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-900/50">
+                    <p className="text-[10px] uppercase font-bold text-slate-400">Top Department</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{underperfAggregations.departments[0]?.name || '—'}</p>
+                    <p className="text-[10px] text-red-500 font-bold">{underperfAggregations.departments[0]?.under || 0} underperforming goals</p>
+                  </div>
+                  <div className="flex gap-1.5 pt-1">
+                    <button onClick={() => openUnderperformingPlans('employee')} className="flex-1 text-[10px] font-bold px-2 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Employee Plans</button>
+                    <button onClick={() => openUnderperformingPlans('scope')} className="flex-1 text-[10px] font-bold px-2 py-1.5 rounded-lg bg-cyan-50 dark:bg-cyan-900/25 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100 dark:hover:bg-cyan-900/40 transition-colors">Scope Plans</button>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
             <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 w-fit">
               <button
                 onClick={() => setUnderperfView('employee')}
@@ -1455,7 +1511,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[112px]">Due</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[88px]">Overdue</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[128px]">Issue</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center w-[190px]">Quick Action</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center w-[460px]">Quick Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1463,44 +1519,117 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         const isOverdue = g.target_date && new Date(g.target_date) < now;
                         const stalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
                         const scopeLabel = g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual';
+                        const assignees = (g.assignees || []) as any[];
+                        const canScopePlan = g.scope === 'Department' || g.scope === 'Team';
+                        const recoveryDraft = recoveryTaskDrafts[g.id] || {
+                          member_employee_id: String(assignees[0]?.employee_id || ''),
+                          title: `Recovery: ${g.title || g.statement || 'Goal task'}`,
+                          description: '',
+                          due_date: '',
+                          priority: 'High',
+                        };
                         return (
-                          <tr key={g.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
-                            <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 align-top min-w-0"><span className="block min-w-0 truncate" title={g.title || g.statement}>{g.title || g.statement}</span></td>
-                            <td className="py-2.5 px-3 align-top"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeLabel}</span></td>
-                            <td className="py-2.5 px-3 text-xs text-slate-500 align-top truncate">{g.department || '—'}</td>
-                            <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium align-top truncate">{g.employee_name || g.delegation || '—'}</td>
-                            <td className="py-2.5 px-3 align-top"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority || 'Medium')}`}>{g.priority || 'Medium'}</span></td>
-                            <td className="py-2.5 px-3 align-top">
-                              <div className="flex items-center gap-2">
-                                <div className="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                                  <motion.div initial={{ width: 0 }} animate={{ width: `${g.progress || 0}%` }} transition={{ duration: 0.45 }} className="bg-red-500 h-2 rounded-full" />
+                          <React.Fragment key={g.id}>
+                            <tr className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
+                              <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 align-top min-w-0"><span className="block min-w-0 truncate" title={g.title || g.statement}>{g.title || g.statement}</span></td>
+                              <td className="py-2.5 px-3 align-top"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeLabel}</span></td>
+                              <td className="py-2.5 px-3 text-xs text-slate-500 align-top truncate">{g.department || '—'}</td>
+                              <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium align-top truncate">{g.employee_name || g.delegation || '—'}</td>
+                              <td className="py-2.5 px-3 align-top"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority || 'Medium')}`}>{g.priority || 'Medium'}</span></td>
+                              <td className="py-2.5 px-3 align-top">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                                    <motion.div initial={{ width: 0 }} animate={{ width: `${g.progress || 0}%` }} transition={{ duration: 0.45 }} className="bg-red-500 h-2 rounded-full" />
+                                  </div>
+                                  <span className="text-[10px] font-black text-red-500 w-8">{g.progress || 0}%</span>
+                                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${statusColor(g.status || 'Not Started')}`}>{g.status || 'Not Started'}</span>
                                 </div>
-                                <span className="text-[10px] font-black text-red-500 w-8">{g.progress || 0}%</span>
-                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${statusColor(g.status || 'Not Started')}`}>{g.status || 'Not Started'}</span>
-                              </div>
-                            </td>
-                            <td className={`py-2.5 px-3 text-xs font-medium align-top ${isOverdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '—'}</td>
-                            <td className="py-2.5 px-3 align-top">{isOverdue ? <span className="flex items-center gap-1 text-[10px] font-black text-red-600"><Clock size={11} /> +{daysOverdue(g.target_date)}d</span> : <span className="text-[10px] text-slate-400">—</span>}</td>
-                            <td className="py-2.5 px-3 align-top">
-                              <div className="flex gap-1 flex-wrap">
-                                {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
-                                {g.status === 'At Risk' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600">AT RISK</span>}
-                                {stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-3 text-center align-top">
-                              <div className="flex flex-wrap items-center justify-center gap-1.5">
-                                <button onClick={() => setViewGoalId(g.id)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">View</button>
-                                <button onClick={() => openProofReview(g.id)} className={`h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}>{proofReviewOpenGoal === g.id ? 'Hide Proofs' : 'View Proofs'}</button>
-                                <button
-                                  onClick={() => { setUnderperfTopTab('plans'); setPlansNavigator(g.scope === 'Individual' ? 'employee' : 'scope'); }}
-                                  className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors"
-                                >
-                                  Open Plans
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
+                              </td>
+                              <td className={`py-2.5 px-3 text-xs font-medium align-top ${isOverdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '—'}</td>
+                              <td className="py-2.5 px-3 align-top">{isOverdue ? <span className="flex items-center gap-1 text-[10px] font-black text-red-600"><Clock size={11} /> +{daysOverdue(g.target_date)}d</span> : <span className="text-[10px] text-slate-400">—</span>}</td>
+                              <td className="py-2.5 px-3 align-top">
+                                <div className="flex gap-1 flex-wrap">
+                                  {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
+                                  {g.status === 'At Risk' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600">AT RISK</span>}
+                                  {stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3 text-center align-top">
+                                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                                  <button onClick={() => setViewGoalId(g.id)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">View</button>
+                                  <button onClick={() => void triggerQuickAction('proofs', g, assignees)} className={`h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}>{proofReviewOpenGoal === g.id ? 'Hide Proofs' : 'View Proofs'}</button>
+                                  <button onClick={() => void triggerQuickAction('pip', g, assignees)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">PIP</button>
+                                  <button onClick={() => void triggerQuickAction('idp', g, assignees)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors">IDP</button>
+                                  {canScopePlan && (
+                                    <>
+                                      <button onClick={() => void triggerQuickAction('perf', g, assignees)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors">TPIP</button>
+                                      <button onClick={() => void triggerQuickAction('dev', g, assignees)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors">DDP</button>
+                                    </>
+                                  )}
+                                  <button onClick={() => void triggerQuickAction('recovery', g, assignees)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">Recovery</button>
+                                  <button onClick={() => openUnderperformingPlans(g.scope === 'Individual' ? 'employee' : 'scope')} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button>
+                                </div>
+                              </td>
+                            </tr>
+                            {recoveryTaskOpenGoal === g.id && (
+                              <tr className="bg-amber-50/60 dark:bg-amber-900/10 border-b border-amber-100 dark:border-amber-900/40">
+                                <td colSpan={10} className="px-3 py-3">
+                                  <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5 items-end">
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Assignee</label>
+                                      <select
+                                        value={recoveryDraft.member_employee_id}
+                                        onChange={(e) => updateRecoveryTaskDraft(g.id, { member_employee_id: e.target.value })}
+                                        className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-xs"
+                                      >
+                                        <option value="">Select</option>
+                                        {assignees.map((a: any) => (
+                                          <option key={a.employee_id} value={String(a.employee_id)}>{a.name}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Task Title</label>
+                                      <input
+                                        value={recoveryDraft.title}
+                                        onChange={(e) => updateRecoveryTaskDraft(g.id, { title: e.target.value })}
+                                        className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-xs"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Due Date</label>
+                                      <input
+                                        type="date"
+                                        value={recoveryDraft.due_date}
+                                        onChange={(e) => updateRecoveryTaskDraft(g.id, { due_date: e.target.value })}
+                                        className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-xs"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Priority</label>
+                                      <select
+                                        value={recoveryDraft.priority}
+                                        onChange={(e) => updateRecoveryTaskDraft(g.id, { priority: e.target.value })}
+                                        className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-xs"
+                                      >
+                                        {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                                      </select>
+                                    </div>
+                                    <div className="flex gap-2 justify-end">
+                                      <button onClick={() => setRecoveryTaskOpenGoal(null)} className="h-8 px-3 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+                                      <button
+                                        onClick={() => void handleCreateRecoveryTask(g)}
+                                        disabled={recoveryTaskSavingGoal === g.id}
+                                        className="h-8 px-3 rounded-lg text-[10px] font-bold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60 transition-colors"
+                                      >
+                                        {recoveryTaskSavingGoal === g.id ? 'Saving...' : 'Assign Recovery'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     </tbody>
