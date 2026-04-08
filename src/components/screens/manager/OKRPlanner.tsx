@@ -46,6 +46,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [editStatus, setEditStatus] = useState('');
   const [underperfTopTab, setUnderperfTopTab] = useState<'summary'|'table'|'plans'>('summary');
   const [plansNavigator, setPlansNavigator] = useState<'employee' | 'scope'>('employee');
+  const [underperfView, setUnderperfView] = useState<'employee'|'team'|'department'>('employee');
   const [underperfScopeFilter, setUnderperfScopeFilter] = useState<'all'|'Department'|'Team'|'Individual'>('all');
   const [underperfQuickFilter, setUnderperfQuickFilter] = useState<'all'|'overdue'|'highPriority'|'stalled'>('all');
   const [recoveryTaskCount7d, setRecoveryTaskCount7d] = useState(0);
@@ -1062,6 +1063,109 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 <p className="text-xs font-bold text-blue-700 dark:text-blue-300">Live sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - proofRealtimeSyncAt) / 1000))}s ago</p>
                 <button onClick={() => void refreshProofReviewTasks(proofReviewOpenGoal)} className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30">Refresh proofs</button>
               </div>
+
+              {proofReviewLoadingGoal === proofReviewOpenGoal ? (
+                <p className="text-sm text-slate-500">Loading task proofs...</p>
+              ) : ((proofReviewTasksByGoal[proofReviewOpenGoal] || []).length === 0 ? (
+                <p className="text-sm text-slate-500">No delegated tasks found for this goal yet.</p>
+              ) : (
+                (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
+                  const reviewStatus = t.proof_review_status || 'Not Submitted';
+                  const uploadNote = proofUploadNotes[t.id] || '';
+                  return (
+                    <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                        <div>
+                          <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
+                          <p className="text-[10px] text-slate-500">{t.member_name || `#${t.member_employee_id}`} • Status: <span className="font-bold">{t.status || 'Not Started'}</span> • Progress: <span className="font-bold">{t.progress || 0}%</span></p>
+                        </div>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full whitespace-nowrap ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
+                          {reviewStatus}
+                        </span>
+                      </div>
+
+                      {!t.proof_image && (
+                        <div className="mb-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                          <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Attach Proof File</label>
+                          <div className="flex gap-1.5 items-end">
+                            <input
+                              type="file"
+                              accept="*/*"
+                              id={`proof-file-${t.id}`}
+                              className="hidden"
+                              disabled={proofUploadingTaskId === t.id}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file && proofReviewOpenGoal) {
+                                  uploadTaskProof(Number(t.id), proofReviewOpenGoal, file, uploadNote);
+                                  setProofUploadNotes(prev => ({ ...prev, [t.id]: '' }));
+                                }
+                              }}
+                            />
+                            <input
+                              type="text"
+                              placeholder="Add note (optional)"
+                              value={uploadNote}
+                              onChange={(e) => setProofUploadNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
+                              className="flex-1 p-1.5 rounded text-[10px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+                              disabled={proofUploadingTaskId === t.id}
+                            />
+                            <label htmlFor={`proof-file-${t.id}`} className="cursor-pointer px-2 py-1 bg-blue-600 text-white text-[10px] font-bold rounded hover:bg-blue-700 disabled:opacity-50">
+                              {proofUploadingTaskId === t.id ? 'Uploading...' : 'Choose'}
+                            </label>
+                          </div>
+                        </div>
+                      )}
+
+                      {t.proof_image && (
+                        <div className="mb-2 max-w-xl">
+                          <ProofAttachment src={t.proof_image} fileName={t.proof_file_name} mimeType={t.proof_file_type} compact />
+                        </div>
+                      )}
+
+                      {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
+                      {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
+                      {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
+
+                      {t.proof_image && (
+                        <div className="space-y-2">
+                          <textarea
+                            rows={2}
+                            value={proofReviewNotes[t.id] ?? String(t.proof_review_note || '')}
+                            onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
+                            className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
+                            placeholder="Reviewer note (optional)"
+                            disabled={proofReviewSubmittingTaskId === t.id}
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Approved')}
+                              disabled={proofReviewSubmittingTaskId === t.id}
+                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                            >
+                              {proofReviewSubmittingTaskId === t.id ? 'Saving...' : 'Approve'}
+                            </button>
+                            <button
+                              onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Needs Revision')}
+                              disabled={proofReviewSubmittingTaskId === t.id}
+                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                            >
+                              Needs Revision
+                            </button>
+                            <button
+                              onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Rejected')}
+                              disabled={proofReviewSubmittingTaskId === t.id}
+                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ))}
             </div>
           )}
         </Modal>
@@ -1147,7 +1251,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         )}
 
         {underperfTopTab === 'summary' && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <Card>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="rounded-xl bg-red-50 dark:bg-red-900/20 p-3">
@@ -1168,6 +1272,129 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 </div>
               </div>
             </Card>
+
+            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 w-fit">
+              <button
+                onClick={() => setUnderperfView('employee')}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${underperfView === 'employee' ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                By Employee
+              </button>
+              <button
+                onClick={() => setUnderperfView('team')}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${underperfView === 'team' ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                By Team
+              </button>
+              <button
+                onClick={() => setUnderperfView('department')}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${underperfView === 'department' ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                By Department
+              </button>
+            </div>
+
+            {underperfView === 'employee' && (
+              <Card>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Employee</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Goals</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Underperforming</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Avg Progress</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Top Issue</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {underperfAggregations.employees.map((e: any) => {
+                        const top = Object.entries(e.reasons || {}).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '';
+                        return (
+                          <tr key={e.name} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors">
+                            <td className="py-3 px-3 text-sm font-medium text-slate-700 dark:text-slate-200">{e.name}</td>
+                            <td className="py-3 px-3 text-sm font-bold text-slate-600 dark:text-slate-300">{e.total}</td>
+                            <td className="py-3 px-3"><span className="text-sm font-black text-red-500">{e.under}</span><span className="text-[10px] text-slate-400 ml-1">({e.pctUnder}%)</span></td>
+                            <td className="py-3 px-3 text-xs font-bold text-slate-500">{e.avgProgress}%</td>
+                            <td className="py-3 px-3 text-xs text-slate-500">{top ? top.replace(/_/g, ' ') : '—'}</td>
+                            <td className="py-3 px-3 text-right"><button onClick={() => openUnderperformingPlans('employee')} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
+
+            {underperfView === 'team' && (
+              <Card>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Team</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Goals</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Underperforming</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Avg Progress</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Top Issue</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {underperfAggregations.teams.map((t: any) => {
+                        const top = Object.entries(t.reasons || {}).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '';
+                        return (
+                          <tr key={t.name} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors">
+                            <td className="py-3 px-3 text-sm font-medium text-slate-700 dark:text-slate-200">{t.name}</td>
+                            <td className="py-3 px-3 text-sm font-bold text-slate-600 dark:text-slate-300">{t.total}</td>
+                            <td className="py-3 px-3"><span className="text-sm font-black text-red-500">{t.under}</span><span className="text-[10px] text-slate-400 ml-1">({t.pctUnder}%)</span></td>
+                            <td className="py-3 px-3 text-xs font-bold text-slate-500">{t.avgProgress}%</td>
+                            <td className="py-3 px-3 text-xs text-slate-500">{top ? top.replace(/_/g, ' ') : '—'}</td>
+                            <td className="py-3 px-3 text-right"><button onClick={() => openUnderperformingPlans('scope')} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
+
+            {underperfView === 'department' && (
+              <Card>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Department</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Goals</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Underperforming</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Avg Progress</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Top Issue</th>
+                        <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {underperfAggregations.departments.map((d: any) => {
+                        const top = Object.entries(d.reasons || {}).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '';
+                        return (
+                          <tr key={d.name} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors">
+                            <td className="py-3 px-3 text-sm font-medium text-slate-700 dark:text-slate-200">{d.name}</td>
+                            <td className="py-3 px-3 text-sm font-bold text-slate-600 dark:text-slate-300">{d.total}</td>
+                            <td className="py-3 px-3"><span className="text-sm font-black text-red-500">{d.under}</span><span className="text-[10px] text-slate-400 ml-1">({d.pctUnder}%)</span></td>
+                            <td className="py-3 px-3 text-xs font-bold text-slate-500">{d.avgProgress}%</td>
+                            <td className="py-3 px-3 text-xs text-slate-500">{top ? top.replace(/_/g, ' ') : '—'}</td>
+                            <td className="py-3 px-3 text-right"><button onClick={() => openUnderperformingPlans('scope')} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
           </div>
         )}
 
@@ -1221,7 +1448,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       <tr className="bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/50">
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[220px]">Goal</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[92px]">Level</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Department</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Department</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[160px]">Owner</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[94px]">Priority</th>
