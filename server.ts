@@ -3275,21 +3275,7 @@ async function startServer() {
       }
 
       if (role === 'Manager') {
-        const managedIds = await getManagedEmployeeIds(actor.id);
-        if (queryEmployeeId) {
-          if (!managedIds.includes(queryEmployeeId)) return res.status(403).json({ error: 'Forbidden' });
-          const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ? ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`, [queryEmployeeId]);
-          return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
-        }
-        if (managedIds.length === 0) {
-          const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id IS NULL ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`);
-          return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
-        }
-        const placeholders = managedIds.map(() => '?').join(',');
-        const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE (g.employee_id IN (${placeholders}) OR g.employee_id IS NULL) ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`, managedIds);
-        return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
-      }
-      if (role === 'Manager') {
+        // Managers can view goals across all departments: Department, Team, and Individual.
         if (queryEmployeeId) {
           const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ? ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`, [queryEmployeeId]);
           return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
