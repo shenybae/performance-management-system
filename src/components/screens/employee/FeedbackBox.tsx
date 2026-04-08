@@ -366,6 +366,97 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
         </Card>
       )}
 
+      {/* Filters + records on top */}
+      <div className="mb-4 space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+          <div className="text-xs font-bold bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full shrink-0">All Feedback ({feedback360.length})</div>
+          <div className="w-full lg:w-96">
+            <SearchableSelect
+              options={[
+                { value: '', label: 'All People' },
+                ...personOptions.map((p) => ({ value: p.value, label: p.value })),
+              ]}
+              value={personFilter}
+              onChange={v => setPersonFilter(String(v))}
+              placeholder="All People"
+              searchable
+              dropdownVariant="pills-horizontal"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search strengths or names..."
+            className="w-full lg:w-72 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+          />
+          <div className="w-full lg:w-80">
+            <SearchableSelect
+              options={[
+                { value: '', label: 'All relationships' },
+                { value: 'Peer', label: 'Peer' },
+                { value: 'Supervisor', label: 'Supervisor' },
+                { value: 'Subordinate', label: 'Subordinate' },
+                { value: 'Self', label: 'Self' },
+              ]}
+              value={relationshipFilter}
+              onChange={v => setRelationshipFilter(String(v))}
+              placeholder="All relationships"
+              dropdownVariant="pills-horizontal"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Records table (full width) */}
+      <Card className="mb-6">
+        <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-4">360° Feedback Records</h3>
+        <div className="overflow-auto max-h-[560px]">
+          <table className="w-full text-left feedback-table min-w-[760px]">
+            <thead>
+              <tr className="border-b border-slate-100 dark:border-slate-800">
+                <th className="py-2 text-sm font-semibold text-slate-500 uppercase min-w-[140px]">Employee</th>
+                <th className="py-2 text-sm font-semibold text-slate-500 uppercase">Relationship</th>
+                <th className="py-2 text-sm font-semibold text-slate-500 uppercase">Knowledge</th>
+                <th className="py-2 text-sm font-semibold text-slate-500 uppercase">Quality</th>
+                <th className="py-2 text-sm font-semibold text-slate-500 uppercase">Communication</th>
+                <th className="py-2 text-sm font-semibold text-slate-500 uppercase min-w-[220px]">Strengths</th>
+                <th className="py-2 text-sm font-semibold text-slate-500 uppercase min-w-[200px]">Improvements</th>
+                <th className="py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleFeedback.map(f => (
+                <tr key={f.id} className={`border-b border-slate-50 dark:border-slate-800/50 ${personFilter && normalizeName(f.target_employee_name) === normalizeName(personFilter) ? 'bg-teal-50/30' : ''}`}>
+                  <td onClick={() => applyPersonFilterFrom(f.target_employee_name)} className="py-3 font-medium text-sm text-slate-700 dark:text-slate-200 min-w-[140px] cursor-pointer">{f.target_employee_name}</td>
+                  <td className="py-3 text-sm text-slate-500">{f.relationship}</td>
+                  <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.job_knowledge}</td>
+                  <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.work_quality}</td>
+                  <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.communication}</td>
+                  <td className="py-3 text-sm text-slate-500 max-w-[480px] truncate" title={f.strengths || undefined}>{f.strengths}</td>
+                  <td className="py-3 text-sm text-slate-500 max-w-[480px] truncate" title={f.improvements || undefined}>{f.improvements}</td>
+                  <td className="py-3">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openView(f)} title="View" className="text-slate-600 hover:text-slate-800 p-1 rounded"><Eye size={16} /></button>
+                      <button onClick={() => deleteFeedback(f.id)} title="Archive" className="text-red-500 hover:text-red-600 p-1 rounded"><Archive size={15} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {visibleFeedback.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-sm text-slate-400">
+                    {feedback360.length === 0 ? 'No feedback records yet.' : 'No feedback matches your filters.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
       {/* KPI tiles */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card>
@@ -461,96 +552,7 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
         </div>
       </Card>
 
-      {/* Filters + search */}
-      <div className="mb-4 space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-2">
-          <div className="text-xs font-bold bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full shrink-0">All Feedback ({feedback360.length})</div>
-          <div className="w-full lg:w-96">
-            <SearchableSelect
-              options={[
-                { value: '', label: 'All People' },
-                ...personOptions.map((p) => ({ value: p.value, label: p.value })),
-              ]}
-              value={personFilter}
-              onChange={v => setPersonFilter(String(v))}
-              placeholder="All People"
-              searchable
-              dropdownVariant="pills-horizontal"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col lg:flex-row lg:items-center gap-2">
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search strengths or names..."
-            className="w-full lg:w-72 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
-          />
-          <div className="w-full lg:w-80">
-            <SearchableSelect
-              options={[
-                { value: '', label: 'All relationships' },
-                { value: 'Peer', label: 'Peer' },
-                { value: 'Supervisor', label: 'Supervisor' },
-                { value: 'Subordinate', label: 'Subordinate' },
-                { value: 'Self', label: 'Self' },
-              ]}
-              value={relationshipFilter}
-              onChange={v => setRelationshipFilter(String(v))}
-              placeholder="All relationships"
-              dropdownVariant="pills-horizontal"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Records table (full width) */}
-      <Card>
-        <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-4">360° Feedback Records</h3>
-        <div className="overflow-auto max-h-[560px]">
-          <table className="w-full text-left feedback-table min-w-[760px]">
-            <thead>
-              <tr className="border-b border-slate-100 dark:border-slate-800">
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase min-w-[140px]">Employee</th>
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase">Relationship</th>
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase">Knowledge</th>
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase">Quality</th>
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase">Communication</th>
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase min-w-[220px]">Strengths</th>
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase min-w-[200px]">Improvements</th>
-                <th className="py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleFeedback.map(f => (
-                <tr key={f.id} className={`border-b border-slate-50 dark:border-slate-800/50 ${personFilter && normalizeName(f.target_employee_name) === normalizeName(personFilter) ? 'bg-teal-50/30' : ''}`}>
-                  <td onClick={() => applyPersonFilterFrom(f.target_employee_name)} className="py-3 font-medium text-sm text-slate-700 dark:text-slate-200 min-w-[140px] cursor-pointer">{f.target_employee_name}</td>
-                  <td className="py-3 text-sm text-slate-500">{f.relationship}</td>
-                  <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.job_knowledge}</td>
-                  <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.work_quality}</td>
-                  <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.communication}</td>
-                  <td className="py-3 text-sm text-slate-500 max-w-[480px] truncate" title={f.strengths || undefined}>{f.strengths}</td>
-                  <td className="py-3 text-sm text-slate-500 max-w-[480px] truncate" title={f.improvements || undefined}>{f.improvements}</td>
-                  <td className="py-3">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => openView(f)} title="View" className="text-slate-600 hover:text-slate-800 p-1 rounded"><Eye size={16} /></button>
-                      <button onClick={() => deleteFeedback(f.id)} title="Archive" className="text-red-500 hover:text-red-600 p-1 rounded"><Archive size={15} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {visibleFeedback.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-sm text-slate-400">
-                    {feedback360.length === 0 ? 'No feedback records yet.' : 'No feedback matches your filters.'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      
 
       {viewItem && (
         <Modal open={!!viewItem} title={`360 Feedback — ${viewItem.target_employee_name || ''}`} onClose={closeView}>
