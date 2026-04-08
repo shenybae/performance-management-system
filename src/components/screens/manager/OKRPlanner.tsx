@@ -62,7 +62,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [proofRealtimeSyncAt, setProofRealtimeSyncAt] = useState<number>(Date.now());
   const [form, setForm] = useState({
     employee_id: '', title: '', statement: '', metric: '', target_date: '',
-    status: '', progress: 0, scope: '' as string,
+    scope: '' as string,
     department: '', team_name: '', delegation: '', priority: '', quarter: '', frequency: '', leader_id: '',
     assignee_ids: [] as string[]
   });
@@ -71,7 +71,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
   const defaultForm = {
     employee_id: '', title: '', statement: '', metric: '', target_date: '',
-    status: '', progress: 0, scope: '' as string,
+    scope: '' as string,
     department: '', team_name: '', delegation: '', priority: '', quarter: '', frequency: '', leader_id: '',
     assignee_ids: [] as string[]
   };
@@ -232,7 +232,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     const title = form.title.trim();
     const statement = form.statement.trim();
     const metric = form.metric.trim();
-    const progress = Math.max(0, Math.min(100, Number(form.progress) || 0));
     if (!form.scope) { window.notify?.('Please select a goal level', 'error'); return; }
     if (!form.department) { window.notify?.('Please select a department', 'error'); return; }
     if (!title) { window.notify?.('Please enter a goal title', 'error'); return; }
@@ -241,7 +240,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     if (statement.length < 10) { window.notify?.('Goal statement must be at least 10 characters', 'error'); return; }
     if (statement.length > 1000) { window.notify?.('Goal statement must be 1000 characters or less', 'error'); return; }
     if (metric.length > 120) { window.notify?.('Key metric must be 120 characters or less', 'error'); return; }
-    if (!form.status) { window.notify?.('Please select an initial status', 'error'); return; }
     if (form.target_date) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -284,7 +282,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           metric,
           employee_id: form.employee_id ? parseInt(form.employee_id) : null,
           leader_id: leaderIdNum,
-          progress
         }),
       });
       if (!res.ok) throw new Error('Failed');
@@ -2051,21 +2048,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Statement / Key Result *</label>
               <textarea rows={2} value={form.statement} onChange={e => setForm({ ...form, statement: e.target.value })} className={inp} placeholder="e.g. Increase department revenue by 20% through cross-selling initiatives" minLength={10} maxLength={1000} required></textarea>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Key Metric</label>
                 <input type="text" value={form.metric} onChange={e => setForm({ ...form, metric: e.target.value })} className={inp} placeholder="e.g. Revenue, NPS Score" maxLength={120} />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Initial Status</label>
-                <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className={inp} required>
-                  <option value="">Select Status...</option>
-                  {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Progress ({form.progress}%)</label>
-                <input type="range" min={0} max={100} step={5} value={form.progress} onChange={e => setForm({ ...form, progress: Number(e.target.value) })} className="w-full mt-3 accent-teal-600" />
+              <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+                <span className="font-bold text-slate-600 dark:text-slate-300">Status and progress are automatic.</span> They will update in real time from proof submission and leader approval.
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
