@@ -46,7 +46,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [editStatus, setEditStatus] = useState('');
   const [underperfTopTab, setUnderperfTopTab] = useState<'summary'|'table'|'plans'>('summary');
   const [plansNavigator, setPlansNavigator] = useState<'employee' | 'scope'>('employee');
-  const [underperfView, setUnderperfView] = useState<'list'|'employee'|'team'|'department'>('list');
   const [underperfQuickFilter, setUnderperfQuickFilter] = useState<'all'|'overdue'|'highPriority'|'stalled'>('all');
   const [recoveryTaskCount7d, setRecoveryTaskCount7d] = useState(0);
   const [recoveryTaskOpenGoal, setRecoveryTaskOpenGoal] = useState<number | null>(null);
@@ -1025,7 +1024,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           </div>
         </div>
 
-        {/* Header with severity indicator */}
         <div className="flex items-center gap-3 mb-6">
           <motion.div
             animate={{ scale: [1, 1.08, 1] }}
@@ -1089,457 +1087,117 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         )}
 
         {underperfTopTab === 'summary' && (
-          <div className="space-y-5">
-        {underperforming.length === 0 && (
-          <Card>
-            <div className="py-16 text-center">
-              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}>
-                <Check size={48} className="mx-auto text-emerald-400 mb-4" />
-              </motion.div>
-              <p className="text-lg font-bold text-slate-700 dark:text-slate-200 mb-1">All Clear</p>
-              <p className="text-sm text-slate-400">No underperforming goals detected. All targets are on track.</p>
-            </div>
-          </Card>
-        )}
-        {underperforming.length > 0 && (
-          <div className="space-y-5">
-            {/* Summary metric cards */}
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-              {(() => {
-                const overdueCount = underperforming.filter(g => g.target_date && new Date(g.target_date) < now).length;
-                const atRiskCount = underperforming.filter(g => g.status === 'At Risk').length;
-                const stalledCount = underperforming.filter(g => (g.progress || 0) <= 10).length;
-                const avgProg = underperforming.length > 0 ? Math.round(underperforming.reduce((s, g) => s + (g.progress || 0), 0) / underperforming.length) : 0;
-                const healthScore = Math.max(0, 100 - Math.round((underperforming.length / Math.max(goals.length, 1)) * 100));
-                return [
-                  <motion.div key="overdue" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
-                    <Card className="border-l-4 border-red-500">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
-                          <Clock size={18} className="text-red-500" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold uppercase text-red-500 tracking-wider">Overdue</p>
-                          <p className="text-2xl font-black text-red-600 dark:text-red-400">{overdueCount}</p>
-                        </div>
-                      </div>
-                    </Card>
-                  </motion.div>,
-                  <motion.div key="atrisk" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-                    <Card className="border-l-4 border-orange-500">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shrink-0">
-                          <AlertTriangle size={18} className="text-orange-500" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold uppercase text-orange-500 tracking-wider">At Risk</p>
-                          <p className="text-2xl font-black text-orange-600 dark:text-orange-400">{atRiskCount}</p>
-                        </div>
-                      </div>
-                    </Card>
-                  </motion.div>,
-                  <motion.div key="stalled" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                    <Card className="border-l-4 border-amber-500">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
-                          <TrendingDown size={18} className="text-amber-500" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold uppercase text-amber-500 tracking-wider">Stalled (0-10%)</p>
-                          <p className="text-2xl font-black text-amber-600 dark:text-amber-400">{stalledCount}</p>
-                        </div>
-                      </div>
-                    </Card>
-                  </motion.div>,
-                  <motion.div key="avgprog" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-                    <Card>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Avg. Progress</p>
-                          <p className="text-2xl font-black text-slate-600 dark:text-slate-300">{avgProg}%</p>
-                        </div>
-                        <CircularProgress value={avgProg} size={52} strokeWidth={5} />
-                      </div>
-                    </Card>
-                  </motion.div>,
-                  <motion.div key="health" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                    <Card>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Health Score</p>
-                          <p className={`text-2xl font-black ${healthScore >= 70 ? 'text-emerald-600' : healthScore >= 40 ? 'text-amber-500' : 'text-red-500'}`}>{healthScore}%</p>
-                        </div>
-                        <CircularProgress value={healthScore} size={52} strokeWidth={5} />
-                      </div>
-                    </Card>
-                  </motion.div>,
-                  <motion.div key="recovery7d" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-                    <Card className="border-l-4 border-teal-500">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0">
-                          <MessageSquare size={18} className="text-teal-600" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold uppercase text-teal-600 tracking-wider">Recovery Tasks (7d)</p>
-                          <p className="text-2xl font-black text-teal-600 dark:text-teal-400">{recoveryTaskCount7d}</p>
-                        </div>
-                      </div>
-                    </Card>
-                  </motion.div>,
-                ];
-              })()}
-            </div>
-
-            {/* Priority Heatmap + Department Breakdown side by side */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <h3 className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center"><Target size={12} className="text-red-500" /></span>
-                  Priority vs Issue Heatmap
-                </h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-center border-collapse">
-                    <thead><tr>
-                      <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-slate-400"></th>
-                      <th className="py-2.5 px-3"><span className="flex items-center justify-center gap-1 text-[10px] font-bold uppercase text-red-500"><Clock size={10} />Overdue</span></th>
-                      <th className="py-2.5 px-3"><span className="flex items-center justify-center gap-1 text-[10px] font-bold uppercase text-orange-500"><AlertTriangle size={10} />At Risk</span></th>
-                      <th className="py-2.5 px-3"><span className="flex items-center justify-center gap-1 text-[10px] font-bold uppercase text-amber-500"><TrendingDown size={10} />Stalled</span></th>
-                    </tr></thead>
-                    <tbody>
-                      {['Critical', 'High', 'Medium', 'Low'].map(p => (
-                        <tr key={p} className="border-t border-slate-100 dark:border-slate-800">
-                          <td className="py-2.5 px-3 text-left"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(p)}`}>{p}</span></td>
-                          {['OVERDUE', 'AT RISK', 'STALLED'].map(issue => {
-                            const val = heatmapData[p]?.[issue] || 0;
-                            return (
-                              <td key={issue} className="py-2.5 px-3">
-                                <motion.span
-                                  initial={{ scale: 0.8, opacity: 0 }}
-                                  animate={{ scale: 1, opacity: 1 }}
-                                  className={`inline-flex w-11 h-9 rounded-xl items-center justify-center text-sm font-black ${heatColor(val)}`}
-                                >
-                                  {val}
-                                </motion.span>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-              <Card>
-                <h3 className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center"><Building2 size={12} className="text-slate-500" /></span>
-                  By Department
-                </h3>
-                <div className="space-y-2.5">
-                  {DEPARTMENTS.map(d => {
-                    const count = underperforming.filter(g => g.department === d).length;
-                    if (count === 0) return null;
-                    const totalInDept = goals.filter(g => g.department === d).length;
-                    const pct = totalInDept > 0 ? Math.round((count / totalInDept) * 100) : 0;
-                    return (
-                      <motion.div key={d} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-3">
-                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300 w-32 truncate" title={d}>{d}</span>
-                        <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-3 relative overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${pct}%` }}
-                            transition={{ duration: 0.6 }}
-                            className={`h-3 rounded-full ${pct >= 50 ? 'bg-red-500' : pct >= 25 ? 'bg-orange-500' : 'bg-amber-500'}`}
-                          />
-                        </div>
-                        <span className="text-xs font-black text-red-500 w-8 text-right">{count}</span>
-                        <span className="text-[10px] text-slate-400 w-10 text-right">{pct}%</span>
-                      </motion.div>
-                    );
-                  })}
-                  {underperforming.filter(g => !g.department).length > 0 && (
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-medium text-slate-400 w-32">No Dept</span>
-                      <span className="text-xs font-bold text-slate-500">{underperforming.filter(g => !g.department).length}</span>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            </div>
-
-          </div>
-        )}
-
-        {underperfTopTab === 'table' && (
           <div className="space-y-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <Filter size={14} className="text-slate-400" />
-              <SearchableSelect
-                value={empFilter}
-                onChange={(v) => setEmpFilter(String(v))}
-                searchable
-                dropdownVariant="pills-horizontal"
-                options={[
-                  { value: 'All', label: `All Employees (${underperforming.length})` },
-                  ...uniqueEmployees.map(n => ({
-                    value: n,
-                    label: `${n} (${underperforming.filter(g => (g.employee_name || g.delegation || '') === n).length})`,
-                  })),
-                ]}
-                placeholder="Filter by employee..."
-                className="w-80"
-              />
-              <SearchableSelect
-                value={underperfQuickFilter}
-                onChange={(v) => setUnderperfQuickFilter(v as 'all' | 'overdue' | 'highPriority' | 'stalled')}
-                searchable={false}
-                dropdownVariant="pills-horizontal"
-                options={[
-                  { value: 'all', label: `All (${baseDisplayGoals.length})` },
-                  { value: 'overdue', label: `Overdue (${baseDisplayGoals.filter(g => g.target_date && new Date(g.target_date) < now).length})` },
-                  { value: 'highPriority', label: `High Priority (${baseDisplayGoals.filter(g => g.priority === 'Critical' || g.priority === 'High').length})` },
-                  { value: 'stalled', label: `Stalled (${baseDisplayGoals.filter(g => (g.progress || 0) <= 10 && g.status === 'In Progress').length})` },
-                ]}
-                placeholder="Filter by status..."
-                className="w-72"
-              />
-            </div>
-
             <Card>
-              <div className="mb-3 flex items-center justify-between rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 px-3 py-2">
-                <div className="flex items-center gap-2 text-[11px] font-bold text-blue-700 dark:text-blue-300">
-                  <motion.span animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }} transition={{ repeat: Infinity, duration: 1.6 }} className="inline-block h-2 w-2 rounded-full bg-blue-500" />
-                  Live Goal Monitor
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="rounded-xl bg-red-50 dark:bg-red-900/20 p-3">
+                  <p className="text-[10px] font-bold uppercase text-red-500">Overdue</p>
+                  <p className="text-2xl font-black text-red-600 dark:text-red-400">{underperforming.filter(g => g.target_date && new Date(g.target_date) < now).length}</p>
                 </div>
-                <div className="text-[10px] text-blue-600 dark:text-blue-300">
-                  Sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - lastRealtimeSyncAt) / 1000))}s ago
+                <div className="rounded-xl bg-orange-50 dark:bg-orange-900/20 p-3">
+                  <p className="text-[10px] font-bold uppercase text-orange-500">At Risk</p>
+                  <p className="text-2xl font-black text-orange-600 dark:text-orange-400">{underperforming.filter(g => g.status === 'At Risk').length}</p>
                 </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full table-fixed text-left border-collapse">
-                  <thead>
-                    <tr className="bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/50">
-                      <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[220px]">Goal</th>
-                      <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[92px]">Level</th>
-                      <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[126px]">Department</th>
-                      <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[160px]">Owner</th>
-                      <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[94px]">Priority</th>
-                      <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[172px]">Progress / Status</th>
-                      <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[112px]">Due</th>
-                      <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[88px]">Overdue</th>
-                      <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[128px]">Issue</th>
-                      <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center w-[190px]">Quick Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayGoals.map(g => {
-                      const isOverdue = g.target_date && new Date(g.target_date) < now;
-                      const stalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
-                      const days = isOverdue ? daysOverdue(g.target_date) : 0;
-                      const scopeLabel = g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual';
-                      return (
-                        <tr key={g.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
-                          <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 align-top min-w-0"><span className="block min-w-0 truncate" title={g.title || g.statement}>{g.title || g.statement}</span></td>
-                          <td className="py-2.5 px-3 align-top"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeLabel}</span></td>
-                          <td className="py-2.5 px-3 text-xs text-slate-500 align-top truncate">{g.department || '—'}</td>
-                          <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium align-top"><div className="min-w-0 truncate" title={g.employee_name || g.delegation || '—'}>{g.employee_name || g.delegation || '—'}</div></td>
-                          <td className="py-2.5 px-3 align-top"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority)}`}>{g.priority || 'Medium'}</span></td>
-                          <td className="py-2.5 px-3 align-top"><div className="space-y-1.5 min-w-[160px]"><div className="flex items-center gap-2"><div className="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden relative"><motion.div initial={{ width: 0 }} animate={{ width: `${g.progress || 0}%` }} transition={{ duration: 0.45 }} className="bg-red-500 h-2.5 rounded-full" /></div><span className="text-[10px] font-black text-red-500 w-8">{g.progress || 0}%</span><motion.span animate={{ opacity: [1, 0.45, 1] }} transition={{ repeat: Infinity, duration: 1.4 }} className="text-[9px] font-bold text-blue-600 dark:text-blue-300">LIVE</motion.span></div><div className="flex items-center gap-1.5"><span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${statusColor(g.status || 'Not Started')}`}>{g.status || 'Not Started'}</span></div></div></td>
-                          <td className={`py-2.5 px-3 text-xs font-medium align-top ${isOverdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '—'}</td>
-                          <td className="py-2.5 px-3 align-top">{isOverdue ? <span className="flex items-center gap-1 text-[10px] font-black text-red-600"><Clock size={11} /> +{days}d</span> : <span className="text-[10px] text-slate-400">—</span>}</td>
-                          <td className="py-2.5 px-3 align-top"><div className="flex gap-1 flex-wrap">{isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}{g.status === 'At Risk' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600">AT RISK</span>}{stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}</div></td>
-                          <td className="py-2.5 px-3 text-center align-top"><div className="flex flex-col items-center gap-1.5"><span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${statusColor(g.status || 'Not Started')}`}><span className="w-2 h-2 rounded-full bg-current opacity-80" />{g.status || 'Not Started'}</span><div className="flex flex-wrap items-center justify-center gap-1.5"><button onClick={() => setViewGoalId(g.id)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">View</button><button onClick={() => openProofReview(g.id)} className={`h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}>{proofReviewOpenGoal === g.id ? 'Hide Proofs' : 'View Proofs'}</button></div></div></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 p-3">
+                  <p className="text-[10px] font-bold uppercase text-amber-500">Stalled</p>
+                  <p className="text-2xl font-black text-amber-600 dark:text-amber-400">{underperforming.filter(g => (g.progress || 0) <= 10).length}</p>
+                </div>
+                <div className="rounded-xl bg-teal-50 dark:bg-teal-900/20 p-3">
+                  <p className="text-[10px] font-bold uppercase text-teal-600">Recovery (7d)</p>
+                  <p className="text-2xl font-black text-teal-600 dark:text-teal-400">{recoveryTaskCount7d}</p>
+                </div>
               </div>
             </Card>
           </div>
         )}
 
-            {/* Aggregated views */}
-                {underperfView === 'employee' && (
-                  <Card>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Employee</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Goals</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Underperforming</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Health</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Avg Progress</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Overdue</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Top Issue</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {underperfAggregations.employees.map((e: any, idx: number) => {
-                            const top = Object.entries(e.reasons || {}).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '';
-                            const healthPct = e.total > 0 ? Math.round(((e.total - e.under) / e.total) * 100) : 100;
-                            const reasonColor: Record<string, string> = { 'AT RISK': 'bg-orange-100 dark:bg-orange-900/30 text-orange-600', 'OVERDUE': 'bg-red-100 dark:bg-red-900/30 text-red-600', 'STALLED': 'bg-amber-100 dark:bg-amber-900/30 text-amber-600', 'HIGH_PRIORITY_DELAY': 'bg-rose-100 dark:bg-rose-900/30 text-rose-600' };
-                            return (
-                              <motion.tr key={e.name} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.03 }} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors">
-                                <td className="py-3 px-3">
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-7 h-7 rounded-full bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center justify-center text-[10px] font-black shrink-0">{e.name.charAt(0).toUpperCase()}</span>
-                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate max-w-[160px]" title={e.name}>{e.name}</span>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3 text-sm font-bold text-slate-600 dark:text-slate-300">{e.total}</td>
-                                <td className="py-3 px-3"><span className="text-sm font-black text-red-500">{e.under}</span><span className="text-[10px] text-slate-400 ml-1">({e.pctUnder}%)</span></td>
-                                <td className="py-3 px-3">
-                                  <div className="flex items-center gap-2 w-24">
-                                    <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                                      <motion.div initial={{ width: 0 }} animate={{ width: `${healthPct}%` }} transition={{ duration: 0.5 }} className={`h-2 rounded-full ${healthPct >= 70 ? 'bg-emerald-500' : healthPct >= 40 ? 'bg-amber-500' : 'bg-red-500'}`} />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-slate-500">{healthPct}%</span>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3">
-                                  <div className="flex items-center gap-2 w-24">
-                                    <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                                      <motion.div initial={{ width: 0 }} animate={{ width: `${e.avgProgress}%` }} transition={{ duration: 0.5 }} className={`h-2 rounded-full ${progressBarColor(e.avgProgress)}`} />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-slate-500">{e.avgProgress}%</span>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3">{e.avgDaysOverdue > 0 ? <span className="flex items-center gap-1 text-xs font-bold text-red-500"><Clock size={11} />{e.avgDaysOverdue}d</span> : <span className="text-xs text-slate-400">—</span>}</td>
-                                <td className="py-3 px-3">{top ? <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${reasonColor[top] || 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>{top.replace(/_/g, ' ')}</span> : <span className="text-xs text-slate-400">—</span>}</td>
-                                <td className="py-3 px-3 text-right">
-                                  <button onClick={() => openUnderperformingPlans('employee')} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button>
-                                </td>
-                              </motion.tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
-                )}
+        {underperfTopTab === 'table' && (
+          <div className="space-y-4">
+            <Card>
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider text-red-500">Monitor Table</p>
+                  <p className="text-xs text-slate-500">{displayGoals.length} goal{displayGoals.length !== 1 ? 's' : ''} visible after filters</p>
+                </div>
+                <div className="text-[10px] text-slate-400">Live sync every 5s • last sync {Math.max(0, Math.floor((Date.now() - lastRealtimeSyncAt) / 1000))}s ago</div>
+              </div>
 
-                {underperfView === 'team' && (
-                  <Card>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Team</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Goals</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Underperforming</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Health</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Avg Progress</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Overdue</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Top Issue</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {underperfAggregations.teams.map((t: any, idx: number) => {
-                            const top = Object.entries(t.reasons || {}).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '';
-                            const healthPct = t.total > 0 ? Math.round(((t.total - t.under) / t.total) * 100) : 100;
-                            const reasonColor: Record<string, string> = { 'AT RISK': 'bg-orange-100 dark:bg-orange-900/30 text-orange-600', 'OVERDUE': 'bg-red-100 dark:bg-red-900/30 text-red-600', 'STALLED': 'bg-amber-100 dark:bg-amber-900/30 text-amber-600', 'HIGH_PRIORITY_DELAY': 'bg-rose-100 dark:bg-rose-900/30 text-rose-600' };
-                            return (
-                              <motion.tr key={t.name} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.03 }} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors">
-                                <td className="py-3 px-3">
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><Users size={13} /></span>
-                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate max-w-[160px]" title={t.name}>{t.name}</span>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3 text-sm font-bold text-slate-600 dark:text-slate-300">{t.total}</td>
-                                <td className="py-3 px-3"><span className="text-sm font-black text-red-500">{t.under}</span><span className="text-[10px] text-slate-400 ml-1">({t.pctUnder}%)</span></td>
-                                <td className="py-3 px-3">
-                                  <div className="flex items-center gap-2 w-24">
-                                    <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                                      <motion.div initial={{ width: 0 }} animate={{ width: `${healthPct}%` }} transition={{ duration: 0.5 }} className={`h-2 rounded-full ${healthPct >= 70 ? 'bg-emerald-500' : healthPct >= 40 ? 'bg-amber-500' : 'bg-red-500'}`} />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-slate-500">{healthPct}%</span>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3">
-                                  <div className="flex items-center gap-2 w-24">
-                                    <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                                      <motion.div initial={{ width: 0 }} animate={{ width: `${t.avgProgress}%` }} transition={{ duration: 0.5 }} className={`h-2 rounded-full ${progressBarColor(t.avgProgress)}`} />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-slate-500">{t.avgProgress}%</span>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3">{t.avgDaysOverdue > 0 ? <span className="flex items-center gap-1 text-xs font-bold text-red-500"><Clock size={11} />{t.avgDaysOverdue}d</span> : <span className="text-xs text-slate-400">—</span>}</td>
-                                <td className="py-3 px-3">{top ? <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${reasonColor[top] || 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>{top.replace(/_/g, ' ')}</span> : <span className="text-xs text-slate-400">—</span>}</td>
-                                <td className="py-3 px-3 text-right">
-                                  <button onClick={() => openUnderperformingPlans('scope')} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button>
-                                </td>
-                              </motion.tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
-                )}
+              <div className="flex items-center gap-3 flex-wrap">
+                <Filter size={14} className="text-slate-400" />
+                <select value={empFilter} onChange={(e) => setEmpFilter(e.target.value)} className="w-72 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-green/40">
+                  <option value="All">All Employees ({underperforming.length})</option>
+                  {uniqueEmployees.map((n) => (
+                    <option key={n} value={n}>{n} ({underperforming.filter(g => (g.employee_name || g.delegation || '') === n).length})</option>
+                  ))}
+                </select>
+                <select value={underperfQuickFilter} onChange={(e) => setUnderperfQuickFilter(e.target.value as 'all' | 'overdue' | 'highPriority' | 'stalled')} className="w-64 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-green/40">
+                  <option value="all">All ({baseDisplayGoals.length})</option>
+                  <option value="overdue">Overdue ({baseDisplayGoals.filter(g => g.target_date && new Date(g.target_date) < now).length})</option>
+                  <option value="highPriority">High Priority ({baseDisplayGoals.filter(g => g.priority === 'Critical' || g.priority === 'High').length})</option>
+                  <option value="stalled">Stalled ({baseDisplayGoals.filter(g => (g.progress || 0) <= 10 && g.status === 'In Progress').length})</option>
+                </select>
+              </div>
+            </Card>
 
-                {underperfView === 'department' && (
-                  <Card>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Department</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Goals</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Underperforming</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Health</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Avg Progress</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Overdue</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider">Top Issue</th>
-                            <th className="py-3 px-3 text-[10px] font-bold uppercase text-slate-500 tracking-wider text-right">Actions</th>
+            {displayGoals.length === 0 ? (
+              <Card>
+                <div className="py-14 text-center">
+                  <Check size={40} className="mx-auto text-emerald-500 mb-3" />
+                  <p className="text-base font-black text-slate-700 dark:text-slate-200">No rows match the current filters</p>
+                  <p className="text-sm text-slate-400 mt-1">Clear the employee or status filter to show the live monitor table again.</p>
+                </div>
+              </Card>
+            ) : (
+              <Card>
+                <div className="overflow-x-auto">
+                  <table className="w-full table-fixed text-left border-collapse">
+                    <thead>
+                      <tr className="bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/50">
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[220px]">Goal</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Owner</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Department</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Progress</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Issue</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center w-[190px]">Quick Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayGoals.map(g => {
+                        const isOverdue = g.target_date && new Date(g.target_date) < now;
+                        const stalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
+                        return (
+                          <tr key={g.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
+                            <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 align-top min-w-0"><span className="block min-w-0 truncate" title={g.title || g.statement}>{g.title || g.statement}</span></td>
+                            <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium align-top truncate">{g.employee_name || g.delegation || '—'}</td>
+                            <td className="py-2.5 px-3 text-xs text-slate-500 align-top truncate">{g.department || '—'}</td>
+                            <td className="py-2.5 px-3 align-top">
+                              <div className="flex items-center gap-2">
+                                <div className="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                                  <motion.div initial={{ width: 0 }} animate={{ width: `${g.progress || 0}%` }} transition={{ duration: 0.45 }} className="bg-red-500 h-2 rounded-full" />
+                                </div>
+                                <span className="text-[10px] font-black text-red-500">{g.progress || 0}%</span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 align-top">
+                              <div className="flex gap-1 flex-wrap">
+                                {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
+                                {g.status === 'At Risk' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600">AT RISK</span>}
+                                {stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 text-center align-top">
+                              <div className="flex flex-wrap items-center justify-center gap-1.5">
+                                <button onClick={() => setViewGoalId(g.id)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">View</button>
+                                <button onClick={() => openProofReview(g.id)} className={`h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}>{proofReviewOpenGoal === g.id ? 'Hide Proofs' : 'View Proofs'}</button>
+                              </div>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {underperfAggregations.departments.map((d: any, idx: number) => {
-                            const top = Object.entries(d.reasons || {}).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '';
-                            const healthPct = d.total > 0 ? Math.round(((d.total - d.under) / d.total) * 100) : 100;
-                            const reasonColor: Record<string, string> = { 'AT RISK': 'bg-orange-100 dark:bg-orange-900/30 text-orange-600', 'OVERDUE': 'bg-red-100 dark:bg-red-900/30 text-red-600', 'STALLED': 'bg-amber-100 dark:bg-amber-900/30 text-amber-600', 'HIGH_PRIORITY_DELAY': 'bg-rose-100 dark:bg-rose-900/30 text-rose-600' };
-                            return (
-                              <motion.tr key={d.name} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.03 }} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors">
-                                <td className="py-3 px-3">
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-7 h-7 rounded-full bg-teal-100 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0"><Building2 size={13} /></span>
-                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate max-w-[160px]" title={d.name}>{d.name}</span>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3 text-sm font-bold text-slate-600 dark:text-slate-300">{d.total}</td>
-                                <td className="py-3 px-3"><span className="text-sm font-black text-red-500">{d.under}</span><span className="text-[10px] text-slate-400 ml-1">({d.pctUnder}%)</span></td>
-                                <td className="py-3 px-3">
-                                  <div className="flex items-center gap-2 w-24">
-                                    <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                                      <motion.div initial={{ width: 0 }} animate={{ width: `${healthPct}%` }} transition={{ duration: 0.5 }} className={`h-2 rounded-full ${healthPct >= 70 ? 'bg-emerald-500' : healthPct >= 40 ? 'bg-amber-500' : 'bg-red-500'}`} />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-slate-500">{healthPct}%</span>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3">
-                                  <div className="flex items-center gap-2 w-24">
-                                    <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                                      <motion.div initial={{ width: 0 }} animate={{ width: `${d.avgProgress}%` }} transition={{ duration: 0.5 }} className={`h-2 rounded-full ${progressBarColor(d.avgProgress)}`} />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-slate-500">{d.avgProgress}%</span>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3">{d.avgDaysOverdue > 0 ? <span className="flex items-center gap-1 text-xs font-bold text-red-500"><Clock size={11} />{d.avgDaysOverdue}d</span> : <span className="text-xs text-slate-400">—</span>}</td>
-                                <td className="py-3 px-3">{top ? <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${reasonColor[top] || 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>{top.replace(/_/g, ' ')}</span> : <span className="text-xs text-slate-400">—</span>}</td>
-                                <td className="py-3 px-3 text-right">
-                                  <button onClick={() => openUnderperformingPlans('scope')} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button>
-                                </td>
-                              </motion.tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
             )}
           </div>
         )}
