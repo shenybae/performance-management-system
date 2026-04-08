@@ -3289,6 +3289,15 @@ async function startServer() {
         const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE (g.employee_id IN (${placeholders}) OR g.employee_id IS NULL) ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`, managedIds);
         return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
       }
+      if (role === 'Manager') {
+        if (queryEmployeeId) {
+          const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ? ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`, [queryEmployeeId]);
+          return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
+        }
+        const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id ${includeArchived ? '' : 'WHERE g.deleted_at IS NULL'}`);
+        return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
+      }
+
 
       if (role === 'Employee') {
         const employeeId = normalizeEmployeeId(actor.employee_id);
