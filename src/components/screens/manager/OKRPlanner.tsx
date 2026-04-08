@@ -172,6 +172,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     return String(goal?.employee_name || goal?.delegation || goal?.owner_name || '').trim() || 'Unassigned';
   };
 
+  const normalizeGoalScope = (goal: any): 'Department' | 'Team' | 'Individual' => {
+    const raw = String(goal?.scope || '').trim().toLowerCase();
+    if (raw === 'department' || raw === 'dept-wide' || raw === 'deptwide' || raw === 'dept') return 'Department';
+    if (raw === 'team') return 'Team';
+    return 'Individual';
+  };
+
   useEffect(() => {
     if (!isDepartmentLocked) return;
     setForm(prev => (prev.department === managerDept ? prev : { ...prev, department: managerDept }));
@@ -1035,7 +1042,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     ];
 
     const displayGoals = baseDisplayGoals.filter(g => {
-      const scopeLabel = g.scope === 'Department' ? 'Department' : g.scope === 'Team' ? 'Team' : 'Individual';
+      const scopeLabel = normalizeGoalScope(g);
       const isOverdue = !!(g.target_date && new Date(g.target_date) < now);
       const isHighPriority = g.priority === 'Critical' || g.priority === 'High';
       const isStalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
@@ -1567,7 +1574,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             ) : (
               <Card>
                 <div className="overflow-x-auto">
-                  <table className="w-full table-fixed text-left border-collapse">
+                  <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/50">
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[220px]">Goal</th>
@@ -1587,9 +1594,10 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       {displayGoals.map(g => {
                         const isOverdue = g.target_date && new Date(g.target_date) < now;
                         const stalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
-                        const scopeLabel = g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual';
+                        const normalizedScope = normalizeGoalScope(g);
+                        const scopeLabel = normalizedScope === 'Department' ? 'Dept-wide' : normalizedScope === 'Team' ? 'Team' : 'Individual';
                         const assignees = (g.assignees || []) as any[];
-                        const canScopePlan = g.scope === 'Department' || g.scope === 'Team';
+                        const canScopePlan = normalizedScope === 'Department' || normalizedScope === 'Team';
                         const goalDept = getGoalDepartment(g);
                         const goalTeam = getGoalTeam(g);
                         const goalOwner = getGoalOwner(g);
@@ -1628,7 +1636,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 </div>
                               </td>
                               <td className="py-2.5 px-3 text-center align-top">
-                                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                                <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-[360px] mx-auto">
                                   <button title="View Goal" onClick={() => setViewGoalId(g.id)} className="h-8 px-2 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors inline-flex items-center gap-1"><Eye size={12} /> View</button>
                                   <button title="View Proofs" onClick={() => void triggerQuickAction('proofs', g, assignees)} className={`h-8 px-2 rounded-lg text-[10px] font-bold border transition-colors inline-flex items-center gap-1 ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}><Check size={12} /> {proofReviewOpenGoal === g.id ? 'Hide' : 'Proofs'}</button>
                                   <button title="Generate PIP" onClick={() => void triggerQuickAction('pip', g, assignees)} className="h-8 px-2 rounded-lg text-[10px] font-bold border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors inline-flex items-center gap-1"><FileText size={12} /> PIP</button>

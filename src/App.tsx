@@ -627,7 +627,8 @@ export default function App() {
   const activeTitle = screenTitleMap[activeScreen] || 'Dashboard';
   const userDisplay = user.employee_name || user.full_name || user.username || user.email || 'User';
   const roleDisplay = (role?: string | null) => role === 'HR' ? 'HR Admin' : (role || '');
-  const isSidebarExpanded = !isDesktopViewport || isSidebarHovered;
+  // Keep desktop sidebar width stable to prevent hover-resize jitter.
+  const isSidebarExpanded = true;
 
   return (
     <NotificationProvider>
@@ -652,9 +653,9 @@ export default function App() {
         animate={{
           x: isDesktopViewport || isSidebarOpen ? 0 : -320,
           opacity: isDesktopViewport || isSidebarOpen ? 1 : 0.96,
-          width: isDesktopViewport ? (isSidebarExpanded ? 264 : 76) : 288,
+          width: isDesktopViewport ? 264 : 288,
         }}
-        transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+        transition={{ duration: 0.24, ease: 'easeOut' }}
         onMouseEnter={() => isDesktopViewport && setIsSidebarHovered(true)}
         onMouseLeave={() => isDesktopViewport && setIsSidebarHovered(false)}
         className="fixed inset-y-0 left-0 z-50 system-bg border-r border-slate-200 dark:border-slate-800 flex flex-col lg:static lg:z-auto overflow-hidden"
