@@ -46,6 +46,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [editStatus, setEditStatus] = useState('');
   const [underperfTopTab, setUnderperfTopTab] = useState<'summary'|'table'|'plans'>('summary');
   const [plansNavigator, setPlansNavigator] = useState<'employee' | 'scope'>('employee');
+  const [underperfScopeFilter, setUnderperfScopeFilter] = useState<'all'|'Department'|'Team'|'Individual'>('all');
   const [underperfQuickFilter, setUnderperfQuickFilter] = useState<'all'|'overdue'|'highPriority'|'stalled'>('all');
   const [recoveryTaskCount7d, setRecoveryTaskCount7d] = useState(0);
   const [recoveryTaskOpenGoal, setRecoveryTaskOpenGoal] = useState<number | null>(null);
@@ -987,9 +988,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       : underperforming.filter(g => (g.employee_name || g.delegation || '') === empFilter);
 
     const displayGoals = baseDisplayGoals.filter(g => {
+      const scopeLabel = g.scope === 'Department' ? 'Department' : g.scope === 'Team' ? 'Team' : 'Individual';
       const isOverdue = !!(g.target_date && new Date(g.target_date) < now);
       const isHighPriority = g.priority === 'Critical' || g.priority === 'High';
       const isStalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
+      if (underperfScopeFilter !== 'all' && scopeLabel !== underperfScopeFilter) return false;
       if (underperfQuickFilter === 'overdue') return isOverdue;
       if (underperfQuickFilter === 'highPriority') return isHighPriority;
       if (underperfQuickFilter === 'stalled') return isStalled;
@@ -1007,6 +1010,63 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       if ((g.progress || 0) <= 10 && g.status === 'In Progress') heatmapData[p].STALLED++;
     });
     const heatColor = (v: number) => v === 0 ? 'bg-slate-50 dark:bg-slate-800/50 text-slate-300 dark:text-slate-600' : v <= 2 ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
+    const goalModals = (
+      <>
+        <Modal
+          open={!!viewGoalId}
+          title="Goal Details"
+          onClose={() => setViewGoalId(null)}
+          maxWidthClassName="max-w-5xl"
+          bodyClassName="space-y-4"
+        >
+          {viewGoalId && (() => {
+            const g = goals.find((goal: any) => Number(goal?.id) === Number(viewGoalId));
+            if (!g) return <p className="text-sm text-slate-500">Goal not found.</p>;
+            const overdue = g.target_date && new Date(g.target_date) < new Date() && g.status !== 'Completed' && g.status !== 'Cancelled';
+            return (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Goal Level</span><span className="text-slate-700 dark:text-slate-200">{g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Department</span><span className="text-slate-700 dark:text-slate-200">{g.department || '\u2014'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team</span><span className="text-slate-700 dark:text-slate-200">{g.team_name || '\u2014'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Employee</span><div className="min-w-0"><span className="text-slate-700 dark:text-slate-200 truncate max-w-[220px]" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Quarter</span><span className="text-slate-700 dark:text-slate-200">{g.quarter || '\u2014'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Frequency</span><span className="text-slate-700 dark:text-slate-200">{g.frequency || 'One-time'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team Leader</span><span className="text-slate-700 dark:text-slate-200">{g.leader_name || '\u2014'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Target Date</span><span className={`${overdue ? 'text-red-600 font-bold' : 'text-slate-700 dark:text-slate-200'}`}>{g.target_date || '\u2014'}</span></div>
+                </div>
+
+                <div className="flex items-center justify-end">
+                  <button
+                    onClick={() => void openProofReview(Number(g.id))}
+                    className="h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                  >
+                    Open Proof Review
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal>
+
+        <Modal
+          open={!!proofReviewOpenGoal}
+          title={`Task Proof Review${proofReviewGoal?.title ? ` - ${proofReviewGoal.title}` : ''}`}
+          onClose={() => setProofReviewOpenGoal(null)}
+          maxWidthClassName="max-w-5xl"
+          bodyClassName="space-y-3"
+        >
+          {proofReviewOpenGoal && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 px-3 py-2">
+                <p className="text-xs font-bold text-blue-700 dark:text-blue-300">Live sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - proofRealtimeSyncAt) / 1000))}s ago</p>
+                <button onClick={() => void refreshProofReviewTasks(proofReviewOpenGoal)} className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30">Refresh proofs</button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      </>
+    );
 
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -1130,6 +1190,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     <option key={n} value={n}>{n} ({underperforming.filter(g => (g.employee_name || g.delegation || '') === n).length})</option>
                   ))}
                 </select>
+                <select value={underperfScopeFilter} onChange={(e) => setUnderperfScopeFilter(e.target.value as 'all'|'Department'|'Team'|'Individual')} className="w-56 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-green/40">
+                  <option value="all">All Scopes</option>
+                  <option value="Department">Dept-wide</option>
+                  <option value="Team">Team</option>
+                  <option value="Individual">Individual</option>
+                </select>
                 <select value={underperfQuickFilter} onChange={(e) => setUnderperfQuickFilter(e.target.value as 'all' | 'overdue' | 'highPriority' | 'stalled')} className="w-64 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-green/40">
                   <option value="all">All ({baseDisplayGoals.length})</option>
                   <option value="overdue">Overdue ({baseDisplayGoals.filter(g => g.target_date && new Date(g.target_date) < now).length})</option>
@@ -1154,10 +1220,15 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     <thead>
                       <tr className="bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/50">
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[220px]">Goal</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Owner</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[92px]">Level</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Department</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Progress</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Issue</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Department</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[160px]">Owner</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[94px]">Priority</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[172px]">Progress / Status</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[112px]">Due</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[88px]">Overdue</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[128px]">Issue</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center w-[190px]">Quick Action</th>
                       </tr>
                     </thead>
@@ -1165,19 +1236,25 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       {displayGoals.map(g => {
                         const isOverdue = g.target_date && new Date(g.target_date) < now;
                         const stalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
+                        const scopeLabel = g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual';
                         return (
                           <tr key={g.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
                             <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 align-top min-w-0"><span className="block min-w-0 truncate" title={g.title || g.statement}>{g.title || g.statement}</span></td>
-                            <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium align-top truncate">{g.employee_name || g.delegation || '—'}</td>
+                            <td className="py-2.5 px-3 align-top"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeLabel}</span></td>
                             <td className="py-2.5 px-3 text-xs text-slate-500 align-top truncate">{g.department || '—'}</td>
+                            <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium align-top truncate">{g.employee_name || g.delegation || '—'}</td>
+                            <td className="py-2.5 px-3 align-top"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority || 'Medium')}`}>{g.priority || 'Medium'}</span></td>
                             <td className="py-2.5 px-3 align-top">
                               <div className="flex items-center gap-2">
                                 <div className="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                                   <motion.div initial={{ width: 0 }} animate={{ width: `${g.progress || 0}%` }} transition={{ duration: 0.45 }} className="bg-red-500 h-2 rounded-full" />
                                 </div>
-                                <span className="text-[10px] font-black text-red-500">{g.progress || 0}%</span>
+                                <span className="text-[10px] font-black text-red-500 w-8">{g.progress || 0}%</span>
+                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${statusColor(g.status || 'Not Started')}`}>{g.status || 'Not Started'}</span>
                               </div>
                             </td>
+                            <td className={`py-2.5 px-3 text-xs font-medium align-top ${isOverdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '—'}</td>
+                            <td className="py-2.5 px-3 align-top">{isOverdue ? <span className="flex items-center gap-1 text-[10px] font-black text-red-600"><Clock size={11} /> +{daysOverdue(g.target_date)}d</span> : <span className="text-[10px] text-slate-400">—</span>}</td>
                             <td className="py-2.5 px-3 align-top">
                               <div className="flex gap-1 flex-wrap">
                                 {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
@@ -1189,6 +1266,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               <div className="flex flex-wrap items-center justify-center gap-1.5">
                                 <button onClick={() => setViewGoalId(g.id)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">View</button>
                                 <button onClick={() => openProofReview(g.id)} className={`h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}>{proofReviewOpenGoal === g.id ? 'Hide Proofs' : 'View Proofs'}</button>
+                                <button
+                                  onClick={() => { setUnderperfTopTab('plans'); setPlansNavigator(g.scope === 'Individual' ? 'employee' : 'scope'); }}
+                                  className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors"
+                                >
+                                  Open Plans
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -1199,6 +1282,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 </div>
               </Card>
             )}
+            {goalModals}
           </div>
         )}
       </motion.div>
