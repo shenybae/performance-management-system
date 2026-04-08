@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Download, ChevronDown, ChevronUp, Search, AlertTriangle, Target, Users, User, Building2, TrendingDown, TrendingUp, FileText, Check, ArrowLeft, Clock, Filter, MessageSquare, DollarSign, Eye, Archive } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Plus, X, Download, Search, AlertTriangle, Target, Users, User, Building2, TrendingDown, TrendingUp, FileText, Check, ArrowLeft, Clock, Filter, MessageSquare, DollarSign, Eye, Archive } from 'lucide-react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { Modal } from '../../common/Modal';
@@ -37,7 +37,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [filterDept, setFilterDept] = useState<string>('All');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedGoal, setExpandedGoal] = useState<number | null>(null);
+  const [viewGoalId, setViewGoalId] = useState<number | null>(null);
   const [showUnderperforming, setShowUnderperforming] = useState(false);
   // States used by the Underperforming view. Move to top-level to comply with Rules of Hooks.
   const [empFilter, setEmpFilter] = useState('All');
@@ -1964,7 +1964,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             >
               <Card
                 className={`cursor-pointer border-2 transition-all duration-300 ${isActive ? style.border + ' shadow-lg' : 'border-transparent hover:border-slate-200 dark:hover:border-slate-700'}`}
-                onClick={() => { setActiveTab(scope as any); setExpandedGoal(null); }}
+                onClick={() => { setActiveTab(scope as any); setViewGoalId(null); }}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-4">
@@ -2246,7 +2246,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           ]).map(({ scope: s, icon: Icon, label, desc }) => {
             const count = goals.filter(g => (g.scope || 'Individual') === s).length;
             return (
-              <button key={s} onClick={() => { setActiveTab(s); setExpandedGoal(null); }} title={desc}
+              <button key={s} onClick={() => { setActiveTab(s); setViewGoalId(null); }} title={desc}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === s ? 'bg-white dark:bg-slate-900 text-teal-deep dark:text-teal-green shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
                 <Icon size={14} /> {label} <span className="text-[10px] font-black ml-0.5 opacity-60">{count}</span>
               </button>
@@ -2314,19 +2314,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             </tr></thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={activeTab === 'Department' ? 8 : 9} className="py-12 text-center text-sm text-slate-400 italic">
+                <tr><td colSpan={activeTab === 'Department' ? 7 : 8} className="py-12 text-center text-sm text-slate-400 italic">
                   No {activeTab.toLowerCase()} goals found. Click &quot;Add Goal&quot; to create one.
                 </td></tr>
               )}
               {filtered.map((g: any) => {
-                const isExpanded = expandedGoal === g.id;
                 const isArchived = !!g.deleted_at;
                 const overdue = g.target_date && new Date(g.target_date) < new Date() && g.status !== 'Completed' && g.status !== 'Cancelled';
                 return (
                   <React.Fragment key={g.id}>
-                    <tr className={`border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors cursor-pointer ${overdue ? 'bg-red-50/30 dark:bg-red-900/5' : ''} ${isArchived ? 'opacity-60' : ''}`}
-                      onClick={() => setExpandedGoal(isExpanded ? null : g.id)}>
-                      <td className="py-3 px-4 text-slate-400">{isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</td>
+                    <tr className={`border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors ${overdue ? 'bg-red-50/30 dark:bg-red-900/5' : ''} ${isArchived ? 'opacity-60' : ''}`}>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-slate-700 dark:text-slate-100 text-sm">{g.title || g.statement}</span>
@@ -2388,7 +2385,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => setExpandedGoal(isExpanded ? null : g.id)} className="text-slate-500 hover:text-blue-700 p-1" title="View"><Eye size={14} /></button>
+                          <button onClick={() => setViewGoalId(g.id)} className="text-slate-500 hover:text-blue-700 p-1" title="View"><Eye size={14} /></button>
                           <button
                             onClick={() => {
                               void openProofReview(g.id);
@@ -2403,61 +2400,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         </div>
                       </td>
                     </tr>
-                    {/* Expanded Detail */}
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <tr><td colSpan={activeTab === 'Department' ? 8 : 9} className="p-0">
-                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                            <div className="bg-slate-50 dark:bg-slate-900/50 p-5 border-b border-slate-200 dark:border-slate-700 space-y-4">
-                              {/* Info Grid */}
-                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
-                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Goal Level</span><span className="text-slate-700 dark:text-slate-200">{g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual'}</span></div>
-                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Department</span><span className="text-slate-700 dark:text-slate-200">{g.department || '\u2014'}</span></div>
-                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team</span><span className="text-slate-700 dark:text-slate-200">{g.team_name || '\u2014'}</span></div>
-                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Employee</span>
-                                  <div className="min-w-0"><span className="text-slate-700 dark:text-slate-200 truncate max-w-[220px]" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div>
-                                </div>
-                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Quarter</span><span className="text-slate-700 dark:text-slate-200">{g.quarter || '\u2014'}</span></div>
-                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Frequency</span><span className="text-slate-700 dark:text-slate-200">{g.frequency || 'One-time'}</span></div>
-                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team Leader</span><span className="text-slate-700 dark:text-slate-200">{g.leader_name || '\u2014'}</span></div>
-                                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Target Date</span><span className={`${overdue ? 'text-red-600 font-bold' : 'text-slate-700 dark:text-slate-200'}`}>{g.target_date || '\u2014'}</span></div>
-                              </div>
-                              {/* Assignees */}
-                              {g.assignees && g.assignees.length > 0 && (
-                                <div>
-                                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-2">Assignees ({g.assignees.length})</span>
-                                  <div className="flex flex-wrap gap-2">
-                                    {(g.assignees as any[]).map((a: any) => (
-                                      <span key={a.employee_id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 text-xs font-bold border border-teal-200 dark:border-teal-800">
-                                        <span className="w-4 h-4 rounded-full bg-teal-200 dark:bg-teal-800 text-teal-600 dark:text-teal-300 flex items-center justify-center text-[9px] font-black">{(a.name || '?')[0]}</span>
-                                        {a.name}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              {/* Goal Statement */}
-                              <div>
-                                <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Goal Statement</span>
-                                <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.statement || '\u2014'}</p>
-                              </div>
-                              {/* Metrics & Delegation */}
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Key Metric</span>
-                                  <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.metric || '\u2014'}</p>
-                                </div>
-                                <div>
-                                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Goal Owner / Responsible</span>
-                                  <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.delegation || '\u2014'}</p>
-                                </div>
-                              </div>
-
-                            </div>
-                          </motion.div>
-                        </td></tr>
-                      )}
-                    </AnimatePresence>
                   </React.Fragment>
                 );
               })}
@@ -2467,6 +2409,75 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       </Card>
       </>
       )}
+
+      <Modal
+        open={!!viewGoalId}
+        title="Goal Details"
+        onClose={() => setViewGoalId(null)}
+        maxWidthClassName="max-w-5xl"
+        bodyClassName="space-y-4"
+      >
+        {viewGoalId && (() => {
+          const g = goals.find((goal: any) => Number(goal?.id) === Number(viewGoalId));
+          if (!g) return <p className="text-sm text-slate-500">Goal not found.</p>;
+          const overdue = g.target_date && new Date(g.target_date) < new Date() && g.status !== 'Completed' && g.status !== 'Cancelled';
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Goal Level</span><span className="text-slate-700 dark:text-slate-200">{g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual'}</span></div>
+                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Department</span><span className="text-slate-700 dark:text-slate-200">{g.department || '\u2014'}</span></div>
+                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team</span><span className="text-slate-700 dark:text-slate-200">{g.team_name || '\u2014'}</span></div>
+                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Employee</span>
+                  <div className="min-w-0"><span className="text-slate-700 dark:text-slate-200 truncate max-w-[220px]" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div>
+                </div>
+                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Quarter</span><span className="text-slate-700 dark:text-slate-200">{g.quarter || '\u2014'}</span></div>
+                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Frequency</span><span className="text-slate-700 dark:text-slate-200">{g.frequency || 'One-time'}</span></div>
+                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team Leader</span><span className="text-slate-700 dark:text-slate-200">{g.leader_name || '\u2014'}</span></div>
+                <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Target Date</span><span className={`${overdue ? 'text-red-600 font-bold' : 'text-slate-700 dark:text-slate-200'}`}>{g.target_date || '\u2014'}</span></div>
+              </div>
+
+              {g.assignees && g.assignees.length > 0 && (
+                <div>
+                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-2">Assignees ({g.assignees.length})</span>
+                  <div className="flex flex-wrap gap-2">
+                    {(g.assignees as any[]).map((a: any) => (
+                      <span key={a.employee_id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 text-xs font-bold border border-teal-200 dark:border-teal-800">
+                        <span className="w-4 h-4 rounded-full bg-teal-200 dark:bg-teal-800 text-teal-600 dark:text-teal-300 flex items-center justify-center text-[9px] font-black">{(a.name || '?')[0]}</span>
+                        {a.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Goal Statement</span>
+                <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.statement || '\u2014'}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Key Metric</span>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.metric || '\u2014'}</p>
+                </div>
+                <div>
+                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Goal Owner / Responsible</span>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.delegation || '\u2014'}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end">
+                <button
+                  onClick={() => void openProofReview(Number(g.id))}
+                  className="h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                >
+                  Open Proof Review
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
 
       <Modal
         open={!!proofReviewOpenGoal}
