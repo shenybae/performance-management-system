@@ -1138,10 +1138,10 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     });
     const heatColor = (v: number) => v === 0 ? 'bg-slate-50 dark:bg-slate-800/50 text-slate-300 dark:text-slate-600' : v <= 2 ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
     const underperfActionsGoal = underperfActionsGoalId
-      ? (displayGoals.find((goal: any) => Number(goal?.id) === Number(underperfActionsGoalId)) || goals.find((goal: any) => Number(goal?.id) === Number(underperfActionsGoalId)) || null)
+      ? (monitorDisplayGoals.find((goal: any) => Number(goal?.id) === Number(underperfActionsGoalId)) || goals.find((goal: any) => Number(goal?.id) === Number(underperfActionsGoalId)) || null)
       : null;
     const underperfPlanGoal = underperfPlanGoalId
-      ? (displayGoals.find((goal: any) => Number(goal?.id) === Number(underperfPlanGoalId)) || goals.find((goal: any) => Number(goal?.id) === Number(underperfPlanGoalId)) || null)
+      ? (monitorDisplayGoals.find((goal: any) => Number(goal?.id) === Number(underperfPlanGoalId)) || goals.find((goal: any) => Number(goal?.id) === Number(underperfPlanGoalId)) || null)
       : null;
 
     const goalModals = (
