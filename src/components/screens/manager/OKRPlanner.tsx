@@ -50,6 +50,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [underperfScopeFilter, setUnderperfScopeFilter] = useState<'all'|'Department'|'Team'|'Individual'>('all');
   const [underperfQuickFilter, setUnderperfQuickFilter] = useState<'all'|'overdue'|'highPriority'|'stalled'>('all');
   const [underperfActionsGoalId, setUnderperfActionsGoalId] = useState<number | null>(null);
+  const [underperfPlanGoalId, setUnderperfPlanGoalId] = useState<number | null>(null);
   const [recoveryTaskCount7d, setRecoveryTaskCount7d] = useState(0);
   const [recoveryTaskOpenGoal, setRecoveryTaskOpenGoal] = useState<number | null>(null);
   const [recoveryTaskSavingGoal, setRecoveryTaskSavingGoal] = useState<number | null>(null);
@@ -1068,6 +1069,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     const underperfActionsGoal = underperfActionsGoalId
       ? (displayGoals.find((goal: any) => Number(goal?.id) === Number(underperfActionsGoalId)) || goals.find((goal: any) => Number(goal?.id) === Number(underperfActionsGoalId)) || null)
       : null;
+    const underperfPlanGoal = underperfPlanGoalId
+      ? (displayGoals.find((goal: any) => Number(goal?.id) === Number(underperfPlanGoalId)) || goals.find((goal: any) => Number(goal?.id) === Number(underperfPlanGoalId)) || null)
+      : null;
 
     const goalModals = (
       <>
@@ -1237,25 +1241,75 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         >
           {underperfActionsGoal && (() => {
             const goal = underperfActionsGoal;
-            const normalizedScope = normalizeGoalScope(goal);
-            const canScopePlan = normalizedScope === 'Department' || normalizedScope === 'Team';
             const assignees = (goal.assignees || []) as any[];
             return (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button onClick={() => { setViewGoalId(goal.id); setUnderperfActionsGoalId(null); }} className="h-9 px-3 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors inline-flex items-center justify-center gap-1.5"><Eye size={13} /> View</button>
                   <button onClick={() => { void triggerQuickAction('proofs', goal, assignees); setUnderperfActionsGoalId(null); }} className="h-9 px-3 rounded-lg text-xs font-bold border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors inline-flex items-center justify-center gap-1.5"><Check size={13} /> Proofs</button>
-                  <button onClick={() => { void triggerQuickAction('pip', goal, assignees); setUnderperfActionsGoalId(null); }} className="h-9 px-3 rounded-lg text-xs font-bold border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors inline-flex items-center justify-center gap-1.5"><FileText size={13} /> PIP</button>
-                  <button onClick={() => { void triggerQuickAction('idp', goal, assignees); setUnderperfActionsGoalId(null); }} className="h-9 px-3 rounded-lg text-xs font-bold border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors inline-flex items-center justify-center gap-1.5"><Target size={13} /> IDP</button>
-                  {canScopePlan && (
+                  <button onClick={() => { void triggerQuickAction('recovery', goal, assignees); setUnderperfActionsGoalId(null); }} className="h-9 px-3 rounded-lg text-xs font-bold border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors inline-flex items-center justify-center gap-1.5"><MessageSquare size={13} /> Recovery</button>
+                  <button onClick={() => { setUnderperfPlanGoalId(goal.id); setUnderperfActionsGoalId(null); }} className="h-9 px-3 rounded-lg text-xs font-bold border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors inline-flex items-center justify-center gap-1.5"><FileText size={13} /> Create Plan</button>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal>
+
+        <Modal
+          open={!!underperfPlanGoal}
+          title={`Create Plan${underperfPlanGoal?.title ? ` - ${underperfPlanGoal.title}` : ''}`}
+          onClose={() => setUnderperfPlanGoalId(null)}
+          maxWidthClassName="max-w-lg"
+          bodyClassName="space-y-3"
+        >
+          {underperfPlanGoal && (() => {
+            const goal = underperfPlanGoal;
+            const normalizedScope = normalizeGoalScope(goal);
+            const assignees = (goal.assignees || []) as any[];
+            const isScopeGoal = normalizedScope === 'Department' || normalizedScope === 'Team';
+
+            return (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500">
+                  Choose a plan type to generate. A confirmation prompt will appear before creation.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    onClick={() => { void triggerQuickAction('pip', goal, assignees); setUnderperfPlanGoalId(null); }}
+                    className="h-9 px-3 rounded-lg text-xs font-bold border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors inline-flex items-center justify-center gap-1.5"
+                  >
+                    <FileText size={13} /> PIP
+                  </button>
+                  <button
+                    onClick={() => { void triggerQuickAction('idp', goal, assignees); setUnderperfPlanGoalId(null); }}
+                    className="h-9 px-3 rounded-lg text-xs font-bold border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors inline-flex items-center justify-center gap-1.5"
+                  >
+                    <Target size={13} /> IDP
+                  </button>
+                  {isScopeGoal && (
                     <>
-                      <button onClick={() => { void triggerQuickAction('perf', goal, assignees); setUnderperfActionsGoalId(null); }} className="h-9 px-3 rounded-lg text-xs font-bold border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors inline-flex items-center justify-center gap-1.5"><TrendingDown size={13} /> TPIP</button>
-                      <button onClick={() => { void triggerQuickAction('dev', goal, assignees); setUnderperfActionsGoalId(null); }} className="h-9 px-3 rounded-lg text-xs font-bold border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors inline-flex items-center justify-center gap-1.5"><TrendingUp size={13} /> DDP</button>
+                      <button
+                        onClick={() => { void triggerQuickAction('perf', goal, assignees); setUnderperfPlanGoalId(null); }}
+                        className="h-9 px-3 rounded-lg text-xs font-bold border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors inline-flex items-center justify-center gap-1.5"
+                      >
+                        <TrendingDown size={13} /> TPIP
+                      </button>
+                      <button
+                        onClick={() => { void triggerQuickAction('dev', goal, assignees); setUnderperfPlanGoalId(null); }}
+                        className="h-9 px-3 rounded-lg text-xs font-bold border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors inline-flex items-center justify-center gap-1.5"
+                      >
+                        <TrendingUp size={13} /> DDP
+                      </button>
                     </>
                   )}
-                  <button onClick={() => { void triggerQuickAction('recovery', goal, assignees); setUnderperfActionsGoalId(null); }} className="h-9 px-3 rounded-lg text-xs font-bold border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors inline-flex items-center justify-center gap-1.5"><MessageSquare size={13} /> Recovery</button>
-                  <button onClick={() => { openUnderperformingPlans(normalizedScope === 'Individual' ? 'employee' : 'scope'); setUnderperfActionsGoalId(null); }} className="h-9 px-3 rounded-lg text-xs font-bold border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors inline-flex items-center justify-center gap-1.5"><FileText size={13} /> Plans</button>
                 </div>
+
+                {!isScopeGoal && (
+                  <p className="text-[11px] text-slate-400">
+                    Scope plans (TPIP/DDP) are available only for Team or Department goals.
+                  </p>
+                )}
               </div>
             );
           })()}
