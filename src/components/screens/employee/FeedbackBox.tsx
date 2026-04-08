@@ -67,6 +67,7 @@ const ScoreSelect: React.FC<{ label: string; field: string; form: any; setFn: an
 
 export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users = [] }) => {
   const [showForm, setShowForm] = useState(false);
+  const [activeView, setActiveView] = useState<'overview' | 'records'>('overview');
   const [feedback360, setFeedback360] = useState<any[]>([]);
   const user = JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('user') || '{}');
   const [usersList, setUsersList] = useState<any[]>(users || []);
@@ -315,7 +316,24 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
         </div>
       </div>
 
-      {showForm && (
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveView('overview')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeView === 'overview' ? 'bg-teal-deep text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+        >
+          Overview
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveView('records')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeView === 'records' ? 'bg-teal-deep text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+        >
+          360 Feedback Records
+        </button>
+      </div>
+
+      {activeView === 'overview' && showForm && (
         <Card className="mb-4">
           <form onSubmit={e => { e.preventDefault(); submitFeedback(); }}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -366,6 +384,8 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
         </Card>
       )}
 
+      {activeView === 'records' && (
+      <>
       {/* Filters + records on top */}
       <div className="mb-4 space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center gap-2">
@@ -456,7 +476,11 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
           </table>
         </div>
       </Card>
+      </>
+      )}
 
+      {activeView === 'overview' && (
+      <>
       {/* KPI tiles */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card>
@@ -551,6 +575,8 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
           </ResponsiveContainer>
         </div>
       </Card>
+      </>
+      )}
 
       
 
