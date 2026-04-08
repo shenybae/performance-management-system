@@ -308,29 +308,38 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex items-end justify-between gap-4 mb-4">
-        <SectionHeader title="360° Feedback" subtitle="Collaborative growth insights from peers, supervisors, and teams" />
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowForm(s => !s)} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Plus size={14} /> New</button>
-          <button onClick={() => exportToCSV(feedback360, 'feedback_360')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={14} /> XLSX</button>
+      <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-slate-950 dark:to-slate-900 p-4 shadow-sm mb-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <SectionHeader title="360° Feedback" subtitle="Collaborative growth insights from peers, supervisors, and teams" />
+          <div className="flex flex-wrap items-center gap-2">
+            {activeView === 'overview' && (
+              <button onClick={() => setShowForm(s => !s)} className="inline-flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition-colors shadow-sm shadow-teal-deep/20"><Plus size={14} /> New Feedback</button>
+            )}
+            <button onClick={() => exportToCSV(feedback360, 'feedback_360')} className="inline-flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={14} /> XLSX</button>
+          </div>
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-2 shadow-sm">
         <button
           type="button"
           onClick={() => setActiveView('overview')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeView === 'overview' ? 'bg-teal-deep text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeView === 'overview' ? 'bg-teal-deep text-white shadow-sm shadow-teal-deep/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
         >
           Overview
         </button>
         <button
           type="button"
           onClick={() => setActiveView('records')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeView === 'records' ? 'bg-teal-deep text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeView === 'records' ? 'bg-teal-deep text-white shadow-sm shadow-teal-deep/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
         >
           360 Feedback Records
         </button>
+        <div className="ml-auto hidden lg:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 pr-2">
+          <span className="font-bold text-slate-700 dark:text-slate-200">{totalResponses}</span> responses
+          <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+          <span className="font-bold text-slate-700 dark:text-slate-200">{uniqueTargets}</span> people
+        </div>
       </div>
 
       {activeView === 'overview' && showForm && (
@@ -387,9 +396,13 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
       {activeView === 'records' && (
       <>
       {/* Filters + records on top */}
-      <div className="mb-4 space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-2">
-          <div className="text-xs font-bold bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full shrink-0">All Feedback ({feedback360.length})</div>
+      <Card className="mb-4 border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex flex-col gap-3 p-1">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+          <div className="inline-flex items-center gap-2 text-xs font-bold bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 px-3 py-1.5 rounded-full shrink-0">
+            <span className="w-2 h-2 rounded-full bg-teal-500" />
+            All Feedback ({feedback360.length})
+          </div>
           <div className="w-full lg:w-96">
             <SearchableSelect
               options={[
@@ -410,7 +423,7 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search strengths or names..."
-            className="w-full lg:w-72 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+            className="w-full lg:w-72 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-950"
           />
           <div className="w-full lg:w-80">
             <SearchableSelect
@@ -428,36 +441,46 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
             />
           </div>
         </div>
-      </div>
+        </div>
+      </Card>
 
       {/* Records table (full width) */}
-      <Card className="mb-6">
-        <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-4">360° Feedback Records</h3>
-        <div className="overflow-auto max-h-[560px]">
+      <Card className="mb-6 border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-700 dark:text-slate-200">360° Feedback Records</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Focused view for reviewing and archiving responses without the overview charts.</p>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Visible</div>
+            <div className="text-sm font-black text-slate-700 dark:text-slate-200">{visibleFeedback.length}</div>
+          </div>
+        </div>
+        <div className="overflow-auto max-h-[480px] rounded-xl border border-slate-100 dark:border-slate-800">
           <table className="w-full text-left feedback-table min-w-[760px]">
             <thead>
-              <tr className="border-b border-slate-100 dark:border-slate-800">
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase min-w-[140px]">Employee</th>
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase">Relationship</th>
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase">Knowledge</th>
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase">Quality</th>
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase">Communication</th>
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase min-w-[220px]">Strengths</th>
-                <th className="py-2 text-sm font-semibold text-slate-500 uppercase min-w-[200px]">Improvements</th>
-                <th className="py-2"></th>
+              <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/40">
+                <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase min-w-[140px]">Employee</th>
+                <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase">Relationship</th>
+                <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase">Knowledge</th>
+                <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase">Quality</th>
+                <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase">Communication</th>
+                <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase min-w-[220px]">Strengths</th>
+                <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase min-w-[200px]">Improvements</th>
+                <th className="py-2.5 px-3"></th>
               </tr>
             </thead>
             <tbody>
               {visibleFeedback.map(f => (
                 <tr key={f.id} className={`border-b border-slate-50 dark:border-slate-800/50 ${personFilter && normalizeName(f.target_employee_name) === normalizeName(personFilter) ? 'bg-teal-50/30' : ''}`}>
-                  <td onClick={() => applyPersonFilterFrom(f.target_employee_name)} className="py-3 font-medium text-sm text-slate-700 dark:text-slate-200 min-w-[140px] cursor-pointer">{f.target_employee_name}</td>
-                  <td className="py-3 text-sm text-slate-500">{f.relationship}</td>
-                  <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.job_knowledge}</td>
-                  <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.work_quality}</td>
-                  <td className="py-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.communication}</td>
-                  <td className="py-3 text-sm text-slate-500 max-w-[480px] truncate" title={f.strengths || undefined}>{f.strengths}</td>
-                  <td className="py-3 text-sm text-slate-500 max-w-[480px] truncate" title={f.improvements || undefined}>{f.improvements}</td>
-                  <td className="py-3">
+                  <td onClick={() => applyPersonFilterFrom(f.target_employee_name)} className="py-3 px-3 font-medium text-sm text-slate-700 dark:text-slate-200 min-w-[140px] cursor-pointer hover:text-teal-deep dark:hover:text-teal-green transition-colors">{f.target_employee_name}</td>
+                  <td className="py-3 px-3 text-sm text-slate-500">{f.relationship}</td>
+                  <td className="py-3 px-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.job_knowledge}</td>
+                  <td className="py-3 px-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.work_quality}</td>
+                  <td className="py-3 px-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.communication}</td>
+                  <td className="py-3 px-3 text-sm text-slate-500 max-w-[480px] truncate" title={f.strengths || undefined}>{f.strengths}</td>
+                  <td className="py-3 px-3 text-sm text-slate-500 max-w-[480px] truncate" title={f.improvements || undefined}>{f.improvements}</td>
+                  <td className="py-3 px-3">
                     <div className="flex items-center gap-2">
                       <button onClick={() => openView(f)} title="View" className="text-slate-600 hover:text-slate-800 p-1 rounded"><Eye size={16} /></button>
                       <button onClick={() => deleteFeedback(f.id)} title="Archive" className="text-red-500 hover:text-red-600 p-1 rounded"><Archive size={15} /></button>
