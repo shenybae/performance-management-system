@@ -8,6 +8,7 @@ import { ProofAttachment } from '../../common/ProofAttachment';
 import { Download, Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTriangle, DollarSign, Building2, Users, User, ClipboardList, CalendarDays, Flag, Save, Archive, Upload, Image as ImageIcon, CheckCircle2 } from 'lucide-react';
 import { LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { io } from 'socket.io-client';
 
 const safeParseSession = (raw: string | null) => {
   if (!raw) return {};
@@ -48,8 +49,30 @@ export const CareerDashboard = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       void fetchData();
-    }, 3000);
+    }, 8000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem('talentflow_token');
+    if (!token) return;
+
+    const socket = io({ path: '/socket.io', autoConnect: true, auth: { token } });
+    socket.on('connect', () => { try { socket.emit('auth', { token }); } catch {} });
+
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    socket.on('goals:updated', () => {
+      if (refreshTimer) return;
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        void fetchData();
+      }, 250);
+    });
+
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      socket.disconnect();
+    };
   }, []);
 
   useEffect(() => {

@@ -3561,6 +3561,14 @@ async function startServer() {
         [goalId, memberId, title, description || null, dueDate, priority || 'Medium', 'Not Started', 0, 'Not Submitted', actor.id || null]
       );
 
+      const progressRows: any = await query(
+        'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ?',
+        [goalId]
+      );
+      const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
+      const avgProgress = Math.max(0, Math.min(100, Number(progressRow?.avg_progress || 0)));
+      await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, goalId]);
+
       try {
         const uRows: any = await query('SELECT id FROM users WHERE employee_id = ?', [memberId]);
         const u = Array.isArray(uRows) ? uRows[0] : uRows;
@@ -3569,6 +3577,29 @@ async function startServer() {
 
       const taskId = inserted?.insertId || null;
       await recordAudit(actor, 'create_goal_member_task', 'goal_member_tasks', taskId, null, { goal_id: goalId, member_employee_id: memberId, title, due_date: dueDate, priority }, { route: req.originalUrl });
+
+      try {
+        const payload = {
+          goal_id: goalId,
+          task_id: taskId,
+          action: 'task_created',
+          goal_progress: avgProgress,
+          task_status: 'Not Started',
+          task_progress: 0,
+          proof_review_status: 'Not Submitted',
+          updated_at: new Date().toISOString(),
+        };
+        if (goal.leader_id) io.to(`user_${goal.leader_id}`).emit('goals:updated', payload);
+        const goalEmployeeId = normalizeEmployeeId(goal.employee_id);
+        if (goalEmployeeId) io.to(`employee_${goalEmployeeId}`).emit('goals:updated', payload);
+        io.to(`employee_${memberId}`).emit('goals:updated', payload);
+        io.to('role_Manager').emit('goals:updated', payload);
+        io.to('role_HR').emit('goals:updated', payload);
+        io.to('role_Admin').emit('goals:updated', payload);
+      } catch (emitErr) {
+        console.error('goals:updated emit error (create task):', emitErr);
+      }
+
       res.json({ success: true, id: taskId });
     } catch (err) { res.status(500).json({ error: 'Database error' }); }
   });
@@ -3837,6 +3868,34 @@ async function startServer() {
       const avgProgress = Math.max(0, Math.min(100, Number(progressRow?.avg_progress || 0)));
       await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, task.goal_id]);
 
+      try {
+        const updatedTaskRows: any = await query(
+          'SELECT id, goal_id, member_employee_id, status, progress, proof_review_status FROM goal_member_tasks WHERE id = ?',
+          [taskId]
+        );
+        const updatedTask = Array.isArray(updatedTaskRows) ? updatedTaskRows[0] : updatedTaskRows;
+        const payload = {
+          goal_id: task.goal_id,
+          task_id: taskId,
+          action: 'task_updated',
+          goal_progress: avgProgress,
+          task_status: String(updatedTask?.status || task.status || ''),
+          task_progress: Number(updatedTask?.progress ?? task.progress ?? 0),
+          proof_review_status: String(updatedTask?.proof_review_status || b?.proof_review_status || task.proof_review_status || ''),
+          updated_at: new Date().toISOString(),
+        };
+        if (task.leader_id) io.to(`user_${task.leader_id}`).emit('goals:updated', payload);
+        const goalEmployeeId = normalizeEmployeeId(task.goal_employee_id);
+        if (goalEmployeeId) io.to(`employee_${goalEmployeeId}`).emit('goals:updated', payload);
+        const memberEmployeeId = normalizeEmployeeId(updatedTask?.member_employee_id || task.member_employee_id);
+        if (memberEmployeeId) io.to(`employee_${memberEmployeeId}`).emit('goals:updated', payload);
+        io.to('role_Manager').emit('goals:updated', payload);
+        io.to('role_HR').emit('goals:updated', payload);
+        io.to('role_Admin').emit('goals:updated', payload);
+      } catch (emitErr) {
+        console.error('goals:updated emit error (update task):', emitErr);
+      }
+
       await recordAudit(actor, 'update_goal_member_task', 'goal_member_tasks', taskId, null, b, { route: req.originalUrl });
       res.json({ success: true, task_id: taskId });
     } catch (err: any) {
@@ -3895,6 +3954,35 @@ async function startServer() {
       if (!allowed) return res.status(403).json({ error: 'Forbidden' });
 
       await softDeleteById('goal_member_tasks', taskId);
+
+      const progressRows: any = await query(
+        'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ? AND deleted_at IS NULL',
+        [task.goal_id]
+      );
+      const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
+      const avgProgress = Math.max(0, Math.min(100, Number(progressRow?.avg_progress || 0)));
+      await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, task.goal_id]);
+
+      try {
+        const payload = {
+          goal_id: task.goal_id,
+          task_id: taskId,
+          action: 'task_deleted',
+          goal_progress: avgProgress,
+          updated_at: new Date().toISOString(),
+        };
+        if (task.leader_id) io.to(`user_${task.leader_id}`).emit('goals:updated', payload);
+        const goalEmployeeId = normalizeEmployeeId(task.goal_employee_id);
+        if (goalEmployeeId) io.to(`employee_${goalEmployeeId}`).emit('goals:updated', payload);
+        const memberEmployeeId = normalizeEmployeeId(task.member_employee_id);
+        if (memberEmployeeId) io.to(`employee_${memberEmployeeId}`).emit('goals:updated', payload);
+        io.to('role_Manager').emit('goals:updated', payload);
+        io.to('role_HR').emit('goals:updated', payload);
+        io.to('role_Admin').emit('goals:updated', payload);
+      } catch (emitErr) {
+        console.error('goals:updated emit error (delete task):', emitErr);
+      }
+
       await recordAudit(actor, 'delete_goal_member_task', 'goal_member_tasks', taskId, null, null, { route: req.originalUrl });
       res.json({ success: true });
     } catch (err: any) {
