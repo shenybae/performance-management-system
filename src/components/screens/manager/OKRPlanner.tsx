@@ -1071,6 +1071,42 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       return true;
     });
 
+    const filteredActiveGoals = goals.filter((g: any) => {
+      if (g.status === 'Completed' || g.status === 'Cancelled') return false;
+      if (underperfScopeFilter !== 'all' && normalizeGoalScope(g) !== underperfScopeFilter) return false;
+      const isOverdue = !!(g.target_date && new Date(g.target_date) < now);
+      const isHighPriority = g.priority === 'Critical' || g.priority === 'High';
+      const isStalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
+      if (underperfQuickFilter === 'overdue') return isOverdue;
+      if (underperfQuickFilter === 'highPriority') return isHighPriority;
+      if (underperfQuickFilter === 'stalled') return isStalled;
+      return true;
+    });
+
+    const hasTeamInDisplay = displayGoals.some((g: any) => normalizeGoalScope(g) === 'Team');
+    const hasDeptInDisplay = displayGoals.some((g: any) => normalizeGoalScope(g) === 'Department');
+
+    const seededScopeRows: any[] = [];
+    if ((underperfScopeFilter === 'all' || underperfScopeFilter === 'Team') && !hasTeamInDisplay) {
+      const teamSeed = filteredActiveGoals
+        .filter((g: any) => normalizeGoalScope(g) === 'Team')
+        .sort((a: any, b: any) => Number(a.progress || 0) - Number(b.progress || 0))[0];
+      if (teamSeed) seededScopeRows.push({ ...teamSeed, __seedUnderperfRow: true });
+    }
+    if ((underperfScopeFilter === 'all' || underperfScopeFilter === 'Department') && !hasDeptInDisplay) {
+      const deptSeed = filteredActiveGoals
+        .filter((g: any) => normalizeGoalScope(g) === 'Department')
+        .sort((a: any, b: any) => Number(a.progress || 0) - Number(b.progress || 0))[0];
+      if (deptSeed && !seededScopeRows.some((g: any) => Number(g.id) === Number(deptSeed.id))) {
+        seededScopeRows.push({ ...deptSeed, __seedUnderperfRow: true });
+      }
+    }
+
+    const monitorDisplayGoals = [
+      ...displayGoals,
+      ...seededScopeRows.filter((seed: any) => !displayGoals.some((g: any) => Number(g.id) === Number(seed.id))),
+    ];
+
     // Priority heatmap data
     const heatmapData: Record<string, Record<string, number>> = {};
     ['Critical', 'High', 'Medium', 'Low'].forEach(p => { heatmapData[p] = { OVERDUE: 0, 'AT RISK': 0, STALLED: 0 }; });
@@ -1361,7 +1397,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         <div className="flex items-center justify-between mb-5">
           <button onClick={() => setShowUnderperforming(false)} className="flex items-center gap-1.5 text-sm font-bold text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors"><ArrowLeft size={18} /> Back to Dashboard</button>
           <div className="flex gap-2">
-            <button onClick={() => exportToCSV(displayGoals.map(g => ({
+            <button onClick={() => exportToCSV(monitorDisplayGoals.map(g => ({
               goal: g.title || g.statement, scope: g.scope || 'Individual', department: g.department,
               assigned: g.employee_name || g.delegation, priority: g.priority || 'Medium',
               assignees: (g.assignees || []).map((a: any) => a.name).join('; '),
@@ -1654,7 +1690,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <div>
                   <p className="text-xs font-black uppercase tracking-wider text-red-500">Monitor Table</p>
-                  <p className="text-xs text-slate-500">{displayGoals.length} goal{displayGoals.length !== 1 ? 's' : ''} visible after filters</p>
+                  <p className="text-xs text-slate-500">{monitorDisplayGoals.length} goal{monitorDisplayGoals.length !== 1 ? 's' : ''} visible after filters{seededScopeRows.length > 0 ? ` (${seededScopeRows.length} scope test row${seededScopeRows.length > 1 ? 's' : ''} injected)` : ''}</p>
                 </div>
                 <div className="text-[10px] text-slate-400">Live sync every 5s • last sync {Math.max(0, Math.floor((Date.now() - lastRealtimeSyncAt) / 1000))}s ago</div>
               </div>
@@ -1694,7 +1730,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               </div>
             </Card>
 
-            {displayGoals.length === 0 ? (
+            {monitorDisplayGoals.length === 0 ? (
               <Card>
                 <div className="py-14 text-center">
                   <Check size={40} className="mx-auto text-emerald-500 mb-3" />
@@ -1722,7 +1758,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {displayGoals.map(g => {
+                      {monitorDisplayGoals.map(g => {
                         const isOverdue = g.target_date && new Date(g.target_date) < now;
                         const stalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
                         const normalizedScope = normalizeGoalScope(g);
@@ -1760,6 +1796,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               <td className="py-2.5 px-3 align-top">{isOverdue ? <span className="flex items-center gap-1 text-[10px] font-black text-red-600"><Clock size={11} /> +{daysOverdue(g.target_date)}d</span> : <span className="text-[10px] text-slate-400">—</span>}</td>
                               <td className="py-2.5 px-3 align-top">
                                 <div className="flex gap-1 flex-wrap">
+                                  {g.__seedUnderperfRow && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-900/35 text-teal-700 dark:text-teal-300">TEST SCOPE</span>}
                                   {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
                                   {g.status === 'At Risk' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600">AT RISK</span>}
                                   {stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}
