@@ -1266,270 +1266,163 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               </Card>
             </div>
 
-        )}
           </div>
         )}
 
         {underperfTopTab === 'table' && (
-          <>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <Filter size={14} className="text-slate-400" />
+              <SearchableSelect
+                value={empFilter}
+                onChange={(v) => setEmpFilter(String(v))}
+                searchable
+                dropdownVariant="pills-horizontal"
+                options={[
+                  { value: 'All', label: `All Employees (${underperforming.length})` },
+                  ...uniqueEmployees.map(n => ({
+                    value: n,
+                    label: `${n} (${underperforming.filter(g => (g.employee_name || g.delegation || '') === n).length})`,
+                  })),
+                ]}
+                placeholder="Filter by employee..."
+                className="w-80"
+              />
 
-            {/* View Tabs */}
-            <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mt-5 mb-4">
-              {([
-                { key: 'list' as const, label: 'All Goals', icon: Target },
-                { key: 'employee' as const, label: 'By Employee', icon: User },
-                { key: 'team' as const, label: 'By Team', icon: Users },
-                { key: 'department' as const, label: 'By Department', icon: Building2 },
-              ]).map(({ key, label, icon: Icon }) => (
-                <button key={key} onClick={() => setUnderperfView(key)}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${underperfView === key ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
-                  <Icon size={14} /> {label}
-                </button>
-              ))}
+              <SearchableSelect
+                value={underperfQuickFilter}
+                onChange={(v) => setUnderperfQuickFilter(v as 'all' | 'overdue' | 'highPriority' | 'stalled')}
+                searchable={false}
+                dropdownVariant="pills-horizontal"
+                options={[
+                  { value: 'all', label: `All (${baseDisplayGoals.length})` },
+                  { value: 'overdue', label: `Overdue (${baseDisplayGoals.filter(g => g.target_date && new Date(g.target_date) < now).length})` },
+                  { value: 'highPriority', label: `High Priority (${baseDisplayGoals.filter(g => g.priority === 'Critical' || g.priority === 'High').length})` },
+                  { value: 'stalled', label: `Stalled (${baseDisplayGoals.filter(g => (g.progress || 0) <= 10 && g.status === 'In Progress').length})` },
+                ]}
+                placeholder="Filter by status..."
+                className="w-72"
+              />
             </div>
 
-            {underperfView === 'list' ? (
-              <>
-                {/* Employee filter */}
-                <div className="flex flex-wrap items-center gap-3">
-                  <Filter size={14} className="text-slate-400" />
-                  <SearchableSelect
-                    value={empFilter}
-                    onChange={(v) => setEmpFilter(String(v))}
-                    searchable
-                    dropdownVariant="pills-horizontal"
-                    options={[
-                      { value: 'All', label: `All Employees (${underperforming.length})` },
-                      ...uniqueEmployees.map(n => ({
-                        value: n,
-                        label: `${n} (${underperforming.filter(g => (g.employee_name || g.delegation || '') === n).length})`,
-                      })),
-                    ]}
-                    placeholder="Filter by employee..."
-                    className="w-80"
+            <Card>
+              <div className="mb-3 flex items-center justify-between rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 px-3 py-2">
+                <div className="flex items-center gap-2 text-[11px] font-bold text-blue-700 dark:text-blue-300">
+                  <motion.span
+                    animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.6 }}
+                    className="inline-block h-2 w-2 rounded-full bg-blue-500"
                   />
-                  
-                  <SearchableSelect
-                    value={underperfQuickFilter}
-                    onChange={(v) => setUnderperfQuickFilter(v as 'all' | 'overdue' | 'highPriority' | 'stalled')}
-                    searchable={false}
-                    dropdownVariant="pills-horizontal"
-                    options={[
-                      { value: 'all', label: `All (${baseDisplayGoals.length})` },
-                      { value: 'overdue', label: `Overdue (${baseDisplayGoals.filter(g => g.target_date && new Date(g.target_date) < now).length})` },
-                      { value: 'highPriority', label: `High Priority (${baseDisplayGoals.filter(g => g.priority === 'Critical' || g.priority === 'High').length})` },
-                      { value: 'stalled', label: `Stalled (${baseDisplayGoals.filter(g => (g.progress || 0) <= 10 && g.status === 'In Progress').length})` },
-                    ]}
-                    placeholder="Filter by status..."
-                    className="w-72"
-                  />
+                  Live Goal Monitor
                 </div>
+                <div className="text-[10px] text-blue-600 dark:text-blue-300">
+                  Sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - lastRealtimeSyncAt) / 1000))}s ago
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full table-fixed text-left border-collapse">
+                  <thead><tr className="bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/50">
+                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[220px]">Goal</th>
+                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[92px]">Level</th>
+                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[126px]">Department</th>
+                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[160px]">Owner</th>
+                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[94px]">Priority</th>
+                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[172px]">Progress / Status</th>
+                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[112px]">Due</th>
+                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[88px]">Overdue</th>
+                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[128px]">Issue</th>
+                    <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center w-[190px]">Quick Action</th>
+                  </tr></thead>
+                  <tbody>
+                    {displayGoals.map(g => {
+                      const isOverdue = g.target_date && new Date(g.target_date) < now;
+                      const stalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
+                      const days = isOverdue ? daysOverdue(g.target_date) : 0;
+                      const scopeLabel = g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual';
+                      return (
+                        <tr key={g.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
+                          <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 align-top min-w-0">
+                            <span className="block min-w-0 truncate" title={g.title || g.statement}>{g.title || g.statement}</span>
+                          </td>
+                          <td className="py-2.5 px-3 align-top"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeLabel}</span></td>
+                          <td className="py-2.5 px-3 text-xs text-slate-500 align-top truncate">{g.department || '—'}</td>
+                          <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium align-top">
+                            <div className="min-w-0 truncate" title={g.employee_name || g.delegation || '—'}>{g.employee_name || g.delegation || '—'}</div>
+                          </td>
+                          <td className="py-2.5 px-3 align-top"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority)}`}>{g.priority || 'Medium'}</span></td>
+                          <td className="py-2.5 px-3 align-top">
+                            <div className="space-y-1.5 min-w-[160px]">
+                              <div className="flex items-center gap-2">
+                                <div className="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden relative">
+                                  <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${g.progress || 0}%` }}
+                                    transition={{ duration: 0.45 }}
+                                    className="bg-red-500 h-2.5 rounded-full"
+                                  />
+                                </div>
+                                <span className="text-[10px] font-black text-red-500 w-8">{g.progress || 0}%</span>
+                                <motion.span
+                                  animate={{ opacity: [1, 0.45, 1] }}
+                                  transition={{ repeat: Infinity, duration: 1.4 }}
+                                  className="text-[9px] font-bold text-blue-600 dark:text-blue-300"
+                                >
+                                  LIVE
+                                </motion.span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${statusColor(g.status || 'Not Started')}`}>
+                                  {g.status || 'Not Started'}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className={`py-2.5 px-3 text-xs font-medium align-top ${isOverdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '—'}</td>
+                          <td className="py-2.5 px-3 align-top">
+                            {isOverdue ? (
+                              <span className="flex items-center gap-1 text-[10px] font-black text-red-600"><Clock size={11} /> +{days}d</span>
+                            ) : <span className="text-[10px] text-slate-400">—</span>}
+                          </td>
+                          <td className="py-2.5 px-3 align-top">
+                            <div className="flex gap-1 flex-wrap">
+                              {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
+                              {g.status === 'At Risk' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600">AT RISK</span>}
+                              {stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-center align-top">
+                            <div className="flex flex-col items-center gap-1.5">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${statusColor(g.status || 'Not Started')}`}>
+                                <span className="w-2 h-2 rounded-full bg-current opacity-80" />
+                                {g.status || 'Not Started'}
+                              </span>
+                              <div className="flex flex-wrap items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => setViewGoalId(g.id)}
+                                  className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                                >
+                                  View
+                                </button>
+                                <button
+                                  onClick={() => openProofReview(g.id)}
+                                  className={`h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}
+                                >
+                                  {proofReviewOpenGoal === g.id ? 'Hide Proofs' : 'View Proofs'}
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        )}
 
-                {/* Table */}
-                <Card>
-                  <div className="mb-3 flex items-center justify-between rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 px-3 py-2">
-                    <div className="flex items-center gap-2 text-[11px] font-bold text-blue-700 dark:text-blue-300">
-                      <motion.span
-                        animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
-                        transition={{ repeat: Infinity, duration: 1.6 }}
-                        className="inline-block h-2 w-2 rounded-full bg-blue-500"
-                      />
-                      Live Goal Monitor
-                    </div>
-                    <div className="text-[10px] text-blue-600 dark:text-blue-300">
-                      Sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - lastRealtimeSyncAt) / 1000))}s ago
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full table-fixed text-left border-collapse">
-                      <thead><tr className="bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/50">
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[220px]">Goal</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[92px]">Level</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[126px]">Department</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[160px]">Owner</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[94px]">Priority</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[172px]">Progress / Status</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[112px]">Due</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[88px]">Overdue</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[128px]">Issue</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center w-[190px]">Quick Action</th>
-                      </tr></thead>
-                      <tbody>
-                        {displayGoals.map(g => {
-                          const isOverdue = g.target_date && new Date(g.target_date) < now;
-                          const stalled = (g.progress || 0) <= 10 && g.status === 'In Progress';
-                          const days = isOverdue ? daysOverdue(g.target_date) : 0;
-                          const isIndividualGoal = (g.scope || 'Individual') === 'Individual';
-                          const isScopeGoal = ['Team', 'Department'].includes(g.scope || '');
-                          const canEditProgressStatus = !isManager || !managerDept || String(g.department || '').trim().toLowerCase() === managerDept.toLowerCase();
-                          const disabledReason = !canEditProgressStatus ? 'Managers can only update goals in their own department' : '';
-                          const scopeLabel = g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual';
-                          const assignees = Array.isArray(g.assignees) ? g.assignees : [];
-                          const hasAssignees = assignees.length > 0;
-                          const recoveryDraft = recoveryTaskDrafts[g.id] || {
-                            member_employee_id: String(assignees[0]?.employee_id || ''),
-                            title: `Recovery: ${g.title || g.statement || 'Goal task'}`,
-                            description: '',
-                            due_date: '',
-                            priority: 'High',
-                          };
-                          return (
-                            <React.Fragment key={g.id}>
-                              <tr className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
-                                <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 align-top min-w-0">
-                                  <span className="block min-w-0 truncate" title={g.title || g.statement}>{g.title || g.statement}</span>
-                                </td>
-                                <td className="py-2.5 px-3 align-top"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeLabel}</span></td>
-                                <td className="py-2.5 px-3 text-xs text-slate-500 align-top truncate">{g.department || '\u2014'}</td>
-                                <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium align-top">
-                                  <div className="min-w-0 truncate" title={g.employee_name || g.delegation || '\u2014'}>{g.employee_name || g.delegation || '\u2014'}</div>
-                                </td>
-                                <td className="py-2.5 px-3 align-top"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority)}`}>{g.priority || 'Medium'}</span></td>
-                                <td className="py-2.5 px-3 align-top">
-                                  <div className="space-y-1.5 min-w-[160px]">
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden relative">
-                                        <motion.div
-                                          initial={{ width: 0 }}
-                                          animate={{ width: `${g.progress || 0}%` }}
-                                          transition={{ duration: 0.45 }}
-                                          className="bg-red-500 h-2.5 rounded-full"
-                                        />
-                                      </div>
-                                      <span className="text-[10px] font-black text-red-500 w-8">{g.progress || 0}%</span>
-                                      <motion.span
-                                        animate={{ opacity: [1, 0.45, 1] }}
-                                        transition={{ repeat: Infinity, duration: 1.4 }}
-                                        className="text-[9px] font-bold text-blue-600 dark:text-blue-300"
-                                      >
-                                        LIVE
-                                      </motion.span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${statusColor(g.status || 'Not Started')}`}>
-                                        {g.status || 'Not Started'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className={`py-2.5 px-3 text-xs font-medium align-top ${isOverdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '\u2014'}</td>
-                                <td className="py-2.5 px-3 align-top">
-                                  {isOverdue ? (
-                                    <span className="flex items-center gap-1 text-[10px] font-black text-red-600"><Clock size={11} /> +{days}d</span>
-                                  ) : <span className="text-[10px] text-slate-400">\u2014</span>}
-                                </td>
-                                <td className="py-2.5 px-3 align-top">
-                                  <div className="flex gap-1 flex-wrap">
-                                    {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
-                                    {g.status === 'At Risk' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600">AT RISK</span>}
-                                    {stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}
-                                  </div>
-                                </td>
-                                <td className="py-2.5 px-3 text-center align-top">
-                                  <div className="flex flex-col items-center gap-1.5">
-                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${statusColor(g.status || 'Not Started')}`}>
-                                      <span className="w-2 h-2 rounded-full bg-current opacity-80" />
-                                      {g.status || 'Not Started'}
-                                    </span>
-                                    <div className="flex flex-wrap items-center justify-center gap-1.5">
-                                      <span className="text-[9px] font-bold text-slate-500">{g.progress || 0}%</span>
-                                      <span className="text-[9px] text-blue-600 dark:text-blue-300 font-bold">LIVE</span>
-                                      <button
-                                        onClick={() => setViewGoalId(g.id)}
-                                        className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                                      >
-                                        View
-                                      </button>
-                                      <button
-                                        onClick={() => openProofReview(g.id)}
-                                        className={`h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}
-                                      >
-                                        {proofReviewOpenGoal === g.id ? 'Hide Proofs' : 'View Proofs'}
-                                      </button>
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-
-                              {recoveryTaskOpenGoal === g.id && (
-                                <tr className="border-b border-slate-100 dark:border-slate-800/50 bg-red-50/40 dark:bg-red-900/10">
-                                  <td colSpan={10} className="px-3 py-3">
-                                    {hasAssignees ? (
-                                      <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
-                                        <select
-                                          value={recoveryDraft.member_employee_id}
-                                          onChange={(e) => updateRecoveryTaskDraft(g.id, { member_employee_id: e.target.value })}
-                                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                                        >
-                                          <option value="">Select member...</option>
-                                          {assignees.map((a: any) => (
-                                            <option key={a.employee_id} value={a.employee_id}>{a.name || a.employee_name || 'Unnamed team member'}</option>
-                                          ))}
-                                        </select>
-                                        <input
-                                          type="text"
-                                          value={recoveryDraft.title}
-                                          onChange={(e) => updateRecoveryTaskDraft(g.id, { title: e.target.value })}
-                                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                                          placeholder="Recovery task title"
-                                        />
-                                        <input
-                                          type="date"
-                                          value={recoveryDraft.due_date}
-                                          onChange={(e) => updateRecoveryTaskDraft(g.id, { due_date: e.target.value })}
-                                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                                        />
-                                        <select
-                                          value={recoveryDraft.priority}
-                                          onChange={(e) => updateRecoveryTaskDraft(g.id, { priority: e.target.value })}
-                                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                                        >
-                                          <option value="Critical">Critical</option>
-                                          <option value="High">High</option>
-                                          <option value="Medium">Medium</option>
-                                          <option value="Low">Low</option>
-                                        </select>
-                                        <div className="flex items-center gap-1 justify-end">
-                                          <button
-                                            onClick={() => setRecoveryTaskOpenGoal(null)}
-                                            className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-slate-700"
-                                          >
-                                            Cancel
-                                          </button>
-                                          <button
-                                            onClick={() => handleCreateRecoveryTask(g)}
-                                            disabled={recoveryTaskSavingGoal === g.id}
-                                            className="px-2.5 py-1.5 rounded-lg bg-red-600 text-white text-[10px] font-bold hover:bg-red-700 disabled:opacity-50"
-                                          >
-                                            {recoveryTaskSavingGoal === g.id ? 'Saving...' : 'Assign'}
-                                          </button>
-                                        </div>
-                                        <textarea
-                                          rows={2}
-                                          value={recoveryDraft.description}
-                                          onChange={(e) => updateRecoveryTaskDraft(g.id, { description: e.target.value })}
-                                          className="md:col-span-5 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                                          placeholder="Recovery note / expected result"
-                                        />
-                                      </div>
-                                    ) : (
-                                      <p className="text-xs text-slate-500">No delegated members on this goal yet. Add members first, then assign a recovery task.</p>
-                                    )}
-                                  </td>
-                                </tr>
-                              )}
-
-                            </React.Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              </>
-            ) : (
-              /* Aggregated views */
-              <>
+            {/* Aggregated views */}
                 {underperfView === 'employee' && (
                   <Card>
                     <div className="overflow-x-auto">
@@ -1711,10 +1604,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       </table>
                     </div>
                   </Card>
-                )}
-              </>
             )}
-          </>
+          </div>
         )}
       </motion.div>
     );
