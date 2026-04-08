@@ -148,6 +148,30 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   ).trim();
   const isDepartmentLocked = isManager && !!managerDept;
 
+  const employeeById = useMemo(() => {
+    const map = new Map<number, Employee>();
+    for (const emp of employees) map.set(Number(emp.id), emp);
+    return map;
+  }, [employees]);
+
+  const getGoalDepartment = (goal: any) => {
+    const emp = employeeById.get(Number(goal?.employee_id));
+    return String(goal?.department || goal?.dept || emp?.dept || '').trim() || 'Unassigned';
+  };
+
+  const getGoalTeam = (goal: any) => {
+    const explicit = String(goal?.team_name || goal?.team || '').trim();
+    if (explicit) return explicit;
+    if (String(goal?.scope || '').trim() === 'Team') {
+      return String(goal?.delegation || goal?.leader_name || goal?.employee_name || '').trim() || 'Unassigned Team';
+    }
+    return 'Unassigned Team';
+  };
+
+  const getGoalOwner = (goal: any) => {
+    return String(goal?.employee_name || goal?.delegation || goal?.owner_name || '').trim() || 'Unassigned';
+  };
+
   useEffect(() => {
     if (!isDepartmentLocked) return;
     setForm(prev => (prev.department === managerDept ? prev : { ...prev, department: managerDept }));
@@ -806,9 +830,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
     // initialize totals from all goals
     for (const g of goals) {
-      const emp = g.employee_name || g.delegation || 'Unassigned';
-      const team = g.team_name || 'Unassigned';
-      const dept = g.department || 'Unassigned';
+      const emp = getGoalOwner(g);
+      const team = getGoalTeam(g);
+      const dept = getGoalDepartment(g);
       const progress = Number(g.progress || 0);
 
       if (!empMap.has(emp)) empMap.set(emp, { name: emp, total: 0, progressSum: 0, under: 0, overdueDaysSum: 0, reasons: {} });
@@ -829,9 +853,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
     // fill underperforming-specific counts
     for (const g of underperforming) {
-      const emp = g.employee_name || g.delegation || 'Unassigned';
-      const team = g.team_name || 'Unassigned';
-      const dept = g.department || 'Unassigned';
+      const emp = getGoalOwner(g);
+      const team = getGoalTeam(g);
+      const dept = getGoalDepartment(g);
       const reasons = classifyReasons(g);
       const days = (g.target_date && new Date(g.target_date) < now) ? Math.ceil((now.getTime() - new Date(g.target_date).getTime()) / msDay) : 0;
 
@@ -864,8 +888,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       reasons: v.reasons || {}
     })).sort((a: any, b: any) => b.under - a.under);
 
-    return { employees: mapToArray(empMap), teams: mapToArray(teamMap), departments: mapToArray(deptMap) };
-  }, [goals, underperforming]);
+    const employeesAgg = mapToArray(empMap);
+    const teamsAgg = mapToArray(teamMap).filter((row: any) => row.total > 0);
+    const departmentsAgg = mapToArray(deptMap).filter((row: any) => row.total > 0);
+    return { employees: employeesAgg, teams: teamsAgg, departments: departmentsAgg };
+  }, [goals, underperforming, employeeById]);
 
   // Stats
   const stats = useMemo(() => {
@@ -982,11 +1009,30 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   if (showUnderperforming) {
     const now = new Date();
     const daysOverdue = (d: string) => { const diff = Math.ceil((now.getTime() - new Date(d).getTime()) / (1000 * 60 * 60 * 24)); return diff > 0 ? diff : 0; };
-    const uniqueEmployees = [...new Set(underperforming.map(g => g.employee_name || g.delegation || '').filter(Boolean))];
+    const uniqueEmployees = [...new Set(underperforming.map(g => getGoalOwner(g)).filter(Boolean))];
 
     const baseDisplayGoals = empFilter === 'All'
       ? underperforming
-      : underperforming.filter(g => (g.employee_name || g.delegation || '') === empFilter);
+      : underperforming.filter(g => getGoalOwner(g) === empFilter);
+
+    const employeeFilterOptions = [
+      { value: 'All', label: `All Employees (${underperforming.length})` },
+      ...uniqueEmployees.map((n) => ({ value: n, label: `${n} (${underperforming.filter(g => getGoalOwner(g) === n).length})` })),
+    ];
+
+    const scopeFilterOptions = [
+      { value: 'all', label: 'All Scopes' },
+      { value: 'Department', label: 'Dept-wide' },
+      { value: 'Team', label: 'Team' },
+      { value: 'Individual', label: 'Individual' },
+    ];
+
+    const quickFilterOptions = [
+      { value: 'all', label: `All (${baseDisplayGoals.length})` },
+      { value: 'overdue', label: `Overdue (${baseDisplayGoals.filter(g => g.target_date && new Date(g.target_date) < now).length})` },
+      { value: 'highPriority', label: `High Priority (${baseDisplayGoals.filter(g => g.priority === 'Critical' || g.priority === 'High').length})` },
+      { value: 'stalled', label: `Stalled (${baseDisplayGoals.filter(g => (g.progress || 0) <= 10 && g.status === 'In Progress').length})` },
+    ];
 
     const displayGoals = baseDisplayGoals.filter(g => {
       const scopeLabel = g.scope === 'Department' ? 'Department' : g.scope === 'Team' ? 'Team' : 'Individual';
@@ -1412,6 +1458,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           </tr>
                         );
                       })}
+                      {underperfAggregations.teams.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="py-8 px-3 text-center text-xs text-slate-400">No team data available for underperforming goals yet.</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1446,6 +1497,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           </tr>
                         );
                       })}
+                      {underperfAggregations.departments.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="py-8 px-3 text-center text-xs text-slate-400">No department data available for underperforming goals yet.</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1467,24 +1523,36 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
               <div className="flex items-center gap-3 flex-wrap">
                 <Filter size={14} className="text-slate-400" />
-                <select value={empFilter} onChange={(e) => setEmpFilter(e.target.value)} className="w-72 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-green/40">
-                  <option value="All">All Employees ({underperforming.length})</option>
-                  {uniqueEmployees.map((n) => (
-                    <option key={n} value={n}>{n} ({underperforming.filter(g => (g.employee_name || g.delegation || '') === n).length})</option>
-                  ))}
-                </select>
-                <select value={underperfScopeFilter} onChange={(e) => setUnderperfScopeFilter(e.target.value as 'all'|'Department'|'Team'|'Individual')} className="w-56 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-green/40">
-                  <option value="all">All Scopes</option>
-                  <option value="Department">Dept-wide</option>
-                  <option value="Team">Team</option>
-                  <option value="Individual">Individual</option>
-                </select>
-                <select value={underperfQuickFilter} onChange={(e) => setUnderperfQuickFilter(e.target.value as 'all' | 'overdue' | 'highPriority' | 'stalled')} className="w-64 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-teal-green/40">
-                  <option value="all">All ({baseDisplayGoals.length})</option>
-                  <option value="overdue">Overdue ({baseDisplayGoals.filter(g => g.target_date && new Date(g.target_date) < now).length})</option>
-                  <option value="highPriority">High Priority ({baseDisplayGoals.filter(g => g.priority === 'Critical' || g.priority === 'High').length})</option>
-                  <option value="stalled">Stalled ({baseDisplayGoals.filter(g => (g.progress || 0) <= 10 && g.status === 'In Progress').length})</option>
-                </select>
+                <SearchableSelect
+                  className="w-72"
+                  options={employeeFilterOptions}
+                  value={empFilter}
+                  onChange={(v) => setEmpFilter(String(v))}
+                  placeholder="All Employees"
+                  pill
+                  searchable
+                  dropdownVariant="pills-horizontal"
+                />
+                <SearchableSelect
+                  className="w-56"
+                  options={scopeFilterOptions}
+                  value={underperfScopeFilter}
+                  onChange={(v) => setUnderperfScopeFilter(v as 'all'|'Department'|'Team'|'Individual')}
+                  placeholder="All Scopes"
+                  pill
+                  searchable={false}
+                  dropdownVariant="pills-horizontal"
+                />
+                <SearchableSelect
+                  className="w-72"
+                  options={quickFilterOptions}
+                  value={underperfQuickFilter}
+                  onChange={(v) => setUnderperfQuickFilter(v as 'all'|'overdue'|'highPriority'|'stalled')}
+                  placeholder="All"
+                  pill
+                  searchable={false}
+                  dropdownVariant="pills-horizontal"
+                />
               </div>
             </Card>
 
@@ -1505,13 +1573,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[220px]">Goal</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[92px]">Level</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Department</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[160px]">Owner</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Team</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[140px]">Owner</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[94px]">Priority</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[172px]">Progress / Status</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[112px]">Due</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[88px]">Overdue</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[128px]">Issue</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center w-[460px]">Quick Action</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center w-[390px]">Quick Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1521,6 +1590,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         const scopeLabel = g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual';
                         const assignees = (g.assignees || []) as any[];
                         const canScopePlan = g.scope === 'Department' || g.scope === 'Team';
+                        const goalDept = getGoalDepartment(g);
+                        const goalTeam = getGoalTeam(g);
+                        const goalOwner = getGoalOwner(g);
                         const recoveryDraft = recoveryTaskDrafts[g.id] || {
                           member_employee_id: String(assignees[0]?.employee_id || ''),
                           title: `Recovery: ${g.title || g.statement || 'Goal task'}`,
@@ -1533,8 +1605,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             <tr className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
                               <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 align-top min-w-0"><span className="block min-w-0 truncate" title={g.title || g.statement}>{g.title || g.statement}</span></td>
                               <td className="py-2.5 px-3 align-top"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeLabel}</span></td>
-                              <td className="py-2.5 px-3 text-xs text-slate-500 align-top truncate">{g.department || '—'}</td>
-                              <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium align-top truncate">{g.employee_name || g.delegation || '—'}</td>
+                              <td className="py-2.5 px-3 text-xs text-slate-500 align-top truncate">{goalDept}</td>
+                              <td className="py-2.5 px-3 text-xs text-slate-500 align-top truncate">{goalTeam}</td>
+                              <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium align-top truncate">{goalOwner}</td>
                               <td className="py-2.5 px-3 align-top"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority || 'Medium')}`}>{g.priority || 'Medium'}</span></td>
                               <td className="py-2.5 px-3 align-top">
                                 <div className="flex items-center gap-2">
@@ -1556,24 +1629,24 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               </td>
                               <td className="py-2.5 px-3 text-center align-top">
                                 <div className="flex flex-wrap items-center justify-center gap-1.5">
-                                  <button onClick={() => setViewGoalId(g.id)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">View</button>
-                                  <button onClick={() => void triggerQuickAction('proofs', g, assignees)} className={`h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}>{proofReviewOpenGoal === g.id ? 'Hide Proofs' : 'View Proofs'}</button>
-                                  <button onClick={() => void triggerQuickAction('pip', g, assignees)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">PIP</button>
-                                  <button onClick={() => void triggerQuickAction('idp', g, assignees)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors">IDP</button>
+                                  <button title="View Goal" onClick={() => setViewGoalId(g.id)} className="h-8 px-2 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors inline-flex items-center gap-1"><Eye size={12} /> View</button>
+                                  <button title="View Proofs" onClick={() => void triggerQuickAction('proofs', g, assignees)} className={`h-8 px-2 rounded-lg text-[10px] font-bold border transition-colors inline-flex items-center gap-1 ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}><Check size={12} /> {proofReviewOpenGoal === g.id ? 'Hide' : 'Proofs'}</button>
+                                  <button title="Generate PIP" onClick={() => void triggerQuickAction('pip', g, assignees)} className="h-8 px-2 rounded-lg text-[10px] font-bold border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors inline-flex items-center gap-1"><FileText size={12} /> PIP</button>
+                                  <button title="Generate IDP" onClick={() => void triggerQuickAction('idp', g, assignees)} className="h-8 px-2 rounded-lg text-[10px] font-bold border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors inline-flex items-center gap-1"><Target size={12} /> IDP</button>
                                   {canScopePlan && (
                                     <>
-                                      <button onClick={() => void triggerQuickAction('perf', g, assignees)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors">TPIP</button>
-                                      <button onClick={() => void triggerQuickAction('dev', g, assignees)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors">DDP</button>
+                                      <button title="Team/Department PIP" onClick={() => void triggerQuickAction('perf', g, assignees)} className="h-8 px-2 rounded-lg text-[10px] font-bold border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors inline-flex items-center gap-1"><TrendingDown size={12} /> TPIP</button>
+                                      <button title="Team/Department Development Plan" onClick={() => void triggerQuickAction('dev', g, assignees)} className="h-8 px-2 rounded-lg text-[10px] font-bold border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors inline-flex items-center gap-1"><TrendingUp size={12} /> DDP</button>
                                     </>
                                   )}
-                                  <button onClick={() => void triggerQuickAction('recovery', g, assignees)} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">Recovery</button>
-                                  <button onClick={() => openUnderperformingPlans(g.scope === 'Individual' ? 'employee' : 'scope')} className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button>
+                                  <button title="Create Recovery Task" onClick={() => void triggerQuickAction('recovery', g, assignees)} className="h-8 px-2 rounded-lg text-[10px] font-bold border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors inline-flex items-center gap-1"><MessageSquare size={12} /> Recovery</button>
+                                  <button title="Open Plans" onClick={() => openUnderperformingPlans(g.scope === 'Individual' ? 'employee' : 'scope')} className="h-8 px-2 rounded-lg text-[10px] font-bold border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors inline-flex items-center gap-1"><FileText size={12} /> Plans</button>
                                 </div>
                               </td>
                             </tr>
                             {recoveryTaskOpenGoal === g.id && (
                               <tr className="bg-amber-50/60 dark:bg-amber-900/10 border-b border-amber-100 dark:border-amber-900/40">
-                                <td colSpan={10} className="px-3 py-3">
+                                <td colSpan={11} className="px-3 py-3">
                                   <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5 items-end">
                                     <div>
                                       <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Assignee</label>
