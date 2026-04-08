@@ -11,8 +11,16 @@ interface UserSession {
 }
 
 export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => {
+    try { return localStorage.getItem('talentflow_remember_email') || ''; } catch (e) { return ''; }
+  });
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(() => {
+    try { return !!localStorage.getItem('talentflow_remember_email'); } catch (e) { return false; }
+  });
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
@@ -100,6 +108,10 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
       if (res.ok) {
         const user = await res.json();
         setAttempts(0); setLockUntil(null);
+        try {
+          if (rememberMe) localStorage.setItem('talentflow_remember_email', email.trim().toLowerCase());
+          else localStorage.removeItem('talentflow_remember_email');
+        } catch (e) {}
         onLogin(user);
         (window as any).notify('Signed in', 'success');
       } else {
@@ -122,9 +134,18 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
     }
   };
 
-  const handleForgot = async () => {
-    const mail = window.prompt('Enter your email for password reset');
-    if (!mail) return;
+  const handleForgotSubmit = async () => {
+    const mail = forgotEmail.trim().toLowerCase();
+    if (!mail) {
+      (window as any).notify('Please enter your email', 'error');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
+      (window as any).notify('Enter a valid email address', 'error');
+      return;
+    }
+
+    setForgotLoading(true);
     try {
       const res = await fetch('/api/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: mail }) });
       const data = await res.json();
@@ -138,11 +159,14 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
           const r = await fetch('/api/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, newPassword: newPass }) });
           if (r.ok) (window as any).notify('Password reset successful', 'success'); else { const j = await r.json(); (window as any).notify(j.error || 'Reset failed', 'error'); }
         }
+        setForgotOpen(false);
       } else {
         (window as any).notify(data.error || 'Failed to request reset', 'error');
       }
     } catch (err) {
       (window as any).notify('Connection error', 'error');
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -166,20 +190,13 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
         </button>
       </div>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-[460px] relative z-20">
-        <div className="text-center mb-6 md:mb-7">
-          <div className="flex flex-col items-center mb-3">
-            <img src="/logo.png" alt="Maptech Logo" className="h-20 md:h-24 w-full object-contain" />
-          </div>
-          <p className="text-slate-200/95 dark:text-slate-300 font-extrabold uppercase tracking-[0.24em] text-[10px]">Performance Management System</p>
-          <p className="text-slate-300/80 dark:text-slate-400 text-xs mt-2">Secure sign-in for HR, managers, and employees</p>
-        </div>
-
         <div className="relative border border-teal-400/25 dark:border-teal-500/20 bg-white/90 dark:bg-slate-950/72 backdrop-blur-xl p-6 md:p-7 rounded-3xl shadow-[0_24px_70px_-22px_rgba(15,118,110,0.55)] transition-colors duration-300">
           <div className="absolute inset-0 rounded-3xl pointer-events-none bg-[linear-gradient(140deg,rgba(45,212,191,0.10),transparent_38%,rgba(14,116,144,0.10))]" />
           <div className="relative">
-            <div className="mb-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-400">Portal Access</p>
-              <h2 className="text-lg md:text-xl font-black text-slate-800 dark:text-slate-100">Sign in to your account</h2>
+            <div className="mb-5 text-center">
+              <img src="/logo.png" alt="Maptech Logo" className="h-14 md:h-16 w-full object-contain mb-2" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Performance Management System</p>
+              <h2 className="mt-2 text-lg md:text-xl font-black text-slate-800 dark:text-slate-100">Sign in</h2>
             </div>
           <form onSubmit={handleSubmit} className="space-y-5">
             {isOffline && (
@@ -234,6 +251,27 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
               </div>
               {fieldErrors.password && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{fieldErrors.password}</p>}
             </div>
+            <div className="flex items-center justify-between gap-3">
+              <label className="inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-teal-600 focus:ring-teal-500"
+                />
+                Remember me
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotEmail(email.trim().toLowerCase());
+                  setForgotOpen(true);
+                }}
+                className="text-xs font-bold text-teal-700 dark:text-teal-300 hover:underline underline-offset-4"
+              >
+                Forgot password?
+              </button>
+            </div>
             <button
               type="submit"
               disabled={loading || isOffline || !!(lockUntil && Date.now() < lockUntil)}
@@ -241,16 +279,6 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
             >
               {isOffline ? 'No Connection' : loading ? 'Signing in...' : lockUntil && Date.now() < lockUntil ? `Locked (${lockDisplay}s)` : 'Sign In to Portal'}
             </button>
-
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={handleForgot}
-                className="text-xs font-bold text-teal-700 dark:text-teal-300 hover:underline underline-offset-4"
-              >
-                Forgot password?
-              </button>
-            </div>
           </form>
           </div>
           
@@ -260,6 +288,50 @@ export const Login = ({ onLogin }: { onLogin: (user: UserSession) => void }) => 
           © {new Date().getFullYear()} Maptech Information Solutions Inc. All rights reserved.
         </p>
       </motion.div>
+
+      {forgotOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !forgotLoading && setForgotOpen(false)} />
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="relative z-10 w-full max-w-md rounded-2xl border border-teal-400/25 dark:border-teal-500/20 bg-white dark:bg-slate-900 p-5 shadow-2xl"
+          >
+            <h3 className="text-base font-black text-slate-800 dark:text-slate-100">Reset password</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Enter your account email to request a reset link/token.</p>
+            <div className="mt-4">
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider mb-2">Email</label>
+              <input
+                type="email"
+                value={forgotEmail}
+                onChange={e => setForgotEmail(e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-black rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50"
+                placeholder="you@company.com"
+                maxLength={254}
+                autoComplete="email"
+              />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setForgotOpen(false)}
+                disabled={forgotLoading}
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleForgotSubmit}
+                disabled={forgotLoading}
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-teal-deep text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {forgotLoading ? 'Sending...' : 'Send Reset'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
