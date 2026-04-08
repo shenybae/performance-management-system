@@ -44,7 +44,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [quickEdit, setQuickEdit] = useState<number | null>(null);
   const [editProgress, setEditProgress] = useState(0);
   const [editStatus, setEditStatus] = useState('');
-  const [underperfTopTab, setUnderperfTopTab] = useState<'metrics'|'plans'>('metrics');
+  const [underperfTopTab, setUnderperfTopTab] = useState<'summary'|'table'|'plans'>('summary');
   const [plansNavigator, setPlansNavigator] = useState<'employee' | 'scope'>('employee');
   const [underperfView, setUnderperfView] = useState<'list'|'employee'|'team'|'department'>('list');
   const [underperfQuickFilter, setUnderperfQuickFilter] = useState<'all'|'overdue'|'highPriority'|'stalled'>('all');
@@ -586,6 +586,17 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     }
   };
 
+  const openUnderperformingMonitor = () => {
+    setUnderperfTopTab('table');
+    setShowUnderperforming(true);
+  };
+
+  const openUnderperformingPlans = (navigator: 'employee' | 'scope') => {
+    setPlansNavigator(navigator);
+    setUnderperfTopTab('plans');
+    setShowUnderperforming(true);
+  };
+
   const openProofReview = async (goalId: number) => {
     if (proofReviewOpenGoal === goalId) {
       setProofReviewOpenGoal(null);
@@ -1031,12 +1042,18 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-5 w-fit">
+        <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-5 w-fit">
           <button
-            onClick={() => setUnderperfTopTab('metrics')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${underperfTopTab === 'metrics' ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+            onClick={() => setUnderperfTopTab('summary')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${underperfTopTab === 'summary' ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
           >
-            Underperformance Metrics
+            Summary
+          </button>
+          <button
+            onClick={() => setUnderperfTopTab('table')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${underperfTopTab === 'table' ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+          >
+            Monitor Table
           </button>
           <button
             onClick={() => setUnderperfTopTab('plans')}
@@ -1070,7 +1087,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             )}
           </div>
         ) : (
-          <>
+          <div className="space-y-5">
         {underperforming.length === 0 ? (
           <Card>
             <div className="py-16 text-center">
@@ -1246,6 +1263,10 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               </Card>
             </div>
 
+          </div>
+        ) : (
+          <>
+
             {/* View Tabs */}
             <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mt-5 mb-4">
               {([
@@ -1314,18 +1335,18 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     </div>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full table-fixed text-left border-collapse">
                       <thead><tr className="bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/50">
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Goal</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Level</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Department</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Owner</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Priority</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Progress / Status</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Due</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Overdue</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500">Issue</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center">Quick Action</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[220px]">Goal</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[92px]">Level</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[126px]">Department</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[160px]">Owner</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[94px]">Priority</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[172px]">Progress / Status</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[112px]">Due</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[88px]">Overdue</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[128px]">Issue</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center w-[190px]">Quick Action</th>
                       </tr></thead>
                       <tbody>
                         {displayGoals.map(g => {
@@ -1349,16 +1370,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           return (
                             <React.Fragment key={g.id}>
                               <tr className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-red-50/50 dark:hover:bg-red-900/10">
-                                <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 max-w-[180px] truncate">{g.title || g.statement}</td>
-                                <td className="py-2.5 px-3"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeLabel}</span></td>
-                                <td className="py-2.5 px-3 text-xs text-slate-500">{g.department || '\u2014'}</td>
-                                <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                  <div className="min-w-0">
-                                    <span className="truncate max-w-[220px]" title={g.employee_name || g.delegation || '\u2014'}>{g.employee_name || g.delegation || '\u2014'}</span>
-                                  </div>
+                                <td className="py-2.5 px-3 text-xs font-medium text-slate-700 dark:text-slate-200 align-top min-w-0">
+                                  <span className="block min-w-0 truncate" title={g.title || g.statement}>{g.title || g.statement}</span>
                                 </td>
-                                <td className="py-2.5 px-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority)}`}>{g.priority || 'Medium'}</span></td>
-                                <td className="py-2.5 px-3">
+                                <td className="py-2.5 px-3 align-top"><span className="text-[10px] font-bold text-slate-500" title={g.scope || 'Individual'}>{scopeLabel}</span></td>
+                                <td className="py-2.5 px-3 text-xs text-slate-500 align-top truncate">{g.department || '\u2014'}</td>
+                                <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-300 font-medium align-top">
+                                  <div className="min-w-0 truncate" title={g.employee_name || g.delegation || '\u2014'}>{g.employee_name || g.delegation || '\u2014'}</div>
+                                </td>
+                                <td className="py-2.5 px-3 align-top"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority)}`}>{g.priority || 'Medium'}</span></td>
+                                <td className="py-2.5 px-3 align-top">
                                   <div className="space-y-1.5 min-w-[160px]">
                                     <div className="flex items-center gap-2">
                                       <div className="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden relative">
@@ -1385,28 +1406,34 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                     </div>
                                   </div>
                                 </td>
-                                <td className={`py-2.5 px-3 text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '\u2014'}</td>
-                                <td className="py-2.5 px-3">
+                                <td className={`py-2.5 px-3 text-xs font-medium align-top ${isOverdue ? 'text-red-600' : 'text-slate-500'}`}>{g.target_date || '\u2014'}</td>
+                                <td className="py-2.5 px-3 align-top">
                                   {isOverdue ? (
                                     <span className="flex items-center gap-1 text-[10px] font-black text-red-600"><Clock size={11} /> +{days}d</span>
                                   ) : <span className="text-[10px] text-slate-400">\u2014</span>}
                                 </td>
-                                <td className="py-2.5 px-3">
+                                <td className="py-2.5 px-3 align-top">
                                   <div className="flex gap-1 flex-wrap">
                                     {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
                                     {g.status === 'At Risk' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600">AT RISK</span>}
                                     {stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}
                                   </div>
                                 </td>
-                                <td className="py-2.5 px-3 text-center">
+                                <td className="py-2.5 px-3 text-center align-top">
                                   <div className="flex flex-col items-center gap-1.5">
                                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${statusColor(g.status || 'Not Started')}`}>
                                       <span className="w-2 h-2 rounded-full bg-current opacity-80" />
                                       {g.status || 'Not Started'}
                                     </span>
-                                    <div className="flex items-center gap-1.5">
+                                    <div className="flex flex-wrap items-center justify-center gap-1.5">
                                       <span className="text-[9px] font-bold text-slate-500">{g.progress || 0}%</span>
                                       <span className="text-[9px] text-blue-600 dark:text-blue-300 font-bold">LIVE</span>
+                                      <button
+                                        onClick={() => setViewGoalId(g.id)}
+                                        className="h-8 px-2.5 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                                      >
+                                        View
+                                      </button>
                                       <button
                                         onClick={() => openProofReview(g.id)}
                                         className={`h-8 px-2.5 rounded-lg text-[10px] font-bold border transition-colors ${proofReviewOpenGoal === g.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'}`}
@@ -1547,7 +1574,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 <td className="py-3 px-3">{e.avgDaysOverdue > 0 ? <span className="flex items-center gap-1 text-xs font-bold text-red-500"><Clock size={11} />{e.avgDaysOverdue}d</span> : <span className="text-xs text-slate-400">—</span>}</td>
                                 <td className="py-3 px-3">{top ? <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${reasonColor[top] || 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>{top.replace(/_/g, ' ')}</span> : <span className="text-xs text-slate-400">—</span>}</td>
                                 <td className="py-3 px-3 text-right">
-                                  <button onClick={() => exportToCSV(goals.filter(g => (g.employee_name || g.delegation || 'Unassigned') === e.name).map(g => ({ title: g.title || g.statement, department: g.department, progress: g.progress, priority: g.priority, status: g.status, target_date: g.target_date })), `employee_${e.name.replace(/\s+/g,'_')}_underperforming`)} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={12} className="inline mr-1" />Export</button>
+                                  <button onClick={() => openUnderperformingPlans('employee')} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button>
                                 </td>
                               </motion.tr>
                             );
@@ -1608,7 +1635,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 <td className="py-3 px-3">{t.avgDaysOverdue > 0 ? <span className="flex items-center gap-1 text-xs font-bold text-red-500"><Clock size={11} />{t.avgDaysOverdue}d</span> : <span className="text-xs text-slate-400">—</span>}</td>
                                 <td className="py-3 px-3">{top ? <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${reasonColor[top] || 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>{top.replace(/_/g, ' ')}</span> : <span className="text-xs text-slate-400">—</span>}</td>
                                 <td className="py-3 px-3 text-right">
-                                  <button onClick={() => exportToCSV(goals.filter(g => (g.team_name || 'Unassigned') === t.name).map(g => ({ title: g.title || g.statement, department: g.department, employee: g.employee_name || g.delegation, progress: g.progress, priority: g.priority, status: g.status, target_date: g.target_date })), `team_${t.name.replace(/\s+/g,'_')}_underperforming`)} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={12} className="inline mr-1" />Export</button>
+                                  <button onClick={() => openUnderperformingPlans('scope')} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button>
                                 </td>
                               </motion.tr>
                             );
@@ -1669,7 +1696,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 <td className="py-3 px-3">{d.avgDaysOverdue > 0 ? <span className="flex items-center gap-1 text-xs font-bold text-red-500"><Clock size={11} />{d.avgDaysOverdue}d</span> : <span className="text-xs text-slate-400">—</span>}</td>
                                 <td className="py-3 px-3">{top ? <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${reasonColor[top] || 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>{top.replace(/_/g, ' ')}</span> : <span className="text-xs text-slate-400">—</span>}</td>
                                 <td className="py-3 px-3 text-right">
-                                  <button onClick={() => exportToCSV(goals.filter(g => (g.department || 'Unassigned') === d.name).map(g => ({ title: g.title || g.statement, team: g.team_name, employee: g.employee_name || g.delegation, progress: g.progress, priority: g.priority, status: g.status, target_date: g.target_date })), `dept_${d.name.replace(/\s+/g,'_')}_underperforming`)} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={12} className="inline mr-1" />Export</button>
+                                  <button onClick={() => openUnderperformingPlans('scope')} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button>
                                 </td>
                               </motion.tr>
                             );
@@ -1680,11 +1707,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   </Card>
                 )}
               </>
-            )}
+            )
           </div>
-        )}
-          </>
-        )}
+        )
       </motion.div>
     );
   }
@@ -1916,7 +1941,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             title: g.title, statement: g.statement, metric: g.metric, status: g.status,
             progress: g.progress, priority: g.priority, quarter: g.quarter, frequency: g.frequency || 'One-time', owner: g.delegation, target_date: g.target_date
           })), 'okr_goals')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
-          <button onClick={() => setShowUnderperforming(true)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50`}>
+          <button onClick={openUnderperformingMonitor} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50`}>
             <AlertTriangle size={16} /> Underperforming ({stats.underperformingCount})
           </button>
           <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">
