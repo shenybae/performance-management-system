@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Download, ChevronDown, ChevronUp, Search, AlertTriangle, Target, Users, User, Building2, TrendingDown, TrendingUp, FileText, Check, ArrowLeft, Clock, Filter, MessageSquare, DollarSign, Eye, Archive } from 'lucide-react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
+import { Modal } from '../../common/Modal';
 import { SectionHeader } from '../../common/SectionHeader';
 import { PIPManager } from './PIPManager';
 import { GoalScopePlanManager } from './GoalScopePlanManager';
@@ -739,6 +740,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       return true;
     });
   }, [goals, activeTab, filterDept, filterStatus, searchTerm, showArchived]);
+
+  const proofReviewGoal = useMemo(() => {
+    if (!proofReviewOpenGoal) return null;
+    return goals.find((goal: any) => Number(goal?.id) === Number(proofReviewOpenGoal)) || null;
+  }, [goals, proofReviewOpenGoal]);
 
   // Underperforming metrics
   const underperforming = useMemo(() => {
@@ -1480,125 +1486,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 </tr>
                               )}
 
-                              {proofReviewOpenGoal === g.id && (
-                                <tr className="border-b border-slate-100 dark:border-slate-800/50 bg-blue-50/40 dark:bg-blue-900/10">
-                                  <td colSpan={10} className="px-3 py-3">
-                                    {proofReviewLoadingGoal === g.id ? (
-                                      <p className="text-xs text-slate-500">Loading Task Proof Viewer...</p>
-                                    ) : ((proofReviewTasksByGoal[g.id] || []).length === 0 ? (
-                                      <p className="text-xs text-slate-500">No delegated tasks found for this goal yet.</p>
-                                    ) : (
-                                      <div className="space-y-2">
-                                        <div className="flex items-center justify-between rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 px-3 py-2">
-                                          <p className="text-[11px] font-bold text-blue-700 dark:text-blue-300">Task Proof Viewer</p>
-                                          <button
-                                            onClick={() => refreshProofReviewTasks(g.id)}
-                                            className="text-[10px] font-bold px-2 py-1 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
-                                          >
-                                            Refresh proofs
-                                          </button>
-                                        </div>
-                                        {(proofReviewTasksByGoal[g.id] || []).map((t: any) => {
-                                          const reviewStatus = t.proof_review_status || 'Not Submitted';
-                                          const uploadNote = proofUploadNotes[t.id] || '';
-                                          return (
-                                            <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                                              <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
-                                                <div>
-                                                  <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
-                                                  <p className="text-[10px] text-slate-500">{t.member_name || `#${t.member_employee_id}`} • Status: <span className="font-bold">{t.status || 'Not Started'}</span> • Progress: <span className="font-bold">{t.progress || 0}%</span></p>
-                                                </div>
-                                                <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full whitespace-nowrap ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
-                                                  {reviewStatus}
-                                                </span>
-                                              </div>
-
-                                              {!t.proof_image && (
-                                                <div className="mb-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                                                  <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Attach Proof File</label>
-                                                  <div className="flex gap-1.5 items-end">
-                                                    <input
-                                                      type="file"
-                                                      accept="*/*"
-                                                      id={`proof-file-${t.id}`}
-                                                      className="hidden"
-                                                      disabled={proofUploadingTaskId === t.id}
-                                                      onChange={(e) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (file) {
-                                                          uploadTaskProof(Number(t.id), g.id, file, uploadNote);
-                                                          setProofUploadNotes(prev => ({ ...prev, [t.id]: '' }));
-                                                        }
-                                                      }}
-                                                    />
-                                                    <input
-                                                      type="text"
-                                                      placeholder="Add note (optional)"
-                                                      value={uploadNote}
-                                                      onChange={(e) => setProofUploadNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
-                                                      className="flex-1 p-1.5 rounded text-[10px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
-                                                      disabled={proofUploadingTaskId === t.id}
-                                                    />
-                                                    <label htmlFor={`proof-file-${t.id}`} className="cursor-pointer px-2 py-1 bg-blue-600 text-white text-[10px] font-bold rounded hover:bg-blue-700 disabled:opacity-50">
-                                                      {proofUploadingTaskId === t.id ? 'Uploading...' : 'Choose'}
-                                                    </label>
-                                                  </div>
-                                                </div>
-                                              )}
-
-                                              {t.proof_image && (
-                                                <div className="mb-2 max-w-xl">
-                                                  <ProofAttachment src={t.proof_image} fileName={t.proof_file_name} mimeType={t.proof_file_type} compact />
-                                                </div>
-                                              )}
-
-                                              {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
-                                              {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
-                                              {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
-
-                                              {t.proof_image && (
-                                                <div className="space-y-2">
-                                                  <textarea
-                                                    rows={2}
-                                                    value={proofReviewNotes[t.id] ?? String(t.proof_review_note || '')}
-                                                    onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
-                                                    className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
-                                                    placeholder="Reviewer note (optional)"
-                                                    disabled={proofReviewSubmittingTaskId === t.id}
-                                                  />
-                                                  <div className="flex flex-wrap gap-2">
-                                                    <button
-                                                      onClick={() => reviewTaskProof(Number(t.id), g.id, 'Approved')}
-                                                      disabled={proofReviewSubmittingTaskId === t.id}
-                                                      className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                                                    >
-                                                      {proofReviewSubmittingTaskId === t.id ? 'Saving...' : 'Approve'}
-                                                    </button>
-                                                    <button
-                                                      onClick={() => reviewTaskProof(Number(t.id), g.id, 'Needs Revision')}
-                                                      disabled={proofReviewSubmittingTaskId === t.id}
-                                                      className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                                                    >
-                                                      Needs Revision
-                                                    </button>
-                                                    <button
-                                                      onClick={() => reviewTaskProof(Number(t.id), g.id, 'Rejected')}
-                                                      disabled={proofReviewSubmittingTaskId === t.id}
-                                                      className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                                                    >
-                                                      Reject
-                                                    </button>
-                                                  </div>
-                                                </div>
-                                              )}
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    ))}
-                                  </td>
-                                </tr>
-                              )}
                             </React.Fragment>
                           );
                         })}
@@ -2505,7 +2392,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           <button
                             onClick={() => {
                               void openProofReview(g.id);
-                              if (!isExpanded) setExpandedGoal(g.id);
                             }}
                             className={`p-1 rounded ${proofReviewOpenGoal === g.id ? 'text-blue-700 bg-blue-100 dark:bg-blue-900/30' : 'text-blue-500 hover:text-blue-700'}`}
                             title={proofReviewOpenGoal === g.id ? 'Hide Proof Review' : 'Open Proof Review'}
@@ -2567,104 +2453,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 </div>
                               </div>
 
-                              {/* Proof Review for any goal */}
-                              <div className="mt-1">
-                                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs">Task Proof Review</span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-blue-600 dark:text-blue-300">
-                                      Live sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - proofRealtimeSyncAt) / 1000))}s ago
-                                    </span>
-                                    <button
-                                      onClick={() => void openProofReview(g.id)}
-                                      className={`text-[10px] font-bold px-2 py-1 rounded border ${proofReviewOpenGoal === g.id ? 'bg-blue-600 border-blue-600 text-white' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'}`}
-                                    >
-                                      {proofReviewOpenGoal === g.id ? 'Hide Proofs' : 'View Proofs'}
-                                    </button>
-                                    <button
-                                      onClick={() => void refreshProofReviewTasks(g.id)}
-                                      className="text-[10px] font-bold px-2 py-1 rounded border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-                                    >
-                                      Refresh
-                                    </button>
-                                  </div>
-                                </div>
-
-                                {proofReviewOpenGoal === g.id && (
-                                  <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-blue-50/40 dark:bg-blue-900/10 p-3 space-y-2">
-                                    {proofReviewLoadingGoal === g.id ? (
-                                      <p className="text-xs text-slate-500">Loading task proofs...</p>
-                                    ) : ((proofReviewTasksByGoal[g.id] || []).length === 0 ? (
-                                      <p className="text-xs text-slate-500">No delegated tasks found for this goal yet.</p>
-                                    ) : (
-                                      (proofReviewTasksByGoal[g.id] || []).map((t: any) => {
-                                        const reviewStatus = t.proof_review_status || 'Not Submitted';
-                                        return (
-                                          <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                                            <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
-                                              <div>
-                                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
-                                                <p className="text-[10px] text-slate-500">{t.member_name || `#${t.member_employee_id}`} • Status: <span className="font-bold">{t.status || 'Not Started'}</span> • Progress: <span className="font-bold">{t.progress || 0}%</span></p>
-                                              </div>
-                                              <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full whitespace-nowrap ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
-                                                {reviewStatus}
-                                              </span>
-                                            </div>
-
-                                            {t.proof_image ? (
-                                              <div className="mb-2 max-w-xl">
-                                                <ProofAttachment src={t.proof_image} fileName={t.proof_file_name} mimeType={t.proof_file_type} compact />
-                                              </div>
-                                            ) : (
-                                              <p className="mb-2 text-[10px] text-slate-500">No proof uploaded yet.</p>
-                                            )}
-
-                                            {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
-                                            {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
-                                            {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
-
-                                            {t.proof_image && (
-                                              <div className="space-y-2">
-                                                <textarea
-                                                  rows={2}
-                                                  value={proofReviewNotes[t.id] ?? String(t.proof_review_note || '')}
-                                                  onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
-                                                  className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
-                                                  placeholder="Reviewer note (optional)"
-                                                  disabled={proofReviewSubmittingTaskId === t.id}
-                                                />
-                                                <div className="flex flex-wrap gap-2">
-                                                  <button
-                                                    onClick={() => reviewTaskProof(Number(t.id), g.id, 'Approved')}
-                                                    disabled={proofReviewSubmittingTaskId === t.id}
-                                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                                                  >
-                                                    {proofReviewSubmittingTaskId === t.id ? 'Saving...' : 'Approve'}
-                                                  </button>
-                                                  <button
-                                                    onClick={() => reviewTaskProof(Number(t.id), g.id, 'Needs Revision')}
-                                                    disabled={proofReviewSubmittingTaskId === t.id}
-                                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                                                  >
-                                                    Needs Revision
-                                                  </button>
-                                                  <button
-                                                    onClick={() => reviewTaskProof(Number(t.id), g.id, 'Rejected')}
-                                                    disabled={proofReviewSubmittingTaskId === t.id}
-                                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                                                  >
-                                                    Reject
-                                                  </button>
-                                                </div>
-                                              </div>
-                                            )}
-                                          </div>
-                                        );
-                                      })
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
                             </div>
                           </motion.div>
                         </td></tr>
@@ -2679,6 +2467,133 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       </Card>
       </>
       )}
+
+      <Modal
+        open={!!proofReviewOpenGoal}
+        title={`Task Proof Review${proofReviewGoal?.title ? ` - ${proofReviewGoal.title}` : ''}`}
+        onClose={() => setProofReviewOpenGoal(null)}
+        maxWidthClassName="max-w-5xl"
+        bodyClassName="space-y-3"
+      >
+        {proofReviewOpenGoal && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 px-3 py-2">
+              <p className="text-xs font-bold text-blue-700 dark:text-blue-300">
+                Live sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - proofRealtimeSyncAt) / 1000))}s ago
+              </p>
+              <button
+                onClick={() => void refreshProofReviewTasks(proofReviewOpenGoal)}
+                className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+              >
+                Refresh proofs
+              </button>
+            </div>
+
+            {proofReviewLoadingGoal === proofReviewOpenGoal ? (
+              <p className="text-sm text-slate-500">Loading task proofs...</p>
+            ) : ((proofReviewTasksByGoal[proofReviewOpenGoal] || []).length === 0 ? (
+              <p className="text-sm text-slate-500">No delegated tasks found for this goal yet.</p>
+            ) : (
+              (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
+                const reviewStatus = t.proof_review_status || 'Not Submitted';
+                const uploadNote = proofUploadNotes[t.id] || '';
+                return (
+                  <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                      <div>
+                        <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
+                        <p className="text-[10px] text-slate-500">{t.member_name || `#${t.member_employee_id}`} • Status: <span className="font-bold">{t.status || 'Not Started'}</span> • Progress: <span className="font-bold">{t.progress || 0}%</span></p>
+                      </div>
+                      <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full whitespace-nowrap ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
+                        {reviewStatus}
+                      </span>
+                    </div>
+
+                    {!t.proof_image && (
+                      <div className="mb-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                        <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Attach Proof File</label>
+                        <div className="flex gap-1.5 items-end">
+                          <input
+                            type="file"
+                            accept="*/*"
+                            id={`proof-file-${t.id}`}
+                            className="hidden"
+                            disabled={proofUploadingTaskId === t.id}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file && proofReviewOpenGoal) {
+                                uploadTaskProof(Number(t.id), proofReviewOpenGoal, file, uploadNote);
+                                setProofUploadNotes(prev => ({ ...prev, [t.id]: '' }));
+                              }
+                            }}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Add note (optional)"
+                            value={uploadNote}
+                            onChange={(e) => setProofUploadNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
+                            className="flex-1 p-1.5 rounded text-[10px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+                            disabled={proofUploadingTaskId === t.id}
+                          />
+                          <label htmlFor={`proof-file-${t.id}`} className="cursor-pointer px-2 py-1 bg-blue-600 text-white text-[10px] font-bold rounded hover:bg-blue-700 disabled:opacity-50">
+                            {proofUploadingTaskId === t.id ? 'Uploading...' : 'Choose'}
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    {t.proof_image && (
+                      <div className="mb-2 max-w-xl">
+                        <ProofAttachment src={t.proof_image} fileName={t.proof_file_name} mimeType={t.proof_file_type} compact />
+                      </div>
+                    )}
+
+                    {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
+                    {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
+                    {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
+
+                    {t.proof_image && (
+                      <div className="space-y-2">
+                        <textarea
+                          rows={2}
+                          value={proofReviewNotes[t.id] ?? String(t.proof_review_note || '')}
+                          onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
+                          className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
+                          placeholder="Reviewer note (optional)"
+                          disabled={proofReviewSubmittingTaskId === t.id}
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Approved')}
+                            disabled={proofReviewSubmittingTaskId === t.id}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                          >
+                            {proofReviewSubmittingTaskId === t.id ? 'Saving...' : 'Approve'}
+                          </button>
+                          <button
+                            onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Needs Revision')}
+                            disabled={proofReviewSubmittingTaskId === t.id}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                          >
+                            Needs Revision
+                          </button>
+                          <button
+                            onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Rejected')}
+                            disabled={proofReviewSubmittingTaskId === t.id}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ))}
+          </div>
+        )}
+      </Modal>
     </motion.div>
   );
 };
