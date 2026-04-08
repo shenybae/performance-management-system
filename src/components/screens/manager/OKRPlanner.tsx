@@ -2298,18 +2298,18 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
       {/* GOALS TABLE */}
       <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1180px] table-fixed text-left border-collapse">
+        <div className="overflow-x-auto pb-1">
+          <table className="w-full min-w-[1360px] table-fixed text-left border-collapse">
             <thead><tr className="border-b border-slate-100 dark:border-slate-800">
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[28%]">Title</th>
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[14%]">Department</th>
-              {activeTab === 'Team' && <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[12%]">Team</th>}
-              {activeTab === 'Individual' && <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[12%]">Employee</th>}
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[14%]">Owner</th>
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[10%]">Priority</th>
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[13%]">Progress</th>
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[9%]">Status</th>
-              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right w-[10%]">Actions</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[30%]">Title</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[16%]">Department</th>
+              {activeTab === 'Team' && <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[13%]">Team</th>}
+              {activeTab === 'Individual' && <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[13%]">Employee</th>}
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[15%]">Owner</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[9%]">Priority</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[11%]">Progress</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[11%]">Status</th>
+              <th className="py-3 px-4 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right w-[12%]">Actions</th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 && (
@@ -2370,11 +2370,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           <span className="text-xs font-bold text-slate-600 dark:text-slate-300 w-10 text-right">{g.progress || 0}%</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 whitespace-nowrap">
                         {isArchived ? (
                           <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border text-slate-500 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700">Archived</span>
                         ) : (
-                        <div className="flex items-center gap-2 min-w-max">
+                        <div className="flex items-center gap-2 min-w-[110px] whitespace-nowrap">
                           <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${statusColor(g.status || 'Not Started')}`}>
                             {g.status || 'Not Started'}
                           </span>
@@ -2382,8 +2382,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         </div>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        <div className="flex justify-end gap-2 flex-nowrap" onClick={e => e.stopPropagation()}>
                           <button onClick={() => setViewGoalId(g.id)} className="text-slate-500 hover:text-blue-700 p-1" title="View"><Eye size={14} /></button>
                           <button
                             onClick={() => {
