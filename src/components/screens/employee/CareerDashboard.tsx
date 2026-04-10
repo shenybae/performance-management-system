@@ -39,6 +39,9 @@ export const CareerDashboard = () => {
   const [taskProgressOpenTaskId, setTaskProgressOpenTaskId] = useState<number | null>(null);
   const [taskSavingGoal, setTaskSavingGoal] = useState<number | null>(null);
   const [myMemberTasks, setMyMemberTasks] = useState<any[]>([]);
+  const [myDeadlineExtensionRequests, setMyDeadlineExtensionRequests] = useState<any[]>([]);
+  const [taskExtensionDrafts, setTaskExtensionDrafts] = useState<Record<number, { requested_due_date: string; reason: string }>>({});
+  const [taskExtensionSubmittingId, setTaskExtensionSubmittingId] = useState<number | null>(null);
   const [proofDrafts, setProofDrafts] = useState<Record<number, { proof_image: string; proof_file_name: string; proof_file_type: string; proof_note: string }>>({});
   const [proofSubmittingTaskId, setProofSubmittingTaskId] = useState<number | null>(null);
   const [closedProofEditors, setClosedProofEditors] = useState<Record<number, boolean>>({});
@@ -117,6 +120,18 @@ export const CareerDashboard = () => {
     });
   }, [myMemberTasks]);
 
+  useEffect(() => {
+    setTaskExtensionDrafts(prev => {
+      const next = { ...prev };
+      for (const t of myMemberTasks) {
+        if (!next[t.id]) {
+          next[t.id] = { requested_due_date: '', reason: '' };
+        }
+      }
+      return next;
+    });
+  }, [myMemberTasks]);
+
   const fetchData = async () => {
     let account: any = {};
     try {
@@ -186,6 +201,14 @@ export const CareerDashboard = () => {
     } catch {
       setMyMemberTasks([]);
     }
+
+    try {
+      const r = await fetch('/api/deadline-extension-requests/mine', { headers: getAuthHeaders() });
+      const d = await r.json();
+      setMyDeadlineExtensionRequests(normalizeArray(d));
+    } catch {
+      setMyDeadlineExtensionRequests([]);
+    }
     if (employeeId) {
       try {
         const r = await fetch(`/api/employees/${employeeId}`, { headers: getAuthHeaders() });
@@ -253,6 +276,63 @@ export const CareerDashboard = () => {
       window.notify?.('Failed to submit proof', 'error');
     } finally {
       setProofSubmittingTaskId(null);
+    }
+  };
+
+  const updateTaskExtensionDraft = (taskId: number, patch: Partial<{ requested_due_date: string; reason: string }>) => {
+    setTaskExtensionDrafts(prev => ({
+      ...prev,
+      [taskId]: {
+        requested_due_date: prev[taskId]?.requested_due_date || '',
+        reason: prev[taskId]?.reason || '',
+        ...patch,
+      },
+    }));
+  };
+
+  const submitTaskExtensionRequest = async (task: any) => {
+    const taskId = Number(task?.id || 0);
+    if (!taskId) return;
+
+    const draft = taskExtensionDrafts[taskId] || { requested_due_date: '', reason: '' };
+    const requestedDueDate = String(draft.requested_due_date || '').trim();
+    const reason = String(draft.reason || '').trim();
+
+    if (!requestedDueDate) {
+      window.notify?.('Please select the requested new due date', 'error');
+      return;
+    }
+
+    setTaskExtensionSubmittingId(taskId);
+    try {
+      const res = await fetch('/api/deadline-extension-requests', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          entity_type: 'task',
+          task_id: taskId,
+          requested_due_date: requestedDueDate,
+          reason,
+        }),
+      });
+      if (!res.ok) {
+        let msg = 'Failed to submit extension request';
+        try {
+          const err = await res.json();
+          if (err?.error) msg = String(err.error);
+        } catch {}
+        throw new Error(msg);
+      }
+      window.notify?.('Extension request sent to your team leader', 'success');
+      setTaskExtensionDrafts(prev => ({
+        ...prev,
+        [taskId]: { requested_due_date: '', reason: '' },
+      }));
+      fetchData();
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to submit extension request', 'error');
+    } finally {
+      setTaskExtensionSubmittingId(null);
     }
   };
 
@@ -899,8 +979,10 @@ export const CareerDashboard = () => {
             <div className="space-y-3">
               {myMemberTasks.map((t: any) => {
                 const draft = proofDrafts[t.id] || { proof_image: t.proof_image || '', proof_file_name: t.proof_file_name || '', proof_file_type: t.proof_file_type || '', proof_note: t.proof_note || '' };
+                const extensionDraft = taskExtensionDrafts[t.id] || { requested_due_date: '', reason: '' };
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
                 const isEditorClosed = !!closedProofEditors[t.id] || reviewStatus === 'Pending Review' || reviewStatus === 'Approved';
+                const pendingTaskExtension = myDeadlineExtensionRequests.find((r: any) => String(r.entity_type || '') === 'task' && Number(r.task_id) === Number(t.id) && String(r.status || '') === 'Pending');
                 return (
                   <div key={t.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-900/40">
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -928,6 +1010,42 @@ export const CareerDashboard = () => {
                         >
                           Close
                         </button>
+                      )}
+                    </div>
+
+                    <div className="mt-2 rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 p-2.5">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Need More Time?</p>
+                      {pendingTaskExtension ? (
+                        <p className="mt-1 text-[11px] text-blue-700/85 dark:text-blue-300/85">
+                          Pending team leader decision. Requested due date: {pendingTaskExtension.requested_due_date || 'N/A'}
+                        </p>
+                      ) : (
+                        <>
+                          <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <input
+                              type="date"
+                              value={extensionDraft.requested_due_date}
+                              onChange={(e) => updateTaskExtensionDraft(t.id, { requested_due_date: e.target.value })}
+                              className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                            />
+                            <input
+                              type="text"
+                              value={extensionDraft.reason}
+                              onChange={(e) => updateTaskExtensionDraft(t.id, { reason: e.target.value })}
+                              placeholder="Reason for extension"
+                              className="md:col-span-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                            />
+                          </div>
+                          <div className="mt-2 flex justify-end">
+                            <button
+                              onClick={() => submitTaskExtensionRequest(t)}
+                              disabled={taskExtensionSubmittingId === Number(t.id)}
+                              className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {taskExtensionSubmittingId === Number(t.id) ? 'Requesting...' : 'Request Deadline Extension'}
+                            </button>
+                          </div>
+                        </>
                       )}
                     </div>
 

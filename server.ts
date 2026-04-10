@@ -367,6 +367,27 @@ async function initDb() {
       FOREIGN KEY(goal_id) REFERENCES goals(id),
       FOREIGN KEY(member_employee_id) REFERENCES employees(id)
     )`,
+    `CREATE TABLE IF NOT EXISTS deadline_extension_requests (
+      id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+      entity_type TEXT NOT NULL,
+      goal_id INTEGER,
+      task_id INTEGER,
+      requester_user_id INTEGER NOT NULL,
+      requester_employee_id INTEGER,
+      requester_role TEXT,
+      next_approver_role TEXT NOT NULL,
+      approver_user_id INTEGER,
+      status TEXT DEFAULT 'Pending',
+      current_due_date TEXT,
+      requested_due_date TEXT NOT NULL,
+      reason TEXT,
+      decision_note TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      resolved_at TEXT,
+      FOREIGN KEY(goal_id) REFERENCES goals(id),
+      FOREIGN KEY(task_id) REFERENCES goal_member_tasks(id)
+    )`,
       `CREATE TABLE IF NOT EXISTS coaching_logs (
       id ${usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
       employee_id INTEGER,
@@ -3298,6 +3319,162 @@ async function startServer() {
       return res.status(403).json({ error: 'Forbidden' });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
+
+  // Consolidated employee performance metrics for manager/HR dashboards.
+  app.get('/api/performance/employees', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = normalizeUserRole(actor.role) || String(actor.role || '');
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      const queryEmployeeId = normalizeEmployeeId(req.query.employee_id);
+
+      if (!isPrivilegedRole(role) && role !== 'Manager' && role !== 'Employee') {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      const whereClauses: string[] = [];
+      const params: any[] = [];
+
+      if (role === 'Employee') {
+        const actorEmployeeId = normalizeEmployeeId(actor.employee_id);
+        if (!actorEmployeeId) return res.json({ employees: [], summary: null, generated_at: new Date().toISOString() });
+        whereClauses.push('e.id = ?');
+        params.push(actorEmployeeId);
+      } else if (role === 'Manager') {
+        const managerDept = normalizeDept(actorCtx.dept);
+        if (!managerDept) return res.json({ employees: [], summary: null, generated_at: new Date().toISOString() });
+        whereClauses.push("LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))");
+        params.push(managerDept);
+      } else if (role === 'HR') {
+        const hrDept = normalizeDept(actorCtx.dept);
+        if (hrDept) {
+          whereClauses.push("LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))");
+          params.push(hrDept);
+        }
+      }
+
+      if (queryEmployeeId) {
+        whereClauses.push('e.id = ?');
+        params.push(queryEmployeeId);
+      }
+
+      const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+      const rows: any = await query(
+        `SELECT
+          e.id AS employee_id,
+          e.name AS employee_name,
+          e.position,
+          e.dept,
+
+          (SELECT COUNT(*) FROM goals g WHERE g.employee_id = e.id) AS goals_total,
+          (SELECT COUNT(*) FROM goals g WHERE g.employee_id = e.id AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS goals_active,
+          (SELECT COUNT(*) FROM goals g WHERE g.employee_id = e.id AND COALESCE(g.status, 'Not Started') = 'Completed') AS goals_completed,
+          (SELECT COUNT(*) FROM goals g WHERE g.employee_id = e.id AND COALESCE(g.status, 'Not Started') = 'At Risk') AS goals_at_risk,
+          (SELECT COUNT(*) FROM goals g WHERE g.employee_id = e.id AND g.target_date IS NOT NULL AND g.target_date < CURRENT_DATE::text AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS goals_overdue,
+          (SELECT ROUND(COALESCE(AVG(COALESCE(g.progress, 0)), 0), 1) FROM goals g WHERE g.employee_id = e.id) AS goals_avg_progress,
+
+          (SELECT COUNT(*) FROM goal_assignees ga LEFT JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id) AS delegated_goal_count,
+          (SELECT COUNT(*) FROM goal_assignees ga LEFT JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id AND COALESCE(g.scope, 'Individual') = 'Team') AS team_goal_count,
+          (SELECT COUNT(*) FROM goal_assignees ga LEFT JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id AND COALESCE(g.scope, 'Individual') = 'Department') AS department_goal_count,
+
+          (SELECT COUNT(*) FROM pip_plans p WHERE p.employee_id = e.id) AS pip_count,
+          (SELECT COUNT(*) FROM development_plans d WHERE d.employee_id = e.id) AS idp_count,
+
+          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id) AS recovery_tasks_total,
+          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS recovery_tasks_open,
+          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.status, 'Not Started') = 'Completed') AS recovery_tasks_completed,
+          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved') AS proofs_approved,
+          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Rejected') AS proofs_rejected,
+          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision') AS proofs_needs_revision,
+
+          (SELECT COUNT(*) FROM self_assessments s WHERE s.employee_id = e.id) AS self_assessments_count,
+          (SELECT MAX(s.created_at) FROM self_assessments s WHERE s.employee_id = e.id) AS last_self_assessment_at,
+
+          (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id) AS appraisals_count,
+          (SELECT ROUND(COALESCE(AVG(COALESCE(a.overall, 0)), 0), 2) FROM appraisals a WHERE a.employee_id = e.id) AS appraisals_avg_overall,
+          (SELECT MAX(a.sign_off_date) FROM appraisals a WHERE a.employee_id = e.id) AS last_appraisal_signoff,
+
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id) AS disciplinary_count,
+          (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id) AS last_disciplinary_date,
+
+          (SELECT COUNT(*) FROM feedback_360 f WHERE LOWER(TRIM(COALESCE(f.target_employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS feedback_360_count,
+
+          (SELECT COUNT(*) FROM goal_improvement_plans gip LEFT JOIN goals g ON g.id = gip.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(COALESCE(e.dept, ''))) AND COALESCE(g.scope, 'Individual') = 'Team') AS team_improvement_plans,
+          (SELECT COUNT(*) FROM goal_development_plans gdp LEFT JOIN goals g ON g.id = gdp.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(COALESCE(e.dept, ''))) AND COALESCE(g.scope, 'Individual') = 'Team') AS team_development_plans,
+          (SELECT COUNT(*) FROM goal_improvement_plans gip LEFT JOIN goals g ON g.id = gip.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(COALESCE(e.dept, ''))) AND COALESCE(g.scope, 'Individual') = 'Department') AS department_improvement_plans,
+          (SELECT COUNT(*) FROM goal_development_plans gdp LEFT JOIN goals g ON g.id = gdp.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(COALESCE(e.dept, ''))) AND COALESCE(g.scope, 'Individual') = 'Department') AS department_development_plans
+
+        FROM employees e
+        ${whereSql}
+        ORDER BY e.name ASC`,
+        params
+      );
+
+      const list = (Array.isArray(rows) ? rows : []).map((r: any) => {
+        const goalsTotal = Number(r.goals_total || 0);
+        const goalsCompleted = Number(r.goals_completed || 0);
+        const completionRate = goalsTotal > 0 ? Math.round((goalsCompleted / goalsTotal) * 100) : 0;
+        return {
+          employee_id: Number(r.employee_id),
+          employee_name: r.employee_name || 'Unknown',
+          position: r.position || null,
+          dept: r.dept || null,
+          goals_total: goalsTotal,
+          goals_active: Number(r.goals_active || 0),
+          goals_completed: goalsCompleted,
+          goals_at_risk: Number(r.goals_at_risk || 0),
+          goals_overdue: Number(r.goals_overdue || 0),
+          goals_avg_progress: Number(r.goals_avg_progress || 0),
+          goals_completion_rate: completionRate,
+          delegated_goal_count: Number(r.delegated_goal_count || 0),
+          team_goal_count: Number(r.team_goal_count || 0),
+          department_goal_count: Number(r.department_goal_count || 0),
+          pip_count: Number(r.pip_count || 0),
+          idp_count: Number(r.idp_count || 0),
+          recovery_tasks_total: Number(r.recovery_tasks_total || 0),
+          recovery_tasks_open: Number(r.recovery_tasks_open || 0),
+          recovery_tasks_completed: Number(r.recovery_tasks_completed || 0),
+          proofs_approved: Number(r.proofs_approved || 0),
+          proofs_rejected: Number(r.proofs_rejected || 0),
+          proofs_needs_revision: Number(r.proofs_needs_revision || 0),
+          self_assessments_count: Number(r.self_assessments_count || 0),
+          last_self_assessment_at: r.last_self_assessment_at || null,
+          appraisals_count: Number(r.appraisals_count || 0),
+          appraisals_avg_overall: Number(r.appraisals_avg_overall || 0),
+          last_appraisal_signoff: r.last_appraisal_signoff || null,
+          disciplinary_count: Number(r.disciplinary_count || 0),
+          last_disciplinary_date: r.last_disciplinary_date || null,
+          feedback_360_count: Number(r.feedback_360_count || 0),
+          team_improvement_plans: Number(r.team_improvement_plans || 0),
+          team_development_plans: Number(r.team_development_plans || 0),
+          department_improvement_plans: Number(r.department_improvement_plans || 0),
+          department_development_plans: Number(r.department_development_plans || 0),
+        };
+      });
+
+      const summary = list.length === 0 ? null : {
+        employees: list.length,
+        avg_goal_progress: Math.round(list.reduce((sum: number, item: any) => sum + Number(item.goals_avg_progress || 0), 0) / list.length),
+        total_goals: list.reduce((sum: number, item: any) => sum + Number(item.goals_total || 0), 0),
+        total_pips: list.reduce((sum: number, item: any) => sum + Number(item.pip_count || 0), 0),
+        total_idps: list.reduce((sum: number, item: any) => sum + Number(item.idp_count || 0), 0),
+        total_appraisals: list.reduce((sum: number, item: any) => sum + Number(item.appraisals_count || 0), 0),
+        total_disciplinary: list.reduce((sum: number, item: any) => sum + Number(item.disciplinary_count || 0), 0),
+        total_self_assessments: list.reduce((sum: number, item: any) => sum + Number(item.self_assessments_count || 0), 0),
+      };
+
+      return res.json({
+        employees: list,
+        summary,
+        generated_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('GET /api/performance/employees error:', err);
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
   app.delete("/api/goals/:id", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
@@ -3987,6 +4164,294 @@ async function startServer() {
       res.json({ success: true });
     } catch (err: any) {
       console.error('DELETE /api/member-tasks/:id error:', err);
+      res.status(500).json({ error: 'Database error', detail: String(err?.message || '') });
+    }
+  });
+
+  app.post('/api/deadline-extension-requests', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const normalizedRole = normalizeUserRole(actor.role);
+      const actorEmployeeId = normalizeEmployeeId(actor.employee_id);
+      const entityType = String(req.body?.entity_type || '').trim().toLowerCase();
+      const requestedDueDate = String(req.body?.requested_due_date || '').trim();
+      const reason = String(req.body?.reason || '').trim();
+
+      if ((entityType !== 'goal' && entityType !== 'task') || !requestedDueDate) {
+        return res.status(400).json({ error: 'Invalid extension request payload' });
+      }
+
+      if (entityType === 'goal') {
+        const goalId = parseInt(String(req.body?.goal_id));
+        if (!goalId) return res.status(400).json({ error: 'Invalid goal id' });
+
+        const goalRows: any = await query('SELECT id, title, target_date, leader_id, employee_id, department FROM goals WHERE id = ?', [goalId]);
+        const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
+        if (!goal) return res.status(404).json({ error: 'Goal not found' });
+
+        if (normalizedRole !== 'Employee' || Number(goal.leader_id) !== Number(actor.id)) {
+          return res.status(403).json({ error: 'Only the assigned team leader can request a goal deadline extension' });
+        }
+
+        const pendingRows: any = await query(
+          "SELECT id FROM deadline_extension_requests WHERE entity_type = 'goal' AND goal_id = ? AND status = 'Pending' LIMIT 1",
+          [goalId]
+        );
+        const pending = Array.isArray(pendingRows) ? pendingRows[0] : pendingRows;
+        if (pending?.id) return res.status(409).json({ error: 'A pending goal extension request already exists' });
+
+        const inserted: any = await query(
+          `INSERT INTO deadline_extension_requests
+             (entity_type, goal_id, requester_user_id, requester_employee_id, requester_role, next_approver_role, status, current_due_date, requested_due_date, reason, created_at, updated_at)
+           VALUES ('goal', ?, ?, ?, ?, 'Manager', 'Pending', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+           RETURNING id`,
+          [goalId, actor.id || null, actorEmployeeId, actor.role || null, goal.target_date || null, requestedDueDate, reason || null]
+        );
+
+        await recordAudit(actor, 'create_deadline_extension_request', 'deadline_extension_requests', inserted?.insertId || null, null, {
+          entity_type: 'goal',
+          goal_id: goalId,
+          requested_due_date: requestedDueDate,
+          reason,
+        }, { route: req.originalUrl });
+
+        return res.json({ success: true });
+      }
+
+      const taskId = parseInt(String(req.body?.task_id));
+      if (!taskId) return res.status(400).json({ error: 'Invalid task id' });
+
+      const taskRows: any = await query(
+        `SELECT t.id, t.goal_id, t.member_employee_id, t.due_date,
+                g.leader_id, g.employee_id AS goal_employee_id
+         FROM goal_member_tasks t
+         LEFT JOIN goals g ON g.id = t.goal_id
+         WHERE t.id = ?`,
+        [taskId]
+      );
+      const task = Array.isArray(taskRows) ? taskRows[0] : taskRows;
+      if (!task) return res.status(404).json({ error: 'Task not found' });
+
+      if (normalizedRole !== 'Employee' || !actorEmployeeId || actorEmployeeId !== normalizeEmployeeId(task.member_employee_id)) {
+        return res.status(403).json({ error: 'Only the delegated member can request a task deadline extension' });
+      }
+      if (!task.leader_id) {
+        return res.status(400).json({ error: 'Task has no team leader approver configured' });
+      }
+
+      const pendingRows: any = await query(
+        "SELECT id FROM deadline_extension_requests WHERE entity_type = 'task' AND task_id = ? AND status = 'Pending' LIMIT 1",
+        [taskId]
+      );
+      const pending = Array.isArray(pendingRows) ? pendingRows[0] : pendingRows;
+      if (pending?.id) return res.status(409).json({ error: 'A pending task extension request already exists' });
+
+      const inserted: any = await query(
+        `INSERT INTO deadline_extension_requests
+           (entity_type, goal_id, task_id, requester_user_id, requester_employee_id, requester_role, next_approver_role, status, current_due_date, requested_due_date, reason, created_at, updated_at)
+         VALUES ('task', ?, ?, ?, ?, ?, 'Team Leader', 'Pending', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         RETURNING id`,
+        [task.goal_id || null, taskId, actor.id || null, actorEmployeeId, actor.role || null, task.due_date || null, requestedDueDate, reason || null]
+      );
+
+      await recordAudit(actor, 'create_deadline_extension_request', 'deadline_extension_requests', inserted?.insertId || null, null, {
+        entity_type: 'task',
+        goal_id: task.goal_id,
+        task_id: taskId,
+        requested_due_date: requestedDueDate,
+        reason,
+      }, { route: req.originalUrl });
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('POST /api/deadline-extension-requests error:', err);
+      return res.status(500).json({ error: 'Database error', detail: String(err?.message || '') });
+    }
+  });
+
+  app.get('/api/deadline-extension-requests/mine', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const rows: any = await query(
+        `SELECT r.*, g.title AS goal_title,
+                t.title AS task_title,
+                t.member_employee_id,
+                rm.name AS requester_name,
+                COALESCE(ru.full_name, ru.username, ru.email) AS requester_user_name,
+                COALESCE(au.full_name, au.username, au.email) AS approver_name
+         FROM deadline_extension_requests r
+         LEFT JOIN goals g ON g.id = r.goal_id
+         LEFT JOIN goal_member_tasks t ON t.id = r.task_id
+         LEFT JOIN users ureq ON ureq.id = r.requester_user_id
+         LEFT JOIN employees rm ON rm.id = ureq.employee_id
+         LEFT JOIN users ru ON ru.id = r.requester_user_id
+         LEFT JOIN users au ON au.id = r.approver_user_id
+         WHERE r.requester_user_id = ?
+         ORDER BY COALESCE(r.updated_at, r.created_at) DESC`,
+        [actor.id || 0]
+      );
+      res.json(Array.isArray(rows) ? rows : []);
+    } catch (err: any) {
+      console.error('GET /api/deadline-extension-requests/mine error:', err);
+      res.status(500).json({ error: 'Database error', detail: String(err?.message || '') });
+    }
+  });
+
+  app.get('/api/deadline-extension-requests/pending', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      const normalizedRole = normalizeUserRole(role);
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      const actorDept = normalizeDept(actorCtx.dept);
+
+      const rows: any = await query(
+        `SELECT r.*, g.title AS goal_title, g.employee_id AS goal_employee_id, g.leader_id, g.department AS goal_department,
+                t.title AS task_title, t.member_employee_id,
+                rm.name AS requester_name,
+                COALESCE(ru.full_name, ru.username, ru.email) AS requester_user_name
+         FROM deadline_extension_requests r
+         LEFT JOIN goals g ON g.id = r.goal_id
+         LEFT JOIN goal_member_tasks t ON t.id = r.task_id
+         LEFT JOIN users ureq ON ureq.id = r.requester_user_id
+         LEFT JOIN employees rm ON rm.id = ureq.employee_id
+         LEFT JOIN users ru ON ru.id = r.requester_user_id
+         WHERE r.status = 'Pending'
+         ORDER BY r.created_at ASC`
+      );
+      const pending = Array.isArray(rows) ? rows : [];
+
+      const out: any[] = [];
+      for (const row of pending) {
+        if (isPrivilegedRole(role)) {
+          out.push(row);
+          continue;
+        }
+
+        if (normalizedRole === 'Manager') {
+          if (String(row?.next_approver_role || '') !== 'Manager') continue;
+          const goalEmployeeId = normalizeEmployeeId(row?.goal_employee_id);
+          if (goalEmployeeId) {
+            const allowedMgr = await canManagerAccessEmployee(actor.id, goalEmployeeId);
+            if (allowedMgr) out.push(row);
+            continue;
+          }
+          const goalDept = normalizeDept(row?.goal_department);
+          if (actorDept && goalDept && actorDept === goalDept) out.push(row);
+          continue;
+        }
+
+        if (normalizedRole === 'Employee') {
+          if (String(row?.next_approver_role || '') !== 'Team Leader') continue;
+          if (Number(row?.leader_id) === Number(actor.id)) out.push(row);
+          continue;
+        }
+      }
+
+      res.json(out);
+    } catch (err: any) {
+      console.error('GET /api/deadline-extension-requests/pending error:', err);
+      res.status(500).json({ error: 'Database error', detail: String(err?.message || '') });
+    }
+  });
+
+  app.put('/api/deadline-extension-requests/:id/decision', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      const role = actor.role;
+      const normalizedRole = normalizeUserRole(role);
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      const actorDept = normalizeDept(actorCtx.dept);
+      const requestId = parseInt(String(req.params.id));
+      const decision = String(req.body?.decision || '').trim().toLowerCase();
+      const note = String(req.body?.note || '').trim();
+      if (!requestId || (decision !== 'approve' && decision !== 'reject')) {
+        return res.status(400).json({ error: 'Invalid decision payload' });
+      }
+
+      const rows: any = await query(
+        `SELECT r.*, g.employee_id AS goal_employee_id, g.leader_id, g.department AS goal_department
+         FROM deadline_extension_requests r
+         LEFT JOIN goals g ON g.id = r.goal_id
+         WHERE r.id = ?
+         LIMIT 1`,
+        [requestId]
+      );
+      const ext = Array.isArray(rows) ? rows[0] : rows;
+      if (!ext) return res.status(404).json({ error: 'Extension request not found' });
+      if (String(ext.status || '') !== 'Pending') return res.status(400).json({ error: 'Request is already resolved' });
+
+      let allowed = false;
+      if (isPrivilegedRole(role)) {
+        allowed = true;
+      } else if (normalizedRole === 'Manager' && String(ext.next_approver_role || '') === 'Manager') {
+        const goalEmployeeId = normalizeEmployeeId(ext.goal_employee_id);
+        if (goalEmployeeId) {
+          const allowedMgr = await canManagerAccessEmployee(actor.id, goalEmployeeId);
+          if (allowedMgr) allowed = true;
+        } else {
+          const goalDept = normalizeDept(ext.goal_department);
+          if (actorDept && goalDept && actorDept === goalDept) allowed = true;
+        }
+      } else if (normalizedRole === 'Employee' && String(ext.next_approver_role || '') === 'Team Leader') {
+        if (Number(ext.leader_id) === Number(actor.id)) allowed = true;
+      }
+
+      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      if (decision === 'approve') {
+        if (String(ext.entity_type) === 'goal') {
+          await query('UPDATE goals SET target_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [ext.requested_due_date, ext.goal_id]);
+        } else if (String(ext.entity_type) === 'task') {
+          await query('UPDATE goal_member_tasks SET due_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [ext.requested_due_date, ext.task_id]);
+        }
+      }
+
+      const nextStatus = decision === 'approve' ? 'Approved' : 'Rejected';
+      await query(
+        `UPDATE deadline_extension_requests
+         SET status = ?, approver_user_id = ?, decision_note = ?, resolved_at = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [nextStatus, actor.id || null, note || null, new Date().toISOString(), requestId]
+      );
+
+      try {
+        if (ext?.requester_user_id) {
+          await createNotification({
+            user_id: Number(ext.requester_user_id),
+            type: decision === 'approve' ? 'success' : 'warning',
+            message: `Deadline extension request ${decision === 'approve' ? 'approved' : 'rejected'}`,
+            source: 'deadline_extension_requests',
+          });
+        }
+      } catch {}
+
+      await recordAudit(actor, 'resolve_deadline_extension_request', 'deadline_extension_requests', requestId, null, {
+        decision: nextStatus,
+        note,
+        entity_type: ext.entity_type,
+        goal_id: ext.goal_id,
+        task_id: ext.task_id,
+      }, { route: req.originalUrl });
+
+      try {
+        const payload = {
+          action: 'deadline_extension_resolved',
+          entity_type: ext.entity_type,
+          request_id: requestId,
+          goal_id: ext.goal_id,
+          task_id: ext.task_id,
+          decision: nextStatus,
+          updated_at: new Date().toISOString(),
+        };
+        if (ext.goal_id) io.to('role_Manager').emit('goals:updated', payload);
+        if (ext.goal_id) io.to('role_HR').emit('goals:updated', payload);
+        if (ext.goal_id) io.to('role_Admin').emit('goals:updated', payload);
+      } catch {}
+
+      res.json({ success: true, status: nextStatus });
+    } catch (err: any) {
+      console.error('PUT /api/deadline-extension-requests/:id/decision error:', err);
       res.status(500).json({ error: 'Database error', detail: String(err?.message || '') });
     }
   });

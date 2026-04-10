@@ -67,6 +67,10 @@ export const TeamLeaderDashboard = () => {
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<number>(Date.now());
+  const [pendingExtensionRequests, setPendingExtensionRequests] = useState<any[]>([]);
+  const [goalExtensionDrafts, setGoalExtensionDrafts] = useState<Record<number, { requested_due_date: string; reason: string }>>({});
+  const [goalExtensionSubmittingId, setGoalExtensionSubmittingId] = useState<number | null>(null);
+  const [extensionDecisionId, setExtensionDecisionId] = useState<number | null>(null);
 
   const [subtaskForm, setSubtaskForm] = useState({
     title: '',
@@ -99,11 +103,99 @@ export const TeamLeaderDashboard = () => {
       setLeaderGoals(normalizeArray(data?.goals).length > 0 ? normalizeArray(data?.goals) : normalizeArray(data));
       setTeamMembers(normalizeArray(data?.teamMembers));
       setLastSyncAt(Date.now());
+      try {
+        const pendingRes = await fetch('/api/deadline-extension-requests/pending', { headers: getAuthHeaders() });
+        const pendingData = pendingRes.ok ? await pendingRes.json() : [];
+        setPendingExtensionRequests(normalizeArray(pendingData));
+      } catch {
+        setPendingExtensionRequests([]);
+      }
     } catch (error) {
       console.error('Error fetching leader goals:', error);
       setLeaderGoals([]);
+      setPendingExtensionRequests([]);
     } finally {
       if (!quiet) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setGoalExtensionDrafts(prev => {
+      const next = { ...prev };
+      for (const g of leaderGoals) {
+        if (!next[g.id]) next[g.id] = { requested_due_date: '', reason: '' };
+      }
+      return next;
+    });
+  }, [leaderGoals]);
+
+  const submitGoalExtensionRequest = async (goal: Goal) => {
+    const goalId = Number(goal?.id || 0);
+    if (!goalId) return;
+    const draft = goalExtensionDrafts[goalId] || { requested_due_date: '', reason: '' };
+    const requestedDueDate = String(draft.requested_due_date || '').trim();
+    const reason = String(draft.reason || '').trim();
+    if (!requestedDueDate) {
+      window.notify?.('Please set the requested new goal due date', 'error');
+      return;
+    }
+
+    setGoalExtensionSubmittingId(goalId);
+    try {
+      const res = await fetch('/api/deadline-extension-requests', {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entity_type: 'goal',
+          goal_id: goalId,
+          requested_due_date: requestedDueDate,
+          reason,
+        }),
+      });
+      if (!res.ok) {
+        let msg = 'Failed to submit goal extension request';
+        try {
+          const err = await res.json();
+          if (err?.error) msg = String(err.error);
+        } catch {}
+        throw new Error(msg);
+      }
+      window.notify?.('Goal extension request sent to manager', 'success');
+      setGoalExtensionDrafts(prev => ({
+        ...prev,
+        [goalId]: { requested_due_date: '', reason: '' },
+      }));
+      fetchLeaderGoals(true);
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to submit goal extension request', 'error');
+    } finally {
+      setGoalExtensionSubmittingId(null);
+    }
+  };
+
+  const decideExtensionRequest = async (requestId: number, decision: 'approve' | 'reject') => {
+    const note = prompt(decision === 'approve' ? 'Approval note (optional):' : 'Rejection note (optional):') || '';
+    setExtensionDecisionId(requestId);
+    try {
+      const res = await fetch(`/api/deadline-extension-requests/${requestId}/decision`, {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision, note }),
+      });
+      if (!res.ok) {
+        let msg = 'Failed to update extension request';
+        try {
+          const err = await res.json();
+          if (err?.error) msg = String(err.error);
+        } catch {}
+        throw new Error(msg);
+      }
+      window.notify?.(`Extension request ${decision === 'approve' ? 'approved' : 'rejected'}`, 'success');
+      fetchLeaderGoals(true);
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to update extension request', 'error');
+    } finally {
+      setExtensionDecisionId(null);
     }
   };
 
@@ -297,6 +389,44 @@ export const TeamLeaderDashboard = () => {
                   </span>
                 </div>
               </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {pendingExtensionRequests.length > 0 && (
+        <div className="glass-card p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Task Deadline Extension Approvals</h3>
+            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-300">{pendingExtensionRequests.length} pending</span>
+          </div>
+          <div className="space-y-2">
+            {pendingExtensionRequests.map((req: any) => (
+              <div key={req.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  {req.entity_type === 'task' ? (req.task_title || 'Delegated task') : (req.goal_title || 'Goal')}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  Requested by {req.requester_name || req.requester_user_name || 'Unknown'} • {req.current_due_date || 'N/A'} → {req.requested_due_date || 'N/A'}
+                </p>
+                {req.reason && <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">Reason: {req.reason}</p>}
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => decideExtensionRequest(Number(req.id), 'approve')}
+                    disabled={extensionDecisionId === Number(req.id)}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => decideExtensionRequest(Number(req.id), 'reject')}
+                    disabled={extensionDecisionId === Number(req.id)}
+                    className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -505,6 +635,51 @@ export const TeamLeaderDashboard = () => {
                             <ImageIcon size={14} />
                             {expandedGoals.has(goal.id) ? 'Hide Proofs' : 'Review Proofs'}
                           </button>
+                        </div>
+
+                        <div className="mt-2 rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 p-2.5">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Goal Deadline Extension (Manager Approval)</p>
+                          <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <input
+                              type="date"
+                              value={goalExtensionDrafts[goal.id]?.requested_due_date || ''}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => setGoalExtensionDrafts(prev => ({
+                                ...prev,
+                                [goal.id]: {
+                                  requested_due_date: e.target.value,
+                                  reason: prev[goal.id]?.reason || '',
+                                },
+                              }))}
+                              className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                            />
+                            <input
+                              type="text"
+                              value={goalExtensionDrafts[goal.id]?.reason || ''}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => setGoalExtensionDrafts(prev => ({
+                                ...prev,
+                                [goal.id]: {
+                                  requested_due_date: prev[goal.id]?.requested_due_date || '',
+                                  reason: e.target.value,
+                                },
+                              }))}
+                              placeholder="Reason for extending goal deadline"
+                              className="md:col-span-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                            />
+                          </div>
+                          <div className="mt-2 flex justify-end">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void submitGoalExtensionRequest(goal);
+                              }}
+                              disabled={goalExtensionSubmittingId === goal.id}
+                              className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold disabled:opacity-50"
+                            >
+                              {goalExtensionSubmittingId === goal.id ? 'Requesting...' : 'Request Goal Deadline Extension'}
+                            </button>
+                          </div>
                         </div>
 
                         {/* Progress Bar */}
