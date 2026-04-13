@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Card } from '../../common/Card';
+import Modal from '../../common/Modal';
 import { Camera, Trash2, Upload, Save, Mail, Phone, MapPin, Briefcase, Building2, Calendar, Shield, Edit3, X } from 'lucide-react';
 
 interface SettingsProps {
@@ -17,6 +18,13 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
   const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
   const [profilePic, setProfilePic] = useState<string | null>(user.profile_picture || null);
   const [uploading, setUploading] = useState(false);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [isProfileAccountModalOpen, setIsProfileAccountModalOpen] = useState(false);
+  const [isAdjustPhotoModalOpen, setIsAdjustPhotoModalOpen] = useState(false);
+  const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
+  const [photoZoom, setPhotoZoom] = useState(1);
+  const [photoOffsetX, setPhotoOffsetX] = useState(0);
+  const [photoOffsetY, setPhotoOffsetY] = useState(0);
 
   // Account info state
   const [accountInfo, setAccountInfo] = useState({
@@ -135,26 +143,79 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
     if (!file.type.startsWith('image/')) { (window as any).notify?.('Please upload an image file', 'error'); return; }
     if (file.size > 2 * 1024 * 1024) { (window as any).notify?.('Image must be under 2 MB', 'error'); return; }
     const reader = new FileReader();
-    reader.onload = async () => {
+    reader.onload = () => {
       const dataUrl = reader.result as string;
-      setUploading(true);
-      try {
-        const token = localStorage.getItem('talentflow_token');
-        const res = await fetch('/api/profile-picture', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ profile_picture: dataUrl }),
-        });
-        if (res.ok) {
-          setProfilePic(dataUrl);
-          onProfilePictureChanged?.(dataUrl);
-          (window as any).notify?.('Profile picture updated', 'success');
-        } else { (window as any).notify?.('Failed to upload', 'error'); }
-      } catch { (window as any).notify?.('Connection error', 'error'); }
-      setUploading(false);
+      setPendingPhoto(dataUrl);
+      setPhotoZoom(1);
+      setPhotoOffsetX(0);
+      setPhotoOffsetY(0);
+      setIsAdjustPhotoModalOpen(true);
     };
     reader.readAsDataURL(file);
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const cancelAdjustPhoto = () => {
+    if (uploading) return;
+    setIsAdjustPhotoModalOpen(false);
+    setPendingPhoto(null);
+    setPhotoZoom(1);
+    setPhotoOffsetX(0);
+    setPhotoOffsetY(0);
+  };
+
+  const applyAndUploadAdjustedPhoto = async () => {
+    if (!pendingPhoto) return;
+
+    setUploading(true);
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Unable to load image for adjustment'));
+        img.src = pendingPhoto;
+      });
+
+      const canvas = document.createElement('canvas');
+      const targetSize = 512;
+      canvas.width = targetSize;
+      canvas.height = targetSize;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas is not supported');
+
+      const baseScale = Math.max(targetSize / image.width, targetSize / image.height);
+      const drawScale = baseScale * photoZoom;
+      const drawWidth = image.width * drawScale;
+      const drawHeight = image.height * drawScale;
+      const drawX = (targetSize - drawWidth) / 2 + photoOffsetX;
+      const drawY = (targetSize - drawHeight) / 2 + photoOffsetY;
+
+      ctx.clearRect(0, 0, targetSize, targetSize);
+      ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+
+      const adjustedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+      const token = localStorage.getItem('talentflow_token');
+      const res = await fetch('/api/profile-picture', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ profile_picture: adjustedDataUrl }),
+      });
+
+      if (res.ok) {
+        setProfilePic(adjustedDataUrl);
+        onProfilePictureChanged?.(adjustedDataUrl);
+        setIsAdjustPhotoModalOpen(false);
+        setPendingPhoto(null);
+        (window as any).notify?.('Profile picture updated', 'success');
+      } else {
+        (window as any).notify?.('Failed to upload', 'error');
+      }
+    } catch {
+      (window as any).notify?.('Connection error', 'error');
+    }
+    setUploading(false);
   };
 
   const handleRemovePic = async () => {
@@ -187,7 +248,14 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
             <div className="flex flex-col items-center gap-2">
               <div className="relative group">
                 {profilePic ? (
-                  <img src={profilePic} alt="Profile" className="w-20 h-20 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700" />
+                  <button
+                    type="button"
+                    onClick={() => setIsPhotoModalOpen(true)}
+                    className="block rounded-full focus:outline-none focus:ring-2 focus:ring-teal-green/40"
+                    aria-label="View profile picture"
+                  >
+                    <img src={profilePic} alt="Profile" className="w-20 h-20 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700" />
+                  </button>
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center">
                     <Camera size={24} className="text-slate-400" />
@@ -210,6 +278,15 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
               </div>
             </div>
             <div className="flex flex-col gap-2">
+              {profilePic && (
+                <button
+                  type="button"
+                  onClick={() => setIsPhotoModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <Camera size={14} /> View Photo
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
@@ -238,11 +315,19 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">Account Information</h3>
-            {!editing && canEditAccountInfo && (
-              <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-teal-deep dark:hover:text-teal-green bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                <Edit3 size={12} /> Edit
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsProfileAccountModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-teal-deep dark:hover:text-teal-green bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                <Camera size={12} /> View Profile + Account
               </button>
-            )}
+              {!editing && canEditAccountInfo && (
+                <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-teal-deep dark:hover:text-teal-green bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                  <Edit3 size={12} /> Edit
+                </button>
+              )}
+            </div>
           </div>
           {!canEditAccountInfo && (
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Only HR admin can edit account information.</p>
@@ -374,6 +459,161 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
           <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-2">Preferences</h3>
           <p className="text-sm text-slate-500 dark:text-slate-400">Theme toggle is available in the sidebar.</p>
         </Card>
+
+        <Modal
+          open={isAdjustPhotoModalOpen}
+          title="Adjust Profile Picture"
+          onClose={cancelAdjustPhoto}
+          maxWidthClassName="max-w-2xl"
+        >
+          <div className="space-y-4">
+            <div className="relative w-full h-[320px] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              {pendingPhoto ? (
+                <img
+                  src={pendingPhoto}
+                  alt="Adjust preview"
+                  className="absolute left-1/2 top-1/2 max-w-none"
+                  style={{ transform: `translate(-50%, -50%) translate(${photoOffsetX}px, ${photoOffsetY}px) scale(${photoZoom})` }}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">No selected photo.</div>
+              )}
+              <div className="pointer-events-none absolute inset-0 border-[3px] border-white/80 rounded-2xl" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Zoom</label>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.01}
+                  value={photoZoom}
+                  onChange={e => setPhotoZoom(Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Horizontal</label>
+                <input
+                  type="range"
+                  min={-180}
+                  max={180}
+                  step={1}
+                  value={photoOffsetX}
+                  onChange={e => setPhotoOffsetX(Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Vertical</label>
+                <input
+                  type="range"
+                  min={-180}
+                  max={180}
+                  step={1}
+                  value={photoOffsetY}
+                  onChange={e => setPhotoOffsetY(Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => { setPhotoZoom(1); setPhotoOffsetX(0); setPhotoOffsetY(0); }}
+                disabled={uploading}
+                className="px-3 py-2 text-sm font-bold text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={cancelAdjustPhoto}
+                disabled={uploading}
+                className="px-3 py-2 text-sm font-bold text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={applyAndUploadAdjustedPhoto}
+                disabled={uploading || !pendingPhoto}
+                className="px-4 py-2 text-sm font-bold bg-teal-deep text-white rounded-xl hover:bg-teal-green transition-colors disabled:opacity-50"
+              >
+                {uploading ? 'Saving...' : 'Apply and Upload'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+
+        <Modal
+          open={isPhotoModalOpen}
+          title="Profile Picture"
+          onClose={() => setIsPhotoModalOpen(false)}
+          maxWidthClassName="max-w-xl"
+          bodyClassName="flex items-center justify-center"
+        >
+          {profilePic ? (
+            <img
+              src={profilePic}
+              alt="Profile"
+              className="max-h-[70vh] w-auto rounded-2xl object-contain border border-slate-200 dark:border-slate-700"
+            />
+          ) : (
+            <div className="w-full py-10 text-center text-sm text-slate-500 dark:text-slate-400">No profile picture uploaded.</div>
+          )}
+        </Modal>
+
+        <Modal
+          open={isProfileAccountModalOpen}
+          title="Profile and Account Information"
+          onClose={() => setIsProfileAccountModalOpen(false)}
+          maxWidthClassName="max-w-2xl"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6">
+            <div className="flex flex-col items-center text-center">
+              {profilePic ? (
+                <img
+                  src={profilePic}
+                  alt="Profile"
+                  className="w-36 h-36 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700"
+                />
+              ) : (
+                <div className="w-36 h-36 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center">
+                  <Camera size={36} className="text-slate-400" />
+                </div>
+              )}
+              <p className="mt-3 text-sm font-bold text-slate-700 dark:text-slate-200">{accountInfo.employee_name || user.employee_name || user.full_name || '—'}</p>
+              <p className="text-xs uppercase font-semibold text-teal-600 dark:text-teal-400">{accountInfo.dept || '—'}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{accountInfo.position || '—'}</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-[10px] uppercase font-bold text-slate-400">Email</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 break-all">{accountInfo.email || '—'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-[10px] uppercase font-bold text-slate-400">Phone</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{accountInfo.phone || '—'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-[10px] uppercase font-bold text-slate-400">Role</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{accountInfo.role || '—'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-[10px] uppercase font-bold text-slate-400">Hire Date</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{accountInfo.hire_date || '—'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 sm:col-span-2">
+                <p className="text-[10px] uppercase font-bold text-slate-400">Address</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{accountInfo.address || '—'}</p>
+              </div>
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   );
