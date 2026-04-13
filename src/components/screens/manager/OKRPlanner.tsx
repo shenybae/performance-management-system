@@ -27,43 +27,6 @@ interface OKRPlannerProps {
   employees: Employee[];
 }
 
-interface EmployeePerformanceSnapshot {
-  employee_id: number;
-  employee_name: string;
-  position: string | null;
-  dept: string | null;
-  goals_total: number;
-  goals_active: number;
-  goals_completed: number;
-  goals_at_risk: number;
-  goals_overdue: number;
-  goals_avg_progress: number;
-  goals_completion_rate: number;
-  delegated_goal_count: number;
-  team_goal_count: number;
-  department_goal_count: number;
-  pip_count: number;
-  idp_count: number;
-  recovery_tasks_total: number;
-  recovery_tasks_open: number;
-  recovery_tasks_completed: number;
-  proofs_approved: number;
-  proofs_rejected: number;
-  proofs_needs_revision: number;
-  self_assessments_count: number;
-  last_self_assessment_at: string | null;
-  appraisals_count: number;
-  appraisals_avg_overall: number;
-  last_appraisal_signoff: string | null;
-  disciplinary_count: number;
-  last_disciplinary_date: string | null;
-  feedback_360_count: number;
-  team_improvement_plans: number;
-  team_development_plans: number;
-  department_improvement_plans: number;
-  department_development_plans: number;
-}
-
 export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [goals, setGoals] = useState<any[]>([]);
   const [showArchived, setShowArchived] = useState(false);
@@ -101,13 +64,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [proofReviewSubmittingTaskId, setProofReviewSubmittingTaskId] = useState<number | null>(null);
   const [lastRealtimeSyncAt, setLastRealtimeSyncAt] = useState<number>(Date.now());
   const [proofRealtimeSyncAt, setProofRealtimeSyncAt] = useState<number>(Date.now());
-  const [metricsSidebarOpen, setMetricsSidebarOpen] = useState(true);
-  const [employeePerformance, setEmployeePerformance] = useState<EmployeePerformanceSnapshot[]>([]);
-  const [employeePerformanceSummary, setEmployeePerformanceSummary] = useState<any>(null);
-  const [employeePerformanceLoading, setEmployeePerformanceLoading] = useState(false);
-  const [employeePerformanceError, setEmployeePerformanceError] = useState<string | null>(null);
-  const [employeePerformanceSearch, setEmployeePerformanceSearch] = useState('');
-  const [selectedPerformanceEmployeeId, setSelectedPerformanceEmployeeId] = useState<number | null>(null);
   const [pendingDeadlineExtensionRequests, setPendingDeadlineExtensionRequests] = useState<any[]>([]);
   const [pendingDeadlineExtensionLoading, setPendingDeadlineExtensionLoading] = useState(false);
   const [pendingDeadlineExtensionDecisionId, setPendingDeadlineExtensionDecisionId] = useState<number | null>(null);
@@ -130,18 +86,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   useEffect(() => { fetchGoals(); }, [showArchived]);
 
   useEffect(() => {
-    void fetchEmployeePerformanceMetrics();
-  }, []);
-
-  useEffect(() => {
     void fetchPendingDeadlineExtensionRequests();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      void fetchEmployeePerformanceMetrics();
-    }, 15000);
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -327,31 +272,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       setGoals([]);
       setRecoveryTaskCount7d(0);
       setLastRealtimeSyncAt(Date.now());
-    }
-  };
-
-  const fetchEmployeePerformanceMetrics = async () => {
-    setEmployeePerformanceLoading(true);
-    setEmployeePerformanceError(null);
-    try {
-      const res = await fetch('/api/performance/employees', { headers: getAuthHeaders() });
-      if (!res.ok) throw new Error('Failed to load employee metrics');
-      const payload = await res.json();
-      const list = Array.isArray(payload?.employees) ? payload.employees : [];
-      setEmployeePerformance(list);
-      setEmployeePerformanceSummary(payload?.summary || null);
-      setSelectedPerformanceEmployeeId(prev => {
-        if (!list.length) return null;
-        if (prev && list.some((item: any) => Number(item?.employee_id) === Number(prev))) return prev;
-        return Number(list[0]?.employee_id || 0) || null;
-      });
-    } catch (e: any) {
-      setEmployeePerformanceError(e?.message || 'Unable to load employee metrics');
-      setEmployeePerformance([]);
-      setEmployeePerformanceSummary(null);
-      setSelectedPerformanceEmployeeId(null);
-    } finally {
-      setEmployeePerformanceLoading(false);
     }
   };
 
@@ -926,22 +846,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       return true;
     });
   }, [goals, activeTab, filterDept, filterStatus, searchTerm, showArchived]);
-
-  const filteredPerformanceEmployees = useMemo(() => {
-    const term = employeePerformanceSearch.trim().toLowerCase();
-    if (!term) return employeePerformance;
-    return employeePerformance.filter((item) => {
-      const name = String(item?.employee_name || '').toLowerCase();
-      const dept = String(item?.dept || '').toLowerCase();
-      const position = String(item?.position || '').toLowerCase();
-      return name.includes(term) || dept.includes(term) || position.includes(term);
-    });
-  }, [employeePerformance, employeePerformanceSearch]);
-
-  const selectedPerformanceEmployee = useMemo(() => {
-    if (!selectedPerformanceEmployeeId) return null;
-    return employeePerformance.find((item) => Number(item.employee_id) === Number(selectedPerformanceEmployeeId)) || null;
-  }, [employeePerformance, selectedPerformanceEmployeeId]);
 
   const proofReviewGoal = useMemo(() => {
     if (!proofReviewOpenGoal) return null;
@@ -2821,125 +2725,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         </div>
       </Card>
       </div>
-
-      <Card>
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Employee Overall Metrics</p>
-            <p className="text-xs text-slate-400">Goals, forms, plans, tasks, and discipline in one place</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => void fetchEmployeePerformanceMetrics()}
-              className="text-[10px] font-bold px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-            >
-              Refresh
-            </button>
-            <button
-              onClick={() => setMetricsSidebarOpen(v => !v)}
-              className="text-[10px] font-bold px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-            >
-              {metricsSidebarOpen ? 'Hide' : 'Show'}
-            </button>
-          </div>
-        </div>
-
-        {metricsSidebarOpen && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg bg-teal-50 dark:bg-teal-900/20 px-2.5 py-2">
-                <p className="text-[10px] font-bold uppercase text-teal-700 dark:text-teal-300">Employees</p>
-                <p className="text-lg font-black text-teal-700 dark:text-teal-300">{employeePerformanceSummary?.employees ?? employeePerformance.length}</p>
-              </div>
-              <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 px-2.5 py-2">
-                <p className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300">Avg Progress</p>
-                <p className="text-lg font-black text-blue-700 dark:text-blue-300">{employeePerformanceSummary?.avg_goal_progress ?? 0}%</p>
-              </div>
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 px-2.5 py-2">
-                <p className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">Appraisals</p>
-                <p className="text-lg font-black text-amber-700 dark:text-amber-300">{employeePerformanceSummary?.total_appraisals ?? 0}</p>
-              </div>
-              <div className="rounded-lg bg-rose-50 dark:bg-rose-900/20 px-2.5 py-2">
-                <p className="text-[10px] font-bold uppercase text-rose-700 dark:text-rose-300">Disciplinary</p>
-                <p className="text-lg font-black text-rose-700 dark:text-rose-300">{employeePerformanceSummary?.total_disciplinary ?? 0}</p>
-              </div>
-            </div>
-
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
-              <input
-                type="text"
-                value={employeePerformanceSearch}
-                onChange={(e) => setEmployeePerformanceSearch(e.target.value)}
-                placeholder="Find employee, dept, role..."
-                className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-              />
-            </div>
-
-            {employeePerformanceError && (
-              <div className="rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/20 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
-                {employeePerformanceError}
-              </div>
-            )}
-
-            {employeePerformanceLoading ? (
-              <p className="text-xs text-slate-400">Loading metrics...</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-2">
-                <div className="max-h-64 overflow-y-auto pr-1 space-y-1.5">
-                  {filteredPerformanceEmployees.map((item) => {
-                    const active = Number(item.employee_id) === Number(selectedPerformanceEmployeeId);
-                    return (
-                      <button
-                        key={item.employee_id}
-                        onClick={() => setSelectedPerformanceEmployeeId(item.employee_id)}
-                        className={`w-full text-left rounded-lg border px-2.5 py-2 transition-colors ${active ? 'border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-900/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{item.employee_name}</p>
-                            <p className="text-[10px] text-slate-400 truncate">{item.position || 'N/A'} • {item.dept || 'N/A'}</p>
-                          </div>
-                          <span className="text-[10px] font-black text-teal-600 dark:text-teal-300">{item.goals_avg_progress}%</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                  {filteredPerformanceEmployees.length === 0 && (
-                    <p className="text-xs text-slate-400 px-1 py-3">No matching employees.</p>
-                  )}
-                </div>
-
-                {selectedPerformanceEmployee && (
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 p-3 space-y-2.5">
-                    <div>
-                      <p className="text-sm font-black text-slate-800 dark:text-slate-100">{selectedPerformanceEmployee.employee_name}</p>
-                      <p className="text-[10px] text-slate-400">{selectedPerformanceEmployee.position || 'N/A'} • {selectedPerformanceEmployee.dept || 'N/A'}</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-1.5 text-[10px]">
-                      <div className="rounded bg-white dark:bg-slate-900 px-2 py-1.5 border border-slate-200 dark:border-slate-700"><span className="font-bold text-slate-500">Goals</span><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goals_total}</p></div>
-                      <div className="rounded bg-white dark:bg-slate-900 px-2 py-1.5 border border-slate-200 dark:border-slate-700"><span className="font-bold text-slate-500">Completion</span><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goals_completion_rate}%</p></div>
-                      <div className="rounded bg-white dark:bg-slate-900 px-2 py-1.5 border border-slate-200 dark:border-slate-700"><span className="font-bold text-slate-500">PIP / IDP</span><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.pip_count} / {selectedPerformanceEmployee.idp_count}</p></div>
-                      <div className="rounded bg-white dark:bg-slate-900 px-2 py-1.5 border border-slate-200 dark:border-slate-700"><span className="font-bold text-slate-500">Forms</span><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.self_assessments_count + selectedPerformanceEmployee.appraisals_count}</p></div>
-                      <div className="rounded bg-white dark:bg-slate-900 px-2 py-1.5 border border-slate-200 dark:border-slate-700"><span className="font-bold text-slate-500">At Risk / Overdue</span><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goals_at_risk} / {selectedPerformanceEmployee.goals_overdue}</p></div>
-                      <div className="rounded bg-white dark:bg-slate-900 px-2 py-1.5 border border-slate-200 dark:border-slate-700"><span className="font-bold text-slate-500">Disciplinary</span><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.disciplinary_count}</p></div>
-                      <div className="rounded bg-white dark:bg-slate-900 px-2 py-1.5 border border-slate-200 dark:border-slate-700"><span className="font-bold text-slate-500">Recovery Open</span><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.recovery_tasks_open}</p></div>
-                      <div className="rounded bg-white dark:bg-slate-900 px-2 py-1.5 border border-slate-200 dark:border-slate-700"><span className="font-bold text-slate-500">Proofs</span><p className="font-black text-slate-700 dark:text-slate-200">+{selectedPerformanceEmployee.proofs_approved} / -{selectedPerformanceEmployee.proofs_rejected}</p></div>
-                    </div>
-
-                    <div className="text-[10px] text-slate-500 space-y-1">
-                      <p><span className="font-bold">Last Self Assessment:</span> {selectedPerformanceEmployee.last_self_assessment_at ? new Date(selectedPerformanceEmployee.last_self_assessment_at).toLocaleDateString() : 'N/A'}</p>
-                      <p><span className="font-bold">Last Appraisal:</span> {selectedPerformanceEmployee.last_appraisal_signoff || 'N/A'}</p>
-                      <p><span className="font-bold">Last Disciplinary:</span> {selectedPerformanceEmployee.last_disciplinary_date || 'N/A'}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
       </div>
       </>
       )}

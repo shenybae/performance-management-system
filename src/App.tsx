@@ -69,6 +69,7 @@ import { PayrollManagement } from './components/screens/hr/PayrollManagement';
 
 // --- Manager Screens ---
 import { OKRPlanner } from './components/screens/manager/OKRPlanner';
+import { EmployeeMetricsDashboard } from './components/screens/manager/EmployeeMetricsDashboard';
 import { CoachingJournal } from './components/screens/manager/CoachingJournal';
 import { EvaluationPortal } from './components/screens/manager/EvaluationPortal';
 import { Promotability } from './components/screens/manager/Promotability';
@@ -220,6 +221,7 @@ export default function App() {
     A12: '/admin/promotability',
     // Manager
     B1: '/manager/okr-planner',
+    B6: '/manager/employee-metrics',
     B2: '/manager/coaching-journal',
     B3: '/manager/disciplinary-action',
     B4: '/manager/evaluation-portal',
@@ -257,6 +259,7 @@ export default function App() {
     },
     manager: {
       'okr-planner': 'B1',
+      'employee-metrics': 'B6',
       'coaching-journal': 'B2',
       'disciplinary-action': 'B3',
       'evaluation-portal': 'B4',
@@ -554,6 +557,7 @@ export default function App() {
 
               // Manager Screens (The Coach & Evaluator)
               case 'B1': return <OKRPlanner employees={employees} />;
+              case 'B6': return <EmployeeMetricsDashboard employees={employees} />;
               case 'B2': return <CoachingJournal employees={employees} currentUser={user} navContext={navContext} onNavContextClear={() => setNavContext(null)} />;
               case 'B3': return <DisciplinaryLog employees={employees} currentUser={user} />;
               case 'B4': return <EvaluationPortal employees={employees} currentUser={user} />;
@@ -609,6 +613,7 @@ export default function App() {
     A12: 'Promotability',
     A13: 'Departments',
     B1: 'OKR Planner',
+    B6: 'Employee Metrics',
     B2: 'Coaching Journal',
     B3: 'Disciplinary Action',
     B4: 'Evaluation Portal',
@@ -731,6 +736,7 @@ export default function App() {
               {isSidebarExpanded && <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Performance Dashboard</div>}
               <SidebarItem expanded={isSidebarExpanded} icon={MessageSquare} label="360° Feedback" active={activeScreen === 'B8'} onClick={() => goToScreen('B8')} />
               <SidebarItem expanded={isSidebarExpanded} icon={Target} label="Target & OKR Planner" active={activeScreen === 'B1'} onClick={() => goToScreen('B1')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={LayoutDashboard} label="Employee Metrics" active={activeScreen === 'B6'} onClick={() => goToScreen('B6')} />
               <SidebarItem expanded={isSidebarExpanded} icon={MessageSquare} label="Coaching Journal" active={activeScreen === 'B2'} onClick={() => goToScreen('B2')} />
               <SidebarItem expanded={isSidebarExpanded} icon={ShieldAlert} label="Disciplinary Action" active={activeScreen === 'B3'} onClick={() => goToScreen('B3')} />
               <SidebarItem expanded={isSidebarExpanded} icon={ClipboardCheck} label="Evaluation Portal" active={activeScreen === 'B4'} onClick={() => goToScreen('B4')} />
