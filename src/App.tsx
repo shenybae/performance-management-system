@@ -693,7 +693,7 @@ export default function App() {
         transition={{
           x: { duration: 0.24, ease: 'easeOut' },
           opacity: { duration: 0.2, ease: 'easeOut' },
-          width: { type: 'spring', stiffness: 280, damping: 30, mass: 0.8 },
+          width: { duration: 0.22, ease: [0.22, 1, 0.36, 1] },
         }}
         onMouseEnter={handleDesktopSidebarMouseEnter}
         onMouseLeave={handleDesktopSidebarMouseLeave}
