@@ -2615,13 +2615,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       {/* GOALS TABLE */}
       <Card>
         <div className="overflow-x-auto pb-1">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse table-fixed">
             <thead><tr className="border-b border-slate-100 dark:border-slate-800">
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Title</th>
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Department</th>
-              {activeTab === 'Team' && <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Team</th>}
-              {activeTab === 'Individual' && <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Employee</th>}
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Owner</th>
+              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[320px]">Title</th>
+              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[170px]">Department</th>
+              {activeTab === 'Team' && <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[170px]">Team</th>}
+              {activeTab === 'Individual' && <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[170px]">Employee</th>}
+              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[220px]">Owner</th>
               <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[96px]">Priority</th>
               <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[170px]">Progress</th>
               <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[130px]">Status</th>
