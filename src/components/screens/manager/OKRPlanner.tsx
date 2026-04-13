@@ -1976,7 +1976,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             {/* Scope & Department */}
             <div className="grid grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Level *</label>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Level</label>
                 <select value={form.scope} onChange={e => setForm({ ...form, scope: e.target.value })} className={inp} required>
                   <option value="">Select Goal Level...</option>
                   <option value="Department">Dept-wide — Entire department</option>
@@ -2147,11 +2147,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             )}
             {/* Goal Details */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Title *</label>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Title</label>
               <input type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className={inp} placeholder="Short title for the goal/OKR" maxLength={120} required />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Statement / Key Result *</label>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Statement / Key Result</label>
               <textarea rows={2} value={form.statement} onChange={e => setForm({ ...form, statement: e.target.value })} className={inp} placeholder="e.g. Increase department revenue by 20% through cross-selling initiatives" minLength={10} maxLength={1000} required></textarea>
             </div>
             <div className="grid grid-cols-1 gap-4">
