@@ -464,11 +464,11 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
           open={isAdjustPhotoModalOpen}
           title="Adjust Profile Picture"
           onClose={cancelAdjustPhoto}
-          maxWidthClassName="max-w-2xl"
+          maxWidthClassName="max-w-xl"
         >
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="flex justify-center">
-              <div className="relative w-80 h-80 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <div className="relative w-96 h-96 rounded-3xl overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 border-2 border-slate-200 dark:border-slate-700 shadow-lg">
                 {pendingPhoto ? (
                   <img
                     src={pendingPhoto}
@@ -477,15 +477,14 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
                     style={{ transform: `translate(-50%, -50%) translate(${photoOffsetX}px, ${photoOffsetY}px) scale(${photoZoom})` }}
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">No selected photo.</div>
+                  <div className="w-full h-full flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">No selected photo uploaded.</div>
                 )}
-                <div className="pointer-events-none absolute inset-0 border-[3px] border-white/80 rounded-2xl" />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="space-y-3">
               <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Zoom</label>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-2">Zoom: {photoZoom.toFixed(2)}x</label>
                 <input
                   type="range"
                   min={1}
@@ -497,7 +496,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Horizontal</label>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-2">Horizontal: {photoOffsetX}px</label>
                 <input
                   type="range"
                   min={-180}
@@ -509,7 +508,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Vertical</label>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-2">Vertical: {photoOffsetY}px</label>
                 <input
                   type="range"
                   min={-180}
@@ -522,12 +521,12 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 justify-end pt-1">
+            <div className="flex gap-2 justify-center pt-4">
               <button
                 type="button"
                 onClick={() => { setPhotoZoom(1); setPhotoOffsetX(0); setPhotoOffsetY(0); }}
                 disabled={uploading}
-                className="px-3 py-2 text-sm font-bold text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                className="px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
               >
                 Reset
               </button>
@@ -535,7 +534,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
                 type="button"
                 onClick={cancelAdjustPhoto}
                 disabled={uploading}
-                className="px-3 py-2 text-sm font-bold text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                className="px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -543,7 +542,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
                 type="button"
                 onClick={applyAndUploadAdjustedPhoto}
                 disabled={uploading || !pendingPhoto}
-                className="px-4 py-2 text-sm font-bold bg-teal-deep text-white rounded-xl hover:bg-teal-green transition-colors disabled:opacity-50"
+                className="px-6 py-2.5 text-sm font-bold bg-teal-deep text-white rounded-xl hover:bg-teal-green transition-colors disabled:opacity-50"
               >
                 {uploading ? 'Saving...' : 'Apply and Upload'}
               </button>
