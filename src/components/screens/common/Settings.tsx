@@ -467,18 +467,20 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
           maxWidthClassName="max-w-2xl"
         >
           <div className="space-y-4">
-            <div className="relative w-full h-[320px] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              {pendingPhoto ? (
-                <img
-                  src={pendingPhoto}
-                  alt="Adjust preview"
-                  className="absolute left-1/2 top-1/2 max-w-none"
-                  style={{ transform: `translate(-50%, -50%) translate(${photoOffsetX}px, ${photoOffsetY}px) scale(${photoZoom})` }}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">No selected photo.</div>
-              )}
-              <div className="pointer-events-none absolute inset-0 border-[3px] border-white/80 rounded-2xl" />
+            <div className="flex justify-center">
+              <div className="relative w-80 h-80 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                {pendingPhoto ? (
+                  <img
+                    src={pendingPhoto}
+                    alt="Adjust preview"
+                    className="absolute left-1/2 top-1/2 max-w-none"
+                    style={{ transform: `translate(-50%, -50%) translate(${photoOffsetX}px, ${photoOffsetY}px) scale(${photoZoom})` }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">No selected photo.</div>
+                )}
+                <div className="pointer-events-none absolute inset-0 border-[3px] border-white/80 rounded-2xl" />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
