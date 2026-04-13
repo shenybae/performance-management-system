@@ -2505,7 +2505,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       {/* SCOPE TABS & FILTERS */}
       {plannerView === 'goals' && (
       <>
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 items-start">
       <div className="space-y-4">
       <Card>
         <div className="flex items-center justify-between gap-3 mb-3">
@@ -2724,7 +2723,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           </table>
         </div>
       </Card>
-      </div>
       </div>
       </>
       )}

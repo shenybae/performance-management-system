@@ -2979,7 +2979,11 @@ async function startServer() {
               if (!empAllowed) continue; // Skip this assignment if not in same dept
             }
             await query("INSERT INTO goal_assignees (goal_id, employee_id, assigned_by, assigned_by_role, assigned_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (goal_id, employee_id) DO NOTHING", [newGoalId, eid, actor.id || null, role || null, now]);
-            try { await createNotification({ user_id: (await query('SELECT id FROM users WHERE employee_id = ?', [eid]))?.[0]?.id || null, type: 'info', message: `You were assigned a goal`, source: 'goals' }); } catch (e) {}
+            try {
+              const notifyRows: any = await query('SELECT id FROM users WHERE employee_id = ?', [eid]);
+              const notifyUser = Array.isArray(notifyRows) ? notifyRows[0] : notifyRows;
+              await createNotification({ user_id: notifyUser?.id || null, type: 'info', message: `You were assigned a goal`, source: 'goals' });
+            } catch (e) {}
           }
         }
       }
@@ -3371,7 +3375,7 @@ async function startServer() {
           (SELECT COUNT(*) FROM goals g WHERE g.employee_id = e.id AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS goals_active,
           (SELECT COUNT(*) FROM goals g WHERE g.employee_id = e.id AND COALESCE(g.status, 'Not Started') = 'Completed') AS goals_completed,
           (SELECT COUNT(*) FROM goals g WHERE g.employee_id = e.id AND COALESCE(g.status, 'Not Started') = 'At Risk') AS goals_at_risk,
-          (SELECT COUNT(*) FROM goals g WHERE g.employee_id = e.id AND g.target_date IS NOT NULL AND g.target_date < CURRENT_DATE::text AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS goals_overdue,
+          (SELECT COUNT(*) FROM goals g WHERE g.employee_id = e.id AND g.target_date IS NOT NULL AND DATE(g.target_date) < CURRENT_DATE AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS goals_overdue,
           (SELECT ROUND(COALESCE(AVG(COALESCE(g.progress, 0)), 0), 1) FROM goals g WHERE g.employee_id = e.id) AS goals_avg_progress,
 
           (SELECT COUNT(*) FROM goal_assignees ga LEFT JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id) AS delegated_goal_count,
@@ -4457,7 +4461,7 @@ async function startServer() {
   });
 
   // ---- Coaching Logs CRUD ----
-  const canAccessCoachingEmployee = async (actor: any, employeeId: number): Promise<boolean> => {
+  const canAccessCoachingEmployee = async (actor: any, employeeId: number | null): Promise<boolean> => {
     const role = actor?.role;
     const normalizedRole = normalizeUserRole(role);
     const actorCtx = await getActorOrgContext(Number(actor?.id || 0));
@@ -7399,8 +7403,8 @@ async function startServer() {
           socket.join(`role_${decoded.role}`);
           broadcastPresence();
           try { socket.emit('auth_ok', { userId: decoded.id, role: decoded.role }); } catch (e) {}
-        } catch (err) {
-          console.log(`Socket handshake auth failed: socket=${socket.id} error=${err && err.message ? err.message : err}`);
+        } catch (err: any) {
+          console.log(`Socket handshake auth failed: socket=${socket.id} error=${err?.message || String(err)}`);
           try { socket.emit('auth_error', { message: 'Invalid token' }); } catch (e) {}
         }
       }
@@ -7436,8 +7440,8 @@ async function startServer() {
         socket.join(`role_${decoded.role}`);
         broadcastPresence();
         socket.emit('auth_ok', { userId: decoded.id, role: decoded.role });
-      } catch (err) {
-        console.log(`Socket auth failed: socket=${socket.id} error=${err && err.message ? err.message : err}`);
+      } catch (err: any) {
+        console.log(`Socket auth failed: socket=${socket.id} error=${err?.message || String(err)}`);
         socket.emit('auth_error', { message: 'Invalid token' });
       }
     });
