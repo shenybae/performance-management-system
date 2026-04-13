@@ -464,11 +464,12 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
           open={isAdjustPhotoModalOpen}
           title="Adjust Profile Picture"
           onClose={cancelAdjustPhoto}
-          maxWidthClassName="max-w-xl"
+          maxWidthClassName="max-w-2xl"
+          bodyClassName="flex flex-col items-center"
         >
-          <div className="space-y-6">
+          <div className="w-full space-y-6">
             <div className="flex justify-center">
-              <div className="relative w-96 h-96 rounded-3xl overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 border-2 border-slate-200 dark:border-slate-700 shadow-lg">
+              <div className="relative w-full max-w-sm aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg">
                 {pendingPhoto ? (
                   <img
                     src={pendingPhoto}
@@ -482,7 +483,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="w-full space-y-4">
               <div>
                 <label className="block text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-2">Zoom: {photoZoom.toFixed(2)}x</label>
                 <input
@@ -521,7 +522,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
               </div>
             </div>
 
-            <div className="flex gap-2 justify-center pt-4">
+            <div className="flex gap-3 justify-center pt-2">
               <button
                 type="button"
                 onClick={() => { setPhotoZoom(1); setPhotoOffsetX(0); setPhotoOffsetY(0); }}
