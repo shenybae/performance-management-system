@@ -242,7 +242,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
       <div className="grid grid-cols-1 gap-4">
 
         {/* Profile Picture */}
-        <Card>
+        <Card className="justify-self-start w-full max-w-md">
           <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-3">Profile Picture</h3>
           <div className="flex items-start gap-4">
             <div className="flex flex-col items-center gap-1">
