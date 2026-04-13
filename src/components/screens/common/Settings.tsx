@@ -243,9 +243,9 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
 
         {/* Profile Picture */}
         <Card>
-          <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-4">Profile Picture</h3>
-          <div className="flex items-start gap-6">
-            <div className="flex flex-col items-center gap-2">
+          <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-3">Profile Picture</h3>
+          <div className="flex items-start gap-4">
+            <div className="flex flex-col items-center gap-1">
               <div className="relative group">
                 {profilePic ? (
                   <button
@@ -271,41 +271,41 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
                 </button>
               </div>
               <div className="text-center">
-                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{user.employee_name || user.full_name || user.username || user.email}</p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">{user.role}</p>
-                {user.position && <p className="text-[10px] text-slate-400 dark:text-slate-500">{user.position}</p>}
-                {user.dept && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold">{user.dept}</p>}
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-200 leading-tight">{user.employee_name || user.full_name || user.username || user.email}</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold leading-tight">{user.role}</p>
+                {user.position && <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">{user.position}</p>}
+                {user.dept && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold leading-tight">{user.dept}</p>}
               </div>
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
               {profilePic && (
                 <button
                   type="button"
                   onClick={() => setIsPhotoModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                 >
-                  <Camera size={14} /> View Photo
+                  <Camera size={13} /> View Photo
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-teal-deep text-white rounded-xl hover:bg-teal-green transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold bg-teal-deep text-white rounded-lg hover:bg-teal-green transition-colors disabled:opacity-50"
               >
-                <Upload size={14} /> {uploading ? 'Uploading...' : 'Upload Photo'}
+                <Upload size={13} /> {uploading ? 'Uploading...' : 'Upload Photo'}
               </button>
               {profilePic && (
                 <button
                   type="button"
                   onClick={handleRemovePic}
                   disabled={uploading}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-red-500 bg-red-50 dark:bg-red-900/20 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors disabled:opacity-50"
                 >
-                  <Trash2 size={14} /> Remove
+                  <Trash2 size={13} /> Remove
                 </button>
               )}
-              <p className="text-[10px] text-slate-400">Max 2 MB. JPG, PNG, or GIF.</p>
+              <p className="text-[9px] text-slate-400 mt-0.5">Max 2 MB. JPG, PNG, or GIF.</p>
             </div>
           </div>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleProfileUpload} />
