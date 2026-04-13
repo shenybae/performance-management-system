@@ -3475,7 +3475,108 @@ async function startServer() {
       });
     } catch (err) {
       console.error('GET /api/performance/employees error:', err);
-      res.status(500).json({ error: 'Database error' });
+
+      // Graceful fallback so the dashboard can still load even when advanced
+      // metrics columns/tables are not yet present in a deployed database.
+      try {
+        const actor = (req as any).user || {};
+        const role = normalizeUserRole(actor.role) || String(actor.role || '');
+        const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+        const queryEmployeeId = normalizeEmployeeId(req.query.employee_id);
+
+        const whereClauses: string[] = [];
+        const params: any[] = [];
+
+        if (role === 'Employee') {
+          const actorEmployeeId = normalizeEmployeeId(actor.employee_id);
+          if (actorEmployeeId) {
+            whereClauses.push('e.id = ?');
+            params.push(actorEmployeeId);
+          }
+        } else if (role === 'Manager') {
+          const managerDept = normalizeDept(actorCtx.dept);
+          if (managerDept) {
+            whereClauses.push("LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))");
+            params.push(managerDept);
+          }
+        } else if (role === 'HR') {
+          const hrDept = normalizeDept(actorCtx.dept);
+          if (hrDept) {
+            whereClauses.push("LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))");
+            params.push(hrDept);
+          }
+        }
+
+        if (queryEmployeeId) {
+          whereClauses.push('e.id = ?');
+          params.push(queryEmployeeId);
+        }
+
+        const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+        const fallbackRows: any = await query(
+          `SELECT e.id AS employee_id, e.name AS employee_name, e.position, e.dept
+           FROM employees e
+           ${whereSql}
+           ORDER BY e.name ASC`,
+          params
+        );
+
+        const list = (Array.isArray(fallbackRows) ? fallbackRows : []).map((r: any) => ({
+          employee_id: Number(r.employee_id),
+          employee_name: r.employee_name || 'Unknown',
+          position: r.position || null,
+          dept: r.dept || null,
+          goals_total: 0,
+          goals_active: 0,
+          goals_completed: 0,
+          goals_at_risk: 0,
+          goals_overdue: 0,
+          goals_avg_progress: 0,
+          goals_completion_rate: 0,
+          delegated_goal_count: 0,
+          team_goal_count: 0,
+          department_goal_count: 0,
+          pip_count: 0,
+          idp_count: 0,
+          recovery_tasks_total: 0,
+          recovery_tasks_open: 0,
+          recovery_tasks_completed: 0,
+          proofs_approved: 0,
+          proofs_rejected: 0,
+          proofs_needs_revision: 0,
+          self_assessments_count: 0,
+          last_self_assessment_at: null,
+          appraisals_count: 0,
+          appraisals_avg_overall: 0,
+          last_appraisal_signoff: null,
+          disciplinary_count: 0,
+          last_disciplinary_date: null,
+          feedback_360_count: 0,
+          team_improvement_plans: 0,
+          team_development_plans: 0,
+          department_improvement_plans: 0,
+          department_development_plans: 0,
+        }));
+
+        return res.json({
+          employees: list,
+          summary: list.length === 0 ? null : {
+            employees: list.length,
+            avg_goal_progress: 0,
+            total_goals: 0,
+            total_pips: 0,
+            total_idps: 0,
+            total_appraisals: 0,
+            total_disciplinary: 0,
+            total_self_assessments: 0,
+          },
+          generated_at: new Date().toISOString(),
+          degraded: true,
+        });
+      } catch (fallbackErr) {
+        console.error('GET /api/performance/employees fallback error:', fallbackErr);
+        return res.json({ employees: [], summary: null, generated_at: new Date().toISOString(), degraded: true });
+      }
     }
   });
 
