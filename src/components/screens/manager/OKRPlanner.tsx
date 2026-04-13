@@ -225,6 +225,29 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       }));
   }, [usersList, form.department]);
 
+  const goalOwnerOptions = useMemo(() => {
+    const normalizedDept = String(form.department || '').trim().toLowerCase();
+    const filtered = employees.filter((emp) => {
+      if (!normalizedDept) return true;
+      return String(emp.dept || '').trim().toLowerCase() === normalizedDept;
+    });
+
+    const seen = new Set<string>();
+    return filtered
+      .map((emp) => {
+        const name = String(emp.name || '').trim();
+        if (!name) return null;
+        if (seen.has(name.toLowerCase())) return null;
+        seen.add(name.toLowerCase());
+        return {
+          value: name,
+          label: `${name}${emp.position ? ` (${emp.position})` : ''}`,
+          avatarUrl: (emp as any).profile_picture || null,
+        };
+      })
+      .filter(Boolean) as Array<{ value: string; label: string; avatarUrl: string | null }>;
+  }, [employees, form.department]);
+
   const selectedAssignees = useMemo(() => {
     const selected = new Set((form.assignee_ids || []).map(String));
     return availableAssignees.filter(emp => selected.has(String(emp.id)));
@@ -2048,7 +2071,18 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               )}
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Owner / Responsible</label>
-                <input type="text" value={form.delegation} onChange={e => setForm({ ...form, delegation: e.target.value })} className={inp} placeholder="Who is accountable for this goal" maxLength={120} />
+                <SearchableSelect
+                  options={goalOwnerOptions}
+                  value={form.delegation}
+                  onChange={v => setForm({ ...form, delegation: String(v) })}
+                  placeholder="Who is accountable for this goal"
+                  allowEmpty
+                  emptyLabel="No owner selected"
+                  searchable
+                  pill
+                  dropdownVariant="pills-horizontal"
+                  className="w-full"
+                />
               </div>
               {(form.scope === 'Team' || form.scope === 'Department') && (
                 <div>
