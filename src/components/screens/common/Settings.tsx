@@ -272,7 +272,6 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
               </div>
               <div className="text-center">
                 <p className="text-sm font-bold text-slate-700 dark:text-slate-200 leading-tight">{user.employee_name || user.full_name || user.username || user.email}</p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold leading-tight">{user.role}</p>
                 {user.position && <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">{user.position}</p>}
                 {user.dept && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold leading-tight">{user.dept}</p>}
               </div>
