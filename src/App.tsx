@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Users,
@@ -148,6 +148,7 @@ export default function App() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+  const sidebarHoverLeaveTimerRef = useRef<number | null>(null);
   const [isDesktopViewport, setIsDesktopViewport] = useState(() => {
     if (typeof window === 'undefined') return true;
     return window.innerWidth >= 1024;
@@ -201,6 +202,35 @@ export default function App() {
   useEffect(() => {
     if (!isDesktopViewport) setIsSidebarHovered(false);
   }, [isDesktopViewport]);
+
+  useEffect(() => {
+    return () => {
+      if (sidebarHoverLeaveTimerRef.current !== null) {
+        window.clearTimeout(sidebarHoverLeaveTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleDesktopSidebarMouseEnter = () => {
+    if (!isDesktopViewport) return;
+    if (sidebarHoverLeaveTimerRef.current !== null) {
+      window.clearTimeout(sidebarHoverLeaveTimerRef.current);
+      sidebarHoverLeaveTimerRef.current = null;
+    }
+    setIsSidebarHovered(true);
+  };
+
+  const handleDesktopSidebarMouseLeave = () => {
+    if (!isDesktopViewport) return;
+    if (sidebarHoverLeaveTimerRef.current !== null) {
+      window.clearTimeout(sidebarHoverLeaveTimerRef.current);
+    }
+    // Slight delay prevents rapid collapse/expand jitter near the edge.
+    sidebarHoverLeaveTimerRef.current = window.setTimeout(() => {
+      setIsSidebarHovered(false);
+      sidebarHoverLeaveTimerRef.current = null;
+    }, 140);
+  };
 
   // --- Routing helpers: map screens to role-based URL paths and vice-versa ---
   const roleSlug = (r: string) => (r === 'HR' ? 'admin' : r.toLowerCase());
@@ -660,9 +690,13 @@ export default function App() {
           opacity: isDesktopViewport || isSidebarOpen ? 1 : 0.96,
           width: isDesktopViewport ? (isSidebarExpanded ? 264 : 84) : 288,
         }}
-        transition={{ duration: 0.24, ease: 'easeOut' }}
-        onMouseEnter={() => isDesktopViewport && setIsSidebarHovered(true)}
-        onMouseLeave={() => isDesktopViewport && setIsSidebarHovered(false)}
+        transition={{
+          x: { duration: 0.24, ease: 'easeOut' },
+          opacity: { duration: 0.2, ease: 'easeOut' },
+          width: { type: 'spring', stiffness: 280, damping: 30, mass: 0.8 },
+        }}
+        onMouseEnter={handleDesktopSidebarMouseEnter}
+        onMouseLeave={handleDesktopSidebarMouseLeave}
         className="fixed inset-y-0 left-0 z-50 system-bg border-r border-slate-200 dark:border-slate-800 flex flex-col lg:static lg:z-auto overflow-hidden"
       >
         <div className={`border-b border-slate-100 dark:border-slate-800 ${isSidebarExpanded ? 'px-4 py-5' : 'px-2 py-4'}`}>
