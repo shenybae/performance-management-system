@@ -835,9 +835,6 @@ export default function App() {
                 )}
                 <div className={`min-w-0 flex-1 ${isSidebarExpanded ? 'block' : 'hidden'}`}>
                   <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.employee_name || user.full_name || user.username || user.email}</p>
-                  <div className="mt-1 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                    {roleDisplay(user.role)}
-                  </div>
                 </div>
               </div>
               {isSidebarExpanded && <div className="mt-2.5 flex gap-1 w-full">
