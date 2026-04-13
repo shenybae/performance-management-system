@@ -237,15 +237,29 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
   };
 
   return (
-    <div>
+    <div className="space-y-5">
       <SectionHeader title="Settings" subtitle="Your account and preferences" />
-      <div className="grid grid-cols-1 gap-4">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-teal-50/90 via-white to-cyan-50/80 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest font-bold text-teal-700 dark:text-teal-300">Workspace Settings</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Manage your profile, account identity, and security in one place.</p>
+          </div>
+          <button
+            onClick={() => setIsProfileAccountModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold rounded-xl bg-white/80 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 transition-colors"
+          >
+            <Camera size={13} /> Quick Profile View
+          </button>
+        </div>
+      </div>
 
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* Profile Picture */}
-        <Card className="justify-self-start w-full max-w-md">
-          <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-3">Profile Picture</h3>
+        <Card className="xl:col-span-1 h-fit">
+          <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-4">Profile Picture</h3>
           <div className="flex items-start gap-4">
-            <div className="flex flex-col items-center gap-1">
+            <div className="flex flex-col items-center gap-2.5">
               <div className="relative group">
                 {profilePic ? (
                   <button
@@ -254,34 +268,34 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
                     className="block rounded-full focus:outline-none focus:ring-2 focus:ring-teal-green/40"
                     aria-label="View profile picture"
                   >
-                    <img src={profilePic} alt="Profile" className="w-20 h-20 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700" />
+                    <img src={profilePic} alt="Profile" className="w-24 h-24 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700 shadow-sm" />
                   </button>
                 ) : (
-                  <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center">
-                    <Camera size={24} className="text-slate-400" />
+                  <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center">
+                    <Camera size={26} className="text-slate-400" />
                   </div>
                 )}
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={uploading}
-                  className="absolute inset-0 w-20 h-20 rounded-full bg-black/0 group-hover:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                  className="absolute inset-0 w-24 h-24 rounded-full bg-black/0 group-hover:bg-black/45 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
                 >
                   <Upload size={18} className="text-white" />
                 </button>
               </div>
               <div className="text-center">
                 <p className="text-sm font-bold text-slate-700 dark:text-slate-200 leading-tight">{user.employee_name || user.full_name || user.username || user.email}</p>
-                {user.position && <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">{user.position}</p>}
-                {user.dept && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold leading-tight">{user.dept}</p>}
+                {user.position && <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">{user.position}</p>}
+                {user.dept && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold leading-tight mt-0.5">{user.dept}</p>}
               </div>
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2 flex-1 min-w-0">
               {profilePic && (
                 <button
                   type="button"
                   onClick={() => setIsPhotoModalOpen(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                  className="flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                 >
                   <Camera size={13} /> View Photo
                 </button>
@@ -290,7 +304,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold bg-teal-deep text-white rounded-lg hover:bg-teal-green transition-colors disabled:opacity-50"
+                className="flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold bg-teal-deep text-white rounded-xl hover:bg-teal-green transition-colors disabled:opacity-50"
               >
                 <Upload size={13} /> {uploading ? 'Uploading...' : 'Upload Photo'}
               </button>
@@ -299,20 +313,20 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
                   type="button"
                   onClick={handleRemovePic}
                   disabled={uploading}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors disabled:opacity-50"
+                  className="flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors disabled:opacity-50"
                 >
                   <Trash2 size={13} /> Remove
                 </button>
               )}
-              <p className="text-[9px] text-slate-400 mt-0.5">Max 2 MB. JPG, PNG, or GIF.</p>
+              <p className="text-[10px] text-slate-400 text-center mt-0.5">Max 2 MB. JPG, PNG, or GIF.</p>
             </div>
           </div>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleProfileUpload} />
         </Card>
 
         {/* Account Information */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
+        <Card className="xl:col-span-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
             <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">Account Information</h3>
             <div className="flex items-center gap-2">
               <button
@@ -331,59 +345,59 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
           {!canEditAccountInfo && (
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Only HR admin can edit account information.</p>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-            <div className="flex items-center gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
               <Briefcase size={16} className="text-slate-400 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Full Name</p>
                 {editing && canEditAccountInfo ? (
-                  <input value={accountInfo.employee_name} onChange={e => setAccountInfo({ ...accountInfo, employee_name: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
+                  <input value={accountInfo.employee_name} onChange={e => setAccountInfo({ ...accountInfo, employee_name: e.target.value })} className="mt-1 w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
                 ) : (
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.employee_name || '—'}</p>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
               <Mail size={16} className="text-slate-400 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Email</p>
                 {editing && canEditAccountInfo ? (
-                  <input value={accountInfo.email} onChange={e => setAccountInfo({ ...accountInfo, email: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
+                  <input value={accountInfo.email} onChange={e => setAccountInfo({ ...accountInfo, email: e.target.value })} className="mt-1 w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
                 ) : (
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.email || '—'}</p>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
               <Building2 size={16} className="text-slate-400 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Department</p>
                 {editing && hasEmployee && canEditAccountInfo ? (
-                  <input value={accountInfo.dept} onChange={e => setAccountInfo({ ...accountInfo, dept: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
+                  <input value={accountInfo.dept} onChange={e => setAccountInfo({ ...accountInfo, dept: e.target.value })} className="mt-1 w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
                 ) : (
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.dept || '—'}</p>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
               <Briefcase size={16} className="text-slate-400 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Position</p>
                 {editing && hasEmployee && canEditAccountInfo ? (
-                  <input value={accountInfo.position} onChange={e => setAccountInfo({ ...accountInfo, position: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
+                  <input value={accountInfo.position} onChange={e => setAccountInfo({ ...accountInfo, position: e.target.value })} className="mt-1 w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
                 ) : (
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.position || '—'}</p>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
               <Shield size={16} className="text-slate-400 shrink-0" />
               <div className="min-w-0">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Role</p>
                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.role || '—'}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
               <Calendar size={16} className="text-slate-400 shrink-0" />
               <div className="min-w-0">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Hire Date</p>
@@ -392,28 +406,27 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
             </div>
           </div>
 
-          {/* Contact Details */}
           {hasEmployee && (
-            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
               <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-3">Contact Details</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                <div className="flex items-center gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
                   <Phone size={16} className="text-slate-400 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Phone</p>
                     {editing && canEditAccountInfo ? (
-                      <input value={accountInfo.phone} onChange={e => setAccountInfo({ ...accountInfo, phone: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
+                      <input value={accountInfo.phone} onChange={e => setAccountInfo({ ...accountInfo, phone: e.target.value })} className="mt-1 w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
                     ) : (
                       <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.phone || '—'}</p>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 md:col-span-2">
+                <div className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3 md:col-span-2">
                   <MapPin size={16} className="text-slate-400 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Address</p>
                     {editing && canEditAccountInfo ? (
-                      <input value={accountInfo.address} onChange={e => setAccountInfo({ ...accountInfo, address: e.target.value })} className="w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
+                      <input value={accountInfo.address} onChange={e => setAccountInfo({ ...accountInfo, address: e.target.value })} className="mt-1 w-full p-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" />
                     ) : (
                       <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{accountInfo.address || '—'}</p>
                     )}
@@ -423,9 +436,8 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
             </div>
           )}
 
-          {/* Edit/Save/Cancel buttons */}
           {editing && canEditAccountInfo && (
-            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex gap-3">
               <button
                 onClick={() => { saveAccountInfo(); setEditing(false); }}
                 disabled={savingInfo}
@@ -442,11 +454,14 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
             </div>
           )}
         </Card>
+      </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Change Password */}
         <Card>
-          <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-4">Change Password</h3>
-          <form onSubmit={handleChange} className="space-y-3 max-w-sm">
+          <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-1">Change Password</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Use a strong password with at least 8 characters.</p>
+          <form onSubmit={handleChange} className="space-y-3">
             <input type="password" placeholder="Current password" value={current} onChange={e => setCurrent(e.target.value)} className="w-full p-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" minLength={6} maxLength={128} autoComplete="current-password" required />
             <input type="password" placeholder="New password" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full p-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" minLength={8} maxLength={128} autoComplete="new-password" required />
             <button type="submit" className="px-4 py-2.5 bg-teal-deep text-white rounded-xl text-sm font-bold hover:bg-teal-green transition-colors" disabled={loading}>{loading ? 'Saving...' : 'Change Password'}</button>
@@ -455,9 +470,14 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
 
         {/* Preferences */}
         <Card>
-          <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-2">Preferences</h3>
+          <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-1">Preferences</h3>
           <p className="text-sm text-slate-500 dark:text-slate-400">Theme toggle is available in the sidebar.</p>
+          <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Quick Tip</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Use “View Profile + Account” to quickly verify how your public identity appears.</p>
+          </div>
         </Card>
+      </div>
 
         <Modal
           open={isAdjustPhotoModalOpen}
@@ -615,7 +635,6 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
             </div>
           </div>
         </Modal>
-      </div>
     </div>
   );
 };
