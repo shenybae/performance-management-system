@@ -148,6 +148,7 @@ export default function App() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+  const sidebarHoverEnterTimerRef = useRef<number | null>(null);
   const sidebarHoverLeaveTimerRef = useRef<number | null>(null);
   const [isDesktopViewport, setIsDesktopViewport] = useState(() => {
     if (typeof window === 'undefined') return true;
@@ -205,6 +206,9 @@ export default function App() {
 
   useEffect(() => {
     return () => {
+      if (sidebarHoverEnterTimerRef.current !== null) {
+        window.clearTimeout(sidebarHoverEnterTimerRef.current);
+      }
       if (sidebarHoverLeaveTimerRef.current !== null) {
         window.clearTimeout(sidebarHoverLeaveTimerRef.current);
       }
@@ -213,15 +217,27 @@ export default function App() {
 
   const handleDesktopSidebarMouseEnter = () => {
     if (!isDesktopViewport) return;
+    if (sidebarHoverEnterTimerRef.current !== null) {
+      window.clearTimeout(sidebarHoverEnterTimerRef.current);
+      sidebarHoverEnterTimerRef.current = null;
+    }
     if (sidebarHoverLeaveTimerRef.current !== null) {
       window.clearTimeout(sidebarHoverLeaveTimerRef.current);
       sidebarHoverLeaveTimerRef.current = null;
     }
-    setIsSidebarHovered(true);
+    // Small hover-intent delay avoids abrupt instant-open feeling.
+    sidebarHoverEnterTimerRef.current = window.setTimeout(() => {
+      setIsSidebarHovered(true);
+      sidebarHoverEnterTimerRef.current = null;
+    }, 56);
   };
 
   const handleDesktopSidebarMouseLeave = () => {
     if (!isDesktopViewport) return;
+    if (sidebarHoverEnterTimerRef.current !== null) {
+      window.clearTimeout(sidebarHoverEnterTimerRef.current);
+      sidebarHoverEnterTimerRef.current = null;
+    }
     if (sidebarHoverLeaveTimerRef.current !== null) {
       window.clearTimeout(sidebarHoverLeaveTimerRef.current);
     }
@@ -229,7 +245,7 @@ export default function App() {
     sidebarHoverLeaveTimerRef.current = window.setTimeout(() => {
       setIsSidebarHovered(false);
       sidebarHoverLeaveTimerRef.current = null;
-    }, 140);
+    }, 100);
   };
 
   // --- Routing helpers: map screens to role-based URL paths and vice-versa ---
@@ -693,7 +709,7 @@ export default function App() {
         transition={{
           x: { duration: 0.24, ease: 'easeOut' },
           opacity: { duration: 0.2, ease: 'easeOut' },
-          width: { duration: 0.34, ease: [0.16, 1, 0.3, 1] },
+          width: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
         }}
         onMouseEnter={handleDesktopSidebarMouseEnter}
         onMouseLeave={handleDesktopSidebarMouseLeave}

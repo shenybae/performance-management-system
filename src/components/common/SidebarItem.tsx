@@ -20,8 +20,16 @@ export const SidebarItem = ({ icon: Icon, label, active, onClick, expanded = tru
     </span>
     <motion.span
       initial={false}
-      animate={{ opacity: expanded ? 1 : 0, width: expanded ? 'auto' : 0 }}
-      transition={{ duration: 0.18, ease: 'easeOut' }}
+      animate={{
+        opacity: expanded ? 1 : 0,
+        maxWidth: expanded ? 180 : 0,
+        x: expanded ? 0 : -4,
+      }}
+      transition={{
+        opacity: { duration: expanded ? 0.14 : 0.08, ease: 'easeOut', delay: expanded ? 0.03 : 0 },
+        maxWidth: { duration: expanded ? 0.16 : 0.09, ease: [0.22, 1, 0.36, 1] },
+        x: { duration: expanded ? 0.14 : 0.08, ease: 'easeOut' },
+      }}
       className="ml-2 text-sm font-bold whitespace-nowrap overflow-hidden"
     >
       {label}
