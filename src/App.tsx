@@ -457,6 +457,7 @@ export default function App() {
     localStorage.setItem('talentflow_user', JSON.stringify(session));
     localStorage.setItem('user', JSON.stringify(session));
     if ((session as any).token) localStorage.setItem('talentflow_token', (session as any).token);
+    window.dispatchEvent(new Event('talentflow-auth-changed'));
   };
 
   const handleLogout = async () => {
@@ -473,6 +474,7 @@ export default function App() {
     localStorage.removeItem('talentflow_user');
     localStorage.removeItem('user');
     localStorage.removeItem('talentflow_token');
+    window.dispatchEvent(new Event('talentflow-auth-changed'));
   };
 
   // When unauthenticated, ensure the URL shows /login and remember the

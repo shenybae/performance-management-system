@@ -27,6 +27,9 @@ export const useNotify = () => useNotifications().notify;
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [list, setList] = useState<Notification[]>([]);
   const [history, setHistory] = useState<NotificationHistoryItem[]>([]);
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    try { return localStorage.getItem('talentflow_token'); } catch { return null; }
+  });
   const seenServerIds = useRef<Set<string>>(new Set());
   const initialServerSyncDone = useRef(false);
   const recentToastKeys = useRef<Map<string, number>>(new Map());
@@ -86,10 +89,23 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     (window as any).notify = (m: string, t: NotificationType = 'info') => notify(m, t);
   }, [notify]);
 
+  useEffect(() => {
+    const syncAuthToken = () => {
+      try {
+        setAuthToken(localStorage.getItem('talentflow_token'));
+      } catch {
+        setAuthToken(null);
+      }
+    };
+
+    syncAuthToken();
+    window.addEventListener('talentflow-auth-changed', syncAuthToken as EventListener);
+    return () => window.removeEventListener('talentflow-auth-changed', syncAuthToken as EventListener);
+  }, []);
+
   // Poll server notifications every 15 seconds
   useEffect(() => {
-    const token = localStorage.getItem('talentflow_token');
-    if (!token) return;
+    if (!authToken) return;
 
     const fetchNotifications = async () => {
       try {
@@ -136,16 +152,15 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [authToken, pushToast]);
 
   // Real-time socket notifications
   useEffect(() => {
-    const token = localStorage.getItem('talentflow_token');
-    if (!token) return;
+    if (!authToken) return;
 
-    const socket = io({ path: '/socket.io', autoConnect: true, auth: { token } });
+    const socket = io({ path: '/socket.io', autoConnect: true, auth: { token: authToken } });
     // still emit an explicit 'auth' as a safe fallback after connect
-    socket.on('connect', () => { try { socket.emit('auth', { token }); } catch (e) {} });
+    socket.on('connect', () => { try { socket.emit('auth', { token: authToken }); } catch (e) {} });
     socket.on('notification', (n: { id?: number; type?: string; message: string; source?: string; employee_id?: number }) => {
       const id = n.id ? `srv_${n.id}` : `sock_${Math.random().toString(36).slice(2, 9)}`;
       const type = (n.type || 'info') as NotificationType;
@@ -166,10 +181,11 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       notify(info?.message || 'Your session was ended because you signed in elsewhere', 'info');
       localStorage.removeItem('talentflow_token');
       localStorage.removeItem('talentflow_user');
+      window.dispatchEvent(new Event('talentflow-auth-changed'));
       setTimeout(() => { window.location.href = '/login'; }, 900);
     });
     return () => { socket.disconnect(); };
-  }, [notify]);
+  }, [authToken, notify]);
 
   useEffect(() => {
     if (list.length === 0) return;
