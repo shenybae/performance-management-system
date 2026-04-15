@@ -722,7 +722,7 @@ export default function App() {
             animate={{ opacity: 1, scale: 1 }}
             className="flex flex-col mb-1 items-center flex-1 min-w-0"
           >
-            <img src="/logo.png" alt="Maptech Logo" className="h-10 w-10 object-contain mb-1" />
+            <img src="/logo.png" alt="Maptech Logo" className="h-14 w-14 object-contain mb-1" />
             <motion.p
               initial={false}
               animate={{
