@@ -1705,7 +1705,8 @@ export const CareerDashboard = () => {
         open={!!selectedTaskBoardGoal}
         title={selectedTaskBoardGoal ? `Task Board: ${selectedTaskBoardGoal.title || selectedTaskBoardGoal.statement || 'Goal'}` : 'Task Board'}
         onClose={() => setTaskBoardOpenGoalId(null)}
-        maxWidthClassName="max-w-5xl"
+        maxWidthClassName="max-w-[96vw]"
+        bodyClassName="!max-h-[90vh]"
       >
         {selectedTaskBoardGoal && (() => {
           const goalId = Number(selectedTaskBoardGoal.id);
@@ -1716,9 +1717,9 @@ export const CareerDashboard = () => {
           const pendingProofCount = memberTasks.filter((t: any) => String(t?.proof_review_status || '') === 'Pending Review').length;
           const withBriefCount = memberTasks.filter((t: any) => parseTaskBriefFiles(t).length > 0).length;
           return (
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_280px] gap-3 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_320px] gap-4 items-start">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Task Board ({memberTasks.length})</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">Task Board ({memberTasks.length})</p>
                 {memberTasks.length === 0 ? (
                   <p className="text-xs text-slate-400">No detailed tasks yet.</p>
                 ) : (
@@ -1732,19 +1733,19 @@ export const CareerDashboard = () => {
                     const reviewNoteValue = taskReviewNotes[t.id] ?? String(t.proof_review_note || '');
                     const briefFiles = parseTaskBriefFiles(t);
                     return (
-                      <div key={t.id || `task-${goalId}-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-900/40">
+                      <div key={t.id || `task-${goalId}-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-900/40">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
-                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
-                            {t.description && <p className="text-xs text-slate-500 mt-0.5">{t.description}</p>}
-                            <div className="flex flex-wrap gap-2 mt-1">
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">{getMemberDisplayName(t)}</span>
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 inline-flex items-center gap-1"><Flag size={10} />{t.priority || 'Medium'}</span>
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 inline-flex items-center gap-1"><CalendarDays size={10} />{t.due_date || 'No deadline'}</span>
+                            <p className="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
+                            {t.description && <p className="text-sm text-slate-500 mt-1">{t.description}</p>}
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              <span className="text-xs px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">{getMemberDisplayName(t)}</span>
+                              <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 inline-flex items-center gap-1"><Flag size={11} />{t.priority || 'Medium'}</span>
+                              <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 inline-flex items-center gap-1"><CalendarDays size={11} />{t.due_date || 'No deadline'}</span>
                             </div>
                             {briefFiles.length > 0 && (
                               <div className="mt-2">
-                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Task Brief ({briefFiles.length})</p>
+                                <p className="text-xs font-black uppercase tracking-wider text-slate-500 mb-1">Task Brief ({briefFiles.length})</p>
                                 <div className="space-y-2">
                                   {briefFiles.map((file, fileIndex) => (
                                     <div key={`${file.brief_file_name}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 p-2">
@@ -1767,7 +1768,7 @@ export const CareerDashboard = () => {
                           </div>
                           <button
                             onClick={() => handleDeleteLeaderTask(Number(t.id))}
-                            className="text-red-500 hover:text-red-600 p-1 rounded"
+                            className="text-red-500 hover:text-red-600 p-1.5 rounded"
                             title="Remove task"
                           >
                             <Trash2 size={15} />
@@ -1780,12 +1781,12 @@ export const CareerDashboard = () => {
                               <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden max-w-[220px]">
                                 <div className={`h-2 rounded-full ${progressValue >= 100 ? 'bg-emerald-500' : progressValue >= 50 ? 'bg-teal-500' : 'bg-amber-500'}`} style={{ width: `${progressValue}%` }} />
                               </div>
-                              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 w-10 text-right">{progressValue}%</span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColors[t.status || 'Not Started']}`}>{t.status || 'Not Started'}</span>
+                              <span className="text-base font-bold text-slate-700 dark:text-slate-200 w-12 text-right">{progressValue}%</span>
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statusColors[t.status || 'Not Started']}`}>{t.status || 'Not Started'}</span>
                             </div>
                             <button
                               onClick={() => setTaskProgressOpenTaskId(t.id)}
-                              className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
+                              className="px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
                             >
                               Update
                             </button>
@@ -1795,7 +1796,7 @@ export const CareerDashboard = () => {
                             <select
                               value={t.status || 'Not Started'}
                               onChange={(e) => handleUpdateLeaderTask(Number(t.id), { status: e.target.value }, 'Task status updated', 'Apply this status change?')}
-                              className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                              className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-base"
                             >
                               <option value="Not Started">Not Started</option>
                               <option value="In Progress">In Progress</option>
@@ -1810,18 +1811,18 @@ export const CareerDashboard = () => {
                                 max={100}
                                 value={progressValue}
                                 onChange={(e) => setTaskProgressEdits(prev => ({ ...prev, [t.id]: Math.max(0, Math.min(100, Number(e.target.value) || 0)) }))}
-                                className="w-24 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                                className="w-28 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-base"
                               />
                               <span className="text-xs text-slate-500">%</span>
                               <button
                                 onClick={() => handleUpdateLeaderTask(Number(t.id), { progress: progressValue }, 'Task progress updated', 'Save this progress update?')}
-                                className="px-2.5 py-2 rounded-lg bg-teal-deep text-white text-xs font-bold inline-flex items-center gap-1"
+                                className="px-3 py-2.5 rounded-lg bg-teal-deep text-white text-sm font-bold inline-flex items-center gap-1"
                               >
                                 <Save size={12} /> Save Progress
                               </button>
                               <button
                                 onClick={() => setTaskProgressOpenTaskId(null)}
-                                className="px-2.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold"
+                                className="px-3 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm font-bold"
                               >
                                 Close
                               </button>
@@ -1918,32 +1919,32 @@ export const CareerDashboard = () => {
 
               <aside className="lg:sticky lg:top-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
                 <p className="text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">Board Summary</p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
-                    <p className="text-[10px] text-slate-400">Total</p>
-                    <p className="text-sm font-black text-slate-700 dark:text-slate-200">{memberTasks.length}</p>
+                <div className="mt-2 grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3">
+                    <p className="text-xs text-slate-400">Total</p>
+                    <p className="text-base font-black text-slate-700 dark:text-slate-200">{memberTasks.length}</p>
                   </div>
-                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
-                    <p className="text-[10px] text-slate-400">Completed</p>
-                    <p className="text-sm font-black text-emerald-600">{completedCount}</p>
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3">
+                    <p className="text-xs text-slate-400">Completed</p>
+                    <p className="text-base font-black text-emerald-600">{completedCount}</p>
                   </div>
-                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
-                    <p className="text-[10px] text-slate-400">In Progress</p>
-                    <p className="text-sm font-black text-teal-600">{inProgressCount}</p>
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3">
+                    <p className="text-xs text-slate-400">In Progress</p>
+                    <p className="text-base font-black text-teal-600">{inProgressCount}</p>
                   </div>
-                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
-                    <p className="text-[10px] text-slate-400">Blocked</p>
-                    <p className="text-sm font-black text-rose-600">{blockedCount}</p>
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3">
+                    <p className="text-xs text-slate-400">Blocked</p>
+                    <p className="text-base font-black text-rose-600">{blockedCount}</p>
                   </div>
                 </div>
-                <div className="mt-2 space-y-2">
-                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
-                    <p className="text-[10px] text-slate-400">Pending Proof Review</p>
-                    <p className="text-sm font-black text-amber-600">{pendingProofCount}</p>
+                <div className="mt-3 space-y-3">
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3">
+                    <p className="text-xs text-slate-400">Pending Proof Review</p>
+                    <p className="text-base font-black text-amber-600">{pendingProofCount}</p>
                   </div>
-                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
-                    <p className="text-[10px] text-slate-400">Tasks With Brief Files</p>
-                    <p className="text-sm font-black text-indigo-600">{withBriefCount}</p>
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3">
+                    <p className="text-xs text-slate-400">Tasks With Brief Files</p>
+                    <p className="text-base font-black text-indigo-600">{withBriefCount}</p>
                   </div>
                 </div>
               </aside>
@@ -1956,7 +1957,8 @@ export const CareerDashboard = () => {
         open={!!delegatedTaskOpen}
         title={delegatedTaskOpen ? `Task Workspace: ${delegatedTaskOpen.title || 'Task'}` : 'Task Workspace'}
         onClose={() => setDelegatedTaskOpenId(null)}
-        maxWidthClassName="max-w-4xl"
+        maxWidthClassName="max-w-[96vw]"
+        bodyClassName="!max-h-[90vh]"
       >
         {delegatedTaskOpen && (() => {
           const t = delegatedTaskOpen;
@@ -1969,32 +1971,32 @@ export const CareerDashboard = () => {
 
           return (
             <div className="space-y-3">
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{t.goal_title || t.goal_statement || 'Goal task'} • Due {t.due_date || 'N/A'}</p>
+                    <p className="text-lg sm:text-xl font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
+                    <p className="text-sm sm:text-base text-slate-500 dark:text-slate-400 mt-1">{t.goal_title || t.goal_statement || 'Goal task'} • Due {t.due_date || 'N/A'}</p>
                   </div>
-                  <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
+                  <span className={`text-xs sm:text-sm font-bold uppercase px-3 py-1.5 rounded-full ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
                     {reviewStatus}
                   </span>
                 </div>
               </div>
 
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Task Brief ({briefFiles.length})</p>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-5">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-500">Task Brief ({briefFiles.length})</p>
                 </div>
                 {briefFiles.length > 0 ? (
                   <div className="space-y-2">
                     {briefFiles.map((file, fileIndex) => (
                       <div key={`${file.brief_file_name}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 p-2">
                         <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className="text-[10px] text-slate-500">File {fileIndex + 1}</span>
+                          <span className="text-xs text-slate-500">File {fileIndex + 1}</span>
                           <button
                             type="button"
                             onClick={() => setTaskBriefViewer({ src: file.brief_file_data, fileName: file.brief_file_name, mimeType: file.brief_file_type })}
-                            className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                            className="text-xs font-bold text-teal-600 hover:text-teal-700"
                           >
                             View Full File
                           </button>
@@ -2008,38 +2010,29 @@ export const CareerDashboard = () => {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
-                <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-3 bg-white/70 dark:bg-slate-900/50">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Submitted Proof ({proofFiles.length})</p>
-                    {proofFiles.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setProofViewerTaskId(Number(t.id))}
-                        className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
-                      >
-                        View Full File
-                      </button>
-                    )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-4 bg-white/70 dark:bg-slate-900/50">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <p className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-500">Submitted Proof ({proofFiles.length})</p>
                   </div>
                   {proofFiles.length > 0 ? (
                     <div className="space-y-2">
                       {proofFiles.map((file, index) => (
                         <div key={`${file.proof_file_name}-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 p-2">
                           <div className="mb-1 flex items-center justify-between gap-2">
-                            <span className="text-[10px] text-slate-500">File {index + 1}</span>
+                            <span className="text-xs text-slate-500">File {index + 1}</span>
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
                                 onClick={() => setProofViewerTaskId(Number(t.id))}
-                                className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                                className="text-xs font-bold text-teal-600 hover:text-teal-700"
                               >
                                 View Full File
                               </button>
                               <button
                                 type="button"
                                 onClick={() => removeProofAttachmentDraftFile(t.id, index)}
-                                className="text-[10px] font-bold text-red-600 hover:text-red-700"
+                                className="text-xs font-bold text-red-600 hover:text-red-700"
                               >
                                 Remove
                               </button>
@@ -2053,8 +2046,8 @@ export const CareerDashboard = () => {
                     <p className="text-xs text-slate-400">No proof file selected yet.</p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <label className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
-                      <Upload size={12} /> Attach Proof Files
+                    <label className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+                      <Upload size={13} /> Attach Proof Files
                       <input
                         type="file"
                         accept="*/*"
@@ -2068,30 +2061,30 @@ export const CareerDashboard = () => {
                       <button
                         type="button"
                         onClick={() => removeProofAttachmentDraft(t.id)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/35"
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-bold bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/35"
                       >
                         <Trash2 size={12} /> Remove All
                       </button>
                     )}
                   </div>
                   {proofFiles.length > 0 && (
-                    <p className="mt-2 text-[10px] text-slate-500 truncate">Selected file{proofFiles.length > 1 ? 's' : ''}: {proofFiles.map((f) => f.proof_file_name).join(', ')}</p>
+                    <p className="mt-2 text-xs text-slate-500 truncate">Selected file{proofFiles.length > 1 ? 's' : ''}: {proofFiles.map((f) => f.proof_file_name).join(', ')}</p>
                   )}
                 </div>
 
                 <div>
                   <textarea
-                    rows={5}
+                    rows={6}
                     value={draft.proof_note}
                     onChange={(e) => handleProofDraftChange(t.id, { proof_note: e.target.value })}
-                    className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                    className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-base"
                     placeholder="Add notes explaining the attached proof"
                   />
-                  <div className="mt-2 flex justify-end">
+                  <div className="mt-3 flex justify-end">
                     <button
                       onClick={() => submitTaskProof(t.id)}
                       disabled={proofSubmittingTaskId === t.id}
-                      className="px-3 py-1.5 rounded-lg bg-teal-deep text-white text-xs font-bold hover:bg-teal-green disabled:opacity-50"
+                      className="px-4 py-2 rounded-lg bg-teal-deep text-white text-sm font-bold hover:bg-teal-green disabled:opacity-50"
                     >
                       {proofSubmittingTaskId === t.id ? 'Submitting...' : 'Submit For Review'}
                     </button>
@@ -2099,8 +2092,8 @@ export const CareerDashboard = () => {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 p-2.5">
-                <p className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Need More Time?</p>
+              <div className="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 p-3 sm:p-4">
+                <p className="text-xs sm:text-sm font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Need More Time?</p>
                 {pendingTaskExtension ? (
                   <div className="mt-1 flex items-center justify-between gap-2">
                     <p className="text-[11px] text-blue-700/85 dark:text-blue-300/85">
@@ -2115,12 +2108,12 @@ export const CareerDashboard = () => {
                     </button>
                   </div>
                 ) : (
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <p className="text-[11px] text-blue-700/85 dark:text-blue-300/85">Send a separate deadline extension request without affecting proof submission.</p>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <p className="text-sm text-blue-700/85 dark:text-blue-300/85">Send a separate deadline extension request without affecting proof submission.</p>
                     <button
                       type="button"
                       onClick={() => setExtensionTaskOpenId(Number(t.id))}
-                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700"
+                      className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700"
                     >
                       Request Deadline Extension
                     </button>
@@ -2192,7 +2185,8 @@ export const CareerDashboard = () => {
         open={!!proofViewerTask}
         title={proofViewerTask ? `Proof: ${proofViewerTask.proof_file_name || proofViewerTask.title || 'Task proof'}` : 'Proof Viewer'}
         onClose={() => setProofViewerTaskId(null)}
-        maxWidthClassName="max-w-4xl"
+        maxWidthClassName="max-w-[96vw]"
+        bodyClassName="!max-h-[90vh]"
       >
         {proofViewerTask ? (() => {
           const proofFiles = parseTaskProofFiles(proofViewerTask);
