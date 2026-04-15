@@ -722,7 +722,7 @@ export default function App() {
             animate={{ opacity: 1, scale: 1 }}
             className="flex flex-col mb-1 items-center flex-1 min-w-0 pt-2"
           >
-            <img src="/logo.png" alt="Maptech Logo" className="h-32 w-32 object-contain mb-1" />
+            <img src="/logo.png" alt="Maptech Logo" className="h-40 w-40 object-contain mb-1" />
             <motion.p
               initial={false}
               animate={{
@@ -749,14 +749,10 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="flex-1 pt-10 pb-4 overflow-y-auto custom-scrollbar">
+        <nav className="flex-1 pt-12 pb-4 overflow-y-auto custom-scrollbar">
           <div className="mb-4 px-3">
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              title={!isSidebarExpanded ? (isDarkMode ? 'Dark Mode' : 'Light Mode') : undefined}
-              className={`w-full flex items-center py-2 system-bg border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 transition-all hover:border-teal-green hover:shadow-lg hover:shadow-teal-green/5 ${isSidebarExpanded ? 'justify-between px-3' : 'justify-start px-3'}`}
+            <div
+              className={`w-full flex items-center py-2 system-bg border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 ${isSidebarExpanded ? 'justify-between px-3' : 'justify-center px-2'}`}
             >
               <div className="flex items-center gap-2 min-w-0">
                 {isDarkMode ? <Moon size={14} className="text-teal-green" /> : <Sun size={14} className="text-amber-500" />}
@@ -776,14 +772,20 @@ export default function App() {
                 </motion.span>
               </div>
               {isSidebarExpanded && (
-                <div className={`w-8 h-4 rounded-full relative transition-colors ${isDarkMode ? 'bg-teal-green' : 'bg-slate-300'}`}>
+                <button
+                  type="button"
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                  className={`w-8 h-4 rounded-full relative transition-colors ${isDarkMode ? 'bg-teal-green' : 'bg-slate-300'}`}
+                  title={isDarkMode ? 'Dark Mode On' : 'Light Mode On'}
+                >
                   <motion.div 
                     animate={{ x: isDarkMode ? 16 : 0 }}
                     className="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow-sm"
                   />
-                </div>
+                </button>
               )}
-            </motion.button>
+            </div>
           </div>
           {user.role === 'HR' && (
             <>
