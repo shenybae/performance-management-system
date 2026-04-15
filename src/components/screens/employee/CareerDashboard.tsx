@@ -2047,7 +2047,7 @@ export const CareerDashboard = () => {
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => setProofViewerTaskId(Number(t.id))}
+                                onClick={() => setTaskBriefViewer({ src: file.proof_file_data, fileName: file.proof_file_name, mimeType: file.proof_file_type })}
                                 className="text-xs font-bold text-teal-600 hover:text-teal-700"
                               >
                                 View Full File
