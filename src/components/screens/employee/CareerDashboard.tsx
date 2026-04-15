@@ -67,6 +67,8 @@ export const CareerDashboard = () => {
   const [leaderGoals, setLeaderGoals] = useState<any[]>([]);
   const [leaderTeamMembers, setLeaderTeamMembers] = useState<any[]>([]);
   const [dashboardTab, setDashboardTab] = useState<'overview' | 'goals' | 'leaderGoals' | 'pips' | 'idps'>('overview');
+  const [goalsSearch, setGoalsSearch] = useState('');
+  const [delegatedTasksSearch, setDelegatedTasksSearch] = useState('');
   const [leaderGoalsSearch, setLeaderGoalsSearch] = useState('');
   const [leaderGoalOpenId, setLeaderGoalOpenId] = useState<number | null>(null);
   const [taskAssignmentOpenGoalId, setTaskAssignmentOpenGoalId] = useState<number | null>(null);
@@ -438,6 +440,21 @@ export const CareerDashboard = () => {
     reader.readAsDataURL(file);
   };
 
+  const removeProofAttachmentDraft = async (taskId: number) => {
+    const confirmed = await appConfirm('Remove the attached proof file from this draft?', {
+      title: 'Remove Proof File',
+      confirmText: 'Remove',
+      icon: 'warning',
+    });
+    if (!confirmed) return;
+
+    handleProofDraftChange(taskId, {
+      proof_image: '',
+      proof_file_name: '',
+      proof_file_type: '',
+    });
+  };
+
   const submitTaskProof = async (taskId: number) => {
     const draft = proofDrafts[taskId] || {
       proof_image: '',
@@ -689,6 +706,38 @@ export const CareerDashboard = () => {
     if (!proofViewerTaskId) return null;
     return allLeaderTasks.find((t: any) => Number(t?.id) === proofViewerTaskId) || null;
   }, [allLeaderTasks, proofViewerTaskId]);
+
+  const visibleGoals = useMemo(() => {
+    const q = goalsSearch.trim().toLowerCase();
+    if (!q) return goals;
+    return goals.filter((g: any) => {
+      return [
+        g?.title,
+        g?.statement,
+        g?.scope,
+        g?.target_date,
+        g?.frequency,
+        g?.status,
+        g?.delegation,
+        String(g?.progress ?? ''),
+      ].join(' ').toLowerCase().includes(q);
+    });
+  }, [goals, goalsSearch]);
+
+  const visibleDelegatedTasks = useMemo(() => {
+    const q = delegatedTasksSearch.trim().toLowerCase();
+    if (!q) return myMemberTasks;
+    return myMemberTasks.filter((t: any) => {
+      return [
+        t?.title,
+        t?.goal_title,
+        t?.goal_statement,
+        t?.due_date,
+        t?.proof_review_status,
+        t?.brief_file_name,
+      ].join(' ').toLowerCase().includes(q);
+    });
+  }, [myMemberTasks, delegatedTasksSearch]);
   
   const delegatedTaskOpen = useMemo(() => {
     if (!delegatedTaskOpenId) return null;
@@ -1014,7 +1063,16 @@ export const CareerDashboard = () => {
       {dashboardTab === 'goals' && (
         goals.length > 0 ? (
         <Card>
-          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">My Goals ({goals.length})</h3>
+          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">My Goals ({visibleGoals.length}/{goals.length})</h3>
+          <div className="mb-3">
+            <input
+              type="text"
+              value={goalsSearch}
+              onChange={(e) => setGoalsSearch(e.target.value)}
+              placeholder="Search goal title, scope, status, or delegation"
+              className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+            />
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left"><thead><tr className="border-b border-slate-100 dark:border-slate-800">
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Goal</th>
@@ -1027,7 +1085,7 @@ export const CareerDashboard = () => {
               <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Action</th></tr></thead>
               <tbody>
               <AnimatePresence>
-              {goals.map((g, idx) => (
+              {visibleGoals.map((g, idx) => (
                 <motion.tr
                   key={g.id}
                   initial={{ opacity: 0, x: -10 }}
@@ -1100,6 +1158,13 @@ export const CareerDashboard = () => {
                 </motion.tr>
               ))}
               </AnimatePresence>
+              {visibleGoals.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-sm text-slate-400">
+                    No goals match your search.
+                  </td>
+                </tr>
+              )}
               </tbody>
             </table>
           </div>
@@ -1116,7 +1181,16 @@ export const CareerDashboard = () => {
 
       {dashboardTab === 'goals' && (
         <Card className="mt-4">
-          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">Delegated Tasks Requiring Proof ({myMemberTasks.length})</h3>
+          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Delegated Tasks Requiring Proof ({visibleDelegatedTasks.length}/{myMemberTasks.length})</h3>
+          <div className="mb-3">
+            <input
+              type="text"
+              value={delegatedTasksSearch}
+              onChange={(e) => setDelegatedTasksSearch(e.target.value)}
+              placeholder="Search task title, goal, due date, or review status"
+              className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+            />
+          </div>
           <div className="mb-4 rounded-xl border border-teal-100 dark:border-teal-900/40 bg-teal-50/70 dark:bg-teal-900/20 px-4 py-3">
             <p className="text-xs font-black uppercase text-teal-700 dark:text-teal-300 tracking-wider">How real-time proof tracking works</p>
             <p className="text-[11px] text-teal-700/80 dark:text-teal-300/80 mt-1">
@@ -1128,9 +1202,13 @@ export const CareerDashboard = () => {
               <CheckCircle2 size={20} className="mx-auto mb-2 opacity-40" />
               No delegated tasks available for proof submission.
             </div>
+          ) : visibleDelegatedTasks.length === 0 ? (
+            <div className="py-8 text-center text-slate-400">
+              No delegated tasks match your search.
+            </div>
           ) : (
             <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-              {myMemberTasks.map((t: any) => {
+              {visibleDelegatedTasks.map((t: any) => {
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
                 const hasTaskBrief = !!t.brief_file_data;
                 return (
@@ -1706,10 +1784,21 @@ export const CareerDashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
                 <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-3 bg-white/70 dark:bg-slate-900/50">
                   <ProofAttachment src={draft.proof_image} fileName={draft.proof_file_name} mimeType={draft.proof_file_type} compact />
-                  <label className="mt-2 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
-                    <Upload size={12} /> Attach Proof File
-                    <input type="file" accept="*/*" className="hidden" onChange={(e) => handleProofImageUpload(t.id, e.target.files?.[0])} />
-                  </label>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <label className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+                      <Upload size={12} /> Attach Proof File
+                      <input type="file" accept="*/*" className="hidden" onChange={(e) => handleProofImageUpload(t.id, e.target.files?.[0])} />
+                    </label>
+                    {!!draft.proof_image && (
+                      <button
+                        type="button"
+                        onClick={() => removeProofAttachmentDraft(t.id)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/35"
+                      >
+                        <Trash2 size={12} /> Remove File
+                      </button>
+                    )}
+                  </div>
                   {draft.proof_file_name && (
                     <p className="mt-2 text-[10px] text-slate-500 truncate">Selected file: {draft.proof_file_name}</p>
                   )}
