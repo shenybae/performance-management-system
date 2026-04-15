@@ -1705,8 +1705,7 @@ export const CareerDashboard = () => {
         open={!!selectedTaskBoardGoal}
         title={selectedTaskBoardGoal ? `Task Board: ${selectedTaskBoardGoal.title || selectedTaskBoardGoal.statement || 'Goal'}` : 'Task Board'}
         onClose={() => setTaskBoardOpenGoalId(null)}
-        maxWidthClassName="max-w-[96vw]"
-        bodyClassName="!max-h-[90vh]"
+        maxWidthClassName="max-w-4xl"
       >
         {selectedTaskBoardGoal && (() => {
           const goalId = Number(selectedTaskBoardGoal.id);
@@ -1957,7 +1956,7 @@ export const CareerDashboard = () => {
         open={!!delegatedTaskOpen}
         title={delegatedTaskOpen ? `Task Workspace: ${delegatedTaskOpen.title || 'Task'}` : 'Task Workspace'}
         onClose={() => setDelegatedTaskOpenId(null)}
-        maxWidthClassName="max-w-[96vw]"
+        maxWidthClassName="max-w-4xl"
         bodyClassName="!max-h-[90vh]"
       >
         {delegatedTaskOpen && (() => {
