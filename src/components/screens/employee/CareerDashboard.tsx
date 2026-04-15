@@ -76,6 +76,7 @@ export const CareerDashboard = () => {
   const [taskProgressEdits, setTaskProgressEdits] = useState<Record<number, number>>({});
   const [taskReviewNotes, setTaskReviewNotes] = useState<Record<number, string>>({});
   const [proofViewerTaskId, setProofViewerTaskId] = useState<number | null>(null);
+  const [delegatedTaskOpenId, setDelegatedTaskOpenId] = useState<number | null>(null);
   const [taskProgressOpenTaskId, setTaskProgressOpenTaskId] = useState<number | null>(null);
   const [taskSavingGoal, setTaskSavingGoal] = useState<number | null>(null);
   const [taskReviewActionOpen, setTaskReviewActionOpen] = useState<Record<number, boolean>>({});
@@ -85,7 +86,6 @@ export const CareerDashboard = () => {
   const [taskExtensionSubmittingId, setTaskExtensionSubmittingId] = useState<number | null>(null);
   const [proofDrafts, setProofDrafts] = useState<Record<number, { proof_image: string; proof_file_name: string; proof_file_type: string; proof_note: string }>>({});
   const [proofSubmittingTaskId, setProofSubmittingTaskId] = useState<number | null>(null);
-  const [closedProofEditors, setClosedProofEditors] = useState<Record<number, boolean>>({});
   const localUser = safeParseSession(localStorage.getItem('talentflow_user') || localStorage.getItem('user'));
 
   useEffect(() => { fetchData(); }, []);
@@ -154,19 +154,6 @@ export const CareerDashboard = () => {
             proof_file_type: t.proof_file_type || '',
             proof_note: t.proof_note || '',
           };
-        }
-      }
-      return next;
-    });
-  }, [myMemberTasks]);
-
-  useEffect(() => {
-    setClosedProofEditors(prev => {
-      const next = { ...prev };
-      for (const t of myMemberTasks) {
-        const rs = String(t?.proof_review_status || 'Not Submitted');
-        if (rs === 'Pending Review' || rs === 'Approved') {
-          next[t.id] = true;
         }
       }
       return next;
@@ -295,6 +282,7 @@ export const CareerDashboard = () => {
     const reason = String(draft.reason || '').trim();
     if (!requestedDueDate) { window.notify?.('Please set a requested due date', 'error'); return; }
     if (!reason) { window.notify?.('Please provide a reason for extension', 'error'); return; }
+    if (!(await appConfirm('Send this deadline extension request to your team leader?', { title: 'Request Extension', confirmText: 'Send Request', icon: 'warning' }))) return;
 
     setTaskExtensionSubmittingId(taskId);
     try {
@@ -460,6 +448,7 @@ export const CareerDashboard = () => {
     const proofImage = String(draft.proof_image || '').trim();
     const proofNote = String(draft.proof_note || '').trim();
     if (!proofImage) { window.notify?.('Please attach a proof file first', 'error'); return; }
+    if (!(await appConfirm('Submit this proof for review now?', { title: 'Submit Proof', confirmText: 'Submit', icon: 'success' }))) return;
 
     setProofSubmittingTaskId(taskId);
     try {
@@ -482,7 +471,6 @@ export const CareerDashboard = () => {
         throw new Error(msg);
       }
       window.notify?.('Proof submitted for review', 'success');
-      setClosedProofEditors(prev => ({ ...prev, [taskId]: true }));
       await fetchData();
     } catch (e: any) {
       window.notify?.(e?.message || 'Failed to submit proof', 'error');
@@ -701,6 +689,40 @@ export const CareerDashboard = () => {
     if (!proofViewerTaskId) return null;
     return allLeaderTasks.find((t: any) => Number(t?.id) === proofViewerTaskId) || null;
   }, [allLeaderTasks, proofViewerTaskId]);
+  
+  const delegatedTaskOpen = useMemo(() => {
+    if (!delegatedTaskOpenId) return null;
+    return myMemberTasks.find((t: any) => Number(t?.id) === Number(delegatedTaskOpenId)) || null;
+  }, [myMemberTasks, delegatedTaskOpenId]);
+
+  const requestGoalReview = async (goal: any) => {
+    const confirmed = await appConfirm(
+      'Send a request to your manager to review and update this goal progress?',
+      { title: 'Request Manager Review', confirmText: 'Send Request', icon: 'warning' }
+    );
+    if (!confirmed) return;
+
+    setRequesting(goal.id);
+    try {
+      const user = safeParseSession(localStorage.getItem('talentflow_user'));
+      await fetch('/api/goal_update_request', {
+        method: 'POST', headers: getAuthHeaders(),
+        body: JSON.stringify({
+          employee_id: user.employee_id,
+          goal_id: goal.id,
+          goal_title: goal.title || goal.statement,
+          proposed_status: goal.status === 'In Progress' ? 'Completed' : 'In Progress',
+          proposed_progress: goal.status === 'In Progress' ? 100 : 50,
+          reason: 'Employee requested manager review of goal progress',
+        }),
+      });
+      window.notify?.('Review request sent to your manager', 'success');
+    } catch {
+      window.notify?.('Failed to send review request', 'error');
+    } finally {
+      setRequesting(null);
+    }
+  };
 
   const getGoalAssignees = (goal: any) => {
     return (Array.isArray(goal?.assignees) ? goal.assignees : []).filter((a: any) => leaderTeamMemberIdSet.has(String(a?.employee_id ?? '')));
@@ -1067,21 +1089,11 @@ export const CareerDashboard = () => {
                     {g.status !== 'Completed' && (
                       <button
                         disabled={requesting === g.id}
-                        onClick={async () => {
-                          setRequesting(g.id);
-                          try {
-                            const user = safeParseSession(localStorage.getItem('talentflow_user'));
-                            await fetch('/api/goal_update_request', {
-                              method: 'POST', headers: getAuthHeaders(),
-                              body: JSON.stringify({ employee_id: user.employee_id, goal_id: g.id, goal_title: g.title || g.statement, proposed_status: g.status === 'In Progress' ? 'Completed' : 'In Progress', proposed_progress: g.status === 'In Progress' ? 100 : 50, reason: 'Progress update requested' }),
-                            });
-                            window.notify?.('Goal update request sent to your manager', 'success');
-                          } catch { window.notify?.('Failed to send request', 'error'); }
-                          setRequesting(null);
-                        }}
+                        onClick={() => requestGoalReview(g)}
                         className="text-[10px] font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1 whitespace-nowrap disabled:opacity-50"
+                        title="Ask your manager to review and update this goal"
                       >
-                        <SendHorizonal size={12} /> Request Approval
+                        <SendHorizonal size={12} /> Request Manager Review
                       </button>
                     )}
                   </td>
@@ -1117,13 +1129,9 @@ export const CareerDashboard = () => {
               No delegated tasks available for proof submission.
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
               {myMemberTasks.map((t: any) => {
-                const draft = proofDrafts[t.id] || { proof_image: t.proof_image || '', proof_file_name: t.proof_file_name || '', proof_file_type: t.proof_file_type || '', proof_note: t.proof_note || '' };
-                const extensionDraft = taskExtensionDrafts[t.id] || { requested_due_date: '', reason: '' };
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
-                const isEditorClosed = !!closedProofEditors[t.id] || reviewStatus === 'Pending Review' || reviewStatus === 'Approved';
-                const pendingTaskExtension = myDeadlineExtensionRequests.find((r: any) => String(r.entity_type || '') === 'task' && Number(r.task_id) === Number(t.id) && String(r.status || '') === 'Pending');
                 const hasTaskBrief = !!t.brief_file_data;
                 return (
                   <div key={t.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-900/40">
@@ -1137,102 +1145,15 @@ export const CareerDashboard = () => {
                       </span>
                     </div>
 
-                    <div className="mt-2 flex justify-end">
-                      {isEditorClosed ? (
-                        <button
-                          onClick={() => setClosedProofEditors(prev => ({ ...prev, [t.id]: false }))}
-                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300"
-                        >
-                          Open Proof Details
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setClosedProofEditors(prev => ({ ...prev, [t.id]: true }))}
-                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300"
-                        >
-                          Close
-                        </button>
-                      )}
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-500">{hasTaskBrief ? 'Task brief attached' : 'No task brief attached'}</span>
+                      <button
+                        onClick={() => setDelegatedTaskOpenId(Number(t.id))}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300"
+                      >
+                        Open Task Workspace
+                      </button>
                     </div>
-
-                    <div className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Task Brief</p>
-                      {hasTaskBrief ? (
-                        <ProofAttachment src={t.brief_file_data} fileName={t.brief_file_name} mimeType={t.brief_file_type} compact />
-                      ) : (
-                        <p className="text-xs text-slate-400">No brief attachment was added to this task.</p>
-                      )}
-                    </div>
-
-                    <div className="mt-2 rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 p-2.5">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Need More Time?</p>
-                      {pendingTaskExtension ? (
-                        <p className="mt-1 text-[11px] text-blue-700/85 dark:text-blue-300/85">
-                          Pending team leader decision. Requested due date: {pendingTaskExtension.requested_due_date || 'N/A'}
-                        </p>
-                      ) : (
-                        <>
-                          <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
-                            <input
-                              type="date"
-                              value={extensionDraft.requested_due_date}
-                              onChange={(e) => updateTaskExtensionDraft(t.id, { requested_due_date: e.target.value })}
-                              className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                            />
-                            <input
-                              type="text"
-                              value={extensionDraft.reason}
-                              onChange={(e) => updateTaskExtensionDraft(t.id, { reason: e.target.value })}
-                              placeholder="Reason for extension"
-                              className="md:col-span-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                            />
-                          </div>
-                          <div className="mt-2 flex justify-end">
-                            <button
-                              onClick={() => submitTaskExtensionRequest(t)}
-                              disabled={taskExtensionSubmittingId === Number(t.id)}
-                              className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700 disabled:opacity-50"
-                            >
-                              {taskExtensionSubmittingId === Number(t.id) ? 'Requesting...' : 'Request Deadline Extension'}
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    {!isEditorClosed && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                      <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-3 bg-white/70 dark:bg-slate-900/50">
-                        <ProofAttachment src={draft.proof_image} fileName={draft.proof_file_name} mimeType={draft.proof_file_type} compact />
-                        <label className="mt-2 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
-                          <Upload size={12} /> Attach Proof File
-                          <input type="file" accept="*/*" className="hidden" onChange={(e) => handleProofImageUpload(t.id, e.target.files?.[0])} />
-                        </label>
-                        {draft.proof_file_name && (
-                          <p className="mt-2 text-[10px] text-slate-500 truncate">Selected file: {draft.proof_file_name}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <textarea
-                          rows={5}
-                          value={draft.proof_note}
-                          onChange={(e) => handleProofDraftChange(t.id, { proof_note: e.target.value })}
-                          className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
-                          placeholder="Add notes explaining the attached proof"
-                        />
-                        <div className="mt-2 flex justify-end">
-                          <button
-                            onClick={() => submitTaskProof(t.id)}
-                            disabled={proofSubmittingTaskId === t.id}
-                            className="px-3 py-1.5 rounded-lg bg-teal-deep text-white text-xs font-bold hover:bg-teal-green disabled:opacity-50"
-                          >
-                            {proofSubmittingTaskId === t.id ? 'Submitting...' : 'Submit For Review'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    )}
                   </div>
                 );
               })}
@@ -1704,6 +1625,115 @@ export const CareerDashboard = () => {
                   })}
                 </div>
               )}
+            </div>
+          );
+        })()}
+      </Modal>
+
+      <Modal
+        open={!!delegatedTaskOpen}
+        title={delegatedTaskOpen ? `Task Workspace: ${delegatedTaskOpen.title || 'Task'}` : 'Task Workspace'}
+        onClose={() => setDelegatedTaskOpenId(null)}
+        maxWidthClassName="max-w-4xl"
+      >
+        {delegatedTaskOpen && (() => {
+          const t = delegatedTaskOpen;
+          const draft = proofDrafts[t.id] || { proof_image: t.proof_image || '', proof_file_name: t.proof_file_name || '', proof_file_type: t.proof_file_type || '', proof_note: t.proof_note || '' };
+          const extensionDraft = taskExtensionDrafts[t.id] || { requested_due_date: '', reason: '' };
+          const reviewStatus = t.proof_review_status || 'Not Submitted';
+          const pendingTaskExtension = myDeadlineExtensionRequests.find((r: any) => String(r.entity_type || '') === 'task' && Number(r.task_id) === Number(t.id) && String(r.status || '') === 'Pending');
+          const hasTaskBrief = !!t.brief_file_data;
+
+          return (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t.goal_title || t.goal_statement || 'Goal task'} • Due {t.due_date || 'N/A'}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
+                    {reviewStatus}
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Task Brief</p>
+                {hasTaskBrief ? (
+                  <ProofAttachment src={t.brief_file_data} fileName={t.brief_file_name} mimeType={t.brief_file_type} compact />
+                ) : (
+                  <p className="text-xs text-slate-400">No brief attachment was added to this task.</p>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 p-2.5">
+                <p className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Need More Time?</p>
+                {pendingTaskExtension ? (
+                  <p className="mt-1 text-[11px] text-blue-700/85 dark:text-blue-300/85">
+                    Pending team leader decision. Requested due date: {pendingTaskExtension.requested_due_date || 'N/A'}
+                  </p>
+                ) : (
+                  <>
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <input
+                        type="date"
+                        value={extensionDraft.requested_due_date}
+                        onChange={(e) => updateTaskExtensionDraft(t.id, { requested_due_date: e.target.value })}
+                        className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                      />
+                      <input
+                        type="text"
+                        value={extensionDraft.reason}
+                        onChange={(e) => updateTaskExtensionDraft(t.id, { reason: e.target.value })}
+                        placeholder="Reason for extension"
+                        className="md:col-span-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                      />
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        onClick={() => submitTaskExtensionRequest(t)}
+                        disabled={taskExtensionSubmittingId === Number(t.id)}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {taskExtensionSubmittingId === Number(t.id) ? 'Requesting...' : 'Request Deadline Extension'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
+                <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-3 bg-white/70 dark:bg-slate-900/50">
+                  <ProofAttachment src={draft.proof_image} fileName={draft.proof_file_name} mimeType={draft.proof_file_type} compact />
+                  <label className="mt-2 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+                    <Upload size={12} /> Attach Proof File
+                    <input type="file" accept="*/*" className="hidden" onChange={(e) => handleProofImageUpload(t.id, e.target.files?.[0])} />
+                  </label>
+                  {draft.proof_file_name && (
+                    <p className="mt-2 text-[10px] text-slate-500 truncate">Selected file: {draft.proof_file_name}</p>
+                  )}
+                </div>
+
+                <div>
+                  <textarea
+                    rows={5}
+                    value={draft.proof_note}
+                    onChange={(e) => handleProofDraftChange(t.id, { proof_note: e.target.value })}
+                    className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                    placeholder="Add notes explaining the attached proof"
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      onClick={() => submitTaskProof(t.id)}
+                      disabled={proofSubmittingTaskId === t.id}
+                      className="px-3 py-1.5 rounded-lg bg-teal-deep text-white text-xs font-bold hover:bg-teal-green disabled:opacity-50"
+                    >
+                      {proofSubmittingTaskId === t.id ? 'Submitting...' : 'Submit For Review'}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           );
         })()}
