@@ -68,6 +68,30 @@ const isPdfMime = (mimeType?: string, src?: string) => {
   return String(src || '').toLowerCase().startsWith('data:application/pdf');
 };
 
+const normalizeAttachmentSrc = (src?: string, mimeType?: string) => {
+  const value = String(src || '').trim();
+  if (!value) return '';
+
+  const lower = value.toLowerCase();
+  const hasScheme =
+    lower.startsWith('data:') ||
+    lower.startsWith('blob:') ||
+    lower.startsWith('http://') ||
+    lower.startsWith('https://') ||
+    lower.startsWith('file:') ||
+    lower.startsWith('/');
+
+  if (hasScheme) return value;
+
+  const likelyBase64 = /^[a-z0-9+/=\s]+$/i.test(value) && value.length > 40;
+  if (likelyBase64) {
+    const contentType = String(mimeType || 'application/octet-stream').trim() || 'application/octet-stream';
+    return `data:${contentType};base64,${value.replace(/\s+/g, '')}`;
+  }
+
+  return value;
+};
+
 type TaskBriefFile = {
   brief_file_data: string;
   brief_file_name: string;
@@ -2221,19 +2245,25 @@ export const CareerDashboard = () => {
         onClose={() => setTaskBriefViewer(null)}
         maxWidthClassName="max-w-7xl"
       >
-        {taskBriefViewer?.src ? (
+        {taskBriefViewer?.src ? (() => {
+          const resolvedTaskBriefSrc = normalizeAttachmentSrc(taskBriefViewer.src, taskBriefViewer.mimeType);
+          if (!resolvedTaskBriefSrc) {
+            return <p className="text-sm text-slate-500">No task brief file available.</p>;
+          }
+
+          return (
           <div className="h-[82vh]">
-            {isImageMime(taskBriefViewer.mimeType, taskBriefViewer.src) ? (
+            {isImageMime(taskBriefViewer.mimeType, resolvedTaskBriefSrc) ? (
               <div className="h-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-2 overflow-auto">
                 <img
-                  src={taskBriefViewer.src}
+                  src={resolvedTaskBriefSrc}
                   alt={taskBriefViewer.fileName || 'Task brief'}
                   className="max-w-full max-h-full mx-auto object-contain"
                 />
               </div>
-            ) : isPdfMime(taskBriefViewer.mimeType, taskBriefViewer.src) ? (
+            ) : isPdfMime(taskBriefViewer.mimeType, resolvedTaskBriefSrc) ? (
               <object
-                data={taskBriefViewer.src}
+                data={resolvedTaskBriefSrc}
                 type="application/pdf"
                 className="w-full h-full rounded-lg border border-slate-200 dark:border-slate-700"
               />
@@ -2244,7 +2274,7 @@ export const CareerDashboard = () => {
                   <p className="text-xs text-slate-500 mt-1">Open or download the full file for complete viewing.</p>
                   <div className="mt-3 flex justify-center gap-2">
                     <a
-                      href={taskBriefViewer.src}
+                      href={resolvedTaskBriefSrc}
                       target="_blank"
                       rel="noreferrer"
                       className="px-3 py-1.5 rounded-lg bg-teal-deep text-white text-xs font-bold hover:bg-teal-green"
@@ -2252,7 +2282,7 @@ export const CareerDashboard = () => {
                       Open Full File
                     </a>
                     <a
-                      href={taskBriefViewer.src}
+                      href={resolvedTaskBriefSrc}
                       download={taskBriefViewer.fileName || undefined}
                       className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold"
                     >
@@ -2263,7 +2293,8 @@ export const CareerDashboard = () => {
               </div>
             )}
           </div>
-        ) : (
+          );
+        })() : (
           <p className="text-sm text-slate-500">No task brief file available.</p>
         )}
       </Modal>
