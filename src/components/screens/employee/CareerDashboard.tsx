@@ -5,9 +5,9 @@ import { Modal } from '../../common/Modal';
 import { SectionHeader } from '../../common/SectionHeader';
 import { CircularProgress } from '../../common/CircularProgress';
 import { ProofAttachment } from '../../common/ProofAttachment';
-import { Download, Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTriangle, DollarSign, Building2, Users, User, ClipboardList, CalendarDays, Flag, Save, Trash2, Upload, Image as ImageIcon, CheckCircle2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTriangle, DollarSign, Building2, Users, User, ClipboardList, CalendarDays, Flag, Save, Trash2, Upload, Image as ImageIcon, CheckCircle2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
-import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { getAuthHeaders } from '../../../utils/csv';
 import { appConfirm } from '../../../utils/appDialog';
 import { io } from 'socket.io-client';
 
@@ -694,9 +694,8 @@ export const CareerDashboard = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="flex justify-between items-end mb-4">
+      <div className="mb-4">
         <SectionHeader title="Career Dashboard" subtitle="Your performance overview and career trajectory" />
-        <button onClick={() => exportToCSV([...appraisals.map(a => ({ ...a, type: 'Appraisal' })), ...goals.map(g => ({ ...g, type: 'Goal' })), ...pips.map(p => ({ ...p, type: 'PIP' })), ...idps.map(i => ({ ...i, type: 'IDP' }))], 'career_data')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
       </div>
 
       <div className="mb-4">
