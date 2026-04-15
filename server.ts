@@ -4156,15 +4156,32 @@ async function startServer() {
         }
       }
 
-      const assigneeSubmittedProof = role === 'Employee' && !isGoalLeader && (b.proof_image !== undefined || b.proof_note !== undefined);
+      const submittedProofFiles = Array.isArray(b.proof_files)
+        ? b.proof_files
+            .map((item: any) => ({
+              proof_file_data: String(item?.proof_file_data || item?.data || '').trim(),
+              proof_file_name: String(item?.proof_file_name || item?.name || '').trim(),
+              proof_file_type: String(item?.proof_file_type || item?.type || '').trim(),
+            }))
+            .filter((item: any) => !!item.proof_file_data)
+        : [];
+      const assigneeSubmittedProof = role === 'Employee' && !isGoalLeader && (b.proof_image !== undefined || b.proof_note !== undefined || submittedProofFiles.length > 0);
       if (assigneeSubmittedProof) {
-        const hasProofImage = typeof b.proof_image === 'string' && b.proof_image.trim().length > 0;
+        const hasProofImage = submittedProofFiles.length > 0 || (typeof b.proof_image === 'string' && b.proof_image.trim().length > 0);
         const nextProgress = Math.max(0, Math.min(100, Math.max(Number(task.progress || 0), hasProofImage ? 75 : 0)));
         sets.push('proof_submitted_at = ?');
         vals.push(hasProofImage ? new Date().toISOString() : null);
         sets.push('proof_review_status = ?');
         vals.push(hasProofImage ? 'Pending Review' : 'Not Submitted');
         if (hasProofImage) {
+          if (submittedProofFiles.length > 0) {
+            sets.push('proof_image = ?');
+            vals.push(JSON.stringify(submittedProofFiles));
+            sets.push('proof_file_name = ?');
+            vals.push(submittedProofFiles[0]?.proof_file_name || null);
+            sets.push('proof_file_type = ?');
+            vals.push(submittedProofFiles[0]?.proof_file_type || null);
+          }
           sets.push('status = ?');
           vals.push('In Progress');
           sets.push('progress = ?');

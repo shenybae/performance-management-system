@@ -74,6 +74,12 @@ type TaskBriefFile = {
   brief_file_type: string;
 };
 
+type TaskProofFile = {
+  proof_file_data: string;
+  proof_file_name: string;
+  proof_file_type: string;
+};
+
 const parseTaskBriefFiles = (task: any): TaskBriefFile[] => {
   const rawData = String(task?.brief_file_data || '').trim();
   const fallbackName = String(task?.brief_file_name || 'Task brief').trim();
@@ -99,6 +105,34 @@ const parseTaskBriefFiles = (task: any): TaskBriefFile[] => {
     brief_file_data: rawData,
     brief_file_name: fallbackName,
     brief_file_type: fallbackType,
+  }];
+};
+
+const parseTaskProofFiles = (task: any): TaskProofFile[] => {
+  const rawData = String(task?.proof_image || '').trim();
+  const fallbackName = String(task?.proof_file_name || 'Submitted proof').trim();
+  const fallbackType = String(task?.proof_file_type || 'application/octet-stream').trim();
+  if (!rawData) return [];
+
+  if (rawData.startsWith('[')) {
+    try {
+      const arr = JSON.parse(rawData);
+      if (Array.isArray(arr)) {
+        return arr
+          .map((item: any) => ({
+            proof_file_data: String(item?.proof_file_data || item?.data || '').trim(),
+            proof_file_name: String(item?.proof_file_name || item?.name || 'Submitted proof').trim(),
+            proof_file_type: String(item?.proof_file_type || item?.type || 'application/octet-stream').trim(),
+          }))
+          .filter((item: TaskProofFile) => !!item.proof_file_data);
+      }
+    } catch {}
+  }
+
+  return [{
+    proof_file_data: rawData,
+    proof_file_name: fallbackName,
+    proof_file_type: fallbackType,
   }];
 };
 
@@ -142,7 +176,7 @@ export const CareerDashboard = () => {
   const [myDeadlineExtensionRequests, setMyDeadlineExtensionRequests] = useState<any[]>([]);
   const [taskExtensionDrafts, setTaskExtensionDrafts] = useState<Record<number, { requested_due_date: string; reason: string }>>({});
   const [taskExtensionSubmittingId, setTaskExtensionSubmittingId] = useState<number | null>(null);
-  const [proofDrafts, setProofDrafts] = useState<Record<number, { proof_image: string; proof_file_name: string; proof_file_type: string; proof_note: string }>>({});
+  const [proofDrafts, setProofDrafts] = useState<Record<number, { proof_files: TaskProofFile[]; proof_note: string }>>({});
   const [proofSubmittingTaskId, setProofSubmittingTaskId] = useState<number | null>(null);
   const localUser = safeParseSession(localStorage.getItem('talentflow_user') || localStorage.getItem('user'));
 
@@ -207,9 +241,7 @@ export const CareerDashboard = () => {
       for (const t of myMemberTasks) {
         if (!next[t.id]) {
           next[t.id] = {
-            proof_image: t.proof_image || '',
-            proof_file_name: t.proof_file_name || '',
-            proof_file_type: t.proof_file_type || '',
+            proof_files: parseTaskProofFiles(t),
             proof_note: t.proof_note || '',
           };
         }
@@ -489,14 +521,12 @@ export const CareerDashboard = () => {
 
   const handleProofDraftChange = (
     taskId: number,
-    patch: Partial<{ proof_image: string; proof_file_name: string; proof_file_type: string; proof_note: string }>
+    patch: Partial<{ proof_files: TaskProofFile[]; proof_note: string }>
   ) => {
     setProofDrafts(prev => ({
       ...prev,
       [taskId]: {
-        proof_image: '',
-        proof_file_name: '',
-        proof_file_type: '',
+        proof_files: [],
         proof_note: '',
         ...(prev[taskId] || {}),
         ...patch,
@@ -504,18 +534,42 @@ export const CareerDashboard = () => {
     }));
   };
 
-  const handleProofImageUpload = (taskId: number, file?: File) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = String(e.target?.result || '');
-      handleProofDraftChange(taskId, {
-        proof_image: base64,
+  const handleProofImageUpload = async (taskId: number, files?: FileList | File[]) => {
+    const selected = Array.from(files || []);
+    if (!selected.length) return;
+
+    const validFiles = selected.filter((file) => file.type === 'application/pdf' || file.type === 'image/png' || file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.png'));
+    if (!validFiles.length) {
+      window.notify?.('Please upload PDF or PNG files only', 'error');
+      return;
+    }
+    if (validFiles.length !== selected.length) {
+      window.notify?.('Some files were skipped. Only PDF and PNG are supported.', 'error');
+    }
+
+    try {
+      const uploadedFiles = await Promise.all(validFiles.map(async (file) => ({
+        proof_file_data: await readFileAsDataUrl(file),
         proof_file_name: file.name,
-        proof_file_type: file.type || 'application/octet-stream',
+        proof_file_type: file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/png'),
+      })));
+
+      setProofDrafts(prev => {
+        const current = prev[taskId] || { proof_files: [], proof_note: '' };
+        return {
+          ...prev,
+          [taskId]: {
+            ...current,
+            proof_files: [
+              ...(current.proof_files || []),
+              ...uploadedFiles,
+            ],
+          },
+        };
       });
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      window.notify?.('Failed to read selected proof files', 'error');
+    }
   };
 
   const removeProofAttachmentDraft = async (taskId: number) => {
@@ -526,24 +580,33 @@ export const CareerDashboard = () => {
     });
     if (!confirmed) return;
 
-    handleProofDraftChange(taskId, {
-      proof_image: '',
-      proof_file_name: '',
-      proof_file_type: '',
+    handleProofDraftChange(taskId, { proof_files: [] });
+  };
+
+  const removeProofAttachmentDraftFile = (taskId: number, index: number) => {
+    setProofDrafts(prev => {
+      const current = prev[taskId] || { proof_files: [], proof_note: '' };
+      return {
+        ...prev,
+        [taskId]: {
+          ...current,
+          proof_files: (current.proof_files || []).filter((_, i) => i !== index),
+        },
+      };
     });
   };
 
   const submitTaskProof = async (taskId: number) => {
     const draft = proofDrafts[taskId] || {
-      proof_image: '',
-      proof_file_name: '',
-      proof_file_type: '',
+      proof_files: [],
       proof_note: '',
     };
-    const proofImage = String(draft.proof_image || '').trim();
+    const proofFiles = Array.isArray(draft.proof_files) ? draft.proof_files : [];
     const proofNote = String(draft.proof_note || '').trim();
-    if (!proofImage) { window.notify?.('Please attach a proof file first', 'error'); return; }
+    if (!proofFiles.length) { window.notify?.('Please attach at least one proof file first', 'error'); return; }
     if (!(await appConfirm('Submit this proof for review now?', { title: 'Submit Proof', confirmText: 'Submit', icon: 'success' }))) return;
+
+    const firstProof = proofFiles[0];
 
     setProofSubmittingTaskId(taskId);
     try {
@@ -551,9 +614,10 @@ export const CareerDashboard = () => {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          proof_image: proofImage,
-          proof_file_name: String(draft.proof_file_name || ''),
-          proof_file_type: String(draft.proof_file_type || 'application/octet-stream'),
+          proof_files: proofFiles,
+          proof_image: JSON.stringify(proofFiles),
+          proof_file_name: String(firstProof.proof_file_name || ''),
+          proof_file_type: String(firstProof.proof_file_type || 'application/octet-stream'),
           proof_note: proofNote,
         }),
       });
@@ -1663,7 +1727,8 @@ export const CareerDashboard = () => {
                     const progressValue = taskProgressEdits[t.id] ?? Number(t.progress || 0);
                     const isProgressOpen = taskProgressOpenTaskId === t.id;
                     const proofReviewStatus = String(t.proof_review_status || 'Not Submitted');
-                    const hasProof = !!t.proof_image;
+                    const proofFiles = parseTaskProofFiles(t);
+                    const hasProof = proofFiles.length > 0;
                     const reviewNoteValue = taskReviewNotes[t.id] ?? String(t.proof_review_note || '');
                     const briefFiles = parseTaskBriefFiles(t);
                     return (
@@ -1774,16 +1839,33 @@ export const CareerDashboard = () => {
 
                           {hasProof ? (
                             <>
-                              <div className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
-                                <p className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">
-                                  {t.proof_file_name || 'Submitted proof'}
-                                </p>
-                                <button
-                                  onClick={() => setProofViewerTaskId(Number(t.id))}
-                                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
-                                >
-                                  View Proof
-                                </button>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
+                                  <p className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">
+                                    {proofFiles.length} proof file{proofFiles.length > 1 ? 's' : ''} submitted
+                                  </p>
+                                  <button
+                                    onClick={() => setProofViewerTaskId(Number(t.id))}
+                                    className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
+                                  >
+                                    View Proof
+                                  </button>
+                                </div>
+                                <div className="space-y-2">
+                                  {proofFiles.map((file, fileIndex) => (
+                                    <div key={`${file.proof_file_name}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <p className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Proof file ${fileIndex + 1}`}</p>
+                                        <button
+                                          onClick={() => setProofViewerTaskId(Number(t.id))}
+                                          className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
+                                        >
+                                          View Full File
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                               <textarea
                                 rows={2}
@@ -1878,7 +1960,8 @@ export const CareerDashboard = () => {
       >
         {delegatedTaskOpen && (() => {
           const t = delegatedTaskOpen;
-          const draft = proofDrafts[t.id] || { proof_image: t.proof_image || '', proof_file_name: t.proof_file_name || '', proof_file_type: t.proof_file_type || '', proof_note: t.proof_note || '' };
+          const draft = proofDrafts[t.id] || { proof_files: parseTaskProofFiles(t), proof_note: t.proof_note || '' };
+          const proofFiles = Array.isArray(draft.proof_files) ? draft.proof_files : [];
           const extensionDraft = taskExtensionDrafts[t.id] || { requested_due_date: '', reason: '' };
           const reviewStatus = t.proof_review_status || 'Not Submitted';
           const pendingTaskExtension = myDeadlineExtensionRequests.find((r: any) => String(r.entity_type || '') === 'task' && Number(r.task_id) === Number(t.id) && String(r.status || '') === 'Pending');
@@ -1927,30 +2010,72 @@ export const CareerDashboard = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
                 <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-3 bg-white/70 dark:bg-slate-900/50">
-                  <ProofAttachment src={draft.proof_image} fileName={draft.proof_file_name} mimeType={draft.proof_file_type} compact />
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Submitted Proof ({proofFiles.length})</p>
+                    {proofFiles.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setProofViewerTaskId(Number(t.id))}
+                        className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                      >
+                        View Full File
+                      </button>
+                    )}
+                  </div>
+                  {proofFiles.length > 0 ? (
+                    <div className="space-y-2">
+                      {proofFiles.map((file, index) => (
+                        <div key={`${file.proof_file_name}-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 p-2">
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <span className="text-[10px] text-slate-500">File {index + 1}</span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setProofViewerTaskId(Number(t.id))}
+                                className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                              >
+                                View Full File
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeProofAttachmentDraftFile(t.id, index)}
+                                className="text-[10px] font-bold text-red-600 hover:text-red-700"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                          <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">No proof file selected yet.</p>
+                  )}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <label className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
-                      <Upload size={12} /> Attach Proof File
+                      <Upload size={12} /> Attach Proof Files
                       <input
                         type="file"
                         accept="*/*"
+                        multiple
                         className="hidden"
                         onClick={(e) => { e.currentTarget.value = ''; }}
-                        onChange={(e) => handleProofImageUpload(t.id, e.target.files?.[0])}
+                        onChange={(e) => handleProofImageUpload(t.id, e.target.files || [])}
                       />
                     </label>
-                    {!!draft.proof_image && (
+                    {!!proofFiles.length && (
                       <button
                         type="button"
                         onClick={() => removeProofAttachmentDraft(t.id)}
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/35"
                       >
-                        <Trash2 size={12} /> Remove File
+                        <Trash2 size={12} /> Remove All
                       </button>
                     )}
                   </div>
-                  {draft.proof_file_name && (
-                    <p className="mt-2 text-[10px] text-slate-500 truncate">Selected file: {draft.proof_file_name}</p>
+                  {proofFiles.length > 0 && (
+                    <p className="mt-2 text-[10px] text-slate-500 truncate">Selected file{proofFiles.length > 1 ? 's' : ''}: {proofFiles.map((f) => f.proof_file_name).join(', ')}</p>
                   )}
                 </div>
 
@@ -2069,13 +2194,30 @@ export const CareerDashboard = () => {
         onClose={() => setProofViewerTaskId(null)}
         maxWidthClassName="max-w-4xl"
       >
-        {proofViewerTask?.proof_image ? (
-          <ProofAttachment
-            src={proofViewerTask.proof_image}
-            fileName={proofViewerTask.proof_file_name}
-            mimeType={proofViewerTask.proof_file_type}
-          />
-        ) : (
+        {proofViewerTask ? (() => {
+          const proofFiles = parseTaskProofFiles(proofViewerTask);
+          return proofFiles.length > 0 ? (
+            <div className="space-y-3">
+              {proofFiles.map((file, index) => (
+                <div key={`${file.proof_file_name}-${index}`} className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">File {index + 1}</p>
+                    <button
+                      type="button"
+                      onClick={() => setTaskBriefViewer({ src: file.proof_file_data, fileName: file.proof_file_name, mimeType: file.proof_file_type })}
+                      className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                    >
+                      View Full File
+                    </button>
+                  </div>
+                  <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No proof file available.</p>
+          );
+        })() : (
           <p className="text-sm text-slate-500">No proof file available.</p>
         )}
       </Modal>
