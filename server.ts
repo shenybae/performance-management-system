@@ -3838,6 +3838,27 @@ async function startServer() {
       const memberAssigned = Array.isArray(memberAssignedRows) ? memberAssignedRows.length > 0 : !!memberAssignedRows;
       if (!memberAssigned) return res.status(400).json({ error: 'Member is not part of this delegated goal team' });
 
+      // Idempotency guard: avoid accidental duplicate task creation from rapid retries/double-submit.
+      const duplicateRows: any = await query(
+        `SELECT id, title, due_date, created_at
+         FROM goal_member_tasks
+         WHERE goal_id = ?
+           AND member_employee_id = ?
+           AND LOWER(TRIM(COALESCE(title, ''))) = LOWER(TRIM(COALESCE(?, '')))
+           AND COALESCE(due_date, '') = COALESCE(?, '')
+         ORDER BY id DESC
+         LIMIT 1`,
+        [goalId, memberId, title, dueDate]
+      );
+      const duplicateCandidate = Array.isArray(duplicateRows) ? duplicateRows[0] : duplicateRows;
+      if (duplicateCandidate?.id) {
+        const createdAtMs = duplicateCandidate?.created_at ? Date.parse(String(duplicateCandidate.created_at)) : NaN;
+        const withinRetryWindow = Number.isFinite(createdAtMs) && Math.abs(Date.now() - createdAtMs) <= 2 * 60 * 1000;
+        if (withinRetryWindow) {
+          return res.json({ success: true, id: Number(duplicateCandidate.id), duplicate_avoided: true });
+        }
+      }
+
       const inserted: any = await query(
         'INSERT INTO goal_member_tasks (goal_id, member_employee_id, title, description, due_date, priority, status, progress, proof_review_status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id',
         [goalId, memberId, title, description || null, dueDate, priority || 'Medium', 'Not Started', 0, 'Not Submitted', actor.id || null]
@@ -3849,7 +3870,14 @@ async function startServer() {
       );
       const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
       const avgProgress = Math.max(0, Math.min(100, Number(progressRow?.avg_progress || 0)));
-      await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, goalId]);
+      try {
+        await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, goalId]);
+      } catch (goalUpdateErr: any) {
+        const msg = String(goalUpdateErr?.message || '').toLowerCase();
+        const missingUpdatedAt = String(goalUpdateErr?.code || '') === '42703' || msg.includes('updated_at');
+        if (!missingUpdatedAt) throw goalUpdateErr;
+        await query('UPDATE goals SET progress = ? WHERE id = ?', [avgProgress, goalId]);
+      }
 
       try {
         const uRows: any = await query('SELECT id FROM users WHERE employee_id = ?', [memberId]);

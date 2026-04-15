@@ -8,6 +8,7 @@ import { ProofAttachment } from '../../common/ProofAttachment';
 import { Download, Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTriangle, DollarSign, Building2, Users, User, ClipboardList, CalendarDays, Flag, Save, Archive, Upload, Image as ImageIcon, CheckCircle2 } from 'lucide-react';
 import { LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { appConfirm } from '../../../utils/appDialog';
 import { io } from 'socket.io-client';
 
 const safeParseSession = (raw: string | null) => {
@@ -38,6 +39,7 @@ export const CareerDashboard = () => {
   const [proofViewerTaskId, setProofViewerTaskId] = useState<number | null>(null);
   const [taskProgressOpenTaskId, setTaskProgressOpenTaskId] = useState<number | null>(null);
   const [taskSavingGoal, setTaskSavingGoal] = useState<number | null>(null);
+  const [taskReviewActionOpen, setTaskReviewActionOpen] = useState<Record<number, boolean>>({});
   const [myMemberTasks, setMyMemberTasks] = useState<any[]>([]);
   const [myDeadlineExtensionRequests, setMyDeadlineExtensionRequests] = useState<any[]>([]);
   const [taskExtensionDrafts, setTaskExtensionDrafts] = useState<Record<number, { requested_due_date: string; reason: string }>>({});
@@ -363,6 +365,8 @@ export const CareerDashboard = () => {
     if (!title) { window.notify?.('Please enter a task title', 'error'); return; }
     if (!dueDate) { window.notify?.('Please set a deadline', 'error'); return; }
 
+    if (!(await appConfirm('Assign this task now?', { title: 'Assign Task', confirmText: 'Assign', icon: 'success' }))) return;
+
     setTaskSavingGoal(goalId);
     try {
       const res = await fetch(`/api/goals/${goalId}/member-tasks`, {
@@ -394,7 +398,17 @@ export const CareerDashboard = () => {
     }
   };
 
-  const handleUpdateLeaderTask = async (taskId: number, updates: Record<string, any>, successMessage = 'Task updated') => {
+  const handleUpdateLeaderTask = async (
+    taskId: number,
+    updates: Record<string, any>,
+    successMessage = 'Task updated',
+    confirmMessage?: string
+  ) => {
+    if (confirmMessage) {
+      const confirmed = await appConfirm(confirmMessage, { title: 'Confirm Update', confirmText: 'Confirm', icon: 'warning' });
+      if (!confirmed) return;
+    }
+
     const applyReviewOutcomeLocally = (task: any) => {
       const reviewStatus = String(updates?.proof_review_status || '');
       if (reviewStatus === 'Approved') {
@@ -447,6 +461,9 @@ export const CareerDashboard = () => {
   };
 
   const handleDeleteLeaderTask = async (taskId: number) => {
+    const confirmed = await appConfirm('Remove this task from the board?', { title: 'Remove Task', confirmText: 'Remove', icon: 'warning' });
+    if (!confirmed) return;
+
     try {
       const res = await fetch(`/api/member-tasks/${taskId}`, {
         method: 'DELETE',
@@ -1253,7 +1270,7 @@ export const CareerDashboard = () => {
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
                                     <select
                                       value={t.status || 'Not Started'}
-                                      onChange={(e) => handleUpdateLeaderTask(Number(t.id), { status: e.target.value }, 'Task status updated')}
+                                      onChange={(e) => handleUpdateLeaderTask(Number(t.id), { status: e.target.value }, 'Task status updated', 'Apply this status change?')}
                                       className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
                                     >
                                       <option value="Not Started">Not Started</option>
@@ -1273,7 +1290,7 @@ export const CareerDashboard = () => {
                                       />
                                       <span className="text-xs text-slate-500">%</span>
                                       <button
-                                        onClick={() => handleUpdateLeaderTask(Number(t.id), { progress: progressValue }, 'Task progress updated')}
+                                        onClick={() => handleUpdateLeaderTask(Number(t.id), { progress: progressValue }, 'Task progress updated', 'Save this progress update?')}
                                         className="px-2.5 py-2 rounded-lg bg-teal-deep text-white text-xs font-bold inline-flex items-center gap-1"
                                       >
                                         <Save size={12} /> Save Progress
@@ -1316,25 +1333,35 @@ export const CareerDashboard = () => {
                                         className="w-full mt-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
                                         placeholder="Add review note (optional)"
                                       />
-                                      <div className="mt-2 flex flex-wrap gap-2">
+                                      <div className="mt-2">
                                         <button
-                                          onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Approved', proof_review_note: reviewNoteValue }, 'Proof approved')}
-                                          className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold"
+                                          onClick={() => setTaskReviewActionOpen(prev => ({ ...prev, [Number(t.id)]: !prev[Number(t.id)] }))}
+                                          className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
                                         >
-                                          Approve
+                                          {taskReviewActionOpen[Number(t.id)] ? 'Hide Review Actions' : 'Open Review Actions'}
                                         </button>
-                                        <button
-                                          onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Needs Revision', proof_review_note: reviewNoteValue }, 'Revision requested')}
-                                          className="px-2.5 py-1.5 rounded-lg bg-amber-500 text-white text-[11px] font-bold"
-                                        >
-                                          Needs Revision
-                                        </button>
-                                        <button
-                                          onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Rejected', proof_review_note: reviewNoteValue }, 'Proof rejected')}
-                                          className="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white text-[11px] font-bold"
-                                        >
-                                          Reject
-                                        </button>
+                                        {taskReviewActionOpen[Number(t.id)] && (
+                                          <div className="mt-2 flex flex-wrap gap-2">
+                                            <button
+                                              onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Approved', proof_review_note: reviewNoteValue }, 'Proof approved', 'Approve this submitted proof?')}
+                                              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold"
+                                            >
+                                              Approve
+                                            </button>
+                                            <button
+                                              onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Needs Revision', proof_review_note: reviewNoteValue }, 'Revision requested', 'Request revision for this submitted proof?')}
+                                              className="px-2.5 py-1.5 rounded-lg bg-amber-500 text-white text-[11px] font-bold"
+                                            >
+                                              Needs Revision
+                                            </button>
+                                            <button
+                                              onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Rejected', proof_review_note: reviewNoteValue }, 'Proof rejected', 'Reject this submitted proof?')}
+                                              className="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white text-[11px] font-bold"
+                                            >
+                                              Reject
+                                            </button>
+                                          </div>
+                                        )}
                                       </div>
                                     </>
                                   ) : (

@@ -58,6 +58,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [proofReviewOpenGoal, setProofReviewOpenGoal] = useState<number | null>(null);
   const [proofReviewLoadingGoal, setProofReviewLoadingGoal] = useState<number | null>(null);
   const [proofReviewTasksByGoal, setProofReviewTasksByGoal] = useState<Record<number, any[]>>({});
+  const [proofReviewActionsOpen, setProofReviewActionsOpen] = useState<Record<number, boolean>>({});
   const [proofUploadingTaskId, setProofUploadingTaskId] = useState<number | null>(null);
   const [proofUploadNotes, setProofUploadNotes] = useState<Record<number, string>>({});
   const [proofReviewNotes, setProofReviewNotes] = useState<Record<number, string>>({});
@@ -440,6 +441,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     if (!title) { window.notify?.('Enter a recovery task title', 'error'); return; }
     if (!dueDate) { window.notify?.('Set a recovery deadline', 'error'); return; }
 
+    if (!(await appConfirm('Assign this recovery task now?', { title: 'Assign Recovery Task', confirmText: 'Assign', icon: 'warning' }))) return;
+
     setRecoveryTaskSavingGoal(goalId);
     try {
       const res = await fetch(`/api/goals/${goalId}/member-tasks`, {
@@ -734,6 +737,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   }, [proofReviewOpenGoal]);
 
   const reviewTaskProof = async (taskId: number, goalId: number, status: 'Approved' | 'Needs Revision' | 'Rejected') => {
+    const actionText = status === 'Approved' ? 'approve' : status === 'Needs Revision' ? 'request revision for' : 'reject';
+    if (!(await appConfirm(`Are you sure you want to ${actionText} this proof?`, { title: 'Confirm Proof Decision', confirmText: 'Confirm', icon: 'warning' }))) return;
+
     const note = String(proofReviewNotes[taskId] || '').trim();
     setProofReviewSubmittingTaskId(taskId);
     try {
@@ -1326,28 +1332,38 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             placeholder="Reviewer note (optional)"
                             disabled={proofReviewSubmittingTaskId === t.id}
                           />
-                          <div className="flex flex-wrap gap-2">
+                          <div className="space-y-2">
                             <button
-                              onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Approved')}
-                              disabled={proofReviewSubmittingTaskId === t.id}
-                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                              onClick={() => setProofReviewActionsOpen(prev => ({ ...prev, [Number(t.id)]: !prev[Number(t.id)] }))}
+                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700"
                             >
-                              {proofReviewSubmittingTaskId === t.id ? 'Saving...' : 'Approve'}
+                              {proofReviewActionsOpen[Number(t.id)] ? 'Hide Review Actions' : 'Open Review Actions'}
                             </button>
-                            <button
-                              onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Needs Revision')}
-                              disabled={proofReviewSubmittingTaskId === t.id}
-                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                            >
-                              Needs Revision
-                            </button>
-                            <button
-                              onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Rejected')}
-                              disabled={proofReviewSubmittingTaskId === t.id}
-                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                            >
-                              Reject
-                            </button>
+                            {proofReviewActionsOpen[Number(t.id)] && (
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Approved')}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                  {proofReviewSubmittingTaskId === t.id ? 'Saving...' : 'Approve'}
+                                </button>
+                                <button
+                                  onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Needs Revision')}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                                >
+                                  Needs Revision
+                                </button>
+                                <button
+                                  onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Rejected')}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -2889,28 +2905,38 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           placeholder="Reviewer note (optional)"
                           disabled={proofReviewSubmittingTaskId === t.id}
                         />
-                        <div className="flex flex-wrap gap-2">
+                        <div className="space-y-2">
                           <button
-                            onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Approved')}
-                            disabled={proofReviewSubmittingTaskId === t.id}
-                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                            onClick={() => setProofReviewActionsOpen(prev => ({ ...prev, [Number(t.id)]: !prev[Number(t.id)] }))}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700"
                           >
-                            {proofReviewSubmittingTaskId === t.id ? 'Saving...' : 'Approve'}
+                            {proofReviewActionsOpen[Number(t.id)] ? 'Hide Review Actions' : 'Open Review Actions'}
                           </button>
-                          <button
-                            onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Needs Revision')}
-                            disabled={proofReviewSubmittingTaskId === t.id}
-                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                          >
-                            Needs Revision
-                          </button>
-                          <button
-                            onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Rejected')}
-                            disabled={proofReviewSubmittingTaskId === t.id}
-                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                          >
-                            Reject
-                          </button>
+                          {proofReviewActionsOpen[Number(t.id)] && (
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Approved')}
+                                disabled={proofReviewSubmittingTaskId === t.id}
+                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                              >
+                                {proofReviewSubmittingTaskId === t.id ? 'Saving...' : 'Approve'}
+                              </button>
+                              <button
+                                onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Needs Revision')}
+                                disabled={proofReviewSubmittingTaskId === t.id}
+                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                              >
+                                Needs Revision
+                              </button>
+                              <button
+                                onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Rejected')}
+                                disabled={proofReviewSubmittingTaskId === t.id}
+                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
