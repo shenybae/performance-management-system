@@ -3831,9 +3831,24 @@ async function startServer() {
       const description = String(req.body.description || '').trim();
       const dueDate = req.body.due_date ? String(req.body.due_date) : null;
       const priority = String(req.body.priority || 'Medium');
-      const briefFileData = String(req.body.brief_file_data || '').trim();
-      const briefFileName = String(req.body.brief_file_name || '').trim();
-      const briefFileType = String(req.body.brief_file_type || '').trim();
+      let briefFileData = String(req.body.brief_file_data || '').trim();
+      let briefFileName = String(req.body.brief_file_name || '').trim();
+      let briefFileType = String(req.body.brief_file_type || '').trim();
+
+      const briefFilesInput = Array.isArray(req.body.brief_files) ? req.body.brief_files : [];
+      const normalizedBriefFiles = briefFilesInput
+        .map((item: any) => ({
+          brief_file_data: String(item?.brief_file_data || item?.data || '').trim(),
+          brief_file_name: String(item?.brief_file_name || item?.name || '').trim(),
+          brief_file_type: String(item?.brief_file_type || item?.type || '').trim(),
+        }))
+        .filter((item: any) => !!item.brief_file_data);
+
+      if (normalizedBriefFiles.length > 0) {
+        briefFileData = JSON.stringify(normalizedBriefFiles);
+        briefFileName = normalizedBriefFiles[0].brief_file_name || briefFileName;
+        briefFileType = normalizedBriefFiles[0].brief_file_type || briefFileType;
+      }
 
       if (!goalId || !memberId || !title) return res.status(400).json({ error: 'Invalid task payload' });
 

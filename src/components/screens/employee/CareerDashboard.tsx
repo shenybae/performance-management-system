@@ -68,6 +68,48 @@ const isPdfMime = (mimeType?: string, src?: string) => {
   return String(src || '').toLowerCase().startsWith('data:application/pdf');
 };
 
+type TaskBriefFile = {
+  brief_file_data: string;
+  brief_file_name: string;
+  brief_file_type: string;
+};
+
+const parseTaskBriefFiles = (task: any): TaskBriefFile[] => {
+  const rawData = String(task?.brief_file_data || '').trim();
+  const fallbackName = String(task?.brief_file_name || 'Task brief').trim();
+  const fallbackType = String(task?.brief_file_type || 'application/octet-stream').trim();
+  if (!rawData) return [];
+
+  if (rawData.startsWith('[')) {
+    try {
+      const arr = JSON.parse(rawData);
+      if (Array.isArray(arr)) {
+        return arr
+          .map((item: any) => ({
+            brief_file_data: String(item?.brief_file_data || item?.data || '').trim(),
+            brief_file_name: String(item?.brief_file_name || item?.name || 'Task brief').trim(),
+            brief_file_type: String(item?.brief_file_type || item?.type || 'application/octet-stream').trim(),
+          }))
+          .filter((item: TaskBriefFile) => !!item.brief_file_data);
+      }
+    } catch {}
+  }
+
+  return [{
+    brief_file_data: rawData,
+    brief_file_name: fallbackName,
+    brief_file_type: fallbackType,
+  }];
+};
+
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(String(e.target?.result || ''));
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+
 export const CareerDashboard = () => {
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
@@ -86,7 +128,7 @@ export const CareerDashboard = () => {
   const [taskAssignmentOpenGoalId, setTaskAssignmentOpenGoalId] = useState<number | null>(null);
   const [taskBoardOpenGoalId, setTaskBoardOpenGoalId] = useState<number | null>(null);
   const [taskDrafts, setTaskDrafts] = useState<Record<number, any>>({});
-  const [taskBriefDrafts, setTaskBriefDrafts] = useState<Record<number, { brief_file_data: string; brief_file_name: string; brief_file_type: string }>>({});
+  const [taskBriefDrafts, setTaskBriefDrafts] = useState<Record<number, TaskBriefFile[]>>({});
   const [taskProgressEdits, setTaskProgressEdits] = useState<Record<number, number>>({});
   const [taskReviewNotes, setTaskReviewNotes] = useState<Record<number, string>>({});
   const [proofViewerTaskId, setProofViewerTaskId] = useState<number | null>(null);
@@ -151,7 +193,7 @@ export const CareerDashboard = () => {
       const next = { ...prev };
       for (const g of leaderGoals) {
         if (!next[g.id]) {
-          next[g.id] = { brief_file_data: '', brief_file_name: '', brief_file_type: '' };
+          next[g.id] = [];
         }
       }
       return next;
@@ -344,40 +386,61 @@ export const CareerDashboard = () => {
     }));
   };
 
-  const handleTaskBriefUpload = (goalId: number, file?: File) => {
-    if (!file) return;
-    const allowedTypes = ['application/pdf', 'image/png'];
-    const isAllowed = allowedTypes.includes(file.type) || file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.png');
-    if (!isAllowed) {
-      window.notify?.('Please upload a PDF or PNG file', 'error');
+  const handleTaskBriefUpload = async (goalId: number, files?: FileList | File[]) => {
+    const selected = Array.from(files || []);
+    if (!selected.length) return;
+
+    const validFiles = selected.filter((file) => {
+      const isAllowed = file.type === 'application/pdf' || file.type === 'image/png' || file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.png');
+      return isAllowed;
+    });
+
+    if (!validFiles.length) {
+      window.notify?.('Please upload PDF or PNG files only', 'error');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const data = String(e.target?.result || '');
+    if (validFiles.length !== selected.length) {
+      window.notify?.('Some files were skipped. Only PDF and PNG are supported.', 'error');
+    }
+
+    try {
+      const converted = await Promise.all(validFiles.map(async (file) => ({
+        brief_file_data: await readFileAsDataUrl(file),
+        brief_file_name: file.name,
+        brief_file_type: file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/png'),
+      })));
+
       setTaskBriefDrafts(prev => ({
         ...prev,
-        [goalId]: {
-          brief_file_data: data,
-          brief_file_name: file.name,
-          brief_file_type: file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/png'),
-        },
+        [goalId]: [
+          ...((prev[goalId] || []).filter((f) => !!f.brief_file_data)),
+          ...converted,
+        ],
       }));
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      window.notify?.('Failed to read selected brief files', 'error');
+    }
   };
 
   const clearTaskBriefDraft = (goalId: number) => {
     setTaskBriefDrafts(prev => ({
       ...prev,
-      [goalId]: { brief_file_data: '', brief_file_name: '', brief_file_type: '' },
+      [goalId]: [],
+    }));
+  };
+
+  const removeTaskBriefDraftFile = (goalId: number, index: number) => {
+    setTaskBriefDrafts(prev => ({
+      ...prev,
+      [goalId]: (prev[goalId] || []).filter((_, i) => i !== index),
     }));
   };
 
   const handleCreateLeaderTask = async (goalId: number) => {
     const draft = taskDrafts[goalId] || {};
-    const briefDraft = taskBriefDrafts[goalId] || { brief_file_data: '', brief_file_name: '', brief_file_type: '' };
+    const briefDraft = taskBriefDrafts[goalId] || [];
+    const firstBrief = briefDraft[0] || { brief_file_data: '', brief_file_name: '', brief_file_type: '' };
     const memberId = Number(draft.member_id);
     const title = String(draft.title || '').trim();
     const description = String(draft.description || '').trim();
@@ -400,9 +463,10 @@ export const CareerDashboard = () => {
           description,
           due_date: dueDate,
           priority,
-          brief_file_data: String(briefDraft.brief_file_data || ''),
-          brief_file_name: String(briefDraft.brief_file_name || ''),
-          brief_file_type: String(briefDraft.brief_file_type || ''),
+          brief_files: briefDraft,
+          brief_file_data: String(firstBrief.brief_file_data || ''),
+          brief_file_name: String(firstBrief.brief_file_name || ''),
+          brief_file_type: String(firstBrief.brief_file_type || ''),
         }),
       });
       if (!res.ok) {
@@ -412,7 +476,7 @@ export const CareerDashboard = () => {
       }
       window.notify?.('Detailed task assigned', 'success');
       setTaskDrafts(prev => ({ ...prev, [goalId]: { member_id: '', title: '', description: '', due_date: '', priority: 'Medium' } }));
-      setTaskBriefDrafts(prev => ({ ...prev, [goalId]: { brief_file_data: '', brief_file_name: '', brief_file_type: '' } }));
+      setTaskBriefDrafts(prev => ({ ...prev, [goalId]: [] }));
       setTaskAssignmentOpenGoalId(null);
       await fetchData();
     } catch (e: any) {
@@ -1223,7 +1287,7 @@ export const CareerDashboard = () => {
             <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
               {visibleDelegatedTasks.map((t: any) => {
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
-                const hasTaskBrief = !!t.brief_file_data;
+                const briefFiles = parseTaskBriefFiles(t);
                 return (
                   <div key={t.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-900/40">
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1237,7 +1301,7 @@ export const CareerDashboard = () => {
                     </div>
 
                     <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-500">{hasTaskBrief ? 'Task brief attached' : 'No task brief attached'}</span>
+                      <span className="text-[10px] text-slate-500">{briefFiles.length > 0 ? `${briefFiles.length} brief file${briefFiles.length > 1 ? 's' : ''} attached` : 'No task brief attached'}</span>
                       <button
                         onClick={() => setDelegatedTaskOpenId(Number(t.id))}
                         className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300"
@@ -1443,7 +1507,7 @@ export const CareerDashboard = () => {
           const goalId = Number(selectedAssignmentGoal.id);
           const assignees = getGoalAssignees(selectedAssignmentGoal);
           const taskDraft = taskDrafts[goalId] || { member_id: '', title: '', description: '', due_date: '', priority: 'Medium' };
-          const briefDraft = taskBriefDrafts[goalId] || { brief_file_data: '', brief_file_name: '', brief_file_type: '' };
+          const briefDraft = taskBriefDrafts[goalId] || [];
           return (
             <div>
               {assignees.length === 0 ? (
@@ -1504,23 +1568,46 @@ export const CareerDashboard = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
-                            <Upload size={12} /> Add Brief
-                            <input type="file" accept="application/pdf,image/png" className="hidden" onChange={(e) => handleTaskBriefUpload(goalId, e.target.files?.[0])} />
+                            <Upload size={12} /> Add Files
+                            <input type="file" accept="application/pdf,image/png" multiple className="hidden" onChange={(e) => handleTaskBriefUpload(goalId, e.target.files || [])} />
                           </label>
-                          {briefDraft.brief_file_data && (
+                          {briefDraft.length > 0 && (
                             <button
                               type="button"
                               onClick={() => clearTaskBriefDraft(goalId)}
                               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30"
                             >
-                              Remove
+                              Remove All
                             </button>
                           )}
                         </div>
                       </div>
-                      {briefDraft.brief_file_data ? (
-                        <div className="mt-3">
-                          <ProofAttachment src={briefDraft.brief_file_data} fileName={briefDraft.brief_file_name} mimeType={briefDraft.brief_file_type} compact />
+                      {briefDraft.length > 0 ? (
+                        <div className="mt-3 space-y-2">
+                          {briefDraft.map((file, index) => (
+                            <div key={`${file.brief_file_name}-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 p-2">
+                              <div className="mb-1.5 flex items-center justify-between gap-2">
+                                <span className="text-[10px] text-slate-500">Brief file {index + 1}</span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setTaskBriefViewer({ src: String(file.brief_file_data || ''), fileName: file.brief_file_name, mimeType: file.brief_file_type })}
+                                    className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                                  >
+                                    View Full File
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeTaskBriefDraftFile(goalId, index)}
+                                    className="text-[10px] font-bold text-red-600 hover:text-red-700"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                              <ProofAttachment src={file.brief_file_data} fileName={file.brief_file_name} mimeType={file.brief_file_type} compact />
+                            </div>
+                          ))}
                         </div>
                       ) : (
                         <p className="mt-2 text-[11px] text-slate-400">No brief attached.</p>
@@ -1559,15 +1646,16 @@ export const CareerDashboard = () => {
               {memberTasks.length === 0 ? (
                 <p className="text-xs text-slate-400">No detailed tasks yet.</p>
               ) : (
-                <div className="space-y-2">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                   {memberTasks.map((t: any, index: number) => {
                     const progressValue = taskProgressEdits[t.id] ?? Number(t.progress || 0);
                     const isProgressOpen = taskProgressOpenTaskId === t.id;
                     const proofReviewStatus = String(t.proof_review_status || 'Not Submitted');
                     const hasProof = !!t.proof_image;
                     const reviewNoteValue = taskReviewNotes[t.id] ?? String(t.proof_review_note || '');
+                    const briefFiles = parseTaskBriefFiles(t);
                     return (
-                      <div key={t.id || `task-${goalId}-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-900/40">
+                      <div key={t.id || `task-${goalId}-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-900/40 h-full">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
                             <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
@@ -1577,19 +1665,26 @@ export const CareerDashboard = () => {
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 inline-flex items-center gap-1"><Flag size={10} />{t.priority || 'Medium'}</span>
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 inline-flex items-center gap-1"><CalendarDays size={10} />{t.due_date || 'No deadline'}</span>
                             </div>
-                            {t.brief_file_data && (
+                            {briefFiles.length > 0 && (
                               <div className="mt-2">
-                                <div className="mb-1 flex items-center justify-between gap-2">
-                                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Task Brief</p>
-                                  <button
-                                    type="button"
-                                    onClick={() => setTaskBriefViewer({ src: String(t.brief_file_data || ''), fileName: t.brief_file_name, mimeType: t.brief_file_type })}
-                                    className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
-                                  >
-                                    View Full File
-                                  </button>
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Task Brief ({briefFiles.length})</p>
+                                <div className="space-y-2">
+                                  {briefFiles.map((file, fileIndex) => (
+                                    <div key={`${file.brief_file_name}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 p-2">
+                                      <div className="mb-1 flex items-center justify-between gap-2">
+                                        <span className="text-[10px] text-slate-500">File {fileIndex + 1}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setTaskBriefViewer({ src: file.brief_file_data, fileName: file.brief_file_name, mimeType: file.brief_file_type })}
+                                          className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                                        >
+                                          View Full File
+                                        </button>
+                                      </div>
+                                      <ProofAttachment src={file.brief_file_data} fileName={file.brief_file_name} mimeType={file.brief_file_type} compact />
+                                    </div>
+                                  ))}
                                 </div>
-                                <ProofAttachment src={t.brief_file_data} fileName={t.brief_file_name} mimeType={t.brief_file_type} compact />
                               </div>
                             )}
                           </div>
@@ -1742,7 +1837,7 @@ export const CareerDashboard = () => {
           const extensionDraft = taskExtensionDrafts[t.id] || { requested_due_date: '', reason: '' };
           const reviewStatus = t.proof_review_status || 'Not Submitted';
           const pendingTaskExtension = myDeadlineExtensionRequests.find((r: any) => String(r.entity_type || '') === 'task' && Number(r.task_id) === Number(t.id) && String(r.status || '') === 'Pending');
-          const hasTaskBrief = !!t.brief_file_data;
+          const briefFiles = parseTaskBriefFiles(t);
 
           return (
             <div className="space-y-3">
@@ -1760,19 +1855,26 @@ export const CareerDashboard = () => {
 
               <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Task Brief</p>
-                  {hasTaskBrief && (
-                    <button
-                      type="button"
-                      onClick={() => setTaskBriefViewer({ src: String(t.brief_file_data || ''), fileName: t.brief_file_name, mimeType: t.brief_file_type })}
-                      className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
-                    >
-                      View Full File
-                    </button>
-                  )}
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Task Brief ({briefFiles.length})</p>
                 </div>
-                {hasTaskBrief ? (
-                  <ProofAttachment src={t.brief_file_data} fileName={t.brief_file_name} mimeType={t.brief_file_type} compact />
+                {briefFiles.length > 0 ? (
+                  <div className="space-y-2">
+                    {briefFiles.map((file, fileIndex) => (
+                      <div key={`${file.brief_file_name}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 p-2">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="text-[10px] text-slate-500">File {fileIndex + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => setTaskBriefViewer({ src: file.brief_file_data, fileName: file.brief_file_name, mimeType: file.brief_file_type })}
+                            className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                          >
+                            View Full File
+                          </button>
+                        </div>
+                        <ProofAttachment src={file.brief_file_data} fileName={file.brief_file_name} mimeType={file.brief_file_type} compact />
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <p className="text-xs text-slate-400">No brief attachment was added to this task.</p>
                 )}
