@@ -74,7 +74,6 @@ export const ProofAttachment = ({ src, fileName, mimeType, compact = false }: Pr
           href={src}
           target="_blank"
           rel="noreferrer"
-          download={fileName || undefined}
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
         >
           <ExternalLink size={11} /> Open
