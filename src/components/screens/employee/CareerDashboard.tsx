@@ -22,6 +22,17 @@ const safeParseSession = (raw: string | null) => {
 
 const normalizeArray = (value: any) => (Array.isArray(value) ? value.filter((item) => item && typeof item === 'object') : []);
 
+const uniqueById = (items: any[]) => {
+  const seen = new Set<string>();
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    const id = String(item?.id ?? '');
+    if (!id) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+};
+
 export const CareerDashboard = () => {
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
@@ -33,6 +44,9 @@ export const CareerDashboard = () => {
   const [leaderGoals, setLeaderGoals] = useState<any[]>([]);
   const [leaderTeamMembers, setLeaderTeamMembers] = useState<any[]>([]);
   const [dashboardTab, setDashboardTab] = useState<'overview' | 'goals' | 'leaderGoals' | 'pips' | 'idps'>('overview');
+  const [leaderGoalsSearch, setLeaderGoalsSearch] = useState('');
+  const [leaderGoalOpenId, setLeaderGoalOpenId] = useState<number | null>(null);
+  const [taskAssignmentOpenGoalId, setTaskAssignmentOpenGoalId] = useState<number | null>(null);
   const [taskDrafts, setTaskDrafts] = useState<Record<number, any>>({});
   const [taskProgressEdits, setTaskProgressEdits] = useState<Record<number, number>>({});
   const [taskReviewNotes, setTaskReviewNotes] = useState<Record<number, string>>({});
@@ -157,246 +171,257 @@ export const CareerDashboard = () => {
     try {
       const r = await fetch('/api/leader-goals', { headers: getAuthHeaders() });
       const d = await r.json();
-      setLeaderGoals(normalizeArray(d?.goals));
+      const dedupedGoals = uniqueById(normalizeArray(d?.goals)).map((goal: any) => ({
+        ...goal,
+        assignees: uniqueById(normalizeArray(goal?.assignees)),
+        member_tasks: uniqueById(normalizeArray(goal?.member_tasks)),
+      }));
+      setLeaderGoals(dedupedGoals);
       setLeaderTeamMembers(normalizeArray(d?.teamMembers));
     } catch {
       setLeaderGoals([]);
       setLeaderTeamMembers([]);
     }
 
-    try {
-      const r = await fetch('/api/appraisals', { headers: getAuthHeaders() });
-      const d = await r.json();
-      setAppraisals(normalizeArray(d).filter((a: any) => !employeeId || Number(a.employee_id) === employeeId));
-    } catch {
-      setAppraisals([]);
-    }
+      {dashboardTab === 'leaderGoals' && (
+        leaderGoalsVisible.length > 0 ? (
+        <Card className="mt-4">
+          <div className="flex flex-col gap-3 mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goals You Lead ({leaderGoalsVisible.length})</h3>
+                <p className="text-xs text-slate-400">Collapsed by default so you can jump to a goal instead of scrolling through every task.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLeaderGoalOpenId(null)}
+                className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold"
+              >
+                Collapse All
+              </button>
+            </div>
 
-    try {
-      const r = await fetch('/api/pip_plans', { headers: getAuthHeaders() });
-      const d = await r.json();
-      setPips(normalizeArray(d).filter((p: any) => !employeeId || Number(p.employee_id) === employeeId));
-    } catch {
-      setPips([]);
-    }
+            <input
+              type="text"
+              value={leaderGoalsSearch}
+              onChange={(e) => setLeaderGoalsSearch(e.target.value)}
+              placeholder="Search goals, team members, or tasks..."
+              className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+            />
 
-    try {
-      const r = await fetch('/api/development_plans', { headers: getAuthHeaders() });
-      const d = await r.json();
-      setIdps(normalizeArray(d).filter((i: any) => !employeeId || Number(i.employee_id) === employeeId));
-    } catch {
-      setIdps([]);
-    }
+            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {leaderGoalsVisible.slice(0, 8).map((g: any) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setLeaderGoalOpenId(prev => (prev === Number(g.id) ? null : Number(g.id)))}
+                  className={`shrink-0 px-3 py-1.5 rounded-full border text-xs font-bold transition-colors ${leaderGoalOpenId === Number(g.id) ? 'border-teal-green bg-teal-green/10 text-teal-deep dark:text-teal-green' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                >
+                  {g.title || g.statement || 'Untitled Goal'}
+                </button>
+              ))}
+            </div>
+          </div>
 
-    try {
-      const r = await fetch('/api/self_assessments', { headers: getAuthHeaders() });
-      const d = await r.json();
-      setSelfAssessments(normalizeArray(d).filter((s: any) => !employeeId || Number(s.employee_id) === employeeId));
-    } catch {
-      setSelfAssessments([]);
-    }
+          <div className="space-y-3">
+            {leaderGoalsVisible.map((g) => {
+              const assignees = (Array.isArray(g.assignees) ? g.assignees : []).filter((a: any) => leaderTeamMemberIdSet.has(String(a?.employee_id ?? '')));
+              const memberTasks = uniqueById((Array.isArray(g.member_tasks) ? g.member_tasks : []).filter((t: any) => leaderTeamMemberIdSet.has(String(t?.member_employee_id ?? ''))));
+              const taskDraft = taskDrafts[g.id] || { member_id: '', title: '', description: '', due_date: '', priority: 'Medium' };
+              const isOpen = leaderGoalOpenId === Number(g.id);
+              return (
+                <div key={g.id} className="border border-slate-200 dark:border-slate-700 rounded-xl bg-white/70 dark:bg-slate-900/40 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setLeaderGoalOpenId(prev => (prev === Number(g.id) ? null : Number(g.id)))}
+                    className="w-full flex flex-col gap-2 text-left p-3 hover:bg-slate-50 dark:hover:bg-slate-900/70 transition-colors"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{g.title || g.statement || 'Untitled Goal'}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">{(g.scope || 'Individual')} • {g.target_date || 'No target date'} • {assignees.length} members • {memberTasks.length} tasks</p>
+                      </div>
+                      <span className={`text-[10px] font-bold uppercase ${g.status === 'Completed' ? 'text-emerald-600' : g.status === 'In Progress' ? 'text-amber-500' : g.status === 'At Risk' ? 'text-red-500' : 'text-slate-400'}`}>{g.status || 'Not Started'}</span>
+                    </div>
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                      <div className={`h-2.5 rounded-full transition-all ${progressBarColor(g.progress || 0)}`} style={{ width: `${g.progress || 0}%` }} />
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-[10px] text-slate-500">
+                      {g.department && <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{g.department}</span>}
+                      {g.team_name && <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{g.team_name}</span>}
+                      {g.delegation && <span className="px-2 py-0.5 rounded-full bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300">{g.delegation}</span>}
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{g.progress || 0}%</span>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{isOpen ? 'Expanded' : 'Tap to expand'}</span>
+                    </div>
+                  </button>
 
-    try {
-      const r = await fetch('/api/member-tasks/my', { headers: getAuthHeaders() });
-      const d = await r.json();
-      setMyMemberTasks(normalizeArray(d));
-    } catch {
-      setMyMemberTasks([]);
-    }
+                  {isOpen && (
+                    <div className="border-t border-slate-200 dark:border-slate-700 p-3">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Team Members (Set By Manager)</p>
+                          {assignees.length === 0 ? (
+                            <p className="text-xs text-slate-400">No team members are configured for this goal yet.</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {assignees.map((a: any, index: number) => (
+                                <div key={a.employee_id || `assignee-${g.id}-${index}`} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs">
+                                  <span className="text-slate-700 dark:text-slate-300">{getMemberDisplayName(a)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
 
-    try {
-      const r = await fetch('/api/deadline-extension-requests/mine', { headers: getAuthHeaders() });
-      const d = await r.json();
-      setMyDeadlineExtensionRequests(normalizeArray(d));
-    } catch {
-      setMyDeadlineExtensionRequests([]);
-    }
-    if (employeeId) {
-      try {
-        const r = await fetch(`/api/employees/${employeeId}`, { headers: getAuthHeaders() });
-        const d = await r.json();
-        setSalary(d.salary_base || null);
-      } catch {
-        setSalary(null);
-      }
-    } else {
-      setSalary(null);
-    }
-  };
+                          <div className="mt-4">
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 flex items-center gap-1.5">
+                                <ClipboardList size={12} /> Detailed Task Assignment
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setTaskAssignmentOpenGoalId(prev => (prev === Number(g.id) ? null : Number(g.id)))}
+                                className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold"
+                              >
+                                {taskAssignmentOpenGoalId === Number(g.id) ? 'Hide Task Assignment' : 'Open Task Assignment'}
+                              </button>
+                            </div>
 
-  const handleProofDraftChange = (taskId: number, patch: Partial<{ proof_image: string; proof_file_name: string; proof_file_type: string; proof_note: string }>) => {
-    setProofDrafts(prev => ({
-      ...prev,
-      [taskId]: {
-        proof_image: prev[taskId]?.proof_image || '',
-        proof_file_name: prev[taskId]?.proof_file_name || '',
-        proof_file_type: prev[taskId]?.proof_file_type || '',
-        proof_note: prev[taskId]?.proof_note || '',
-        ...patch,
-      }
-    }));
-  };
+                            {taskAssignmentOpenGoalId === Number(g.id) && (
+                              assignees.length === 0 ? (
+                                <p className="text-xs text-slate-400">No manager-assigned members for this goal yet.</p>
+                              ) : (
+                                <>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                                    <select value={taskDraft.member_id} onChange={(e) => handleTaskDraftChange(g.id, { member_id: e.target.value })} className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm">
+                                      <option value="">Select team member...</option>
+                                      {assignees.map((a: any) => <option key={a.employee_id} value={a.employee_id}>{getMemberDisplayName(a)}</option>)}
+                                    </select>
+                                    <input type="text" value={taskDraft.title} onChange={(e) => handleTaskDraftChange(g.id, { title: e.target.value })} className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm" placeholder="Task title (e.g., Prepare Q2 lead report)" />
+                                    <input type="date" value={taskDraft.due_date} onChange={(e) => handleTaskDraftChange(g.id, { due_date: e.target.value })} className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm" />
+                                    <select value={taskDraft.priority} onChange={(e) => handleTaskDraftChange(g.id, { priority: e.target.value })} className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm">
+                                      <option value="Critical">Critical</option>
+                                      <option value="High">High</option>
+                                      <option value="Medium">Medium</option>
+                                      <option value="Low">Low</option>
+                                    </select>
+                                    <textarea rows={2} value={taskDraft.description} onChange={(e) => handleTaskDraftChange(g.id, { description: e.target.value })} className="md:col-span-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm" placeholder="Task details / expected output" />
+                                  </div>
+                                  <div className="flex justify-end">
+                                    <button onClick={() => handleCreateLeaderTask(g.id)} disabled={taskSavingGoal === g.id} className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold disabled:opacity-50">
+                                      {taskSavingGoal === g.id ? 'Saving...' : 'Assign Task'}
+                                    </button>
+                                  </div>
+                                </>
+                              )
+                            )}
+                          </div>
+                        </div>
 
-  const handleProofImageUpload = async (taskId: number, file?: File | null) => {
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      window.notify?.('File must be under 10 MB', 'error');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => handleProofDraftChange(taskId, {
-      proof_image: String(reader.result || ''),
-      proof_file_name: file.name,
-      proof_file_type: file.type || 'application/octet-stream',
-    });
-    reader.readAsDataURL(file);
-  };
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Task Board ({memberTasks.length})</p>
+                          {memberTasks.length === 0 ? (
+                            <p className="text-xs text-slate-400">No detailed tasks yet.</p>
+                          ) : (
+                            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                              {memberTasks.map((t: any, index: number) => {
+                                const progressValue = taskProgressEdits[t.id] ?? Number(t.progress || 0);
+                                const isProgressOpen = taskProgressOpenTaskId === t.id;
+                                const proofReviewStatus = String(t.proof_review_status || 'Not Submitted');
+                                const hasProof = !!t.proof_image;
+                                const reviewNoteValue = taskReviewNotes[t.id] ?? String(t.proof_review_note || '');
+                                return (
+                                  <div key={t.id || `task-${g.id}-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-900/40">
+                                    <div className="flex flex-wrap items-start justify-between gap-2">
+                                      <div>
+                                        <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
+                                        {t.description && <p className="text-xs text-slate-500 mt-0.5">{t.description}</p>}
+                                        <div className="flex flex-wrap gap-2 mt-1">
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">{getMemberDisplayName(t)}</span>
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 inline-flex items-center gap-1"><Flag size={10} />{t.priority || 'Medium'}</span>
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 inline-flex items-center gap-1"><CalendarDays size={10} />{t.due_date || 'No deadline'}</span>
+                                        </div>
+                                      </div>
+                                      <button onClick={() => handleDeleteLeaderTask(Number(t.id))} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive task"><Archive size={15} /></button>
+                                    </div>
 
-  const submitTaskProof = async (taskId: number) => {
-    const draft = proofDrafts[taskId] || { proof_image: '', proof_file_name: '', proof_file_type: '', proof_note: '' };
-    if (!draft.proof_image) {
-      window.notify?.('Please attach a proof file first', 'error');
-      return;
-    }
-    setProofSubmittingTaskId(taskId);
-    try {
-      const res = await fetch(`/api/member-tasks/${taskId}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          proof_image: draft.proof_image,
-          proof_file_name: draft.proof_file_name,
-          proof_file_type: draft.proof_file_type,
-          proof_note: draft.proof_note,
-        })
-      });
-      if (!res.ok) throw new Error('Failed');
-      window.notify?.('Proof submitted for review', 'success');
-      setClosedProofEditors(prev => ({ ...prev, [taskId]: true }));
-      fetchData();
-    } catch {
-      window.notify?.('Failed to submit proof', 'error');
-    } finally {
-      setProofSubmittingTaskId(null);
-    }
-  };
+                                    {!isProgressOpen ? (
+                                      <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2">
+                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                          <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden max-w-[220px]">
+                                            <div className={`h-2 rounded-full ${progressValue >= 100 ? 'bg-emerald-500' : progressValue >= 50 ? 'bg-teal-500' : 'bg-amber-500'}`} style={{ width: `${progressValue}%` }} />
+                                          </div>
+                                          <span className="text-sm font-bold text-slate-700 dark:text-slate-200 w-10 text-right">{progressValue}%</span>
+                                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColors[t.status || 'Not Started']}`}>{t.status || 'Not Started'}</span>
+                                        </div>
+                                        <button onClick={() => setTaskProgressOpenTaskId(t.id)} className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700">Update</button>
+                                      </div>
+                                    ) : (
+                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                                        <select value={t.status || 'Not Started'} onChange={(e) => handleUpdateLeaderTask(Number(t.id), { status: e.target.value }, 'Task status updated', 'Apply this status change?')} className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm">
+                                          <option value="Not Started">Not Started</option>
+                                          <option value="In Progress">In Progress</option>
+                                          <option value="Blocked">Blocked</option>
+                                          <option value="Completed">Completed</option>
+                                        </select>
+                                        <div className="flex items-center gap-2 md:col-span-2">
+                                          <input type="number" min={0} max={100} value={progressValue} onChange={(e) => setTaskProgressEdits(prev => ({ ...prev, [t.id]: Math.max(0, Math.min(100, Number(e.target.value) || 0)) }))} className="w-24 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm" />
+                                          <span className="text-xs text-slate-500">%</span>
+                                          <button onClick={() => handleUpdateLeaderTask(Number(t.id), { progress: progressValue }, 'Task progress updated', 'Save this progress update?')} className="px-2.5 py-2 rounded-lg bg-teal-deep text-white text-xs font-bold inline-flex items-center gap-1"><Save size={12} /> Save Progress</button>
+                                          <button onClick={() => setTaskProgressOpenTaskId(null)} className="px-2.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold">Close</button>
+                                        </div>
+                                      </div>
+                                    )}
 
-  const updateTaskExtensionDraft = (taskId: number, patch: Partial<{ requested_due_date: string; reason: string }>) => {
-    setTaskExtensionDrafts(prev => ({
-      ...prev,
-      [taskId]: {
-        requested_due_date: prev[taskId]?.requested_due_date || '',
-        reason: prev[taskId]?.reason || '',
-        ...patch,
-      },
-    }));
-  };
+                                    <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Proof Review</p>
+                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${proofReviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : proofReviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : proofReviewStatus === 'Needs Revision' || proofReviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>{proofReviewStatus}</span>
+                                      </div>
 
-  const submitTaskExtensionRequest = async (task: any) => {
-    const taskId = Number(task?.id || 0);
-    if (!taskId) return;
-
-    const draft = taskExtensionDrafts[taskId] || { requested_due_date: '', reason: '' };
-    const requestedDueDate = String(draft.requested_due_date || '').trim();
-    const reason = String(draft.reason || '').trim();
-
-    if (!requestedDueDate) {
-      window.notify?.('Please select the requested new due date', 'error');
-      return;
-    }
-
-    setTaskExtensionSubmittingId(taskId);
-    try {
-      const res = await fetch('/api/deadline-extension-requests', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          entity_type: 'task',
-          task_id: taskId,
-          requested_due_date: requestedDueDate,
-          reason,
-        }),
-      });
-      if (!res.ok) {
-        let msg = 'Failed to submit extension request';
-        try {
-          const err = await res.json();
-          if (err?.error) msg = String(err.error);
-        } catch {}
-        throw new Error(msg);
-      }
-      window.notify?.('Extension request sent to your team leader', 'success');
-      setTaskExtensionDrafts(prev => ({
-        ...prev,
-        [taskId]: { requested_due_date: '', reason: '' },
-      }));
-      fetchData();
-    } catch (e: any) {
-      window.notify?.(e?.message || 'Failed to submit extension request', 'error');
-    } finally {
-      setTaskExtensionSubmittingId(null);
-    }
-  };
-
-  const handleTaskDraftChange = (goalId: number, patch: Record<string, any>) => {
-    setTaskDrafts(prev => ({
-      ...prev,
-      [goalId]: {
-        member_id: '',
-        title: '',
-        description: '',
-        due_date: '',
-        priority: 'Medium',
-        ...(prev[goalId] || {}),
-        ...patch,
-      }
-    }));
-  };
-
-  const handleCreateLeaderTask = async (goalId: number) => {
-    const draft = taskDrafts[goalId] || {};
-    const memberId = Number(draft.member_id);
-    const title = String(draft.title || '').trim();
-    const description = String(draft.description || '').trim();
-    const dueDate = String(draft.due_date || '').trim();
-    const priority = String(draft.priority || 'Medium');
-
-    if (!memberId) { window.notify?.('Select a member for this task', 'error'); return; }
-    if (!title) { window.notify?.('Please enter a task title', 'error'); return; }
-    if (!dueDate) { window.notify?.('Please set a deadline', 'error'); return; }
-
-    if (!(await appConfirm('Assign this task now?', { title: 'Assign Task', confirmText: 'Assign', icon: 'success' }))) return;
-
-    setTaskSavingGoal(goalId);
-    try {
-      const res = await fetch(`/api/goals/${goalId}/member-tasks`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          member_employee_id: memberId,
-          title,
-          description,
-          due_date: dueDate,
-          priority,
-        })
-      });
-      if (!res.ok) {
-        let msg = 'Failed to assign task';
-        try { const err = await res.json(); msg = err.error || msg; } catch {}
-        throw new Error(msg);
-      }
-      window.notify?.('Detailed task assigned', 'success');
-      setTaskDrafts(prev => ({
-        ...prev,
-        [goalId]: { member_id: '', title: '', description: '', due_date: '', priority: 'Medium' }
-      }));
-      fetchData();
-    } catch (e: any) {
-      window.notify?.(e?.message || 'Failed to assign task', 'error');
-    } finally {
-      setTaskSavingGoal(null);
-    }
-  };
+                                      {hasProof ? (
+                                        <>
+                                          <div className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
+                                            <p className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">{t.proof_file_name || 'Submitted proof'}</p>
+                                            <button onClick={() => setProofViewerTaskId(Number(t.id))} className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold hover:bg-slate-200 dark:hover:bg-slate-700">View Proof</button>
+                                          </div>
+                                          <textarea rows={2} value={reviewNoteValue} onChange={(e) => setTaskReviewNotes(prev => ({ ...prev, [t.id]: e.target.value }))} className="w-full mt-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs" placeholder="Add review note (optional)" />
+                                          <div className="mt-2 space-y-2">
+                                            <button onClick={() => setTaskReviewActionOpen(prev => ({ ...prev, [Number(t.id)]: !prev[Number(t.id)] }))} className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700">{taskReviewActionOpen[Number(t.id)] ? 'Hide Review Actions' : 'Open Review Actions'}</button>
+                                            {taskReviewActionOpen[Number(t.id)] && (
+                                              <div className="flex flex-wrap gap-2">
+                                                <button onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Approved', proof_review_note: reviewNoteValue }, 'Proof approved', 'Approve this submitted proof?')} className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold">Approve</button>
+                                                <button onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Needs Revision', proof_review_note: reviewNoteValue }, 'Revision requested', 'Request revision for this submitted proof?')} className="px-2.5 py-1.5 rounded-lg bg-amber-500 text-white text-[11px] font-bold">Needs Revision</button>
+                                                <button onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Rejected', proof_review_note: reviewNoteValue }, 'Proof rejected', 'Reject this submitted proof?')} className="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white text-[11px] font-bold">Reject</button>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <p className="text-xs text-slate-400">No proof submitted yet by assignee.</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        ) : (
+        <Card className="mt-4">
+          <div className="py-10 text-center text-slate-400">
+            <ClipboardList size={20} className="mx-auto mb-2 opacity-40" />
+            No goals assigned to you as team leader yet.
+          </div>
+        </Card>
+        )
+      )}
 
   const handleUpdateLeaderTask = async (
     taskId: number,
@@ -416,12 +441,7 @@ export const CareerDashboard = () => {
       }
       if (reviewStatus === 'Needs Revision') {
         const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));
-        return {
-          ...task,
-          ...updates,
-          status: 'In Progress',
-          progress: currentProgress >= 100 ? 75 : Math.max(currentProgress, 50),
-        };
+        return { ...task, ...updates, status: 'In Progress', progress: currentProgress >= 100 ? 75 : Math.max(currentProgress, 50) };
       }
       if (reviewStatus === 'Rejected') {
         const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));
@@ -589,6 +609,26 @@ export const CareerDashboard = () => {
     }
     return tasks;
   }, [leaderGoals]);
+
+  const leaderGoalsVisible = useMemo(() => {
+    const q = leaderGoalsSearch.trim().toLowerCase();
+    const goalsList = uniqueById(leaderGoals).map((goal: any) => ({
+      ...goal,
+      assignees: uniqueById(normalizeArray(goal?.assignees)),
+      member_tasks: uniqueById(normalizeArray(goal?.member_tasks)),
+    }));
+
+    if (!q) return goalsList;
+
+    return goalsList.filter((goal: any) => {
+      const assigneeNames = (Array.isArray(goal?.assignees) ? goal.assignees : []).map((a: any) => getMemberDisplayName(a)).join(' ');
+      const taskTitles = (Array.isArray(goal?.member_tasks) ? goal.member_tasks : []).map((t: any) => String(t?.title || '')).join(' ');
+      return [goal.title, goal.statement, goal.department, goal.team_name, goal.delegation, assigneeNames, taskTitles]
+        .join(' ')
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [leaderGoals, leaderGoalsSearch, getMemberDisplayName]);
 
   const proofViewerTask = useMemo(() => {
     if (!proofViewerTaskId) return null;

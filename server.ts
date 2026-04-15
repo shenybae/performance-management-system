@@ -3766,11 +3766,21 @@ async function startServer() {
   app.get('/api/leader-goals', authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
+      const uniqueById = (rows: any[]) => {
+        const seen = new Set<string>();
+        return (Array.isArray(rows) ? rows : []).filter((row) => {
+          const id = String(row?.id ?? '');
+          if (!id) return true;
+          if (seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
+      };
       const memberRows: any = await query(
         'SELECT l.member_id, e.name as member_name FROM team_leaders l LEFT JOIN employees e ON l.member_id = e.id WHERE l.leader_id = ?',
         [actor.id]
       );
-      const teamMembers = (Array.isArray(memberRows) ? memberRows : []).filter((m: any) => {
+      const teamMembers = uniqueById(Array.isArray(memberRows) ? memberRows : []).filter((m: any) => {
         const memberId = normalizeEmployeeId(m?.member_id);
         return !!memberId;
       });
@@ -3780,10 +3790,10 @@ async function startServer() {
         'SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.leader_id = ?',
         [actor.id]
       );
-      const goals = await enrichGoalsWithAssignees(Array.isArray(goalRows) ? goalRows : []);
+      const goals = uniqueById(await enrichGoalsWithAssignees(Array.isArray(goalRows) ? goalRows : []));
       await Promise.all(
         goals.map(async (g: any) => {
-          const assignees = Array.isArray(g.assignees) ? g.assignees : [];
+          const assignees = uniqueById(Array.isArray(g.assignees) ? g.assignees : []);
           g.assignees = assignees
             .filter((a: any) => {
               const assigneeId = normalizeEmployeeId(a?.employee_id);
@@ -3795,7 +3805,7 @@ async function startServer() {
             'SELECT t.*, e.name as member_name FROM goal_member_tasks t LEFT JOIN employees e ON t.member_employee_id = e.id WHERE t.goal_id = ? ORDER BY t.created_at DESC',
             [g.id]
           );
-          g.member_tasks = (Array.isArray(taskRows) ? taskRows : []).filter((t: any) => {
+          g.member_tasks = uniqueById(Array.isArray(taskRows) ? taskRows : []).filter((t: any) => {
             const taskMemberId = normalizeEmployeeId(t?.member_employee_id);
             return !!taskMemberId && allowedMemberIds.has(String(taskMemberId));
           });
