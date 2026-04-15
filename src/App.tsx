@@ -704,28 +704,39 @@ export default function App() {
         animate={{
           x: isDesktopViewport || isSidebarOpen ? 0 : -320,
           opacity: isDesktopViewport || isSidebarOpen ? 1 : 0.96,
-          width: isDesktopViewport ? (isSidebarExpanded ? 264 : 84) : 288,
+          width: isDesktopViewport ? (isSidebarExpanded ? 272 : 88) : 288,
         }}
         transition={{
           x: { duration: 0.24, ease: 'easeOut' },
           opacity: { duration: 0.2, ease: 'easeOut' },
-          width: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+          width: { duration: 0.24, ease: [0.22, 1, 0.36, 1] },
         }}
         onMouseEnter={handleDesktopSidebarMouseEnter}
         onMouseLeave={handleDesktopSidebarMouseLeave}
         className="fixed inset-y-0 left-0 z-50 system-bg border-r border-slate-200 dark:border-slate-800 flex flex-col lg:static lg:z-auto overflow-hidden"
       >
-        <div className={`border-b border-slate-100 dark:border-slate-800 ${isSidebarExpanded ? 'px-4 py-5' : 'px-2 py-4'}`}>
+        <div className="border-b border-slate-100 dark:border-slate-800 px-4 py-4">
           <div className="flex items-start justify-between gap-2">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className={`flex flex-col mb-1 items-center flex-1 min-w-0`}
+            className="flex flex-col mb-1 items-center flex-1 min-w-0"
           >
-            <img src="/logo.png" alt="Maptech Logo" className={`${isSidebarExpanded ? 'h-16 w-full mx-auto' : 'h-8 w-8'} object-contain mb-1`} />
-            {isSidebarExpanded && (
-              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Performance System</p>
-            )}
+            <img src="/logo.png" alt="Maptech Logo" className="h-10 w-10 object-contain mb-1" />
+            <motion.p
+              initial={false}
+              animate={{
+                opacity: isSidebarExpanded ? 1 : 0,
+                maxHeight: isSidebarExpanded ? 24 : 0,
+              }}
+              transition={{
+                opacity: { duration: isSidebarExpanded ? 0.16 : 0.1, ease: 'easeOut' },
+                maxHeight: { duration: isSidebarExpanded ? 0.22 : 0.12, ease: [0.22, 1, 0.36, 1] },
+              }}
+              className="overflow-hidden text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap"
+            >
+              Performance System
+            </motion.p>
           </motion.div>
           <button
             type="button"
@@ -739,17 +750,30 @@ export default function App() {
         </div>
 
         <nav className="flex-1 py-4 overflow-y-auto custom-scrollbar">
-          <div className={`mb-4 ${isSidebarExpanded ? 'px-3' : 'px-2'}`}>
+          <div className="mb-4 px-3">
             <motion.button 
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setIsDarkMode(!isDarkMode)}
               title={!isSidebarExpanded ? (isDarkMode ? 'Dark Mode' : 'Light Mode') : undefined}
-              className={`w-full flex items-center py-2 system-bg border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 transition-all hover:border-teal-green hover:shadow-lg hover:shadow-teal-green/5 ${isSidebarExpanded ? 'justify-between px-3' : 'justify-center px-2'}`}
+              className={`w-full flex items-center py-2 system-bg border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 transition-all hover:border-teal-green hover:shadow-lg hover:shadow-teal-green/5 ${isSidebarExpanded ? 'justify-between px-3' : 'justify-start px-3'}`}
             >
-              <div className={`flex items-center ${isSidebarExpanded ? 'gap-2' : 'gap-0'}`}>
+              <div className="flex items-center gap-2 min-w-0">
                 {isDarkMode ? <Moon size={14} className="text-teal-green" /> : <Sun size={14} className="text-amber-500" />}
-                {isSidebarExpanded && (isDarkMode ? 'Dark Mode' : 'Light Mode')}
+                <motion.span
+                  initial={false}
+                  animate={{
+                    opacity: isSidebarExpanded ? 1 : 0,
+                    maxWidth: isSidebarExpanded ? 120 : 0,
+                  }}
+                  transition={{
+                    opacity: { duration: isSidebarExpanded ? 0.16 : 0.1, ease: 'easeOut' },
+                    maxWidth: { duration: isSidebarExpanded ? 0.22 : 0.12, ease: [0.22, 1, 0.36, 1] },
+                  }}
+                  className="overflow-hidden whitespace-nowrap"
+                >
+                  {isDarkMode ? 'Dark Mode' : 'Light Mode'}
+                </motion.span>
               </div>
               {isSidebarExpanded && (
                 <div className={`w-8 h-4 rounded-full relative transition-colors ${isDarkMode ? 'bg-teal-green' : 'bg-slate-300'}`}>
@@ -822,20 +846,32 @@ export default function App() {
           )}
         </nav>
 
-        <div className={`border-t border-slate-100 dark:border-slate-800 ${isSidebarExpanded ? 'p-4' : 'p-2'}`}>
-          <div className={`mb-3 ${isSidebarExpanded ? 'px-2' : 'px-1'}`}>
-            <div className={`rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/30 ${isSidebarExpanded ? 'p-3' : 'p-2'}`}>
-              <div className={`flex items-center min-w-0 ${isSidebarExpanded ? 'gap-3' : 'justify-center'}`}>
+        <div className="border-t border-slate-100 dark:border-slate-800 p-3">
+          <div className="mb-3 px-1">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/30 p-2.5">
+              <div className={`flex items-center min-w-0 ${isSidebarExpanded ? 'gap-3' : 'gap-0 justify-center'}`}>
                 {user.profile_picture ? (
-                  <img src={user.profile_picture} alt="Profile" className={`${isSidebarExpanded ? 'w-12 h-12' : 'w-10 h-10'} rounded-full object-cover border-2 border-slate-200 dark:border-slate-700 shrink-0`} />
+                  <img src={user.profile_picture} alt="Profile" className="w-10 h-10 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700 shrink-0" />
                 ) : (
-                  <div className={`${isSidebarExpanded ? 'w-12 h-12' : 'w-10 h-10'} system-bg border-2 border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-teal-deep dark:text-teal-green font-bold text-base shrink-0`}>
+                  <div className="w-10 h-10 system-bg border-2 border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center text-teal-deep dark:text-teal-green font-bold text-base shrink-0">
                     {((user.employee_name || user.full_name || user.username || user.email || 'U')[0] || 'U').toUpperCase()}
                   </div>
                 )}
-                <div className={`min-w-0 flex-1 ${isSidebarExpanded ? 'block' : 'hidden'}`}>
+                <motion.div
+                  initial={false}
+                  animate={{
+                    opacity: isSidebarExpanded ? 1 : 0,
+                    maxWidth: isSidebarExpanded ? 180 : 0,
+                    marginLeft: isSidebarExpanded ? 0 : 0,
+                  }}
+                  transition={{
+                    opacity: { duration: isSidebarExpanded ? 0.16 : 0.1, ease: 'easeOut' },
+                    maxWidth: { duration: isSidebarExpanded ? 0.22 : 0.12, ease: [0.22, 1, 0.36, 1] },
+                  }}
+                  className="min-w-0 flex-1 overflow-hidden"
+                >
                   <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.employee_name || user.full_name || user.username || user.email}</p>
-                </div>
+                </motion.div>
               </div>
               {isSidebarExpanded && <div className="mt-2.5 flex gap-1 w-full">
                 <span className="flex-1 min-w-0 flex items-center justify-center px-1.5 py-0.5 rounded-md text-[9px] font-medium bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 truncate">
