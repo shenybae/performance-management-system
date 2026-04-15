@@ -365,6 +365,13 @@ export const CareerDashboard = () => {
     reader.readAsDataURL(file);
   };
 
+  const clearTaskBriefDraft = (goalId: number) => {
+    setTaskBriefDrafts(prev => ({
+      ...prev,
+      [goalId]: { brief_file_data: '', brief_file_name: '', brief_file_type: '' },
+    }));
+  };
+
   const handleCreateLeaderTask = async (goalId: number) => {
     const draft = taskDrafts[goalId] || {};
     const briefDraft = taskBriefDrafts[goalId] || { brief_file_data: '', brief_file_name: '', brief_file_type: '' };
@@ -1483,10 +1490,21 @@ export const CareerDashboard = () => {
                           <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Optional task brief</p>
                           <p className="text-[11px] text-slate-500">Upload a PDF or PNG showing what needs to be done.</p>
                         </div>
-                        <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
-                          <Upload size={12} /> Add Brief
-                          <input type="file" accept="application/pdf,image/png" className="hidden" onChange={(e) => handleTaskBriefUpload(goalId, e.target.files?.[0])} />
-                        </label>
+                        <div className="flex items-center gap-2">
+                          <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+                            <Upload size={12} /> Add Brief
+                            <input type="file" accept="application/pdf,image/png" className="hidden" onChange={(e) => handleTaskBriefUpload(goalId, e.target.files?.[0])} />
+                          </label>
+                          {briefDraft.brief_file_data && (
+                            <button
+                              type="button"
+                              onClick={() => clearTaskBriefDraft(goalId)}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
                       </div>
                       {briefDraft.brief_file_data ? (
                         <div className="mt-3">
