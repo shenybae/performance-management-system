@@ -20,30 +20,54 @@ const isPdfType = (mimeType?: string, src?: string) => {
   return String(src || '').toLowerCase().startsWith('data:application/pdf');
 };
 
+const normalizeSrc = (src?: string, mimeType?: string) => {
+  const value = String(src || '').trim();
+  if (!value) return '';
+
+  const lower = value.toLowerCase();
+  const hasScheme =
+    lower.startsWith('data:') ||
+    lower.startsWith('blob:') ||
+    lower.startsWith('http://') ||
+    lower.startsWith('https://') ||
+    lower.startsWith('file:') ||
+    lower.startsWith('/');
+
+  if (hasScheme) return value;
+
+  const likelyBase64 = /^[a-z0-9+/=\s]+$/i.test(value) && value.length > 40;
+  if (likelyBase64) {
+    const contentType = String(mimeType || 'application/octet-stream').trim() || 'application/octet-stream';
+    return `data:${contentType};base64,${value.replace(/\s+/g, '')}`;
+  }
+
+  return value;
+};
+
 export const ProofAttachment = ({ src, fileName, mimeType, compact = false }: ProofAttachmentProps) => {
   if (!src) return null;
 
+  const resolvedSrc = normalizeSrc(src, mimeType);
+  if (!resolvedSrc) return null;
+
   const displayName = fileName || 'Submitted proof';
-  const image = isImageType(mimeType, src);
-  const pdf = isPdfType(mimeType, src);
+  const image = isImageType(mimeType, resolvedSrc);
+  const pdf = isPdfType(mimeType, resolvedSrc);
 
   const handleOpen = async () => {
     try {
-      if (String(src).toLowerCase().startsWith('data:')) {
-        const response = await fetch(src);
+      if (String(resolvedSrc).toLowerCase().startsWith('data:')) {
+        const response = await fetch(resolvedSrc);
         const blob = await response.blob();
         const blobUrl = URL.createObjectURL(blob);
-        const opened = window.open(blobUrl, '_blank', 'noopener,noreferrer');
-        if (!opened) window.location.assign(blobUrl);
+        window.open(blobUrl, '_blank');
         setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
         return;
       }
 
-      const opened = window.open(src, '_blank', 'noopener,noreferrer');
-      if (!opened) window.location.assign(src);
+      window.open(resolvedSrc, '_blank');
     } catch {
-      const opened = window.open(src, '_blank', 'noopener,noreferrer');
-      if (!opened) window.location.assign(src);
+      window.open(resolvedSrc, '_blank');
     }
   };
 
@@ -67,7 +91,7 @@ export const ProofAttachment = ({ src, fileName, mimeType, compact = false }: Pr
               <ExternalLink size={11} /> Open
             </button>
             <a
-              href={src}
+              href={resolvedSrc}
               download={fileName || undefined}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
             >
@@ -99,16 +123,16 @@ export const ProofAttachment = ({ src, fileName, mimeType, compact = false }: Pr
       </div>
 
       {image ? (
-        <a href={src} target="_blank" rel="noreferrer" className="block">
-          <img src={src} alt={displayName} className="w-full max-h-56 object-contain rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800" />
+        <a href={resolvedSrc} target="_blank" rel="noreferrer" className="block">
+          <img src={resolvedSrc} alt={displayName} className="w-full max-h-56 object-contain rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800" />
         </a>
       ) : pdf ? (
-        <object data={src} type="application/pdf" className="w-full h-64 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+        <object data={resolvedSrc} type="application/pdf" className="w-full h-64 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
           <div className="flex h-64 items-center justify-center text-center px-4 text-xs text-slate-500">
             <div>
               <FileText size={22} className="mx-auto mb-2 text-slate-400" />
               <p>PDF preview is not available in this browser.</p>
-              <a href={src} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-teal-deep dark:text-teal-green font-bold">
+              <a href={resolvedSrc} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-teal-deep dark:text-teal-green font-bold">
                 <Download size={12} /> Open or download the file
               </a>
             </div>
@@ -127,7 +151,7 @@ export const ProofAttachment = ({ src, fileName, mimeType, compact = false }: Pr
             >
               <ExternalLink size={11} /> Open file
             </button>
-            <a href={src} download={fileName || undefined} className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">
+            <a href={resolvedSrc} download={fileName || undefined} className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">
               <Download size={11} /> Download
             </a>
           </div>

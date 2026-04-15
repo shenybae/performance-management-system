@@ -1635,18 +1635,24 @@ export const CareerDashboard = () => {
         open={!!selectedTaskBoardGoal}
         title={selectedTaskBoardGoal ? `Task Board: ${selectedTaskBoardGoal.title || selectedTaskBoardGoal.statement || 'Goal'}` : 'Task Board'}
         onClose={() => setTaskBoardOpenGoalId(null)}
-        maxWidthClassName="max-w-4xl"
+        maxWidthClassName="max-w-5xl"
       >
         {selectedTaskBoardGoal && (() => {
           const goalId = Number(selectedTaskBoardGoal.id);
           const memberTasks = getGoalMemberTasks(selectedTaskBoardGoal);
+          const completedCount = memberTasks.filter((t: any) => String(t?.status || '') === 'Completed').length;
+          const inProgressCount = memberTasks.filter((t: any) => String(t?.status || '') === 'In Progress').length;
+          const blockedCount = memberTasks.filter((t: any) => String(t?.status || '') === 'Blocked').length;
+          const pendingProofCount = memberTasks.filter((t: any) => String(t?.proof_review_status || '') === 'Pending Review').length;
+          const withBriefCount = memberTasks.filter((t: any) => parseTaskBriefFiles(t).length > 0).length;
           return (
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Task Board ({memberTasks.length})</p>
-              {memberTasks.length === 0 ? (
-                <p className="text-xs text-slate-400">No detailed tasks yet.</p>
-              ) : (
-                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_280px] gap-3 items-start">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Task Board ({memberTasks.length})</p>
+                {memberTasks.length === 0 ? (
+                  <p className="text-xs text-slate-400">No detailed tasks yet.</p>
+                ) : (
+                  <div className="space-y-3">
                   {memberTasks.map((t: any, index: number) => {
                     const progressValue = taskProgressEdits[t.id] ?? Number(t.progress || 0);
                     const isProgressOpen = taskProgressOpenTaskId === t.id;
@@ -1655,7 +1661,7 @@ export const CareerDashboard = () => {
                     const reviewNoteValue = taskReviewNotes[t.id] ?? String(t.proof_review_note || '');
                     const briefFiles = parseTaskBriefFiles(t);
                     return (
-                      <div key={t.id || `task-${goalId}-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-900/40 h-full">
+                      <div key={t.id || `task-${goalId}-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-900/40">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
                             <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
@@ -1818,8 +1824,41 @@ export const CareerDashboard = () => {
                       </div>
                     );
                   })}
+                  </div>
+                )}
+              </div>
+
+              <aside className="lg:sticky lg:top-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
+                <p className="text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">Board Summary</p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
+                    <p className="text-[10px] text-slate-400">Total</p>
+                    <p className="text-sm font-black text-slate-700 dark:text-slate-200">{memberTasks.length}</p>
+                  </div>
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
+                    <p className="text-[10px] text-slate-400">Completed</p>
+                    <p className="text-sm font-black text-emerald-600">{completedCount}</p>
+                  </div>
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
+                    <p className="text-[10px] text-slate-400">In Progress</p>
+                    <p className="text-sm font-black text-teal-600">{inProgressCount}</p>
+                  </div>
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
+                    <p className="text-[10px] text-slate-400">Blocked</p>
+                    <p className="text-sm font-black text-rose-600">{blockedCount}</p>
+                  </div>
                 </div>
-              )}
+                <div className="mt-2 space-y-2">
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
+                    <p className="text-[10px] text-slate-400">Pending Proof Review</p>
+                    <p className="text-sm font-black text-amber-600">{pendingProofCount}</p>
+                  </div>
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
+                    <p className="text-[10px] text-slate-400">Tasks With Brief Files</p>
+                    <p className="text-sm font-black text-indigo-600">{withBriefCount}</p>
+                  </div>
+                </div>
+              </aside>
             </div>
           );
         })()}
