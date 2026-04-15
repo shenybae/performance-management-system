@@ -56,6 +56,18 @@ const uniqueTasksBySignature = (items: any[]) => {
   });
 };
 
+const isImageMime = (mimeType?: string, src?: string) => {
+  const value = String(mimeType || '').toLowerCase();
+  if (value.startsWith('image/')) return true;
+  return String(src || '').toLowerCase().startsWith('data:image/');
+};
+
+const isPdfMime = (mimeType?: string, src?: string) => {
+  const value = String(mimeType || '').toLowerCase();
+  if (value === 'application/pdf') return true;
+  return String(src || '').toLowerCase().startsWith('data:application/pdf');
+};
+
 export const CareerDashboard = () => {
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
@@ -78,6 +90,7 @@ export const CareerDashboard = () => {
   const [taskProgressEdits, setTaskProgressEdits] = useState<Record<number, number>>({});
   const [taskReviewNotes, setTaskReviewNotes] = useState<Record<number, string>>({});
   const [proofViewerTaskId, setProofViewerTaskId] = useState<number | null>(null);
+  const [taskBriefViewer, setTaskBriefViewer] = useState<{ src: string; fileName?: string; mimeType?: string } | null>(null);
   const [delegatedTaskOpenId, setDelegatedTaskOpenId] = useState<number | null>(null);
   const [taskProgressOpenTaskId, setTaskProgressOpenTaskId] = useState<number | null>(null);
   const [taskSavingGoal, setTaskSavingGoal] = useState<number | null>(null);
@@ -1566,7 +1579,16 @@ export const CareerDashboard = () => {
                             </div>
                             {t.brief_file_data && (
                               <div className="mt-2">
-                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Task Brief</p>
+                                <div className="mb-1 flex items-center justify-between gap-2">
+                                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Task Brief</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => setTaskBriefViewer({ src: String(t.brief_file_data || ''), fileName: t.brief_file_name, mimeType: t.brief_file_type })}
+                                    className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                                  >
+                                    View Full File
+                                  </button>
+                                </div>
                                 <ProofAttachment src={t.brief_file_data} fileName={t.brief_file_name} mimeType={t.brief_file_type} compact />
                               </div>
                             )}
@@ -1737,7 +1759,18 @@ export const CareerDashboard = () => {
               </div>
 
               <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Task Brief</p>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Task Brief</p>
+                  {hasTaskBrief && (
+                    <button
+                      type="button"
+                      onClick={() => setTaskBriefViewer({ src: String(t.brief_file_data || ''), fileName: t.brief_file_name, mimeType: t.brief_file_type })}
+                      className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                    >
+                      View Full File
+                    </button>
+                  )}
+                </div>
                 {hasTaskBrief ? (
                   <ProofAttachment src={t.brief_file_data} fileName={t.brief_file_name} mimeType={t.brief_file_type} compact />
                 ) : (
@@ -1842,6 +1875,59 @@ export const CareerDashboard = () => {
           />
         ) : (
           <p className="text-sm text-slate-500">No proof file available.</p>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!taskBriefViewer}
+        title={taskBriefViewer ? `Task Brief: ${taskBriefViewer.fileName || 'Attachment'}` : 'Task Brief'}
+        onClose={() => setTaskBriefViewer(null)}
+        maxWidthClassName="max-w-7xl"
+      >
+        {taskBriefViewer?.src ? (
+          <div className="h-[82vh]">
+            {isImageMime(taskBriefViewer.mimeType, taskBriefViewer.src) ? (
+              <div className="h-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-2 overflow-auto">
+                <img
+                  src={taskBriefViewer.src}
+                  alt={taskBriefViewer.fileName || 'Task brief'}
+                  className="max-w-full max-h-full mx-auto object-contain"
+                />
+              </div>
+            ) : isPdfMime(taskBriefViewer.mimeType, taskBriefViewer.src) ? (
+              <object
+                data={taskBriefViewer.src}
+                type="application/pdf"
+                className="w-full h-full rounded-lg border border-slate-200 dark:border-slate-700"
+              />
+            ) : (
+              <div className="h-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4 flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Preview for this file type is limited.</p>
+                  <p className="text-xs text-slate-500 mt-1">Open or download the full file for complete viewing.</p>
+                  <div className="mt-3 flex justify-center gap-2">
+                    <a
+                      href={taskBriefViewer.src}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-teal-deep text-white text-xs font-bold hover:bg-teal-green"
+                    >
+                      Open Full File
+                    </a>
+                    <a
+                      href={taskBriefViewer.src}
+                      download={taskBriefViewer.fileName || undefined}
+                      className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold"
+                    >
+                      Download
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">No task brief file available.</p>
         )}
       </Modal>
     </motion.div>
