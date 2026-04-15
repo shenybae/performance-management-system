@@ -1925,35 +1925,6 @@ export const CareerDashboard = () => {
                 )}
               </div>
 
-              <div className="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 p-2.5">
-                <p className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Need More Time?</p>
-                {pendingTaskExtension ? (
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <p className="text-[11px] text-blue-700/85 dark:text-blue-300/85">
-                      Pending team leader decision. Requested due date: {pendingTaskExtension.requested_due_date || 'N/A'}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setExtensionTaskOpenId(Number(t.id))}
-                      className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-[10px] font-bold text-blue-700 dark:text-blue-300"
-                    >
-                      View Request
-                    </button>
-                  </div>
-                ) : (
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <p className="text-[11px] text-blue-700/85 dark:text-blue-300/85">Send a separate deadline extension request without affecting proof submission.</p>
-                    <button
-                      type="button"
-                      onClick={() => setExtensionTaskOpenId(Number(t.id))}
-                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700"
-                    >
-                      Request Deadline Extension
-                    </button>
-                  </div>
-                )}
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
                 <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-3 bg-white/70 dark:bg-slate-900/50">
                   <ProofAttachment src={draft.proof_image} fileName={draft.proof_file_name} mimeType={draft.proof_file_type} compact />
@@ -2001,6 +1972,35 @@ export const CareerDashboard = () => {
                     </button>
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 p-2.5">
+                <p className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Need More Time?</p>
+                {pendingTaskExtension ? (
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-blue-700/85 dark:text-blue-300/85">
+                      Pending team leader decision. Requested due date: {pendingTaskExtension.requested_due_date || 'N/A'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setExtensionTaskOpenId(Number(t.id))}
+                      className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-[10px] font-bold text-blue-700 dark:text-blue-300"
+                    >
+                      View Request
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-blue-700/85 dark:text-blue-300/85">Send a separate deadline extension request without affecting proof submission.</p>
+                    <button
+                      type="button"
+                      onClick={() => setExtensionTaskOpenId(Number(t.id))}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700"
+                    >
+                      Request Deadline Extension
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           );
