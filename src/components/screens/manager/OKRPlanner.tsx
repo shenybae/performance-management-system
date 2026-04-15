@@ -153,6 +153,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     return Number.isFinite(eid) && eid > 0 ? eid : null;
   }, [usersList, form.leader_id]);
 
+  const selectedLeaderName = useMemo(() => {
+    if (!form.leader_id) return '';
+    const row = usersList.find(u => String(u.id) === String(form.leader_id));
+    return String(row?.full_name || row?.employee_name || row?.username || '').trim();
+  }, [usersList, form.leader_id]);
+
   const userRole = String(currentUser?.role || '').toLowerCase();
   const isManager = userRole === 'manager';
   const managerDept = String(
@@ -224,45 +230,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         avatarUrl: u.profile_picture || null,
       }));
   }, [usersList, form.department]);
-
-  const goalOwnerOptions = useMemo(() => {
-    const normalizedDept = String(form.department || '').trim().toLowerCase();
-    const filtered = employees.filter((emp) => {
-      if (!normalizedDept) return true;
-      return String(emp.dept || '').trim().toLowerCase() === normalizedDept;
-    });
-
-    const seen = new Set<string>();
-    const options = filtered
-      .map((emp) => {
-        const name = String(emp.name || '').trim();
-        if (!name) return null;
-        if (seen.has(name.toLowerCase())) return null;
-        seen.add(name.toLowerCase());
-        return {
-          value: name,
-          label: `${name}${emp.position ? ` (${emp.position})` : ''}`,
-          avatarUrl: (emp as any).profile_picture || null,
-        };
-      })
-      .filter(Boolean) as Array<{ value: string; label: string; avatarUrl: string | null }>;
-
-    const managerName = String(
-      currentUser?.employee_name || currentUser?.full_name || currentUser?.username || currentUser?.email || ''
-    ).trim();
-    const managerDeptName = String(currentUser?.dept || '').trim().toLowerCase();
-    const managerAllowedByDept = !normalizedDept || managerDeptName === normalizedDept;
-
-    if (managerName && managerAllowedByDept && !seen.has(managerName.toLowerCase())) {
-      options.unshift({
-        value: managerName,
-        label: `${managerName}${currentUser?.position ? ` (${currentUser.position})` : ''}`,
-        avatarUrl: currentUser?.profile_picture || null,
-      });
-    }
-
-    return options;
-  }, [employees, form.department, currentUser]);
 
   const selectedAssignees = useMemo(() => {
     const selected = new Set((form.assignee_ids || []).map(String));
@@ -381,10 +348,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       window.notify?.('Team name must be 100 characters or less', 'error');
       return;
     }
-    if (form.delegation.trim().length > 120) {
-      window.notify?.('Goal owner/responsible must be 120 characters or less', 'error');
-      return;
-    }
     try {
       const leaderIdNum = form.leader_id ? parseInt(String(form.leader_id), 10) : null;
       const assigneeIds = (Array.isArray(form.assignee_ids) ? form.assignee_ids : [])
@@ -407,6 +370,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           title,
           statement,
           metric,
+          delegation: (form.scope === 'Team' || form.scope === 'Department') ? selectedLeaderName : '',
           employee_id: form.employee_id ? parseInt(form.employee_id) : null,
           leader_id: leaderIdNum,
         }),
@@ -1102,7 +1066,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       <div class="field"><span class="label">Department</span><span class="val">${g.department || '\u2014'}</span></div>
       <div class="field"><span class="label">Team</span><span class="val">${g.team_name || '\u2014'}</span></div>
       <div class="field"><span class="label">Assigned To</span><span class="val">${g.employee_name || '\u2014'}</span></div>
-      <div class="field"><span class="label">Goal Owner</span><span class="val">${g.delegation || '\u2014'}</span></div>
+      <div class="field"><span class="label">Team Leader (Owner)</span><span class="val">${g.delegation || '\u2014'}</span></div>
       <div class="field"><span class="label">Priority</span><span class="val">${g.priority || 'Medium'}</span></div>
       <div class="field"><span class="label">Quarter</span><span class="val">${g.quarter || '\u2014'}</span></div>
       <div class="field"><span class="label">Frequency</span><span class="val">${g.frequency || 'One-time'}</span></div>
@@ -2065,7 +2029,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 </select>
               </div>
             </div>
-            {/* Team / Employee / Delegation */}
+            {/* Team / Employee / Leader */}
             <div className="grid grid-cols-3 gap-4">
               {(form.scope === 'Team' || form.scope === 'Department') && (
                 <div>
@@ -2085,21 +2049,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   />
                 </div>
               )}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Goal Owner / Responsible</label>
-                <SearchableSelect
-                  options={goalOwnerOptions}
-                  value={form.delegation}
-                  onChange={v => setForm({ ...form, delegation: String(v) })}
-                  placeholder="Who is accountable for this goal"
-                  allowEmpty
-                  emptyLabel="No owner selected"
-                  searchable
-                  pill
-                  dropdownVariant="pills-horizontal"
-                  className="w-full"
-                />
-              </div>
               {(form.scope === 'Team' || form.scope === 'Department') && (
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Team Leader</label>
@@ -2352,7 +2301,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   <p className="mt-4 text-[10px] text-slate-400 italic">No {scope.toLowerCase()} goals yet</p>
                 )}
 
-                {/* Goal Owners */}
+                {/* Team Leaders (Owners) */}
                 {owners.length > 0 && (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -2360,7 +2309,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     transition={{ delay: 0.3 }}
                     className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800"
                   >
-                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5">Goal Owners</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5">Team Leaders (Owners)</p>
                     <div className="flex flex-wrap gap-1.5">
                       {owners.slice(0, 4).map(name => (
                         <span key={name} className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -2828,7 +2777,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.metric || '\u2014'}</p>
                 </div>
                 <div>
-                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Goal Owner / Responsible</span>
+                  <span className="font-bold text-teal-deep dark:text-teal-green text-xs block mb-1">Team Leader (Owner)</span>
                   <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">{g.delegation || '\u2014'}</p>
                 </div>
               </div>
