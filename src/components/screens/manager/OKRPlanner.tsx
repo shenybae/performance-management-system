@@ -233,7 +233,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     });
 
     const seen = new Set<string>();
-    return filtered
+    const options = filtered
       .map((emp) => {
         const name = String(emp.name || '').trim();
         if (!name) return null;
@@ -246,7 +246,23 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         };
       })
       .filter(Boolean) as Array<{ value: string; label: string; avatarUrl: string | null }>;
-  }, [employees, form.department]);
+
+    const managerName = String(
+      currentUser?.employee_name || currentUser?.full_name || currentUser?.username || currentUser?.email || ''
+    ).trim();
+    const managerDeptName = String(currentUser?.dept || '').trim().toLowerCase();
+    const managerAllowedByDept = !normalizedDept || managerDeptName === normalizedDept;
+
+    if (managerName && managerAllowedByDept && !seen.has(managerName.toLowerCase())) {
+      options.unshift({
+        value: managerName,
+        label: `${managerName}${currentUser?.position ? ` (${currentUser.position})` : ''}`,
+        avatarUrl: currentUser?.profile_picture || null,
+      });
+    }
+
+    return options;
+  }, [employees, form.department, currentUser]);
 
   const selectedAssignees = useMemo(() => {
     const selected = new Set((form.assignee_ids || []).map(String));
