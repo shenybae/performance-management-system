@@ -1635,7 +1635,7 @@ export const CareerDashboard = () => {
         open={!!selectedTaskBoardGoal}
         title={selectedTaskBoardGoal ? `Task Board: ${selectedTaskBoardGoal.title || selectedTaskBoardGoal.statement || 'Goal'}` : 'Task Board'}
         onClose={() => setTaskBoardOpenGoalId(null)}
-        maxWidthClassName="max-w-5xl"
+        maxWidthClassName="max-w-4xl"
       >
         {selectedTaskBoardGoal && (() => {
           const goalId = Number(selectedTaskBoardGoal.id);
@@ -1646,7 +1646,7 @@ export const CareerDashboard = () => {
               {memberTasks.length === 0 ? (
                 <p className="text-xs text-slate-400">No detailed tasks yet.</p>
               ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3">
                   {memberTasks.map((t: any, index: number) => {
                     const progressValue = taskProgressEdits[t.id] ?? Number(t.progress || 0);
                     const isProgressOpen = taskProgressOpenTaskId === t.id;

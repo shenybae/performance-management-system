@@ -27,6 +27,26 @@ export const ProofAttachment = ({ src, fileName, mimeType, compact = false }: Pr
   const image = isImageType(mimeType, src);
   const pdf = isPdfType(mimeType, src);
 
+  const handleOpen = async () => {
+    try {
+      if (String(src).toLowerCase().startsWith('data:')) {
+        const response = await fetch(src);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const opened = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+        if (!opened) window.location.assign(blobUrl);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+        return;
+      }
+
+      const opened = window.open(src, '_blank', 'noopener,noreferrer');
+      if (!opened) window.location.assign(src);
+    } catch {
+      const opened = window.open(src, '_blank', 'noopener,noreferrer');
+      if (!opened) window.location.assign(src);
+    }
+  };
+
   if (compact) {
     return (
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
@@ -39,14 +59,13 @@ export const ProofAttachment = ({ src, fileName, mimeType, compact = false }: Pr
             {mimeType && <p className="mt-0.5 text-[10px] text-slate-400 truncate">{mimeType}</p>}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <a
-              href={src}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={() => { void handleOpen(); }}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
             >
               <ExternalLink size={11} /> Open
-            </a>
+            </button>
             <a
               href={src}
               download={fileName || undefined}
@@ -70,14 +89,13 @@ export const ProofAttachment = ({ src, fileName, mimeType, compact = false }: Pr
           </div>
           {mimeType && <p className="mt-0.5 text-[10px] text-slate-400 truncate">{mimeType}</p>}
         </div>
-        <a
-          href={src}
-          target="_blank"
-          rel="noreferrer"
+        <button
+          type="button"
+          onClick={() => { void handleOpen(); }}
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
         >
           <ExternalLink size={11} /> Open
-        </a>
+        </button>
       </div>
 
       {image ? (
@@ -102,9 +120,13 @@ export const ProofAttachment = ({ src, fileName, mimeType, compact = false }: Pr
           <p className="text-xs font-bold text-slate-700 dark:text-slate-200">File attached and ready to review</p>
           <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Open the file in a new tab or download it to inspect the proof.</p>
           <div className="mt-3 flex justify-center gap-2">
-            <a href={src} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[10px] font-bold bg-teal-deep text-white hover:bg-teal-green">
+            <button
+              type="button"
+              onClick={() => { void handleOpen(); }}
+              className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[10px] font-bold bg-teal-deep text-white hover:bg-teal-green"
+            >
               <ExternalLink size={11} /> Open file
-            </a>
+            </button>
             <a href={src} download={fileName || undefined} className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">
               <Download size={11} /> Download
             </a>
