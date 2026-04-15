@@ -715,14 +715,14 @@ export default function App() {
         onMouseLeave={handleDesktopSidebarMouseLeave}
         className="fixed inset-y-0 left-0 z-50 system-bg border-r border-slate-200 dark:border-slate-800 flex flex-col lg:static lg:z-auto overflow-hidden"
       >
-        <div className="border-b border-slate-100 dark:border-slate-800 px-4 py-4">
+        <div className="border-b border-slate-100 dark:border-slate-800 px-4 py-5">
           <div className="flex items-start justify-between gap-2">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col mb-1 items-center flex-1 min-w-0"
+            className="flex flex-col mb-1 items-center flex-1 min-w-0 pt-1"
           >
-            <img src="/logo.png" alt="Maptech Logo" className="h-16 w-16 object-contain mb-1" />
+            <img src="/logo.png" alt="Maptech Logo" className="h-20 w-20 object-contain mb-1" />
             <motion.p
               initial={false}
               animate={{
@@ -749,7 +749,7 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="flex-1 pt-6 pb-4 overflow-y-auto custom-scrollbar">
+        <nav className="flex-1 pt-8 pb-4 overflow-y-auto custom-scrollbar">
           <div className="mb-4 px-3">
             <motion.button 
               whileHover={{ scale: 1.02 }}
