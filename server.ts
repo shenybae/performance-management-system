@@ -3802,7 +3802,7 @@ async function startServer() {
             .map((a: any) => ({ ...a, employee_name: a.employee_name || a.name || null }));
 
           const taskRows: any = await query(
-            'SELECT t.*, e.name as member_name FROM goal_member_tasks t LEFT JOIN employees e ON t.member_employee_id = e.id WHERE t.goal_id = ? ORDER BY t.created_at DESC',
+            'SELECT t.*, e.name as member_name FROM goal_member_tasks t LEFT JOIN employees e ON t.member_employee_id = e.id WHERE t.goal_id = ? AND t.deleted_at IS NULL ORDER BY t.created_at DESC',
             [g.id]
           );
           g.member_tasks = uniqueById(Array.isArray(taskRows) ? taskRows : []).filter((t: any) => {
@@ -3854,6 +3854,7 @@ async function startServer() {
          FROM goal_member_tasks
          WHERE goal_id = ?
            AND member_employee_id = ?
+           AND deleted_at IS NULL
            AND LOWER(TRIM(COALESCE(title, ''))) = LOWER(TRIM(COALESCE(?, '')))
            AND COALESCE(due_date, '') = COALESCE(?, '')
          ORDER BY id DESC
@@ -3875,7 +3876,7 @@ async function startServer() {
       );
 
       const progressRows: any = await query(
-        'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ?',
+        'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ? AND deleted_at IS NULL',
         [goalId]
       );
       const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
@@ -3993,6 +3994,7 @@ async function startServer() {
          LEFT JOIN employees e ON e.id = t.member_employee_id
          LEFT JOIN users u ON u.id = t.proof_reviewed_by
          WHERE t.member_employee_id = ?
+           AND t.deleted_at IS NULL
          ORDER BY COALESCE(t.updated_at, t.created_at) DESC`,
         [actorEmployeeId]
       );
@@ -4044,6 +4046,7 @@ async function startServer() {
          LEFT JOIN employees e ON e.id = t.member_employee_id
          LEFT JOIN users u ON u.id = t.proof_reviewed_by
          WHERE t.goal_id = ?
+           AND t.deleted_at IS NULL
          ORDER BY COALESCE(t.updated_at, t.created_at) DESC`,
         [goalId]
       );
@@ -4064,7 +4067,7 @@ async function startServer() {
       let taskRows: any;
       try {
         taskRows = await query(
-          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL',
           [taskId]
         );
       } catch (e: any) {
@@ -4072,7 +4075,7 @@ async function startServer() {
         const missingGoalDeptColumn = String(e?.code || '') === '42703' || msg.includes('g.department') || msg.includes('goal_department');
         if (!missingGoalDeptColumn) throw e;
         taskRows = await query(
-          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL',
           [taskId]
         );
       }
@@ -4181,7 +4184,7 @@ async function startServer() {
       await query(`UPDATE goal_member_tasks SET ${sets.join(', ')} WHERE id = ?`, vals);
 
       const progressRows: any = await query(
-        'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ?',
+        'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ? AND deleted_at IS NULL',
         [task.goal_id]
       );
       const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
@@ -4234,7 +4237,7 @@ async function startServer() {
       let taskRows: any;
       try {
         taskRows = await query(
-          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL',
           [taskId]
         );
       } catch (e: any) {
@@ -4242,7 +4245,7 @@ async function startServer() {
         const missingGoalDeptColumn = String(e?.code || '') === '42703' || msg.includes('g.department') || msg.includes('goal_department');
         if (!missingGoalDeptColumn) throw e;
         taskRows = await query(
-          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ?',
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL',
           [taskId]
         );
       }
@@ -4273,7 +4276,7 @@ async function startServer() {
       }
       if (!allowed) return res.status(403).json({ error: 'Forbidden' });
 
-      await softDeleteById('goal_member_tasks', taskId);
+      await query('DELETE FROM goal_member_tasks WHERE id = ?', [taskId]);
 
       const progressRows: any = await query(
         'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ? AND deleted_at IS NULL',
