@@ -722,7 +722,7 @@ export default function App() {
             animate={{ opacity: 1, scale: 1 }}
             className="flex flex-col mb-1 items-center flex-1 min-w-0"
           >
-            <img src="/logo.png" alt="Maptech Logo" className="h-14 w-14 object-contain mb-1" />
+            <img src="/logo.png" alt="Maptech Logo" className="h-16 w-16 object-contain mb-1" />
             <motion.p
               initial={false}
               animate={{
@@ -749,7 +749,7 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="flex-1 py-4 overflow-y-auto custom-scrollbar">
+        <nav className="flex-1 pt-6 pb-4 overflow-y-auto custom-scrollbar">
           <div className="mb-4 px-3">
             <motion.button 
               whileHover={{ scale: 1.02 }}
