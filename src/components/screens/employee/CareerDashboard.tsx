@@ -7,7 +7,7 @@ import { CircularProgress } from '../../common/CircularProgress';
 import { ProofAttachment } from '../../common/ProofAttachment';
 import { Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTriangle, DollarSign, Building2, Users, User, ClipboardList, CalendarDays, Flag, Save, Trash2, Upload, Image as ImageIcon, CheckCircle2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
-import { getAuthHeaders } from '../../../utils/csv';
+import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { appConfirm } from '../../../utils/appDialog';
 import { io } from 'socket.io-client';
 
@@ -694,7 +694,7 @@ export const CareerDashboard = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="mb-4">
+      <div className="flex justify-between items-end mb-4">
         <SectionHeader title="Career Dashboard" subtitle="Your performance overview and career trajectory" />
       </div>
 

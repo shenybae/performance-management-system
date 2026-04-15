@@ -4,7 +4,7 @@ import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import {
-  Plus, X, Download, Lightbulb, ArrowLeft, Eye, Star, FileText, Archive,
+  Plus, X, Lightbulb, ArrowLeft, Eye, Star, FileText, Archive,
   ChevronDown, ChevronUp, CheckCircle2, Clock, AlertTriangle, Send
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -885,9 +885,6 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title={isManagement ? 'Suggestion Review' : 'Employee Suggestion Form'} subtitle={isManagement ? 'Review and manage employee suggestions' : 'Submit ideas for improving workplace efficiency, safety, revenue, or cost savings'} />
         <div className="flex gap-2">
-          <button onClick={() => exportToCSV(suggestions, 'suggestions')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-            <Download size={16} /> XLSX
-          </button>
           {!isManagement ? (
             <button onClick={() => setView('newForm')} className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">
               <Plus size={16} /> New Suggestion

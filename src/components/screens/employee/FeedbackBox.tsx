@@ -4,7 +4,7 @@ import { Card } from '../../common/Card';
 import Modal from '../../common/Modal';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
-import { Plus, Download, Eye, Archive, Sparkles, Users, BarChart3 } from 'lucide-react';
+import { Plus, Eye, Archive, Sparkles, Users, BarChart3 } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -315,7 +315,6 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
             {activeView === 'overview' && (
               <button onClick={() => setShowForm(s => !s)} className="inline-flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition-colors shadow-sm shadow-teal-deep/20"><Plus size={14} /> New Feedback</button>
             )}
-            <button onClick={() => exportToCSV(feedback360, 'feedback_360')} className="inline-flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={14} /> XLSX</button>
           </div>
         </div>
       </div>

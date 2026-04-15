@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
-import { Download, Archive } from 'lucide-react';
+import { Archive } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { appConfirm } from '../../../utils/appDialog';
@@ -93,7 +93,6 @@ export const SelfAssessment = () => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="Self Assessment" subtitle="Evaluate your own performance" />
-        <button onClick={() => exportToCSV(assessments, 'self_assessments')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
