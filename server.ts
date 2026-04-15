@@ -352,6 +352,9 @@ async function initDb() {
       priority TEXT DEFAULT 'Medium',
       status TEXT DEFAULT 'Not Started',
       progress INTEGER DEFAULT 0,
+      brief_file_data TEXT,
+      brief_file_name TEXT,
+      brief_file_type TEXT,
       proof_image TEXT,
       proof_file_name TEXT,
       proof_file_type TEXT,
@@ -938,6 +941,9 @@ async function initDb() {
       'ALTER TABLE goal_member_tasks ADD COLUMN priority TEXT DEFAULT \'Medium\'',
       'ALTER TABLE goal_member_tasks ADD COLUMN status TEXT DEFAULT \'Not Started\'',
       'ALTER TABLE goal_member_tasks ADD COLUMN progress INTEGER DEFAULT 0',
+      'ALTER TABLE goal_member_tasks ADD COLUMN brief_file_data TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN brief_file_name TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN brief_file_type TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_image TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_file_name TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_file_type TEXT',
@@ -3825,6 +3831,9 @@ async function startServer() {
       const description = String(req.body.description || '').trim();
       const dueDate = req.body.due_date ? String(req.body.due_date) : null;
       const priority = String(req.body.priority || 'Medium');
+      const briefFileData = String(req.body.brief_file_data || '').trim();
+      const briefFileName = String(req.body.brief_file_name || '').trim();
+      const briefFileType = String(req.body.brief_file_type || '').trim();
 
       if (!goalId || !memberId || !title) return res.status(400).json({ error: 'Invalid task payload' });
 
@@ -3871,8 +3880,8 @@ async function startServer() {
       }
 
       const inserted: any = await query(
-        'INSERT INTO goal_member_tasks (goal_id, member_employee_id, title, description, due_date, priority, status, progress, proof_review_status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id',
-        [goalId, memberId, title, description || null, dueDate, priority || 'Medium', 'Not Started', 0, 'Not Submitted', actor.id || null]
+        'INSERT INTO goal_member_tasks (goal_id, member_employee_id, title, description, due_date, priority, status, progress, brief_file_data, brief_file_name, brief_file_type, proof_review_status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id',
+        [goalId, memberId, title, description || null, dueDate, priority || 'Medium', 'Not Started', 0, briefFileData || null, briefFileName || null, briefFileType || null, 'Not Submitted', actor.id || null]
       );
 
       const progressRows: any = await query(

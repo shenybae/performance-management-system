@@ -72,6 +72,7 @@ export const CareerDashboard = () => {
   const [taskAssignmentOpenGoalId, setTaskAssignmentOpenGoalId] = useState<number | null>(null);
   const [taskBoardOpenGoalId, setTaskBoardOpenGoalId] = useState<number | null>(null);
   const [taskDrafts, setTaskDrafts] = useState<Record<number, any>>({});
+  const [taskBriefDrafts, setTaskBriefDrafts] = useState<Record<number, { brief_file_data: string; brief_file_name: string; brief_file_type: string }>>({});
   const [taskProgressEdits, setTaskProgressEdits] = useState<Record<number, number>>({});
   const [taskReviewNotes, setTaskReviewNotes] = useState<Record<number, string>>({});
   const [proofViewerTaskId, setProofViewerTaskId] = useState<number | null>(null);
@@ -124,6 +125,18 @@ export const CareerDashboard = () => {
       for (const g of leaderGoals) {
         if (!next[g.id]) {
           next[g.id] = { member_id: '', title: '', description: '', due_date: '', priority: 'Medium' };
+        }
+      }
+      return next;
+    });
+  }, [leaderGoals]);
+
+  useEffect(() => {
+    setTaskBriefDrafts(prev => {
+      const next = { ...prev };
+      for (const g of leaderGoals) {
+        if (!next[g.id]) {
+          next[g.id] = { brief_file_data: '', brief_file_name: '', brief_file_type: '' };
         }
       }
       return next;
@@ -328,8 +341,33 @@ export const CareerDashboard = () => {
     }));
   };
 
+  const handleTaskBriefUpload = (goalId: number, file?: File) => {
+    if (!file) return;
+    const allowedTypes = ['application/pdf', 'image/png'];
+    const isAllowed = allowedTypes.includes(file.type) || file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.png');
+    if (!isAllowed) {
+      window.notify?.('Please upload a PDF or PNG file', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const data = String(e.target?.result || '');
+      setTaskBriefDrafts(prev => ({
+        ...prev,
+        [goalId]: {
+          brief_file_data: data,
+          brief_file_name: file.name,
+          brief_file_type: file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/png'),
+        },
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleCreateLeaderTask = async (goalId: number) => {
     const draft = taskDrafts[goalId] || {};
+    const briefDraft = taskBriefDrafts[goalId] || { brief_file_data: '', brief_file_name: '', brief_file_type: '' };
     const memberId = Number(draft.member_id);
     const title = String(draft.title || '').trim();
     const description = String(draft.description || '').trim();
@@ -352,6 +390,9 @@ export const CareerDashboard = () => {
           description,
           due_date: dueDate,
           priority,
+          brief_file_data: String(briefDraft.brief_file_data || ''),
+          brief_file_name: String(briefDraft.brief_file_name || ''),
+          brief_file_type: String(briefDraft.brief_file_type || ''),
         }),
       });
       if (!res.ok) {
@@ -361,6 +402,7 @@ export const CareerDashboard = () => {
       }
       window.notify?.('Detailed task assigned', 'success');
       setTaskDrafts(prev => ({ ...prev, [goalId]: { member_id: '', title: '', description: '', due_date: '', priority: 'Medium' } }));
+      setTaskBriefDrafts(prev => ({ ...prev, [goalId]: { brief_file_data: '', brief_file_name: '', brief_file_type: '' } }));
       setTaskAssignmentOpenGoalId(null);
       await fetchData();
     } catch (e: any) {
@@ -1075,6 +1117,7 @@ export const CareerDashboard = () => {
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
                 const isEditorClosed = !!closedProofEditors[t.id] || reviewStatus === 'Pending Review' || reviewStatus === 'Approved';
                 const pendingTaskExtension = myDeadlineExtensionRequests.find((r: any) => String(r.entity_type || '') === 'task' && Number(r.task_id) === Number(t.id) && String(r.status || '') === 'Pending');
+                const hasTaskBrief = !!t.brief_file_data;
                 return (
                   <div key={t.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-900/40">
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1102,6 +1145,15 @@ export const CareerDashboard = () => {
                         >
                           Close
                         </button>
+                      )}
+                    </div>
+
+                    <div className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Task Brief</p>
+                      {hasTaskBrief ? (
+                        <ProofAttachment src={t.brief_file_data} fileName={t.brief_file_name} mimeType={t.brief_file_type} compact />
+                      ) : (
+                        <p className="text-xs text-slate-400">No brief attachment was added to this task.</p>
                       )}
                     </div>
 
@@ -1372,6 +1424,7 @@ export const CareerDashboard = () => {
           const goalId = Number(selectedAssignmentGoal.id);
           const assignees = getGoalAssignees(selectedAssignmentGoal);
           const taskDraft = taskDrafts[goalId] || { member_id: '', title: '', description: '', due_date: '', priority: 'Medium' };
+          const briefDraft = taskBriefDrafts[goalId] || { brief_file_data: '', brief_file_name: '', brief_file_type: '' };
           return (
             <div>
               {assignees.length === 0 ? (
@@ -1423,6 +1476,26 @@ export const CareerDashboard = () => {
                       className="md:col-span-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
                       placeholder="Task details / expected output"
                     />
+
+                    <div className="md:col-span-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                          <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Optional task brief</p>
+                          <p className="text-[11px] text-slate-500">Upload a PDF or PNG showing what needs to be done.</p>
+                        </div>
+                        <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+                          <Upload size={12} /> Add Brief
+                          <input type="file" accept="application/pdf,image/png" className="hidden" onChange={(e) => handleTaskBriefUpload(goalId, e.target.files?.[0])} />
+                        </label>
+                      </div>
+                      {briefDraft.brief_file_data ? (
+                        <div className="mt-3">
+                          <ProofAttachment src={briefDraft.brief_file_data} fileName={briefDraft.brief_file_name} mimeType={briefDraft.brief_file_type} compact />
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-[11px] text-slate-400">No brief attached.</p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex justify-end">
@@ -1474,6 +1547,12 @@ export const CareerDashboard = () => {
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 inline-flex items-center gap-1"><Flag size={10} />{t.priority || 'Medium'}</span>
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 inline-flex items-center gap-1"><CalendarDays size={10} />{t.due_date || 'No deadline'}</span>
                             </div>
+                            {t.brief_file_data && (
+                              <div className="mt-2">
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Task Brief</p>
+                                <ProofAttachment src={t.brief_file_data} fileName={t.brief_file_name} mimeType={t.brief_file_type} compact />
+                              </div>
+                            )}
                           </div>
                           <button
                             onClick={() => handleDeleteLeaderTask(Number(t.id))}
