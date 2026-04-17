@@ -4403,7 +4403,10 @@ async function startServer() {
       }
       if (!allowed) return res.status(403).json({ error: 'Forbidden' });
 
-      const deleteResult: any = await query('DELETE FROM goal_member_tasks WHERE id = ?', [taskId]);
+      const deleteResult: any = await query(
+        'UPDATE goal_member_tasks SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL',
+        [taskId]
+      );
       if (typeof deleteResult?.affectedRows === 'number' && deleteResult.affectedRows === 0) {
         return res.json({ success: true, task_id: taskId, already_removed: true });
       }
