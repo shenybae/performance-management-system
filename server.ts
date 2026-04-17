@@ -75,7 +75,7 @@ async function softDeleteWhere(tableName: string, whereClause: string, params: a
 }
 
 const TASK_PROGRESS_SUBMITTED = 25;
-const TASK_PROGRESS_REVIEW_APPROVED = 75;
+const TASK_PROGRESS_REVIEW_APPROVED = 100;
 const GOAL_PROGRESS_MAX_BEFORE_MANAGER_APPROVAL = 75;
 
 function normalizeProgressValue(value: any) {

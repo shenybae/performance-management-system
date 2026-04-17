@@ -883,7 +883,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         [goalId]: (prev[goalId] || []).map((task: any) => {
           if (Number(task?.id) !== Number(taskId)) return task;
           if (status === 'Approved') {
-            return { ...task, proof_review_status: status, proof_review_note: note, status: 'Completed', progress: 75 };
+            return { ...task, proof_review_status: status, proof_review_note: note, status: 'Completed', progress: 100 };
           }
           if (status === 'Needs Revision') {
             const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));

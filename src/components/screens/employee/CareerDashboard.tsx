@@ -824,7 +824,7 @@ export const CareerDashboard = () => {
     const applyReviewOutcomeLocally = (task: any) => {
       const reviewStatus = String(updates?.proof_review_status || '');
       if (reviewStatus === 'Approved') {
-        return { ...task, ...updates, status: 'In Progress', progress: 75 };
+        return { ...task, ...updates, status: 'Completed', progress: 100 };
       }
       if (reviewStatus === 'Needs Revision') {
         const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));
