@@ -2078,28 +2078,30 @@ export const CareerDashboard = () => {
                   ) : (
                     <p className="text-xs text-slate-400">No proof file selected yet.</p>
                   )}
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <label className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
-                      <Upload size={13} /> Attach Proof Files
-                      <input
-                        type="file"
-                        accept="*/*"
-                        multiple
-                        className="hidden"
-                        onClick={(e) => { e.currentTarget.value = ''; }}
-                        onChange={(e) => handleProofImageUpload(t.id, e.target.files || [])}
-                      />
-                    </label>
-                    {!!proofFiles.length && (
-                      <button
-                        type="button"
-                        onClick={() => removeProofAttachmentDraft(t.id)}
-                        className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-bold bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/35"
-                      >
-                        <Trash2 size={12} /> Remove All
-                      </button>
-                    )}
-                  </div>
+                  {!proofLocked && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <label className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+                        <Upload size={13} /> Attach Proof Files
+                        <input
+                          type="file"
+                          accept="*/*"
+                          multiple
+                          className="hidden"
+                          onClick={(e) => { e.currentTarget.value = ''; }}
+                          onChange={(e) => handleProofImageUpload(t.id, e.target.files || [])}
+                        />
+                      </label>
+                      {!!proofFiles.length && (
+                        <button
+                          type="button"
+                          onClick={() => removeProofAttachmentDraft(t.id)}
+                          className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-bold bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/35"
+                        >
+                          <Trash2 size={12} /> Remove All
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {proofFiles.length > 0 && (
                     <p className="mt-2 text-xs text-slate-500 truncate">Selected file{proofFiles.length > 1 ? 's' : ''}: {proofFiles.map((f) => f.proof_file_name).join(', ')}</p>
                   )}
@@ -2120,7 +2122,8 @@ export const CareerDashboard = () => {
                     rows={6}
                     value={draft.proof_note}
                     onChange={(e) => handleProofDraftChange(t.id, { proof_note: e.target.value })}
-                    className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-base"
+                    readOnly={proofLocked}
+                    className={`w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 text-base ${proofLocked ? 'bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 cursor-not-allowed' : 'bg-white dark:bg-slate-900'}`}
                     placeholder="Add notes explaining the attached proof"
                   />
                   <div className="mt-3 flex justify-end">
