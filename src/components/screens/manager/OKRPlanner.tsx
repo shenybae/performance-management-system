@@ -23,6 +23,40 @@ const QUARTERS = ['Q1 2026', 'Q2 2026', 'Q3 2026', 'Q4 2026'] as const;
 const FREQUENCIES = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually', 'One-time'] as const;
 const COLORS = ['#0f766e', '#0ea5e9', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
+type TaskProofFile = {
+  proof_file_data: string;
+  proof_file_name: string;
+  proof_file_type: string;
+};
+
+const parseTaskProofFiles = (task: any): TaskProofFile[] => {
+  const rawData = String(task?.proof_image || '').trim();
+  const fallbackName = String(task?.proof_file_name || 'Submitted proof').trim();
+  const fallbackType = String(task?.proof_file_type || 'application/octet-stream').trim();
+  if (!rawData) return [];
+
+  if (rawData.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(rawData);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item: any) => ({
+            proof_file_data: String(item?.proof_file_data || item?.data || '').trim(),
+            proof_file_name: String(item?.proof_file_name || item?.name || 'Submitted proof').trim(),
+            proof_file_type: String(item?.proof_file_type || item?.type || 'application/octet-stream').trim(),
+          }))
+          .filter((item: TaskProofFile) => !!item.proof_file_data);
+      }
+    } catch {}
+  }
+
+  return [{
+    proof_file_data: rawData,
+    proof_file_name: fallbackName,
+    proof_file_type: fallbackType,
+  }];
+};
+
 interface OKRPlannerProps {
   employees: Employee[];
 }
@@ -1299,6 +1333,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
                   const reviewStatus = t.proof_review_status || 'Not Submitted';
                   const uploadNote = proofUploadNotes[t.id] || '';
+                  const proofFiles = parseTaskProofFiles(t);
+                  const hasProof = proofFiles.length > 0;
                   return (
                     <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
                       <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
@@ -1311,7 +1347,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         </span>
                       </div>
 
-                      {!t.proof_image && (
+                      {!hasProof && (
                         <div className="mb-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                           <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Attach Proof File</label>
                           <div className="flex gap-1.5 items-end">
@@ -1344,9 +1380,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         </div>
                       )}
 
-                      {t.proof_image && (
-                        <div className="mb-2 max-w-2xl">
-                          <ProofAttachment src={t.proof_image} fileName={t.proof_file_name} mimeType={t.proof_file_type} compact />
+                      {hasProof && (
+                        <div className="mb-2 space-y-2 max-w-2xl">
+                          {proofFiles.map((file, fileIndex) => (
+                            <div key={`${file.proof_file_name}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-2">
+                              <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Proof ${fileIndex + 1}`}</p>
+                              <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                            </div>
+                          ))}
                         </div>
                       )}
 
@@ -1354,7 +1395,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
                       {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
 
-                      {t.proof_image && (
+                      {hasProof && (
                         <div className="space-y-2">
                           <textarea
                             rows={2}
@@ -2882,6 +2923,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
                 const uploadNote = proofUploadNotes[t.id] || '';
+                const proofFiles = parseTaskProofFiles(t);
+                const hasProof = proofFiles.length > 0;
                 return (
                   <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
                     <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
@@ -2894,7 +2937,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       </span>
                     </div>
 
-                    {!t.proof_image && (
+                    {!hasProof && (
                       <div className="mb-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                         <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Attach Proof File</label>
                         <div className="flex gap-1.5 items-end">
@@ -2927,9 +2970,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       </div>
                     )}
 
-                    {t.proof_image && (
-                      <div className="mb-2 max-w-xl">
-                        <ProofAttachment src={t.proof_image} fileName={t.proof_file_name} mimeType={t.proof_file_type} compact />
+                    {hasProof && (
+                      <div className="mb-2 space-y-2 max-w-xl">
+                        {proofFiles.map((file, fileIndex) => (
+                          <div key={`${file.proof_file_name}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-2">
+                            <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Proof ${fileIndex + 1}`}</p>
+                            <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                          </div>
+                        ))}
                       </div>
                     )}
 
@@ -2937,7 +2985,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
                     {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
 
-                    {t.proof_image && (
+                    {hasProof && (
                       <div className="space-y-2">
                         <textarea
                           rows={2}

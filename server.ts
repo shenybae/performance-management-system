@@ -4171,7 +4171,7 @@ async function startServer() {
       const goalId = parseInt(String(req.params.id));
       if (!goalId) return res.status(400).json({ error: 'Invalid goal id' });
 
-      const goalRows: any = await query('SELECT id, employee_id, leader_id FROM goals WHERE id = ?', [goalId]);
+      const goalRows: any = await query('SELECT id, employee_id, leader_id, department FROM goals WHERE id = ?', [goalId]);
       const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
       if (!goal) return res.status(404).json({ error: 'Goal not found' });
 
