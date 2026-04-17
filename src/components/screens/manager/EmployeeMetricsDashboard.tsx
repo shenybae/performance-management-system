@@ -5,6 +5,7 @@ import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { getAuthHeaders } from '../../../utils/csv';
+import { appConfirm } from '../../../utils/appDialog';
 
 interface EmployeeMetricsDashboardProps {
   employees: Employee[];
@@ -57,6 +58,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
   const [employeePerformanceSearch, setEmployeePerformanceSearch] = useState('');
   const [selectedPerformanceEmployeeId, setSelectedPerformanceEmployeeId] = useState<number | null>(null);
   const [metricsSidebarOpen, setMetricsSidebarOpen] = useState(true);
+  const [metricsPlanSubmitting, setMetricsPlanSubmitting] = useState<'pip' | 'idp' | null>(null);
 
   const fetchEmployeePerformanceMetrics = async () => {
     setEmployeePerformanceLoading(true);
@@ -132,6 +134,101 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
       { name: 'Disciplinary', value: disciplinary },
     ].filter((item) => item.value > 0);
   }, [employeePerformance]);
+
+  const createPIPFromMetrics = async (employee: EmployeePerformanceSnapshot) => {
+    const employeeId = Number(employee?.employee_id || 0);
+    if (!employeeId) {
+      window.notify?.('Unable to identify employee for PIP creation', 'error');
+      return;
+    }
+
+    const employeeName = String(employee?.employee_name || 'Employee').trim();
+    const avgProgress = Number(employee?.goals_avg_progress || 0);
+    const atRisk = Number(employee?.goals_at_risk || 0);
+    const overdue = Number(employee?.goals_overdue || 0);
+    const disciplinary = Number(employee?.disciplinary_count || 0);
+
+    if (!(await appConfirm(`Create a PIP for ${employeeName} from overall metrics?`, { title: 'Create PIP from Metrics', confirmText: 'Create', icon: 'warning' }))) return;
+
+    const start = new Date();
+    const end = new Date();
+    end.setDate(end.getDate() + 30);
+
+    setMetricsPlanSubmitting('pip');
+    try {
+      const deficiencySummary = [
+        `Average goal progress: ${avgProgress}%`,
+        `At risk goals: ${atRisk}`,
+        `Overdue goals: ${overdue}`,
+        `Disciplinary records: ${disciplinary}`,
+      ].join(' | ');
+
+      const res = await fetch('/api/pip_plans', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          employee_id: employeeId,
+          start_date: start.toISOString().slice(0, 10),
+          end_date: end.toISOString().slice(0, 10),
+          deficiency: `Overall metrics trigger: ${deficiencySummary}`,
+          improvement_objective: 'Raise goal execution consistency and reduce risk indicators.',
+          action_steps: '1) Weekly check-ins 2) Prioritize overdue goals 3) Daily execution tracking',
+          outcome: 'In Progress',
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as any));
+        throw new Error(err?.error || 'Failed to create PIP from metrics');
+      }
+      window.notify?.('PIP created from overall metrics', 'success');
+      void fetchEmployeePerformanceMetrics();
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to create PIP from metrics', 'error');
+    } finally {
+      setMetricsPlanSubmitting(null);
+    }
+  };
+
+  const createIDPFromMetrics = async (employee: EmployeePerformanceSnapshot) => {
+    const employeeId = Number(employee?.employee_id || 0);
+    if (!employeeId) {
+      window.notify?.('Unable to identify employee for IDP creation', 'error');
+      return;
+    }
+
+    const employeeName = String(employee?.employee_name || 'Employee').trim();
+    const completionRate = Number(employee?.goals_completion_rate || 0);
+    const appraisalsAvg = Number(employee?.appraisals_avg_overall || 0);
+    const needsRevision = Number(employee?.proofs_needs_revision || 0);
+
+    if (!(await appConfirm(`Create an IDP for ${employeeName} from overall metrics?`, { title: 'Create IDP from Metrics', confirmText: 'Create', icon: 'info' }))) return;
+
+    setMetricsPlanSubmitting('idp');
+    try {
+      const skillGap = `Metrics-based gap: completion ${completionRate}%, appraisal avg ${appraisalsAvg.toFixed(1)}, proofs needing revision ${needsRevision}`;
+      const res = await fetch('/api/development_plans', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          employee_id: employeeId,
+          skill_gap: skillGap,
+          growth_step: 'Define skill milestones, assign learning modules, and schedule coaching reviews.',
+          step_order: 1,
+          status: 'Not Started',
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as any));
+        throw new Error(err?.error || 'Failed to create IDP from metrics');
+      }
+      window.notify?.('IDP created from overall metrics', 'success');
+      void fetchEmployeePerformanceMetrics();
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to create IDP from metrics', 'error');
+    } finally {
+      setMetricsPlanSubmitting(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -289,6 +386,22 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                 <div>
                   <p className="text-sm font-black text-slate-800 dark:text-slate-100">{selectedPerformanceEmployee.employee_name}</p>
                   <p className="text-[11px] text-slate-500">{selectedPerformanceEmployee.position || 'N/A'} • {selectedPerformanceEmployee.dept || 'N/A'}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => void createPIPFromMetrics(selectedPerformanceEmployee)}
+                    disabled={metricsPlanSubmitting !== null}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/30 disabled:opacity-60"
+                  >
+                    {metricsPlanSubmitting === 'pip' ? 'Creating PIP...' : 'Create PIP from Metrics'}
+                  </button>
+                  <button
+                    onClick={() => void createIDPFromMetrics(selectedPerformanceEmployee)}
+                    disabled={metricsPlanSubmitting !== null}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 dark:hover:bg-teal-900/30 disabled:opacity-60"
+                  >
+                    {metricsPlanSubmitting === 'idp' ? 'Creating IDP...' : 'Create IDP from Metrics'}
+                  </button>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Goals</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goals_total}</p></div>
