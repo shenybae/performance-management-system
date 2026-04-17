@@ -217,7 +217,7 @@ export const Departments = () => {
         </div>
       </div>
     </Modal>
-    <Modal open={detailOpen} maxWidthClassName="max-w-5xl" title={selectedDept ? selectedDept.name : 'Department'} onClose={() => { setDetailOpen(false); setSelectedDept(null); }}>
+    <Modal open={detailOpen} maxWidthClassName="max-w-7xl" title={selectedDept ? selectedDept.name : 'Department'} onClose={() => { setDetailOpen(false); setSelectedDept(null); }}>
       {selectedDept ? (
         <div className="space-y-5">
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-slate-800 dark:to-slate-900 p-5">

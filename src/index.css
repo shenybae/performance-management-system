@@ -203,11 +203,11 @@
 
 /* Shared in-screen heading styles for consistent typography. */
 .screen-heading {
-  @apply text-xl font-black tracking-tight text-slate-800 dark:text-slate-100;
+  @apply text-2xl sm:text-3xl font-black tracking-tight text-slate-800 dark:text-slate-100;
 }
 
 .screen-subheading {
-  @apply text-xs text-slate-400 dark:text-slate-500;
+  @apply text-sm sm:text-base text-slate-400 dark:text-slate-500;
 }
 
 /* Prevent tiny jumps when interactive controls switch active/inactive styles. */

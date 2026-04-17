@@ -1212,7 +1212,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           open={!!viewGoalId}
           title="Goal Details"
           onClose={() => setViewGoalId(null)}
-          maxWidthClassName="max-w-5xl"
+          maxWidthClassName="max-w-7xl"
           bodyClassName="space-y-4"
         >
           {viewGoalId && (() => {
@@ -1221,7 +1221,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             const overdue = g.target_date && new Date(g.target_date) < new Date() && g.status !== 'Completed' && g.status !== 'Cancelled';
             return (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 text-xs">
                   <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Goal Level</span><span className="text-slate-700 dark:text-slate-200">{g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual'}</span></div>
                   <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Department</span><span className="text-slate-700 dark:text-slate-200">{g.department || '\u2014'}</span></div>
                   <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team</span><span className="text-slate-700 dark:text-slate-200">{g.team_name || '\u2014'}</span></div>
@@ -1249,7 +1249,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           open={!!proofReviewOpenGoal}
           title={`Task Proof Review${proofReviewGoal?.title ? ` - ${proofReviewGoal.title}` : ''}`}
           onClose={() => setProofReviewOpenGoal(null)}
-          maxWidthClassName="max-w-5xl"
+          maxWidthClassName="max-w-7xl"
           bodyClassName="space-y-3"
         >
           {proofReviewOpenGoal && (
@@ -1313,7 +1313,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       )}
 
                       {t.proof_image && (
-                        <div className="mb-2 max-w-xl">
+                        <div className="mb-2 max-w-2xl">
                           <ProofAttachment src={t.proof_image} fileName={t.proof_file_name} mimeType={t.proof_file_type} compact />
                         </div>
                       )}
@@ -1379,7 +1379,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           open={!!underperfActionsGoal}
           title={`Quick Actions${underperfActionsGoal?.title ? ` - ${underperfActionsGoal.title}` : ''}`}
           onClose={() => setUnderperfActionsGoalId(null)}
-          maxWidthClassName="max-w-xl"
+          maxWidthClassName="max-w-2xl"
           bodyClassName="space-y-3"
         >
           {underperfActionsGoal && (() => {
@@ -1402,7 +1402,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           open={!!underperfPlanGoal}
           title={`Create Plan${underperfPlanGoal?.title ? ` - ${underperfPlanGoal.title}` : ''}`}
           onClose={() => setUnderperfPlanGoalId(null)}
-          maxWidthClassName="max-w-lg"
+          maxWidthClassName="max-w-2xl"
           bodyClassName="space-y-3"
         >
           {underperfPlanGoal && (() => {

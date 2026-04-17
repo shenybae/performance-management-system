@@ -574,7 +574,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
           open={isPhotoModalOpen}
           title="Profile Picture"
           onClose={() => setIsPhotoModalOpen(false)}
-          maxWidthClassName="max-w-xl"
+          maxWidthClassName="max-w-2xl"
           bodyClassName="flex items-center justify-center"
         >
           {profilePic ? (
@@ -592,7 +592,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
           open={isProfileAccountModalOpen}
           title="Profile and Account Information"
           onClose={() => setIsProfileAccountModalOpen(false)}
-          maxWidthClassName="max-w-2xl"
+          maxWidthClassName="max-w-4xl"
         >
           <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6">
             <div className="flex flex-col items-center text-center">

@@ -7,7 +7,7 @@ export const SidebarItem = ({ icon: Icon, label, active, onClick, expanded = tru
     whileTap={{ scale: 0.98 }}
     onClick={onClick}
     title={!expanded ? label : undefined}
-    className={`w-full flex items-center py-3 text-sm font-bold transition-colors duration-200 ${
+    className={`w-full flex items-center py-3.5 text-base font-bold transition-colors duration-200 ${
       expanded ? 'justify-start px-4' : 'justify-center px-0'
     } ${
       active 
@@ -30,7 +30,7 @@ export const SidebarItem = ({ icon: Icon, label, active, onClick, expanded = tru
         maxWidth: { duration: expanded ? 0.22 : 0.14, ease: [0.22, 1, 0.36, 1] },
         x: { duration: expanded ? 0.16 : 0.1, ease: 'easeOut' },
       }}
-      className="ml-2 text-sm font-bold whitespace-nowrap overflow-hidden"
+      className="ml-2 text-base font-bold whitespace-nowrap overflow-hidden"
     >
       {label}
     </motion.span>
