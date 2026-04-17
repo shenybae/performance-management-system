@@ -4384,7 +4384,7 @@ async function startServer() {
         );
       }
       const task = Array.isArray(taskRows) ? taskRows[0] : taskRows;
-      if (!task) return res.status(404).json({ error: 'Task not found' });
+      if (!task) return res.json({ success: true, task_id: taskId, already_removed: true });
 
       let allowed = false;
       if (isPrivilegedRole(role)) allowed = true;
@@ -4424,7 +4424,21 @@ async function startServer() {
       );
       const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
       const avgProgress = Math.max(0, Math.min(100, Number(progressRow?.avg_progress || 0)));
-      await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, task.goal_id]);
+      try {
+        await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, task.goal_id]);
+      } catch (goalUpdateErr: any) {
+        const msg = String(goalUpdateErr?.message || '').toLowerCase();
+        const missingUpdatedAt = String(goalUpdateErr?.code || '') === '42703' || msg.includes('updated_at') || msg.includes('no such column');
+        if (missingUpdatedAt) {
+          try {
+            await query('UPDATE goals SET progress = ? WHERE id = ?', [avgProgress, task.goal_id]);
+          } catch (fallbackErr) {
+            console.error('DELETE /api/member-tasks/:id goal progress fallback update error:', fallbackErr);
+          }
+        } else {
+          console.error('DELETE /api/member-tasks/:id goal progress update error:', goalUpdateErr);
+        }
+      }
 
       try {
         const payload = {
