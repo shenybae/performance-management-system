@@ -745,7 +745,11 @@ export const CareerDashboard = () => {
       })));
 
       window.notify?.('Task removed', 'success');
-      await fetchData();
+      try {
+        await fetchData();
+      } catch {
+        // Keep the success state if the refresh fails after a successful delete.
+      }
     } catch {
       window.notify?.('Failed to remove task', 'error');
     }

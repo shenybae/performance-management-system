@@ -3807,16 +3807,11 @@ async function startServer() {
             })
             .map((a: any) => ({ ...a, employee_name: a.employee_name || a.name || null }));
 
-          const goalAssigneeIds = new Set(g.assignees.map((a: any) => String(normalizeEmployeeId(a?.employee_id))));
-
           const taskRows: any = await query(
             'SELECT t.*, e.name as member_name FROM goal_member_tasks t LEFT JOIN employees e ON t.member_employee_id = e.id WHERE t.goal_id = ? AND t.deleted_at IS NULL ORDER BY t.created_at DESC',
             [g.id]
           );
-          g.member_tasks = uniqueById(Array.isArray(taskRows) ? taskRows : []).filter((t: any) => {
-            const taskMemberId = normalizeEmployeeId(t?.member_employee_id);
-            return !!taskMemberId && goalAssigneeIds.has(String(taskMemberId));
-          });
+          g.member_tasks = uniqueById(Array.isArray(taskRows) ? taskRows : []);
         })
       );
       res.json({ goals, teamMembers });
