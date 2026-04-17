@@ -5,7 +5,7 @@ import { Modal } from '../../common/Modal';
 import { SectionHeader } from '../../common/SectionHeader';
 import { CircularProgress } from '../../common/CircularProgress';
 import { ProofAttachment } from '../../common/ProofAttachment';
-import { Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTriangle, DollarSign, Building2, Users, User, ClipboardList, CalendarDays, Flag, Save, Trash2, Upload, Image as ImageIcon, CheckCircle2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTriangle, DollarSign, Building2, Users, User, ClipboardList, CalendarDays, Flag, Trash2, Upload, Image as ImageIcon, CheckCircle2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { appConfirm } from '../../../utils/appDialog';
@@ -187,13 +187,11 @@ export const CareerDashboard = () => {
   const [taskBoardOpenGoalId, setTaskBoardOpenGoalId] = useState<number | null>(null);
   const [taskDrafts, setTaskDrafts] = useState<Record<number, any>>({});
   const [taskBriefDrafts, setTaskBriefDrafts] = useState<Record<number, TaskBriefFile[]>>({});
-  const [taskProgressEdits, setTaskProgressEdits] = useState<Record<number, number>>({});
   const [taskReviewNotes, setTaskReviewNotes] = useState<Record<number, string>>({});
   const [proofViewerTaskId, setProofViewerTaskId] = useState<number | null>(null);
   const [taskBriefViewer, setTaskBriefViewer] = useState<{ src: string; fileName?: string; mimeType?: string } | null>(null);
   const [delegatedTaskOpenId, setDelegatedTaskOpenId] = useState<number | null>(null);
   const [extensionTaskOpenId, setExtensionTaskOpenId] = useState<number | null>(null);
-  const [taskProgressOpenTaskId, setTaskProgressOpenTaskId] = useState<number | null>(null);
   const [taskSavingGoal, setTaskSavingGoal] = useState<number | null>(null);
   const [taskReviewActionOpen, setTaskReviewActionOpen] = useState<Record<number, boolean>>({});
   const [myMemberTasks, setMyMemberTasks] = useState<any[]>([]);
@@ -719,7 +717,6 @@ export const CareerDashboard = () => {
       })));
 
       window.notify?.(successMessage, 'success');
-      setTaskProgressOpenTaskId(prev => (prev === taskId ? null : prev));
       fetchData();
     } catch (e: any) {
       window.notify?.(e?.message || 'Failed to update task', 'error');
@@ -1780,8 +1777,7 @@ export const CareerDashboard = () => {
                 ) : (
                   <div className="space-y-3">
                   {memberTasks.map((t: any, index: number) => {
-                    const progressValue = taskProgressEdits[t.id] ?? Number(t.progress || 0);
-                    const isProgressOpen = taskProgressOpenTaskId === t.id;
+                    const progressValue = Number(t.progress || 0);
                     const proofReviewStatus = String(t.proof_review_status || 'Not Submitted');
                     const proofDecisionFinalized = proofReviewStatus === 'Approved';
                     const proofFiles = parseTaskProofFiles(t);
@@ -1831,60 +1827,15 @@ export const CareerDashboard = () => {
                           </button>
                         </div>
 
-                        {!isProgressOpen ? (
-                          <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2">
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden max-w-[220px]">
-                                <div className={`h-2 rounded-full ${progressValue >= 100 ? 'bg-emerald-500' : progressValue >= 50 ? 'bg-teal-500' : 'bg-amber-500'}`} style={{ width: `${progressValue}%` }} />
-                              </div>
-                              <span className="text-base font-bold text-slate-700 dark:text-slate-200 w-12 text-right">{progressValue}%</span>
-                              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statusColors[t.status || 'Not Started']}`}>{t.status || 'Not Started'}</span>
+                        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden max-w-[220px]">
+                              <div className={`h-2 rounded-full ${progressValue >= 100 ? 'bg-emerald-500' : progressValue >= 50 ? 'bg-teal-500' : 'bg-amber-500'}`} style={{ width: `${progressValue}%` }} />
                             </div>
-                            <button
-                              onClick={() => setTaskProgressOpenTaskId(t.id)}
-                              className="px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
-                            >
-                              Update
-                            </button>
+                            <span className="text-base font-bold text-slate-700 dark:text-slate-200 w-12 text-right">{progressValue}%</span>
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statusColors[t.status || 'Not Started']}`}>{t.status || 'Not Started'}</span>
                           </div>
-                        ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
-                            <select
-                              value={t.status || 'Not Started'}
-                              onChange={(e) => handleUpdateLeaderTask(Number(t.id), { status: e.target.value }, 'Task status updated', 'Apply this status change?')}
-                              className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-base"
-                            >
-                              <option value="Not Started">Not Started</option>
-                              <option value="In Progress">In Progress</option>
-                              <option value="Blocked">Blocked</option>
-                              <option value="Completed">Completed</option>
-                            </select>
-
-                            <div className="flex items-center gap-2 md:col-span-2">
-                              <input
-                                type="number"
-                                min={0}
-                                max={100}
-                                value={progressValue}
-                                onChange={(e) => setTaskProgressEdits(prev => ({ ...prev, [t.id]: Math.max(0, Math.min(100, Number(e.target.value) || 0)) }))}
-                                className="w-28 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-base"
-                              />
-                              <span className="text-xs text-slate-500">%</span>
-                              <button
-                                onClick={() => handleUpdateLeaderTask(Number(t.id), { progress: progressValue }, 'Task progress updated', 'Save this progress update?')}
-                                className="px-3 py-2.5 rounded-lg bg-teal-deep text-white text-sm font-bold inline-flex items-center gap-1"
-                              >
-                                <Save size={12} /> Save Progress
-                              </button>
-                              <button
-                                onClick={() => setTaskProgressOpenTaskId(null)}
-                                className="px-3 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm font-bold"
-                              >
-                                Close
-                              </button>
-                            </div>
-                          </div>
-                        )}
+                        </div>
 
                         <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
                           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
