@@ -5,7 +5,7 @@ import { Modal } from '../../common/Modal';
 import { SectionHeader } from '../../common/SectionHeader';
 import { CircularProgress } from '../../common/CircularProgress';
 import { ProofAttachment } from '../../common/ProofAttachment';
-import { Target, TrendingUp, Award, BarChart3, SendHorizonal, AlertTriangle, DollarSign, Building2, Users, User, ClipboardList, CalendarDays, Flag, Trash2, Upload, Image as ImageIcon, CheckCircle2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { Target, TrendingUp, Award, BarChart3, AlertTriangle, DollarSign, Building2, Users, User, ClipboardList, CalendarDays, Flag, Trash2, Upload, Image as ImageIcon, CheckCircle2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { appConfirm } from '../../../utils/appDialog';
@@ -173,7 +173,7 @@ export const CareerDashboard = () => {
   const [goals, setGoals] = useState<any[]>([]);
   const [pips, setPips] = useState<any[]>([]);
   const [idps, setIdps] = useState<any[]>([]);
-  const [requesting, setRequesting] = useState<number | null>(null);
+  const [goalDetailsOpenId, setGoalDetailsOpenId] = useState<number | null>(null);
   const [selfAssessments, setSelfAssessments] = useState<any[]>([]);
   const [salary, setSalary] = useState<number | null>(null);
   const [leaderGoals, setLeaderGoals] = useState<any[]>([]);
@@ -932,35 +932,6 @@ export const CareerDashboard = () => {
     return myMemberTasks.find((t: any) => Number(t?.id) === Number(extensionTaskOpenId)) || null;
   }, [myMemberTasks, extensionTaskOpenId]);
 
-  const requestGoalReview = async (goal: any) => {
-    const confirmed = await appConfirm(
-      'Send a request to your manager to review and update this goal progress?',
-      { title: 'Request Manager Review', confirmText: 'Send Request', icon: 'warning' }
-    );
-    if (!confirmed) return;
-
-    setRequesting(goal.id);
-    try {
-      const user = safeParseSession(localStorage.getItem('talentflow_user'));
-      await fetch('/api/goal_update_request', {
-        method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({
-          employee_id: user.employee_id,
-          goal_id: goal.id,
-          goal_title: goal.title || goal.statement,
-          proposed_status: goal.status === 'In Progress' ? 'Completed' : 'In Progress',
-          proposed_progress: goal.status === 'In Progress' ? 100 : 50,
-          reason: 'Employee requested manager review of goal progress',
-        }),
-      });
-      window.notify?.('Review request sent to your manager', 'success');
-    } catch {
-      window.notify?.('Failed to send review request', 'error');
-    } finally {
-      setRequesting(null);
-    }
-  };
-
   const getGoalAssignees = (goal: any) => {
     return (Array.isArray(goal?.assignees) ? goal.assignees : []).filter((a: any) => leaderTeamMemberIdSet.has(String(a?.employee_id ?? '')));
   };
@@ -1342,16 +1313,13 @@ export const CareerDashboard = () => {
                     )}
                   </td>
                   <td className="py-3">
-                    {g.status !== 'Completed' && (
-                      <button
-                        disabled={requesting === g.id}
-                        onClick={() => requestGoalReview(g)}
-                        className="text-[10px] font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1 whitespace-nowrap disabled:opacity-50"
-                        title="Ask your manager to review and update this goal"
-                      >
-                        <SendHorizonal size={12} /> Request Manager Review
-                      </button>
-                    )}
+                    <button
+                      onClick={() => setGoalDetailsOpenId(Number(g.id))}
+                      className="text-[10px] font-bold text-teal-600 hover:text-teal-700 whitespace-nowrap"
+                      title="View goal details"
+                    >
+                      View Goal
+                    </button>
                   </td>
                 </motion.tr>
               ))}
@@ -2218,6 +2186,41 @@ export const CareerDashboard = () => {
             </div>
           );
         })()}
+      </Modal>
+
+      <Modal
+        open={!!goalDetailsOpenId}
+        title={goalDetailsOpenId ? `Goal Details: ${goals.find((goal: any) => Number(goal?.id) === Number(goalDetailsOpenId))?.title || goals.find((goal: any) => Number(goal?.id) === Number(goalDetailsOpenId))?.statement || 'Goal'}` : 'Goal Details'}
+        onClose={() => setGoalDetailsOpenId(null)}
+        maxWidthClassName="max-w-3xl"
+      >
+        {goalDetailsOpenId ? (() => {
+          const g = goals.find((goal: any) => Number(goal?.id) === Number(goalDetailsOpenId));
+          if (!g) return <p className="text-sm text-slate-500">Goal not found.</p>;
+          return (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div><p className="text-[10px] font-bold uppercase text-slate-400">Goal</p><p className="text-slate-700 dark:text-slate-200">{g.title || g.statement || '—'}</p></div>
+                <div><p className="text-[10px] font-bold uppercase text-slate-400">Scope</p><p className="text-slate-700 dark:text-slate-200">{g.scope || 'Individual'}</p></div>
+                <div><p className="text-[10px] font-bold uppercase text-slate-400">Target Date</p><p className="text-slate-700 dark:text-slate-200">{g.target_date || '—'}</p></div>
+                <div><p className="text-[10px] font-bold uppercase text-slate-400">Frequency</p><p className="text-slate-700 dark:text-slate-200">{g.frequency || 'One-time'}</p></div>
+                <div><p className="text-[10px] font-bold uppercase text-slate-400">Status</p><p className="text-slate-700 dark:text-slate-200">{g.status || 'Not Started'}</p></div>
+                <div><p className="text-[10px] font-bold uppercase text-slate-400">Progress</p><p className="text-slate-700 dark:text-slate-200">{g.progress || 0}%</p></div>
+                <div className="col-span-2"><p className="text-[10px] font-bold uppercase text-slate-400">Delegated By</p><p className="text-slate-700 dark:text-slate-200">{g.delegation || '—'}</p></div>
+              </div>
+              {g.metric && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase text-slate-400">Metric</p>
+                  <p className="text-slate-700 dark:text-slate-200">{g.metric}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-[10px] font-bold uppercase text-slate-400">Statement</p>
+                <p className="text-slate-700 dark:text-slate-200">{g.statement || '—'}</p>
+              </div>
+            </div>
+          );
+        })() : null}
       </Modal>
 
       <Modal

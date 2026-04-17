@@ -754,11 +754,19 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     setProofReviewLoadingGoal(goalId);
     try {
       const res = await fetch(`/api/goals/${goalId}/member-tasks`, { headers: getAuthHeaders() });
+      if (!res.ok) {
+        let msg = 'Failed to load proof tasks';
+        try {
+          const err = await res.json();
+          if (err?.error) msg = String(err.error);
+        } catch {}
+        throw new Error(msg);
+      }
       const data = await res.json();
       setProofReviewTasksByGoal(prev => ({ ...prev, [goalId]: Array.isArray(data) ? data : [] }));
       setProofReviewOpenGoal(goalId);
-    } catch {
-      window.notify?.('Failed to load proof tasks', 'error');
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to load proof tasks', 'error');
     } finally {
       setProofReviewLoadingGoal(null);
     }
@@ -767,6 +775,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const refreshProofReviewTasks = async (goalId: number) => {
     try {
       const res = await fetch(`/api/goals/${goalId}/member-tasks`, { headers: getAuthHeaders() });
+      if (!res.ok) return;
       const data = await res.json();
       setProofReviewTasksByGoal(prev => ({ ...prev, [goalId]: Array.isArray(data) ? data : [] }));
       setProofRealtimeSyncAt(Date.now());

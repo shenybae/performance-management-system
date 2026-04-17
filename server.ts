@@ -4182,8 +4182,10 @@ async function startServer() {
         if (goalEmployeeId) {
           const allowedMgr = await canManagerAccessEmployee(actor.id, goalEmployeeId);
           if (allowedMgr) allowed = true;
-        } else {
-          // Team/Department goals can be department-level and may not have a single goal owner.
+        }
+        // Managers can review delegated tasks for goals in their own department,
+        // even if the goal owner is not directly mapped by manager_id.
+        if (!allowed) {
           const actorDept = String(
             actor.dept ||
             actor.department ||
@@ -4252,7 +4254,9 @@ async function startServer() {
         if (goalEmployeeId) {
           const allowedMgr = await canManagerAccessEmployee(actor.id, goalEmployeeId);
           if (allowedMgr) allowed = true;
-        } else {
+        }
+        // Managers can review task proofs for goals in their department.
+        if (!allowed) {
           const actorDept = String(
             actor.dept ||
             actor.department ||
