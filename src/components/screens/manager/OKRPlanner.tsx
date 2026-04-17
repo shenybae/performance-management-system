@@ -812,7 +812,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       const res = await fetch(`/api/goals/${goalId}/member-tasks`, { headers: getAuthHeaders() });
       if (!res.ok) return;
       const data = await res.json();
-      setProofReviewTasksByGoal(prev => ({ ...prev, [goalId]: Array.isArray(data) ? data : [] }));
+      const normalizedTasks = Array.isArray(data)
+        ? data.map((task: any) => (
+            goalId === proofReviewGoal?.id && String(proofReviewGoal?.proof_review_status || '').trim() === 'Approved'
+              ? { ...task, status: 'Completed', progress: 100 }
+              : task
+          ))
+        : [];
+      setProofReviewTasksByGoal(prev => ({ ...prev, [goalId]: normalizedTasks }));
       setProofRealtimeSyncAt(Date.now());
     } catch {
       // Keep existing panel data if refresh fails.
@@ -3100,6 +3107,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             ) : (
               (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
+                const effectiveProgress = proofReviewGoal && String(proofReviewGoal.proof_review_status || '').trim() === 'Approved' ? 100 : Math.max(0, Math.min(100, Number(t.progress || 0)));
+                const effectiveStatus = proofReviewGoal && String(proofReviewGoal.proof_review_status || '').trim() === 'Approved' ? 'Completed' : (t.status || 'Not Started');
                 const proofFiles = parseTaskProofFiles(t);
                 const hasProof = proofFiles.length > 0;
                 return (
@@ -3107,7 +3116,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
                       <div>
                         <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{t.title || 'Untitled Task'}</p>
-                        <p className="text-[10px] text-slate-500">{t.member_name || `#${t.member_employee_id}`} • Status: <span className="font-bold">{t.status || 'Not Started'}</span> • Progress: <span className="font-bold">{t.progress || 0}%</span></p>
+                        <p className="text-[10px] text-slate-500">{t.member_name || `#${t.member_employee_id}`} • Status: <span className="font-bold">{effectiveStatus}</span> • Progress: <span className="font-bold">{effectiveProgress}%</span></p>
                       </div>
                       <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full whitespace-nowrap ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
                         {reviewStatus}
