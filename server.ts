@@ -4169,6 +4169,10 @@ async function startServer() {
             .filter((item: any) => !!item.proof_file_data)
         : [];
       const assigneeSubmittedProof = role === 'Employee' && !isGoalLeader && (b.proof_image !== undefined || b.proof_note !== undefined || submittedProofFiles.length > 0);
+      const currentProofReviewStatus = String(task.proof_review_status || 'Not Submitted');
+      if (assigneeSubmittedProof && currentProofReviewStatus === 'Pending Review') {
+        return res.status(409).json({ error: 'Proof already submitted and pending review' });
+      }
       if (assigneeSubmittedProof) {
         const hasProofImage = submittedProofFiles.length > 0 || (typeof b.proof_image === 'string' && b.proof_image.trim().length > 0);
         const nextProgress = Math.max(0, Math.min(100, Math.max(Number(task.progress || 0), hasProofImage ? 75 : 0)));
