@@ -517,7 +517,7 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
         </motion.div>
       )}
 
-      {records.length > 0 && (
+      {!showForm && records.length > 0 && (
         <>
           {/* Stat Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
