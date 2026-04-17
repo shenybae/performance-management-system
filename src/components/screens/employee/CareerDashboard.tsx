@@ -683,11 +683,11 @@ export const CareerDashboard = () => {
     const applyReviewOutcomeLocally = (task: any) => {
       const reviewStatus = String(updates?.proof_review_status || '');
       if (reviewStatus === 'Approved') {
-        return { ...task, ...updates, status: 'Completed', progress: 100 };
+        return { ...task, ...updates, status: 'Completed', progress: 75 };
       }
       if (reviewStatus === 'Needs Revision') {
         const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));
-        return { ...task, ...updates, status: 'In Progress', progress: currentProgress >= 100 ? 75 : Math.max(currentProgress, 50) };
+        return { ...task, ...updates, status: 'In Progress', progress: currentProgress >= 75 ? 75 : Math.max(currentProgress, 50) };
       }
       if (reviewStatus === 'Rejected') {
         const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));

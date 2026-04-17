@@ -74,6 +74,51 @@ async function softDeleteWhere(tableName: string, whereClause: string, params: a
   return query(`UPDATE ${tableName} SET deleted_at = CURRENT_TIMESTAMP WHERE ${whereClause}`, params);
 }
 
+const TASK_PROGRESS_SUBMITTED = 25;
+const TASK_PROGRESS_REVIEW_APPROVED = 75;
+const GOAL_PROGRESS_MAX_BEFORE_MANAGER_APPROVAL = 75;
+
+function normalizeProgressValue(value: any) {
+  return Math.max(0, Math.min(100, Number(value) || 0));
+}
+
+function isGoalMarkedCompleted(status: any) {
+  return String(status || '').trim().toLowerCase() === 'completed';
+}
+
+function computeGoalProgressFromTaskAverage(avgProgress: any, goalStatus: any) {
+  const normalizedAverage = normalizeProgressValue(avgProgress);
+  if (isGoalMarkedCompleted(goalStatus)) return 100;
+  return Math.min(GOAL_PROGRESS_MAX_BEFORE_MANAGER_APPROVAL, normalizedAverage);
+}
+
+async function recomputeGoalProgress(goalId: number) {
+  const rows: any = await query(
+    `SELECT g.status AS goal_status,
+            COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0) AS avg_progress
+     FROM goals g
+     LEFT JOIN goal_member_tasks t
+       ON t.goal_id = g.id
+      AND t.deleted_at IS NULL
+     WHERE g.id = ?
+     GROUP BY g.id, g.status`,
+    [goalId]
+  );
+  const row = Array.isArray(rows) ? rows[0] : rows;
+  const nextProgress = computeGoalProgressFromTaskAverage(row?.avg_progress || 0, row?.goal_status);
+
+  try {
+    await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [nextProgress, goalId]);
+  } catch (goalUpdateErr: any) {
+    const msg = String(goalUpdateErr?.message || '').toLowerCase();
+    const missingUpdatedAt = String(goalUpdateErr?.code || '') === '42703' || msg.includes('updated_at') || msg.includes('no such column');
+    if (!missingUpdatedAt) throw goalUpdateErr;
+    await query('UPDATE goals SET progress = ? WHERE id = ?', [nextProgress, goalId]);
+  }
+
+  return nextProgress;
+}
+
 function usernameBaseFromInput(input: string) {
   const normalized = (input || '')
     .toLowerCase()
@@ -3896,20 +3941,7 @@ async function startServer() {
         [goalId, memberId, title, description || null, dueDate, priority || 'Medium', 'Not Started', 0, briefFileData || null, briefFileName || null, briefFileType || null, 'Not Submitted', actor.id || null]
       );
 
-      const progressRows: any = await query(
-        'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ? AND deleted_at IS NULL',
-        [goalId]
-      );
-      const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
-      const avgProgress = Math.max(0, Math.min(100, Number(progressRow?.avg_progress || 0)));
-      try {
-        await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, goalId]);
-      } catch (goalUpdateErr: any) {
-        const msg = String(goalUpdateErr?.message || '').toLowerCase();
-        const missingUpdatedAt = String(goalUpdateErr?.code || '') === '42703' || msg.includes('updated_at');
-        if (!missingUpdatedAt) throw goalUpdateErr;
-        await query('UPDATE goals SET progress = ? WHERE id = ?', [avgProgress, goalId]);
-      }
+      const avgProgress = await recomputeGoalProgress(goalId);
 
       try {
         const uRows: any = await query('SELECT id FROM users WHERE employee_id = ?', [memberId]);
@@ -4030,15 +4062,15 @@ async function startServer() {
       try {
         await query(
           `UPDATE goal_member_tasks
-           SET progress = 75,
+           SET progress = ?,
                status = CASE WHEN COALESCE(status, 'Not Started') IN ('Not Started', 'Blocked') THEN 'In Progress' ELSE status END,
                updated_at = CURRENT_TIMESTAMP
            WHERE member_employee_id = ?
              AND deleted_at IS NULL
              AND COALESCE(proof_review_status, 'Not Submitted') = 'Pending Review'
-             AND COALESCE(progress, 0) < 75
+             AND COALESCE(progress, 0) < ?
              AND COALESCE(TRIM(proof_image), '') <> ''`,
-          [actorEmployeeId]
+          [TASK_PROGRESS_SUBMITTED, actorEmployeeId, TASK_PROGRESS_SUBMITTED]
         );
       } catch (backfillErr: any) {
         const msg = String(backfillErr?.message || '').toLowerCase();
@@ -4047,14 +4079,14 @@ async function startServer() {
           try {
             await query(
               `UPDATE goal_member_tasks
-               SET progress = 75,
+               SET progress = ?,
                    status = CASE WHEN COALESCE(status, 'Not Started') IN ('Not Started', 'Blocked') THEN 'In Progress' ELSE status END
                WHERE member_employee_id = ?
                  AND deleted_at IS NULL
                  AND COALESCE(proof_review_status, 'Not Submitted') = 'Pending Review'
-                 AND COALESCE(progress, 0) < 75
+                 AND COALESCE(progress, 0) < ?
                  AND COALESCE(TRIM(proof_image), '') <> ''`,
-              [actorEmployeeId]
+              [TASK_PROGRESS_SUBMITTED, actorEmployeeId, TASK_PROGRESS_SUBMITTED]
             );
           } catch (fallbackBackfillErr) {
             console.error('GET /api/member-tasks/my backfill fallback error:', fallbackBackfillErr);
@@ -4065,50 +4097,22 @@ async function startServer() {
       }
 
       try {
-        await query(
-          `UPDATE goals
-           SET progress = (
-             SELECT COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0)
-             FROM goal_member_tasks t
-             WHERE t.goal_id = goals.id
-               AND t.deleted_at IS NULL
-           ),
-           updated_at = CURRENT_TIMESTAMP
-           WHERE id IN (
-             SELECT DISTINCT goal_id
-             FROM goal_member_tasks
-             WHERE member_employee_id = ?
-               AND deleted_at IS NULL
-           )`,
+        const goalRows: any = await query(
+          `SELECT DISTINCT goal_id
+           FROM goal_member_tasks
+           WHERE member_employee_id = ?
+             AND deleted_at IS NULL
+             AND goal_id IS NOT NULL`,
           [actorEmployeeId]
         );
-      } catch (goalProgressErr: any) {
-        const msg = String(goalProgressErr?.message || '').toLowerCase();
-        const missingUpdatedAt = String(goalProgressErr?.code || '') === '42703' || msg.includes('updated_at') || msg.includes('no such column');
-        if (missingUpdatedAt) {
-          try {
-            await query(
-              `UPDATE goals
-               SET progress = (
-                 SELECT COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0)
-                 FROM goal_member_tasks t
-                 WHERE t.goal_id = goals.id
-                   AND t.deleted_at IS NULL
-               )
-               WHERE id IN (
-                 SELECT DISTINCT goal_id
-                 FROM goal_member_tasks
-                 WHERE member_employee_id = ?
-                   AND deleted_at IS NULL
-               )`,
-              [actorEmployeeId]
-            );
-          } catch (fallbackGoalProgressErr) {
-            console.error('GET /api/member-tasks/my goal progress fallback error:', fallbackGoalProgressErr);
-          }
-        } else {
-          console.error('GET /api/member-tasks/my goal progress error:', goalProgressErr);
+        const goalIds = (Array.isArray(goalRows) ? goalRows : [goalRows])
+          .map((r: any) => Number(r?.goal_id || 0))
+          .filter((id: number) => Number.isFinite(id) && id > 0);
+        for (const goalId of goalIds) {
+          await recomputeGoalProgress(goalId);
         }
+      } catch (goalProgressErr: any) {
+        console.error('GET /api/member-tasks/my goal progress error:', goalProgressErr);
       }
 
       const rows: any = await query(
@@ -4290,30 +4294,24 @@ async function startServer() {
       }
       if (assigneeSubmittedProof && currentProofReviewStatus === 'Pending Review') {
         const hasExistingProof = String(task.proof_image || '').trim().length > 0;
-        if (hasExistingProof && Number(task.progress || 0) < 75) {
+        if (hasExistingProof && Number(task.progress || 0) < TASK_PROGRESS_SUBMITTED) {
           await query(
             `UPDATE goal_member_tasks
-             SET progress = 75,
+             SET progress = ?,
                  status = CASE WHEN COALESCE(status, 'Not Started') IN ('Not Started', 'Blocked') THEN 'In Progress' ELSE status END,
                  updated_at = CURRENT_TIMESTAMP
              WHERE id = ?`,
-            [taskId]
+            [TASK_PROGRESS_SUBMITTED, taskId]
           );
 
-          const progressRows: any = await query(
-            'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ? AND deleted_at IS NULL',
-            [task.goal_id]
-          );
-          const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
-          const avgProgress = Math.max(0, Math.min(100, Number(progressRow?.avg_progress || 0)));
-          await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, task.goal_id]);
+          await recomputeGoalProgress(Number(task.goal_id));
         }
 
         return res.json({ success: true, task_id: taskId, already_submitted: true, message: 'Proof already submitted and pending review' });
       }
       if (assigneeSubmittedProof) {
         const hasProofImage = submittedProofFiles.length > 0 || (typeof b.proof_image === 'string' && b.proof_image.trim().length > 0);
-        const nextProgress = Math.max(0, Math.min(100, Math.max(Number(task.progress || 0), hasProofImage ? 75 : 0)));
+        const nextProgress = Math.max(0, Math.min(100, Math.max(Number(task.progress || 0), hasProofImage ? TASK_PROGRESS_SUBMITTED : 0)));
         sets.push('proof_submitted_at = ?');
         vals.push(hasProofImage ? new Date().toISOString() : null);
         sets.push('proof_review_status = ?');
@@ -4346,13 +4344,13 @@ async function startServer() {
           sets.push('status = ?');
           vals.push('Completed');
           sets.push('progress = ?');
-          vals.push(100);
+          vals.push(TASK_PROGRESS_REVIEW_APPROVED);
         } else if (reviewedStatus === 'Needs Revision') {
           const currentProgress = Math.max(0, Math.min(100, Number(task.progress || 0)));
           sets.push('status = ?');
           vals.push('In Progress');
           sets.push('progress = ?');
-          vals.push(currentProgress >= 100 ? 75 : Math.max(currentProgress, 50));
+          vals.push(currentProgress >= TASK_PROGRESS_REVIEW_APPROVED ? TASK_PROGRESS_REVIEW_APPROVED : Math.max(currentProgress, 50));
         } else if (reviewedStatus === 'Rejected') {
           const currentProgress = Math.max(0, Math.min(100, Number(task.progress || 0)));
           sets.push('status = ?');
@@ -4372,20 +4370,7 @@ async function startServer() {
       vals.push(taskId);
       await query(`UPDATE goal_member_tasks SET ${sets.join(', ')} WHERE id = ?`, vals);
 
-      const progressRows: any = await query(
-        'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ? AND deleted_at IS NULL',
-        [task.goal_id]
-      );
-      const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
-      const avgProgress = Math.max(0, Math.min(100, Number(progressRow?.avg_progress || 0)));
-      try {
-        await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, task.goal_id]);
-      } catch (goalUpdateErr: any) {
-        const msg = String(goalUpdateErr?.message || '').toLowerCase();
-        const missingUpdatedAt = String(goalUpdateErr?.code || '') === '42703' || msg.includes('updated_at') || msg.includes('no such column');
-        if (!missingUpdatedAt) throw goalUpdateErr;
-        await query('UPDATE goals SET progress = ? WHERE id = ?', [avgProgress, task.goal_id]);
-      }
+      const avgProgress = await recomputeGoalProgress(Number(task.goal_id));
 
       try {
         const updatedTaskRows: any = await query(
@@ -4480,27 +4465,7 @@ async function startServer() {
         return res.json({ success: true, task_id: taskId, already_removed: true });
       }
 
-      const progressRows: any = await query(
-        'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ? AND deleted_at IS NULL',
-        [task.goal_id]
-      );
-      const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
-      const avgProgress = Math.max(0, Math.min(100, Number(progressRow?.avg_progress || 0)));
-      try {
-        await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, task.goal_id]);
-      } catch (goalUpdateErr: any) {
-        const msg = String(goalUpdateErr?.message || '').toLowerCase();
-        const missingUpdatedAt = String(goalUpdateErr?.code || '') === '42703' || msg.includes('updated_at') || msg.includes('no such column');
-        if (missingUpdatedAt) {
-          try {
-            await query('UPDATE goals SET progress = ? WHERE id = ?', [avgProgress, task.goal_id]);
-          } catch (fallbackErr) {
-            console.error('DELETE /api/member-tasks/:id goal progress fallback update error:', fallbackErr);
-          }
-        } else {
-          console.error('DELETE /api/member-tasks/:id goal progress update error:', goalUpdateErr);
-        }
-      }
+      const avgProgress = await recomputeGoalProgress(Number(task.goal_id));
 
       try {
         const payload = {
@@ -7878,8 +7843,8 @@ async function startServer() {
           if (data.action === 'approved') {
             const sets: string[] = [];
             const vals: any[] = [];
-            if (payload.status) { sets.push('status = ?'); vals.push(payload.status); }
-            if (payload.progress !== undefined) { sets.push('progress = ?'); vals.push(payload.progress); }
+            if (payload.proposed_status) { sets.push('status = ?'); vals.push(payload.proposed_status); }
+            if (payload.proposed_progress !== undefined) { sets.push('progress = ?'); vals.push(payload.proposed_progress); }
             if (sets.length > 0) {
               vals.push(payload.goal_id);
               await query(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, vals);
