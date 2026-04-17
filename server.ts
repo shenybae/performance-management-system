@@ -3266,8 +3266,7 @@ async function startServer() {
                progress = 100,
                updated_at = CURRENT_TIMESTAMP
            WHERE goal_id = ?
-             AND deleted_at IS NULL
-             AND COALESCE(status, 'Not Started') <> 'Completed'`,
+             AND deleted_at IS NULL`,
           [req.params.id]
         );
       }
