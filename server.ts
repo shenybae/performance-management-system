@@ -4009,6 +4009,38 @@ async function startServer() {
       const actorEmployeeId = normalizeEmployeeId(actor.employee_id);
       if (!actorEmployeeId) return res.json([]);
 
+      // Backfill stale rows: proof already submitted and pending review should not stay at 0%.
+      await query(
+        `UPDATE goal_member_tasks
+         SET progress = 75,
+             status = CASE WHEN COALESCE(status, 'Not Started') IN ('Not Started', 'Blocked') THEN 'In Progress' ELSE status END,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE member_employee_id = ?
+           AND deleted_at IS NULL
+           AND COALESCE(proof_review_status, 'Not Submitted') = 'Pending Review'
+           AND COALESCE(progress, 0) < 75
+           AND COALESCE(TRIM(proof_image), '') <> ''`,
+        [actorEmployeeId]
+      );
+
+      await query(
+        `UPDATE goals
+         SET progress = (
+           SELECT COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0)
+           FROM goal_member_tasks t
+           WHERE t.goal_id = goals.id
+             AND t.deleted_at IS NULL
+         ),
+         updated_at = CURRENT_TIMESTAMP
+         WHERE id IN (
+           SELECT DISTINCT goal_id
+           FROM goal_member_tasks
+           WHERE member_employee_id = ?
+             AND deleted_at IS NULL
+         )`,
+        [actorEmployeeId]
+      );
+
       const rows: any = await query(
         `SELECT t.*, g.title as goal_title, g.statement as goal_statement,
                 COALESCE(e.name, 'Unknown') as member_name,
@@ -4171,7 +4203,27 @@ async function startServer() {
       const assigneeSubmittedProof = role === 'Employee' && !isGoalLeader && (b.proof_image !== undefined || b.proof_note !== undefined || submittedProofFiles.length > 0);
       const currentProofReviewStatus = String(task.proof_review_status || 'Not Submitted');
       if (assigneeSubmittedProof && currentProofReviewStatus === 'Pending Review') {
-        return res.status(409).json({ error: 'Proof already submitted and pending review' });
+        const hasExistingProof = String(task.proof_image || '').trim().length > 0;
+        if (hasExistingProof && Number(task.progress || 0) < 75) {
+          await query(
+            `UPDATE goal_member_tasks
+             SET progress = 75,
+                 status = CASE WHEN COALESCE(status, 'Not Started') IN ('Not Started', 'Blocked') THEN 'In Progress' ELSE status END,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [taskId]
+          );
+
+          const progressRows: any = await query(
+            'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ? AND deleted_at IS NULL',
+            [task.goal_id]
+          );
+          const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
+          const avgProgress = Math.max(0, Math.min(100, Number(progressRow?.avg_progress || 0)));
+          await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, task.goal_id]);
+        }
+
+        return res.json({ success: true, task_id: taskId, already_submitted: true, message: 'Proof already submitted and pending review' });
       }
       if (assigneeSubmittedProof) {
         const hasProofImage = submittedProofFiles.length > 0 || (typeof b.proof_image === 'string' && b.proof_image.trim().length > 0);
