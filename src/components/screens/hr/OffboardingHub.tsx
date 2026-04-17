@@ -753,7 +753,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
         <Card>
           <h3 className="text-sm font-bold text-slate-500 uppercase mb-4">Reasons for Leaving</h3>
           <div className="h-64">
@@ -761,7 +761,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
           </div>
           <div className="flex flex-wrap gap-2 mt-2 justify-center">{pieData.map((d, i) => (<span key={d.name} className="flex items-center gap-1 text-[10px] font-bold text-slate-500"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span>))}</div>
         </Card>
-        <div className="md:col-span-2">
+        <div className="xl:col-span-2">
           <Card>
             <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">Offboarding Records ({offboardingData.length})</h3>
             <div className="overflow-x-auto">
@@ -802,7 +802,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                         <tr>
                           <td colSpan={5} className="p-0">
                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                              <div className="bg-slate-50 dark:bg-slate-900/50 p-4 border-b border-slate-200 dark:border-slate-700 grid grid-cols-4 gap-3 text-xs">
+                              <div className="bg-slate-50 dark:bg-slate-900/50 p-4 border-b border-slate-200 dark:border-slate-700 grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Employee</span><span className="text-slate-700 dark:text-slate-200">{data.employee_name || '—'}</span></div>
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Last Day</span><span className="text-slate-700 dark:text-slate-200">{data.last_day || '—'}</span></div>
                                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Reason</span><span className="text-slate-700 dark:text-slate-200">{data.reason || '—'}</span></div>
@@ -878,7 +878,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
                               <div className="bg-slate-50 dark:bg-slate-900/50 p-5 border-b border-slate-200 dark:border-slate-700">
                                 {/* Employee Info */}
-                                <div className="grid grid-cols-4 gap-3 text-xs mb-4">
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs mb-4">
                                   <div><span className="font-bold text-slate-500 uppercase block text-[10px]">SSN</span><span className="text-slate-700 dark:text-slate-200">{ei.ssn || '—'}</span></div>
                                   <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Hire Date</span><span className="text-slate-700 dark:text-slate-200">{ei.hire_date || '—'}</span></div>
                                   <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Termination Date</span><span className="text-slate-700 dark:text-slate-200">{ei.termination_date || '—'}</span></div>
@@ -888,7 +888,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                                   <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Salary</span><span className="text-slate-700 dark:text-slate-200">{ei.salary || '—'}</span></div>
                                 </div>
                                 {/* Comments */}
-                                <div className="grid grid-cols-2 gap-4 text-xs mb-4">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs mb-4">
                                   {ei.liked_most && <div><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Liked Best</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{ei.liked_most}</p></div>}
                                   {ei.liked_least && <div><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Liked Least</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{ei.liked_least}</p></div>}
                                   {ei.pay_benefits_opinion && <div className="col-span-2"><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Pay & Benefits</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{ei.pay_benefits_opinion}</p></div>}
@@ -908,7 +908,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                                   </div>
                                 )}
                                 {(ei.would_recommend || ei.improvement_suggestions) && (
-                                  <div className="grid grid-cols-2 gap-4 text-xs mb-4">
+                                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs mb-4">
                                     {ei.would_recommend && <div><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Would Recommend</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{ei.would_recommend}</p></div>}
                                     {ei.improvement_suggestions && <div><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Improvement Suggestions</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{ei.improvement_suggestions}</p></div>}
                                   </div>

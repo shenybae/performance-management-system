@@ -419,7 +419,7 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                 </div>
               ))}
             </div>
-            <div className="max-w-sm">
+            <div className="max-w-md">
               <label className={labelClass}>Total Estimated Time to Completion</label>
               <input type="text" value={form.estimated_time} onChange={e => setForm({ ...form, estimated_time: e.target.value })} className={inputClass} placeholder="e.g., 2 weeks, 3 months" />
             </div>
@@ -966,29 +966,29 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800">
-                <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Employee</th>
-                <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Concern</th>
-                <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Est. Cost</th>
-                <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Est. Benefit</th>
-                <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
-                <th className="pb-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</th>
+                <th className="pb-3 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Employee</th>
+                <th className="pb-3 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Concern</th>
+                <th className="pb-3 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Est. Cost</th>
+                <th className="pb-3 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Est. Benefit</th>
+                <th className="pb-3 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
+                <th className="pb-3 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</th>
                 <th className="pb-3"></th>
               </tr>
             </thead>
             <tbody>
               {(filterEmployee ? suggestions.filter(s => String(s.employee_id) === filterEmployee) : suggestions).map(s => (
                 <tr key={s.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer" onClick={() => openDetail(s)}>
-                  <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
+                  <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-200">
                     <div className="min-w-0">
-                      <span className="truncate max-w-[220px]" title={s.employee_name || s.title || '—'}>{s.employee_name || s.title || '—'}</span>
+                      <span className="truncate max-w-[280px]" title={s.employee_name || s.title || '—'}>{s.employee_name || s.title || '—'}</span>
                     </div>
                   </td>
-                  <td className="py-3 text-slate-500 dark:text-slate-400 max-w-xs truncate">{s.concern || '—'}</td>
-                  <td className="py-3 text-slate-500 dark:text-slate-400">{s.estimated_cost || '—'}</td>
-                  <td className="py-3 text-slate-500 dark:text-slate-400">{s.total_financial_benefit || s.estimated_financial_benefit || '—'}</td>
-                  <td className="py-3"><span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${statusColor(s.status)}`}>{s.status || 'Under Review'}</span></td>
-                  <td className="py-3 text-xs text-slate-400">{s.created_at ? new Date(s.created_at).toLocaleDateString() : '—'}</td>
-                  <td className="py-3 flex items-center gap-2">
+                  <td className="py-3 px-4 text-slate-500 dark:text-slate-400 max-w-[320px] truncate">{s.concern || '—'}</td>
+                  <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{s.estimated_cost || '—'}</td>
+                  <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{s.total_financial_benefit || s.estimated_financial_benefit || '—'}</td>
+                  <td className="py-3 px-4"><span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${statusColor(s.status)}`}>{s.status || 'Under Review'}</span></td>
+                  <td className="py-3 px-4 text-xs text-slate-400">{s.created_at ? new Date(s.created_at).toLocaleDateString() : '—'}</td>
+                  <td className="py-3 px-4 flex items-center gap-2">
                     <button onClick={e => { e.stopPropagation(); openDetail(s); }} className="text-teal-500 hover:text-teal-700"><Eye size={14} /></button>
                     <button onClick={e => { e.stopPropagation(); deleteSuggestion(s.id); }} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                   </td>

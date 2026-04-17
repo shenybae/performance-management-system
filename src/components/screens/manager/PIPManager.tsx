@@ -158,7 +158,7 @@ export const PIPManager = ({ employees }: PIPManagerProps) => {
       </div>
 
       {/* Analytics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
         <Card>
           <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">PIP Outcomes ({plans.length})</h3>
           <div className="h-48">
@@ -200,13 +200,13 @@ export const PIPManager = ({ employees }: PIPManagerProps) => {
           </tr></thead><tbody>
             {plans.map(p => (
                 <tr key={p.id} className="border-b border-slate-50 dark:border-slate-800/50">
-                <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
+                <td className="py-3 px-1.5 font-medium text-slate-700 dark:text-slate-200">
                   <div className="min-w-0">
-                    <span className="truncate max-w-[220px]" title={getEmployeeName(p.employee_id)}>{getEmployeeName(p.employee_id)}</span>
+                    <span className="truncate max-w-[280px]" title={getEmployeeName(p.employee_id)}>{getEmployeeName(p.employee_id)}</span>
                   </div>
                 </td>
-                <td className="py-3 text-slate-500 dark:text-slate-400 max-w-xs truncate">{p.deficiency}</td>
-                <td className="py-3 text-xs text-slate-400">{p.start_date || '—'} → {p.end_date || '—'}</td>
+                <td className="py-3 px-1.5 text-slate-500 dark:text-slate-400 max-w-sm truncate">{p.deficiency}</td>
+                <td className="py-3 px-1.5 text-xs text-slate-400">{p.start_date || '—'} → {p.end_date || '—'}</td>
                 <td className="py-3">
                   <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${p.outcome === 'Improved' || p.outcome === 'Completed' ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30' : p.outcome === 'Escalated' ? 'text-red-600 bg-red-50 dark:bg-red-900/30' : 'text-amber-600 bg-amber-50 dark:bg-amber-900/30'}`}>
                     {p.outcome || 'In Progress'}
@@ -237,15 +237,15 @@ export const PIPManager = ({ employees }: PIPManagerProps) => {
             </tr></thead><tbody>
               {devPlans.map(p => (
                 <tr key={p.id} className="border-b border-slate-50 dark:border-slate-800/50">
-                  <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
+                  <td className="py-3 px-1.5 font-medium text-slate-700 dark:text-slate-200">
                     <div className="min-w-0">
-                      <span className="truncate max-w-[220px]" title={getEmployeeName(p.employee_id)}>{getEmployeeName(p.employee_id)}</span>
+                      <span className="truncate max-w-[280px]" title={getEmployeeName(p.employee_id)}>{getEmployeeName(p.employee_id)}</span>
                     </div>
                   </td>
-                  <td className="py-3 text-slate-500 dark:text-slate-400">
+                  <td className="py-3 px-1.5 text-slate-500 dark:text-slate-400">
                     <div className="min-w-0"><span className="truncate max-w-[260px]" title={p.skill_gap}>{p.skill_gap}</span></div>
                   </td>
-                  <td className="py-3 text-slate-500 dark:text-slate-400">
+                  <td className="py-3 px-1.5 text-slate-500 dark:text-slate-400">
                     <div className="min-w-0"><span className="truncate max-w-[260px]" title={p.growth_step}>{p.growth_step}</span></div>
                   </td>
                   <td className="py-3">

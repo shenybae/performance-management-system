@@ -25,8 +25,8 @@ export const EmployeeDirectory = ({ employees, onSelectEmployee }: EmployeeDirec
       <SectionHeader title="Employee Master Directory" subtitle="View personnel records and status" />
 
       <Card>
-        <div className="flex justify-between mb-4">
-          <div className="relative w-64">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+          <div className="relative w-full sm:w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
             <input 
               type="text" 
@@ -41,11 +41,11 @@ export const EmployeeDirectory = ({ employees, onSelectEmployee }: EmployeeDirec
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800">
-                <th className="py-3 px-4 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Name</th>
-                <th className="py-3 px-4 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Position</th>
-                <th className="py-3 px-4 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Department</th>
-                <th className="py-3 px-4 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Status</th>
-                <th className="py-3 px-4 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right">Action</th>
+                <th className="py-3 px-5 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Name</th>
+                <th className="py-3 px-5 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Position</th>
+                <th className="py-3 px-5 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Department</th>
+                <th className="py-3 px-5 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                <th className="py-3 px-5 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -55,19 +55,19 @@ export const EmployeeDirectory = ({ employees, onSelectEmployee }: EmployeeDirec
                   className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer group" 
                   onClick={() => onSelectEmployee(emp.id)}
                 >
-                  <td className="py-4 px-4 font-medium text-slate-700 dark:text-slate-100 group-hover:text-teal-deep dark:group-hover:text-teal-green">
-                    <div className="min-w-0 truncate max-w-[220px]" title={emp.name}>{emp.name}</div>
+                  <td className="py-4 px-5 font-medium text-slate-700 dark:text-slate-100 group-hover:text-teal-deep dark:group-hover:text-teal-green">
+                    <div className="min-w-0 truncate max-w-[280px]" title={emp.name}>{emp.name}</div>
                   </td>
-                  <td className="py-4 px-4 text-slate-600 dark:text-slate-200">{emp.position}</td>
-                  <td className="py-4 px-4 text-slate-600 dark:text-slate-200">{emp.dept}</td>
-                  <td className="py-4 px-4">
+                  <td className="py-4 px-5 text-slate-600 dark:text-slate-200">{emp.position}</td>
+                  <td className="py-4 px-5 text-slate-600 dark:text-slate-200">{emp.dept}</td>
+                  <td className="py-4 px-5">
                     <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
                       emp.status === 'Permanent' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
                     }`}>
                       {emp.status}
                     </span>
                   </td>
-                  <td className="py-4 px-4 text-right">
+                  <td className="py-4 px-5 text-right">
                     <div className="flex justify-end">
                       <ChevronRight size={16} className="text-slate-400 group-hover:text-teal-deep dark:group-hover:text-teal-green" />
                     </div>

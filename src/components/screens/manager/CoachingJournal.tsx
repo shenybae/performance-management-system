@@ -711,34 +711,34 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead><tr className="border-b border-slate-100 dark:border-slate-800">
-                <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-slate-500">Employee</th>
-                <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-slate-500">Course</th>
-                <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-slate-500">Weakness</th>
-                <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-slate-500">Reason</th>
-                <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-slate-500">Status</th>
-                <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-slate-500">By</th>
-                <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-slate-500">Date</th>
-                <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-slate-500 text-right">Actions</th>
+                <th className="py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">Employee</th>
+                <th className="py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">Course</th>
+                <th className="py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">Weakness</th>
+                <th className="py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">Reason</th>
+                <th className="py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">Status</th>
+                <th className="py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">By</th>
+                <th className="py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">Date</th>
+                <th className="py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500 text-right">Actions</th>
               </tr></thead>
               <tbody>
                 {recommendations.length === 0 && <tr><td colSpan={8} className="py-8 text-center text-sm text-slate-400 italic">No recommendations yet.</td></tr>}
                 {recommendations.map((r: any) => (
                   <tr key={r.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900">
-                    <td className="py-2 px-3 text-xs font-medium text-slate-700 dark:text-slate-200">
+                    <td className="py-2 px-4 text-xs font-medium text-slate-700 dark:text-slate-200">
                       <div className="min-w-0">
                         <span className="truncate max-w-[220px]" title={r.employee_name || `#${r.employee_id}`}>
                           {r.employee_name || `#${r.employee_id}`}
                         </span>
                       </div>
                     </td>
-                    <td className="py-2 px-3 text-xs text-slate-600 dark:text-slate-300">
+                    <td className="py-2 px-4 text-xs text-slate-600 dark:text-slate-300">
                       <div className="min-w-0">
                         <span className="truncate max-w-[220px]" title={r.course_title}>{r.course_title}</span>
                       </div>
                     </td>
-                    <td className="py-2 px-3"><span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600">{r.weakness || '—'}</span></td>
-                    <td className="py-2 px-3 text-xs text-slate-500 max-w-[200px] truncate">{r.reason || '—'}</td>
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-4"><span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600">{r.weakness || '—'}</span></td>
+                    <td className="py-2 px-4 text-xs text-slate-500 max-w-[280px] truncate">{r.reason || '—'}</td>
+                    <td className="py-2 px-4">
                       <ChoicePills
                         value={r.status}
                         compact
@@ -752,9 +752,9 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
                         ]}
                       />
                     </td>
-                    <td className="py-2 px-3 text-xs text-slate-400">{r.recommended_by || '—'}</td>
-                    <td className="py-2 px-3 text-xs text-slate-400">{r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</td>
-                    <td className="py-2 px-3 text-right">
+                    <td className="py-2 px-4 text-xs text-slate-400">{r.recommended_by || '—'}</td>
+                    <td className="py-2 px-4 text-xs text-slate-400">{r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</td>
+                    <td className="py-2 px-4 text-right">
                       <button onClick={async () => { if (await appConfirm('Archive this recommendation?', { title: 'Archive Recommendation', confirmText: 'Archive' })) { try { await fetch(`/api/elearning_recommendations/${r.id}`, { method: 'DELETE', headers: getAuthHeaders() }); window.notify?.('Recommendation archived', 'success'); fetchRecommendations(); } catch { window.notify?.('Failed to archive', 'error'); } } }}
                         className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                     </td>
@@ -863,25 +863,25 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead><tr className="border-b border-slate-100 dark:border-slate-800">
-                <th className="py-2 px-3 text-[10px] font-bold uppercase text-slate-500">Employee</th>
-                <th className="py-2 px-3 text-[10px] font-bold uppercase text-slate-500">Course</th>
-                <th className="py-2 px-3 text-[10px] font-bold uppercase text-slate-500">Weakness</th>
-                <th className="py-2 px-3 text-[10px] font-bold uppercase text-slate-500">Status</th>
+                <th className="py-2 px-4 text-[10px] font-bold uppercase text-slate-500">Employee</th>
+                <th className="py-2 px-4 text-[10px] font-bold uppercase text-slate-500">Course</th>
+                <th className="py-2 px-4 text-[10px] font-bold uppercase text-slate-500">Weakness</th>
+                <th className="py-2 px-4 text-[10px] font-bold uppercase text-slate-500">Status</th>
               </tr></thead>
               <tbody>
                 {employeeRecs.length === 0 && <tr><td colSpan={4} className="py-6 text-center text-sm text-slate-400 italic">No recommendations</td></tr>}
                 {employeeRecs.map((r: any) => (
                   <tr key={r.id} className="border-b border-slate-50 dark:border-slate-800/50">
-                    <td className="py-2 px-3 text-xs font-medium text-slate-700 dark:text-slate-200">
+                    <td className="py-2 px-4 text-xs font-medium text-slate-700 dark:text-slate-200">
                       <div className="min-w-0">
                         <span className="truncate max-w-[220px]" title={r.employee_name || `#${r.employee_id}`}>
                           {r.employee_name || `#${r.employee_id}`}
                         </span>
                       </div>
                     </td>
-                    <td className="py-2 px-3 text-xs text-slate-600 dark:text-slate-300">{r.course_title}</td>
-                    <td className="py-2 px-3"><span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600">{r.weakness || '—'}</span></td>
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-4 text-xs text-slate-600 dark:text-slate-300">{r.course_title}</td>
+                    <td className="py-2 px-4"><span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600">{r.weakness || '—'}</span></td>
+                    <td className="py-2 px-4">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         r.status === 'Completed' ? 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600'
                         : r.status === 'In Progress' ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-600'

@@ -296,7 +296,7 @@ export const AuditLogs = () => {
             </button>
           </div>
         </div>
-        <div className="overflow-x-auto min-h-[520px]">
+        <div className="overflow-x-auto min-h-[600px]">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b-2 border-slate-200 dark:border-slate-700">
@@ -362,9 +362,9 @@ export const AuditLogs = () => {
                             <ActionIcon size={10} /> {(l as any).display_action || ac.label}
                           </span>
                         </td>
-                        <td className="py-2.5 text-xs text-slate-600 dark:text-slate-400 max-w-[200px] truncate">{(l as any).display_description || '—'}</td>
+                        <td className="py-2.5 text-xs text-slate-600 dark:text-slate-400 max-w-[320px] truncate">{(l as any).display_description || '—'}</td>
                         <td className="py-2.5">
-                          <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded">{l.table_name}</span>
+                          <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded">{l.table_name}</span>
                         </td>
                         <td className="py-2.5 text-xs text-slate-500 dark:text-slate-400">{l.source || '—'}</td>
                         <td className="py-2.5 text-slate-400">
