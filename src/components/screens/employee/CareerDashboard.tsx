@@ -780,7 +780,6 @@ export const CareerDashboard = () => {
           proof_file_type: String(files[0]?.proof_file_type || 'application/octet-stream'),
           proof_note: note,
           proof_submitted_at: new Date().toISOString(),
-          proof_review_status: 'Pending Review',
         }),
       });
       if (!res.ok) {
