@@ -131,6 +131,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [proofUploadNotes, setProofUploadNotes] = useState<Record<number, string>>({});
   const [proofReviewNotes, setProofReviewNotes] = useState<Record<number, string>>({});
   const [proofReviewSubmittingTaskId, setProofReviewSubmittingTaskId] = useState<number | null>(null);
+  const [proofFileViewer, setProofFileViewer] = useState<{ src: string; fileName?: string; mimeType?: string } | null>(null);
   const [lastRealtimeSyncAt, setLastRealtimeSyncAt] = useState<number>(Date.now());
   const [proofRealtimeSyncAt, setProofRealtimeSyncAt] = useState<number>(Date.now());
   const [pendingDeadlineExtensionRequests, setPendingDeadlineExtensionRequests] = useState<any[]>([]);
@@ -1415,7 +1416,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
                               <button
                                 type="button"
-                                onClick={() => window.open(String(file.proof_file_data || ''), '_blank', 'noopener,noreferrer')}
+                                onClick={() => setProofFileViewer({ src: String(file.proof_file_data || ''), fileName: file.proof_file_name, mimeType: file.proof_file_type })}
                                 className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
                               >
                                 View Full File
@@ -1497,7 +1498,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         <div className="mb-2 space-y-2 max-w-2xl">
                           {proofFiles.map((file, fileIndex) => (
                             <div key={`${file.proof_file_name}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-2">
-                              <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Proof ${fileIndex + 1}`}</p>
+                              <div className="mb-1 flex items-center justify-between gap-2">
+                                <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Proof ${fileIndex + 1}`}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => setProofFileViewer({ src: String(file.proof_file_data || ''), fileName: file.proof_file_name, mimeType: file.proof_file_type })}
+                                  className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                                >
+                                  View Full File
+                                </button>
+                              </div>
                               <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
                             </div>
                           ))}
@@ -1514,6 +1524,22 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 })
               ))}
             </div>
+          )}
+        </Modal>
+
+        <Modal
+          open={!!proofFileViewer}
+          title={proofFileViewer ? `File Viewer: ${proofFileViewer.fileName || 'Attachment'}` : 'File Viewer'}
+          onClose={() => setProofFileViewer(null)}
+          maxWidthClassName="max-w-5xl"
+          bodyClassName="space-y-3"
+        >
+          {proofFileViewer?.src ? (
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+              <ProofAttachment src={proofFileViewer.src} fileName={proofFileViewer.fileName} mimeType={proofFileViewer.mimeType} />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No file selected.</p>
           )}
         </Modal>
 
@@ -3002,7 +3028,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
                             <button
                               type="button"
-                              onClick={() => window.open(String(file.proof_file_data || ''), '_blank', 'noopener,noreferrer')}
+                              onClick={() => setProofFileViewer({ src: String(file.proof_file_data || ''), fileName: file.proof_file_name, mimeType: file.proof_file_type })}
                               className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
                             >
                               View Full File
@@ -3084,7 +3110,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       <div className="mb-2 space-y-2 max-w-xl">
                         {proofFiles.map((file, fileIndex) => (
                           <div key={`${file.proof_file_name}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-2">
-                            <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Proof ${fileIndex + 1}`}</p>
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Proof ${fileIndex + 1}`}</p>
+                              <button
+                                type="button"
+                                onClick={() => setProofFileViewer({ src: String(file.proof_file_data || ''), fileName: file.proof_file_name, mimeType: file.proof_file_type })}
+                                className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                              >
+                                View Full File
+                              </button>
+                            </div>
                             <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
                           </div>
                         ))}
@@ -3101,6 +3136,22 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               })
             ))}
           </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!proofFileViewer}
+        title={proofFileViewer ? `File Viewer: ${proofFileViewer.fileName || 'Attachment'}` : 'File Viewer'}
+        onClose={() => setProofFileViewer(null)}
+        maxWidthClassName="max-w-5xl"
+        bodyClassName="space-y-3"
+      >
+        {proofFileViewer?.src ? (
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+            <ProofAttachment src={proofFileViewer.src} fileName={proofFileViewer.fileName} mimeType={proofFileViewer.mimeType} />
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">No file selected.</p>
         )}
       </Modal>
     </motion.div>
