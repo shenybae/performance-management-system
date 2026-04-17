@@ -489,19 +489,70 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
   }
 
   /* ─── MAIN VIEW ─── */
+  const courseCompletionRate = courses.length > 0 ? Math.round((completedRecs.length / recommendations.length) * 100) || 0 : 0;
+  const positivePercent = coachingLogs.length > 0 ? Math.round((positiveLogs.length / coachingLogs.length) * 100) : 0;
+  const recentLogs = coachingLogs.slice(-5).reverse();
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-      <SectionHeader title="Coaching & Development" subtitle="Chat with your manager, access e-learning, and view your coaching journal" />
+      <SectionHeader title="Coaching & Development" subtitle="Your personalized coaching dashboard with progress tracking and development insights" />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-4 mb-5">
+      {/* Analytics Cards Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 mb-6">
+        <Card>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center"><MessageSquare size={20} className="text-teal-600" /></div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold uppercase text-slate-400">Chat Messages</p>
+              <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{chatMessages.length}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{chatMessages.filter((m: any) => m.sender_role === 'Manager').length} from manager</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center"><GraduationCap size={20} className="text-purple-600" /></div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold uppercase text-slate-400">Course Status</p>
+              <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{completedRecs.length}/{recommendations.length}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{courseCompletionRate}% complete</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center"><ThumbsUp size={20} className="text-emerald-600" /></div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold uppercase text-slate-400">Positive Feedback</p>
+              <p className="text-2xl font-black text-emerald-600">{positiveLogs.length}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">of {coachingLogs.length} journal entries</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><ClipboardList size={20} className="text-amber-600" /></div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold uppercase text-slate-400">Journal Entries</p>
+              <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{coachingLogs.length}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{positivePercent}% positive tone</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Quick Action Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
         <button onClick={() => setView('chat')} className="text-left">
           <Card>
             <div className="flex items-center gap-4 p-2">
               <div className="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center"><MessageSquare size={24} className="text-teal-600" /></div>
               <div>
                 <p className="text-base font-bold text-slate-800 dark:text-slate-100">Coaching Chat</p>
-                <p className="text-xs text-slate-400">Discuss goals, ask questions & get feedback</p>
-                {chatMessages.length > 0 && <p className="text-[10px] text-teal-500 font-bold mt-1">{chatMessages.length} messages</p>}
+                <p className="text-xs text-slate-400">Direct discussion with your manager</p>
               </div>
             </div>
           </Card>
@@ -512,8 +563,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
               <div className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center"><GraduationCap size={24} className="text-purple-600" /></div>
               <div>
                 <p className="text-base font-bold text-slate-800 dark:text-slate-100">E-Learning Courses</p>
-                <p className="text-xs text-slate-400">Recommended training & skill development</p>
-                {activeRecs.length > 0 && <p className="text-[10px] text-amber-500 font-bold mt-1">{activeRecs.length} pending recommendations</p>}
+                <p className="text-xs text-slate-400">{activeRecs.length} pending recommendations</p>
               </div>
             </div>
           </Card>
@@ -524,75 +574,147 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
               <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><ClipboardList size={24} className="text-amber-600" /></div>
               <div>
                 <p className="text-base font-bold text-slate-800 dark:text-slate-100">Coaching Journal</p>
-                <p className="text-xs text-slate-400">Monitoring & coaching observations</p>
-                {coachingLogs.length > 0 && <p className="text-[10px] text-amber-500 font-bold mt-1">{coachingLogs.length} entries</p>}
+                <p className="text-xs text-slate-400">{coachingLogs.length} total entries</p>
               </div>
             </div>
           </Card>
         </button>
       </div>
 
-      {/* Quick recommendations preview */}
-      {activeRecs.length > 0 && (
-        <div className="mb-5">
-          <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 mb-3">
-            <Brain size={16} className="text-amber-500 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-xs font-bold text-amber-800 dark:text-amber-300">You have {activeRecs.length} recommended course{activeRecs.length > 1 ? 's' : ''}</p>
-              <p className="text-[10px] text-amber-700 dark:text-amber-400">Your manager has identified areas for growth. Complete these courses to demonstrate your commitment to improvement and professional development.</p>
+      {/* Mode Selection and Visualizations */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Course Progress Bar */}
+        <Card>
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Course Completion Progress</h3>
+              <span className="text-sm font-bold text-purple-600">{courseCompletionRate}%</span>
+            </div>
+            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden">
+              <div
+                className="h-3 rounded-full bg-gradient-to-r from-purple-400 to-purple-600 transition-all duration-500"
+                style={{ width: `${courseCompletionRate}%` }}
+              />
             </div>
           </div>
-          <div className="space-y-2">
-            {activeRecs.slice(0, 3).map((r: any) => (
-              <Card key={r.id}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <BookOpen size={16} className="text-purple-500" />
-                    <div>
-                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{r.course_title}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {r.weakness && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-50 dark:bg-red-900/20 text-red-500">Weakness: {r.weakness}</span>}
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                          r.status === 'In Progress' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-500' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-500'
-                        }`}>{r.status}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <button onClick={() => setView('courses')} className="text-xs font-bold text-purple-500 hover:text-purple-700">View →</button>
-                </div>
-              </Card>
-            ))}
-            {activeRecs.length > 3 && (
-              <button onClick={() => setView('courses')} className="text-xs font-bold text-purple-500 hover:text-purple-700 ml-2">+ {activeRecs.length - 3} more recommendations</button>
-            )}
+          <div className="grid grid-cols-3 gap-2 text-[10px]">
+            <div className="text-center">
+              <p className="font-bold text-emerald-600">{completedRecs.length}</p>
+              <p className="text-slate-400">Completed</p>
+            </div>
+            <div className="text-center">
+              <p className="font-bold text-blue-600">{activeRecs.filter((r: any) => r.status === 'In Progress').length}</p>
+              <p className="text-slate-400">In Progress</p>
+            </div>
+            <div className="text-center">
+              <p className="font-bold text-amber-600">{activeRecs.filter((r: any) => r.status === 'Recommended').length}</p>
+              <p className="text-slate-400">Pending</p>
+            </div>
           </div>
-        </div>
+        </Card>
+
+        {/* Coaching Sentiment */}
+        <Card>
+          <div className="mb-3">
+            <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-3">Coaching Journal Sentiment</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="text-center p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20">
+              <p className="text-2xl font-black text-emerald-600">{positiveLogs.length}</p>
+              <p className="text-xs font-bold text-emerald-600 mt-1">Positive</p>
+              <p className="text-[10px] text-slate-400">{positivePercent}% of entries</p>
+            </div>
+            <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20">
+              <p className="text-2xl font-black text-amber-600">{constructiveLogs.length}</p>
+              <p className="text-xs font-bold text-amber-600 mt-1">Constructive</p>
+              <p className="text-[10px] text-slate-400">{100 - positivePercent}% of entries</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Journal Summary Table */}
+      {recentLogs.length > 0 && (
+        <Card>
+          <div className="mb-4">
+            <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Recent Coaching Observations</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-700">
+                  <th className="text-left px-3 py-2 text-[10px] font-bold uppercase text-slate-500">Date</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-bold uppercase text-slate-500">Type</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-bold uppercase text-slate-500">Category</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-bold uppercase text-slate-500">Logged By</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-bold uppercase text-slate-500">Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentLogs.map((log: any) => {
+                  const isPositive = log.is_positive === 1 || log.is_positive === true;
+                  return (
+                    <tr key={log.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/30">
+                      <td className="px-3 py-2 text-[11px] text-slate-600 dark:text-slate-400">{log.created_at ? new Date(log.created_at).toLocaleDateString() : '—'}</td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          isPositive ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600'
+                        }`}>
+                          {isPositive ? <ThumbsUp size={10} /> : <AlertCircle size={10} />} {isPositive ? 'Positive' : 'Constructive'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-[11px] text-slate-600 dark:text-slate-400">{log.category || '—'}</td>
+                      <td className="px-3 py-2 text-[11px] text-slate-600 dark:text-slate-400">{log.logged_by || 'Manager'}</td>
+                      <td className="px-3 py-2 text-[11px] text-slate-600 dark:text-slate-400 max-w-xs truncate">{log.notes || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {coachingLogs.length > 5 && (
+            <button onClick={() => setView('journal')} className="text-xs font-bold text-amber-500 hover:text-amber-700 mt-3 block">View all {coachingLogs.length} entries →</button>
+          )}
+        </Card>
       )}
 
-      {/* Recent chat messages preview */}
-      {chatMessages.length > 0 && (
-        <div>
-          <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2"><MessageSquare size={14} /> Recent Messages</h3>
-          <Card>
-            <div className="space-y-2">
-              {chatMessages.slice(-3).map((msg: any) => {
-                const isEmployee = msg.sender_role === 'Employee';
-                return (
-                  <div key={msg.id} className={`flex ${isEmployee ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[70%] rounded-xl px-3 py-2 ${isEmployee
-                      ? 'bg-teal-deep/10 text-teal-deep dark:text-teal-green'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200'
-                    }`}>
-                      <p className="text-[10px] font-bold text-slate-400 mb-0.5">{msg.sender_name} · {msg.created_at ? new Date(msg.created_at).toLocaleString() : ''}</p>
-                      <p className="text-xs">{msg.message}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <button onClick={() => setView('chat')} className="text-xs font-bold text-teal-500 hover:text-teal-700 mt-3 block">Open Full Chat →</button>
-          </Card>
-        </div>
+      {/* Course Recommendations Table */}
+      {recommendations.length > 0 && (
+        <Card>
+          <div className="mb-4">
+            <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">All Course Recommendations</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-700">
+                  <th className="text-left px-3 py-2 text-[10px] font-bold uppercase text-slate-500">Course</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-bold uppercase text-slate-500">Status</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-bold uppercase text-slate-500">Weakness</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-bold uppercase text-slate-500">Recommended By</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-bold uppercase text-slate-500">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recommendations.map((r: any) => (
+                  <tr key={r.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/30">
+                    <td className="px-3 py-2 text-[11px] font-medium text-slate-700 dark:text-slate-200">{r.course_title}</td>
+                    <td className="px-3 py-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        r.status === 'Completed' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' :
+                        r.status === 'In Progress' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' :
+                        'bg-amber-100 dark:bg-amber-900/30 text-amber-600'
+                      }`}>{r.status}</span>
+                    </td>
+                    <td className="px-3 py-2 text-[11px] text-slate-600 dark:text-slate-400">{r.weakness || '—'}</td>
+                    <td className="px-3 py-2 text-[11px] text-slate-600 dark:text-slate-400">{r.recommended_by || 'Manager'}</td>
+                    <td className="px-3 py-2 text-[11px] text-slate-600 dark:text-slate-400">{r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </motion.div>
   );

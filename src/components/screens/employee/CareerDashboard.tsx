@@ -1739,6 +1739,83 @@ export const CareerDashboard = () => {
           return (
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_320px] gap-4 items-start">
               <div>
+                {/* Final Proof Submission Section (for Team Leaders) */}
+                <div className="mb-4 p-4 rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-900/10">
+                  <h3 className="text-sm font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mb-3">Final Proof for Manager Review</h3>
+                  <div className="space-y-3">
+                    {selectedTaskBoardGoal.proof_image ? (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-bold uppercase text-slate-500">Submitted Final Proof</span>
+                          <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${
+                            String(selectedTaskBoardGoal.proof_review_status || 'Not Submitted') === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' :
+                            String(selectedTaskBoardGoal.proof_review_status || 'Not Submitted') === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' :
+                            'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                          }`}>
+                            {String(selectedTaskBoardGoal.proof_review_status || 'Not Submitted')}
+                          </span>
+                        </div>
+                        {(() => {
+                          const goalProofFiles = (() => {
+                            const rawData = String(selectedTaskBoardGoal?.proof_image || '').trim();
+                            const fallback = String(selectedTaskBoardGoal?.proof_file_name || 'Final proof').trim();
+                            const fallbackType = String(selectedTaskBoardGoal?.proof_file_type || 'application/octet-stream').trim();
+                            if (!rawData) return [];
+                            if (rawData.startsWith('[')) {
+                              try {
+                                const parsed = JSON.parse(rawData);
+                                if (Array.isArray(parsed)) {
+                                  return parsed.map((item: any) => ({
+                                    proof_file_data: String(item?.proof_file_data || item?.data || '').trim(),
+                                    proof_file_name: String(item?.proof_file_name || item?.name || 'Final proof').trim(),
+                                    proof_file_type: String(item?.proof_file_type || item?.type || 'application/octet-stream').trim(),
+                                  })).filter((item: any) => !!item.proof_file_data);
+                                }
+                              } catch {}
+                            }
+                            return [{
+                              proof_file_data: rawData,
+                              proof_file_name: fallback,
+                              proof_file_type: fallbackType,
+                            }];
+                          })();
+                          return (
+                            <>
+                              <div className="space-y-2">
+                                {goalProofFiles.map((file, fileIndex) => (
+                                  <div key={`goal-proof-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
+                                    <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
+                                    <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                                  </div>
+                                ))}
+                              </div>
+                              {selectedTaskBoardGoal.proof_note && (
+                                <p className="text-[10px] text-slate-600 dark:text-slate-300 mt-2"><span className="font-bold">Note:</span> {selectedTaskBoardGoal.proof_note}</p>
+                              )}
+                              {selectedTaskBoardGoal.proof_submitted_at && (
+                                <p className="text-[10px] text-slate-500 mt-1">Submitted: {new Date(selectedTaskBoardGoal.proof_submitted_at).toLocaleDateString()}</p>
+                              )}
+                              {selectedTaskBoardGoal.proof_review_note && (
+                                <p className="text-[10px] text-slate-500 italic mt-1">Manager note: {selectedTaskBoardGoal.proof_review_note}</p>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="text-center py-3">
+                        <p className="text-[10px] text-slate-500">No final proof submitted yet. Submit your completed goal proof for manager review.</p>
+                        <button
+                          onClick={() => setLeaderGoalOpenId(Number(selectedTaskBoardGoal.id))}
+                          className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 mt-2"
+                        >
+                          Submit Final Proof →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">Task Board ({memberTasks.length})</p>
                 {memberTasks.length === 0 ? (
                   <p className="text-xs text-slate-400">No detailed tasks yet.</p>
