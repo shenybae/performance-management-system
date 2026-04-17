@@ -266,7 +266,21 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       ]);
 
       const goalsData = await goalsRes.json();
-      setGoals(Array.isArray(goalsData) ? goalsData : []);
+      const normalizedGoals = (Array.isArray(goalsData) ? goalsData : []).map((goal: any) => {
+        const progress = Math.max(0, Math.min(100, Number(goal?.progress || 0)));
+        const statusRaw = String(goal?.status || '').trim();
+        const statusLower = statusRaw.toLowerCase();
+        const lockedStatus = statusLower === 'completed' || statusLower === 'cancelled' || statusLower === 'at risk';
+        const status = lockedStatus
+          ? (statusRaw || goal?.status)
+          : progress >= 100
+            ? 'Completed'
+            : progress > 0
+              ? 'In Progress'
+              : 'Not Started';
+        return { ...goal, progress, status };
+      });
+      setGoals(normalizedGoals);
 
       if (recoveryRes.ok) {
         const recoveryData = await recoveryRes.json();
@@ -727,6 +741,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     }
   };
 
+  const approveGoalCompletion = async (goalId: number) => {
+    if (!(await appConfirm('Approve this goal as completed? This will set goal progress to 100%.', { title: 'Manager Goal Approval', confirmText: 'Approve Goal', icon: 'success' }))) return;
+    await updateGoal(goalId, { status: 'Completed', progress: 100 }, false);
+    if (proofReviewOpenGoal === goalId) {
+      await refreshProofReviewTasks(goalId);
+    }
+  };
+
   // Keep proof review panel synced in real time while it is open.
   useEffect(() => {
     if (!proofReviewOpenGoal) return;
@@ -754,11 +776,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         [goalId]: (prev[goalId] || []).map((task: any) => {
           if (Number(task?.id) !== Number(taskId)) return task;
           if (status === 'Approved') {
-            return { ...task, proof_review_status: status, proof_review_note: note, status: 'Completed', progress: 100 };
+            return { ...task, proof_review_status: status, proof_review_note: note, status: 'Completed', progress: 75 };
           }
           if (status === 'Needs Revision') {
             const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));
-            return { ...task, proof_review_status: status, proof_review_note: note, status: 'In Progress', progress: currentProgress >= 100 ? 75 : Math.max(currentProgress, 50) };
+            return { ...task, proof_review_status: status, proof_review_note: note, status: 'In Progress', progress: currentProgress >= 75 ? 75 : Math.max(currentProgress, 50) };
           }
           const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));
           return { ...task, proof_review_status: status, proof_review_note: note, status: 'Blocked', progress: Math.min(currentProgress, 50) };
@@ -1256,7 +1278,17 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 px-3 py-2">
                 <p className="text-xs font-bold text-blue-700 dark:text-blue-300">Live sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - proofRealtimeSyncAt) / 1000))}s ago</p>
-                <button onClick={() => void refreshProofReviewTasks(proofReviewOpenGoal)} className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30">Refresh proofs</button>
+                <div className="flex items-center gap-2">
+                  {proofReviewGoal && String(proofReviewGoal?.status || '') !== 'Completed' && (
+                    <button
+                      onClick={() => void approveGoalCompletion(Number(proofReviewGoal.id))}
+                      className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                    >
+                      Manager Approve Goal Completion
+                    </button>
+                  )}
+                  <button onClick={() => void refreshProofReviewTasks(proofReviewOpenGoal)} className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30">Refresh proofs</button>
+                </div>
               </div>
 
               {proofReviewLoadingGoal === proofReviewOpenGoal ? (
@@ -2824,12 +2856,22 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               <p className="text-xs font-bold text-blue-700 dark:text-blue-300">
                 Live sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - proofRealtimeSyncAt) / 1000))}s ago
               </p>
-              <button
-                onClick={() => void refreshProofReviewTasks(proofReviewOpenGoal)}
-                className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
-              >
-                Refresh proofs
-              </button>
+              <div className="flex items-center gap-2">
+                {proofReviewGoal && String(proofReviewGoal?.status || '') !== 'Completed' && (
+                  <button
+                    onClick={() => void approveGoalCompletion(Number(proofReviewGoal.id))}
+                    className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                  >
+                    Manager Approve Goal Completion
+                  </button>
+                )}
+                <button
+                  onClick={() => void refreshProofReviewTasks(proofReviewOpenGoal)}
+                  className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                >
+                  Refresh proofs
+                </button>
+              </div>
             </div>
 
             {proofReviewLoadingGoal === proofReviewOpenGoal ? (

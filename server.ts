@@ -92,6 +92,16 @@ function computeGoalProgressFromTaskAverage(avgProgress: any, goalStatus: any) {
   return Math.min(GOAL_PROGRESS_MAX_BEFORE_MANAGER_APPROVAL, normalizedAverage);
 }
 
+function normalizeGoalStatusFromProgress(currentStatus: any, progressValue: any) {
+  const status = String(currentStatus || '').trim();
+  const normalized = status.toLowerCase();
+  if (normalized === 'completed' || normalized === 'cancelled' || normalized === 'at risk') return status || currentStatus;
+  const progress = normalizeProgressValue(progressValue);
+  if (progress >= 100) return 'Completed';
+  if (progress > 0) return 'In Progress';
+  return 'Not Started';
+}
+
 async function recomputeGoalProgress(goalId: number) {
   const rows: any = await query(
     `SELECT g.status AS goal_status,
@@ -106,14 +116,15 @@ async function recomputeGoalProgress(goalId: number) {
   );
   const row = Array.isArray(rows) ? rows[0] : rows;
   const nextProgress = computeGoalProgressFromTaskAverage(row?.avg_progress || 0, row?.goal_status);
+  const nextStatus = normalizeGoalStatusFromProgress(row?.goal_status, nextProgress);
 
   try {
-    await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [nextProgress, goalId]);
+    await query('UPDATE goals SET progress = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [nextProgress, nextStatus, goalId]);
   } catch (goalUpdateErr: any) {
     const msg = String(goalUpdateErr?.message || '').toLowerCase();
     const missingUpdatedAt = String(goalUpdateErr?.code || '') === '42703' || msg.includes('updated_at') || msg.includes('no such column');
     if (!missingUpdatedAt) throw goalUpdateErr;
-    await query('UPDATE goals SET progress = ? WHERE id = ?', [nextProgress, goalId]);
+    await query('UPDATE goals SET progress = ?, status = ? WHERE id = ?', [nextProgress, nextStatus, goalId]);
   }
 
   return nextProgress;
@@ -3056,7 +3067,7 @@ async function startServer() {
       const role = actor.role;
       if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
 
-      const existingRows: any = await query('SELECT id, employee_id, department FROM goals WHERE id = ?', [req.params.id]);
+      const existingRows: any = await query('SELECT id, employee_id, department, status, progress FROM goals WHERE id = ?', [req.params.id]);
       const existing = Array.isArray(existingRows) ? existingRows[0] : existingRows;
       if (!existing) return res.status(404).json({ error: 'Goal not found' });
 
@@ -3080,9 +3091,20 @@ async function startServer() {
       }
 
       const b = req.body;
+      const normalizedProgress = b.progress !== undefined ? normalizeProgressValue(b.progress) : undefined;
+      const normalizedStatus = b.status !== undefined ? String(b.status || '').trim() : undefined;
+      const effectiveStatus = normalizeGoalStatusFromProgress(normalizedStatus ?? existing.status, normalizedProgress ?? existing.progress);
       const sets: string[] = [];
       const vals: any[] = [];
       for (const k of ['statement', 'metric', 'target_date', 'title', 'status', 'progress', 'scope', 'department', 'team_name', 'delegation', 'priority', 'quarter', 'frequency', 'leader_id']) {
+        if (k === 'progress') {
+          if (normalizedProgress !== undefined) { sets.push('progress = ?'); vals.push(normalizedProgress); }
+          continue;
+        }
+        if (k === 'status') {
+          if (normalizedStatus !== undefined || normalizedProgress !== undefined) { sets.push('status = ?'); vals.push(effectiveStatus); }
+          continue;
+        }
         if (b[k] !== undefined) { sets.push(`${k} = ?`); vals.push(b[k]); }
       }
       if (sets.length === 0) return res.status(400).json({ error: "No fields to update" });
