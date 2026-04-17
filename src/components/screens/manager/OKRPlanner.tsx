@@ -1393,6 +1393,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               {proofReviewGoal && (() => {
                 const goalProofFiles = parseGoalProofFiles(proofReviewGoal);
                 const goalProofStatus = String(proofReviewGoal.proof_review_status || 'Not Submitted');
+                const goalProofApproved = goalProofStatus === 'Approved';
                 const hasGoalProof = goalProofFiles.length > 0;
                 return (
                   <div className="rounded-lg border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-900/15 p-3 space-y-2">
@@ -1440,31 +1441,35 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [proofReviewGoal.id]: e.target.value }))}
                           className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
                           placeholder="Final proof review note (optional)"
-                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || goalProofApproved}
                         />
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Approved')}
-                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
-                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                          >
-                            Approve Final Proof
-                          </button>
-                          <button
-                            onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Needs Revision')}
-                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
-                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                          >
-                            Needs Revision
-                          </button>
-                          <button
-                            onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Rejected')}
-                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
-                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                          >
-                            Reject
-                          </button>
-                        </div>
+                        {goalProofApproved ? (
+                          <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Approved')}
+                              disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                            >
+                              Approve Final Proof
+                            </button>
+                            <button
+                              onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Needs Revision')}
+                              disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                            >
+                              Needs Revision
+                            </button>
+                            <button
+                              onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Rejected')}
+                              disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -3005,6 +3010,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             {proofReviewGoal && (() => {
               const goalProofFiles = parseGoalProofFiles(proofReviewGoal);
               const goalProofStatus = String(proofReviewGoal.proof_review_status || 'Not Submitted');
+              const goalProofApproved = goalProofStatus === 'Approved';
               const hasGoalProof = goalProofFiles.length > 0;
               return (
                 <div className="rounded-lg border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-900/15 p-3 space-y-2">
@@ -3052,31 +3058,35 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [proofReviewGoal.id]: e.target.value }))}
                         className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
                         placeholder="Final proof review note (optional)"
-                        disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                        disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || goalProofApproved}
                       />
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Approved')}
-                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
-                          className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                        >
-                          Approve Final Proof
-                        </button>
-                        <button
-                          onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Needs Revision')}
-                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
-                          className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                        >
-                          Needs Revision
-                        </button>
-                        <button
-                          onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Rejected')}
-                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
-                          className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                        >
-                          Reject
-                        </button>
-                      </div>
+                      {goalProofApproved ? (
+                        <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Approved')}
+                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                          >
+                            Approve Final Proof
+                          </button>
+                          <button
+                            onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Needs Revision')}
+                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                          >
+                            Needs Revision
+                          </button>
+                          <button
+                            onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Rejected')}
+                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

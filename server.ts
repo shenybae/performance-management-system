@@ -4078,7 +4078,7 @@ async function startServer() {
 
       if (!goalId || !memberId || !title) return res.status(400).json({ error: 'Invalid task payload' });
 
-      const goalRows: any = await query('SELECT id, employee_id, leader_id, department FROM goals WHERE id = ?', [goalId]);
+      const goalRows: any = await query('SELECT id, employee_id, leader_id, department, proof_review_status FROM goals WHERE id = ?', [goalId]);
       const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
       if (!goal) return res.status(404).json({ error: 'Goal not found' });
 
@@ -4382,6 +4382,20 @@ async function startServer() {
         if (Number(goal.leader_id) === Number(actor.id)) allowed = true;
       }
       if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+      if (String(goal?.proof_review_status || '').trim() === 'Approved') {
+        await query(
+          `UPDATE goal_member_tasks
+           SET status = 'Completed',
+               progress = 100,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE goal_id = ?
+             AND deleted_at IS NULL
+             AND (COALESCE(status, 'Not Started') <> 'Completed' OR COALESCE(progress, 0) < 100)`,
+          [goalId]
+        );
+        await recomputeGoalProgress(goalId);
+      }
 
       const rows: any = await query(
         `SELECT t.*, e.name as member_name, COALESCE(u.full_name, u.username, u.email) as reviewer_name
