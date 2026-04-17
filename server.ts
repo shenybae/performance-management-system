@@ -4527,7 +4527,7 @@ async function startServer() {
 
         if (reviewedStatus === 'Approved') {
           sets.push('status = ?');
-          vals.push('Completed');
+          vals.push('In Progress');
           sets.push('progress = ?');
           vals.push(TASK_PROGRESS_REVIEW_APPROVED);
         } else if (reviewedStatus === 'Needs Revision') {

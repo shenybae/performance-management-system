@@ -818,7 +818,7 @@ export const CareerDashboard = () => {
     const applyReviewOutcomeLocally = (task: any) => {
       const reviewStatus = String(updates?.proof_review_status || '');
       if (reviewStatus === 'Approved') {
-        return { ...task, ...updates, status: 'Completed', progress: 75 };
+        return { ...task, ...updates, status: 'In Progress', progress: 75 };
       }
       if (reviewStatus === 'Needs Revision') {
         const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));
@@ -1868,9 +1868,15 @@ export const CareerDashboard = () => {
         {selectedTaskBoardGoal && (() => {
           const goalId = Number(selectedTaskBoardGoal.id);
           const memberTasks = getGoalMemberTasks(selectedTaskBoardGoal);
-          const completedCount = memberTasks.filter((t: any) => String(t?.status || '') === 'Completed').length;
-          const inProgressCount = memberTasks.filter((t: any) => String(t?.status || '') === 'In Progress').length;
-          const blockedCount = memberTasks.filter((t: any) => String(t?.status || '') === 'Blocked').length;
+          const effectiveTaskStatus = (task: any) => {
+            const reviewStatus = String(task?.proof_review_status || 'Not Submitted');
+            const progress = Number(task?.progress || 0);
+            if (reviewStatus === 'Approved' && progress < 100) return 'In Progress';
+            return String(task?.status || 'Not Started');
+          };
+          const completedCount = memberTasks.filter((t: any) => effectiveTaskStatus(t) === 'Completed').length;
+          const inProgressCount = memberTasks.filter((t: any) => effectiveTaskStatus(t) === 'In Progress').length;
+          const blockedCount = memberTasks.filter((t: any) => effectiveTaskStatus(t) === 'Blocked').length;
           const pendingProofCount = memberTasks.filter((t: any) => String(t?.proof_review_status || '') === 'Pending Review').length;
           const withBriefCount = memberTasks.filter((t: any) => parseTaskBriefFiles(t).length > 0).length;
           return (
@@ -1923,7 +1929,21 @@ export const CareerDashboard = () => {
 
                       <div className="rounded-lg border border-dashed border-emerald-300 dark:border-emerald-800 bg-white/70 dark:bg-slate-900/40 p-3 space-y-2">
                         <label className="block text-[10px] font-bold uppercase text-slate-500">Upload Final Proof Files</label>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <label
+                            htmlFor={`goal-final-proof-${goalId}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-600 text-white cursor-pointer hover:bg-emerald-700"
+                          >
+                            <Upload size={12} /> Choose Files
+                          </label>
+                          <span className="text-[11px] text-slate-500">
+                            {goalDraft.files.length > 0
+                              ? `${goalDraft.files.length} file${goalDraft.files.length > 1 ? 's' : ''} selected`
+                              : 'No files selected'}
+                          </span>
+                        </div>
                         <input
+                          id={`goal-final-proof-${goalId}`}
                           type="file"
                           multiple
                           accept="*/*"
@@ -1931,7 +1951,7 @@ export const CareerDashboard = () => {
                             void handleGoalProofUpload(goalId, e.target.files || []);
                             e.currentTarget.value = '';
                           }}
-                          className="block w-full text-[11px] text-slate-600 dark:text-slate-300"
+                          className="hidden"
                         />
 
                         {goalDraft.files.length > 0 && (
@@ -1992,6 +2012,7 @@ export const CareerDashboard = () => {
                   {memberTasks.map((t: any, index: number) => {
                     const progressValue = Number(t.progress || 0);
                     const proofReviewStatus = String(t.proof_review_status || 'Not Submitted');
+                    const taskStatusValue = proofReviewStatus === 'Approved' && progressValue < 100 ? 'In Progress' : (t.status || 'Not Started');
                     const proofDecisionFinalized = proofReviewStatus === 'Approved';
                     const proofFiles = parseTaskProofFiles(t);
                     const hasProof = proofFiles.length > 0;
@@ -2046,7 +2067,7 @@ export const CareerDashboard = () => {
                               <div className={`h-2 rounded-full ${progressValue >= 100 ? 'bg-emerald-500' : progressValue >= 50 ? 'bg-teal-500' : 'bg-amber-500'}`} style={{ width: `${progressValue}%` }} />
                             </div>
                             <span className="text-base font-bold text-slate-700 dark:text-slate-200 w-12 text-right">{progressValue}%</span>
-                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statusColors[t.status || 'Not Started']}`}>{t.status || 'Not Started'}</span>
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statusColors[taskStatusValue] || statusColors['Not Started']}`}>{taskStatusValue}</span>
                           </div>
                         </div>
 
