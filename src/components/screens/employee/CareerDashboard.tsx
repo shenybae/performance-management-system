@@ -104,6 +104,12 @@ type TaskProofFile = {
   proof_file_type: string;
 };
 
+type GoalProofFile = {
+  proof_file_data: string;
+  proof_file_name: string;
+  proof_file_type: string;
+};
+
 const parseTaskBriefFiles = (task: any): TaskBriefFile[] => {
   const rawData = String(task?.brief_file_data || '').trim();
   const fallbackName = String(task?.brief_file_name || 'Task brief').trim();
@@ -160,6 +166,34 @@ const parseTaskProofFiles = (task: any): TaskProofFile[] => {
   }];
 };
 
+const parseGoalProofFiles = (goal: any): GoalProofFile[] => {
+  const rawData = String(goal?.proof_image || '').trim();
+  const fallbackName = String(goal?.proof_file_name || 'Final proof').trim();
+  const fallbackType = String(goal?.proof_file_type || 'application/octet-stream').trim();
+  if (!rawData) return [];
+
+  if (rawData.startsWith('[')) {
+    try {
+      const arr = JSON.parse(rawData);
+      if (Array.isArray(arr)) {
+        return arr
+          .map((item: any) => ({
+            proof_file_data: String(item?.proof_file_data || item?.data || '').trim(),
+            proof_file_name: String(item?.proof_file_name || item?.name || 'Final proof').trim(),
+            proof_file_type: String(item?.proof_file_type || item?.type || 'application/octet-stream').trim(),
+          }))
+          .filter((item: GoalProofFile) => !!item.proof_file_data);
+      }
+    } catch {}
+  }
+
+  return [{
+    proof_file_data: rawData,
+    proof_file_name: fallbackName,
+    proof_file_type: fallbackType,
+  }];
+};
+
 const readFileAsDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -200,6 +234,8 @@ export const CareerDashboard = () => {
   const [taskExtensionSubmittingId, setTaskExtensionSubmittingId] = useState<number | null>(null);
   const [proofDrafts, setProofDrafts] = useState<Record<number, { proof_files: TaskProofFile[]; proof_note: string }>>({});
   const [proofSubmittingTaskId, setProofSubmittingTaskId] = useState<number | null>(null);
+  const [goalProofDrafts, setGoalProofDrafts] = useState<Record<number, { files: GoalProofFile[]; note: string }>>({});
+  const [goalProofSubmittingId, setGoalProofSubmittingId] = useState<number | null>(null);
   const localUser = safeParseSession(localStorage.getItem('talentflow_user') || localStorage.getItem('user'));
 
   useEffect(() => { fetchData(); }, []);
@@ -283,6 +319,18 @@ export const CareerDashboard = () => {
       return next;
     });
   }, [myMemberTasks]);
+
+  useEffect(() => {
+    setGoalProofDrafts(prev => {
+      const next = { ...prev };
+      for (const g of leaderGoals) {
+        if (!next[g.id]) {
+          next[g.id] = { files: [], note: '' };
+        }
+      }
+      return next;
+    });
+  }, [leaderGoals]);
 
   const fetchData = async () => {
     let account: any = {};
@@ -665,6 +713,95 @@ export const CareerDashboard = () => {
       window.notify?.(e?.message || 'Failed to submit proof', 'error');
     } finally {
       setProofSubmittingTaskId(null);
+    }
+  };
+
+  const handleGoalProofUpload = async (goalId: number, files?: FileList | File[]) => {
+    const selected = Array.from(files || []);
+    if (!selected.length) return;
+
+    try {
+      const uploadedFiles = await Promise.all(selected.map(async (file) => ({
+        proof_file_data: await readFileAsDataUrl(file),
+        proof_file_name: file.name,
+        proof_file_type: file.type || 'application/octet-stream',
+      })));
+
+      setGoalProofDrafts(prev => {
+        const current = prev[goalId] || { files: [], note: '' };
+        return {
+          ...prev,
+          [goalId]: {
+            ...current,
+            files: [...(current.files || []), ...uploadedFiles],
+          },
+        };
+      });
+    } catch {
+      window.notify?.('Failed to read selected final proof files', 'error');
+    }
+  };
+
+  const removeGoalProofDraftFile = (goalId: number, index: number) => {
+    setGoalProofDrafts(prev => {
+      const current = prev[goalId] || { files: [], note: '' };
+      return {
+        ...prev,
+        [goalId]: {
+          ...current,
+          files: (current.files || []).filter((_, i) => i !== index),
+        },
+      };
+    });
+  };
+
+  const submitGoalFinalProof = async (goal: any) => {
+    const goalId = Number(goal?.id || 0);
+    if (!goalId) return;
+
+    const draft = goalProofDrafts[goalId] || { files: [], note: '' };
+    const files = Array.isArray(draft.files) ? draft.files : [];
+    const note = String(draft.note || '').trim();
+    if (!files.length) {
+      window.notify?.('Please attach at least one final proof file', 'error');
+      return;
+    }
+    if (!(await appConfirm('Submit this final proof to your manager for review?', { title: 'Submit Final Proof', confirmText: 'Submit', icon: 'success' }))) return;
+
+    setGoalProofSubmittingId(goalId);
+    try {
+      const res = await fetch(`/api/goals/${goalId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          proof_files: files,
+          proof_image: JSON.stringify(files),
+          proof_file_name: String(files[0]?.proof_file_name || ''),
+          proof_file_type: String(files[0]?.proof_file_type || 'application/octet-stream'),
+          proof_note: note,
+          proof_submitted_at: new Date().toISOString(),
+          proof_review_status: 'Pending Review',
+        }),
+      });
+      if (!res.ok) {
+        let msg = 'Failed to submit final proof';
+        try {
+          const err = await res.json();
+          if (err?.error) msg = String(err.error);
+        } catch {}
+        throw new Error(msg);
+      }
+
+      window.notify?.('Final proof submitted to manager', 'success');
+      setGoalProofDrafts(prev => ({
+        ...prev,
+        [goalId]: { files: [], note: '' },
+      }));
+      await fetchData();
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to submit final proof', 'error');
+    } finally {
+      setGoalProofSubmittingId(null);
     }
   };
   const handleUpdateLeaderTask = async (
@@ -1739,82 +1876,113 @@ export const CareerDashboard = () => {
           return (
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_320px] gap-4 items-start">
               <div>
-                {/* Final Proof Submission Section (for Team Leaders) */}
-                <div className="mb-4 p-4 rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-900/10">
-                  <h3 className="text-sm font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mb-3">Final Proof for Manager Review</h3>
-                  <div className="space-y-3">
-                    {selectedTaskBoardGoal.proof_image ? (
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[10px] font-bold uppercase text-slate-500">Submitted Final Proof</span>
-                          <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${
-                            String(selectedTaskBoardGoal.proof_review_status || 'Not Submitted') === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' :
-                            String(selectedTaskBoardGoal.proof_review_status || 'Not Submitted') === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' :
-                            'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                          }`}>
-                            {String(selectedTaskBoardGoal.proof_review_status || 'Not Submitted')}
-                          </span>
+                {(() => {
+                  const goalProofStatus = String(selectedTaskBoardGoal?.proof_review_status || 'Not Submitted');
+                  const submittedGoalProofFiles = parseGoalProofFiles(selectedTaskBoardGoal);
+                  const goalDraft = goalProofDrafts[goalId] || { files: [], note: '' };
+                  const isGoalProofSubmitting = goalProofSubmittingId === goalId;
+                  return (
+                    <div className="mb-4 p-4 rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-900/10">
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <h3 className="text-sm font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Final Proof for Manager Review</h3>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${
+                          goalProofStatus === 'Approved'
+                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                            : goalProofStatus === 'Pending Review'
+                              ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                              : goalProofStatus === 'Needs Revision' || goalProofStatus === 'Rejected'
+                                ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'
+                        }`}>
+                          {goalProofStatus}
+                        </span>
+                      </div>
+
+                      {submittedGoalProofFiles.length > 0 ? (
+                        <div className="space-y-2 mb-3">
+                          <p className="text-[10px] font-bold uppercase text-slate-500">Submitted Final Proof</p>
+                          {submittedGoalProofFiles.map((file, fileIndex) => (
+                            <div key={`goal-proof-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
+                              <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
+                              <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                            </div>
+                          ))}
+                          {selectedTaskBoardGoal.proof_note && (
+                            <p className="text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Submitted note:</span> {selectedTaskBoardGoal.proof_note}</p>
+                          )}
+                          {selectedTaskBoardGoal.proof_submitted_at && (
+                            <p className="text-[10px] text-slate-500">Submitted: {new Date(selectedTaskBoardGoal.proof_submitted_at).toLocaleDateString()}</p>
+                          )}
+                          {selectedTaskBoardGoal.proof_review_note && (
+                            <p className="text-[10px] text-slate-500 italic">Manager note: {selectedTaskBoardGoal.proof_review_note}</p>
+                          )}
                         </div>
-                        {(() => {
-                          const goalProofFiles = (() => {
-                            const rawData = String(selectedTaskBoardGoal?.proof_image || '').trim();
-                            const fallback = String(selectedTaskBoardGoal?.proof_file_name || 'Final proof').trim();
-                            const fallbackType = String(selectedTaskBoardGoal?.proof_file_type || 'application/octet-stream').trim();
-                            if (!rawData) return [];
-                            if (rawData.startsWith('[')) {
-                              try {
-                                const parsed = JSON.parse(rawData);
-                                if (Array.isArray(parsed)) {
-                                  return parsed.map((item: any) => ({
-                                    proof_file_data: String(item?.proof_file_data || item?.data || '').trim(),
-                                    proof_file_name: String(item?.proof_file_name || item?.name || 'Final proof').trim(),
-                                    proof_file_type: String(item?.proof_file_type || item?.type || 'application/octet-stream').trim(),
-                                  })).filter((item: any) => !!item.proof_file_data);
-                                }
-                              } catch {}
-                            }
-                            return [{
-                              proof_file_data: rawData,
-                              proof_file_name: fallback,
-                              proof_file_type: fallbackType,
-                            }];
-                          })();
-                          return (
-                            <>
-                              <div className="space-y-2">
-                                {goalProofFiles.map((file, fileIndex) => (
-                                  <div key={`goal-proof-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
-                                    <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
-                                    <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
-                                  </div>
-                                ))}
+                      ) : (
+                        <p className="text-[11px] text-slate-500 mb-3">No final proof submitted yet. Upload files and add notes below.</p>
+                      )}
+
+                      <div className="rounded-lg border border-dashed border-emerald-300 dark:border-emerald-800 bg-white/70 dark:bg-slate-900/40 p-3 space-y-2">
+                        <label className="block text-[10px] font-bold uppercase text-slate-500">Upload Final Proof Files</label>
+                        <input
+                          type="file"
+                          multiple
+                          accept="*/*"
+                          onChange={(e) => {
+                            void handleGoalProofUpload(goalId, e.target.files || []);
+                            e.currentTarget.value = '';
+                          }}
+                          className="block w-full text-[11px] text-slate-600 dark:text-slate-300"
+                        />
+
+                        {goalDraft.files.length > 0 && (
+                          <div className="space-y-2">
+                            {goalDraft.files.map((file, index) => (
+                              <div key={`goal-draft-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
+                                <div className="mb-1 flex items-center justify-between gap-2">
+                                  <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Draft file ${index + 1}`}</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeGoalProofDraftFile(goalId, index)}
+                                    className="text-[10px] font-bold text-red-600 hover:text-red-700"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                                <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
                               </div>
-                              {selectedTaskBoardGoal.proof_note && (
-                                <p className="text-[10px] text-slate-600 dark:text-slate-300 mt-2"><span className="font-bold">Note:</span> {selectedTaskBoardGoal.proof_note}</p>
-                              )}
-                              {selectedTaskBoardGoal.proof_submitted_at && (
-                                <p className="text-[10px] text-slate-500 mt-1">Submitted: {new Date(selectedTaskBoardGoal.proof_submitted_at).toLocaleDateString()}</p>
-                              )}
-                              {selectedTaskBoardGoal.proof_review_note && (
-                                <p className="text-[10px] text-slate-500 italic mt-1">Manager note: {selectedTaskBoardGoal.proof_review_note}</p>
-                              )}
-                            </>
-                          );
-                        })()}
+                            ))}
+                          </div>
+                        )}
+
+                        <label className="block text-[10px] font-bold uppercase text-slate-500 mt-1">Final Proof Note</label>
+                        <textarea
+                          rows={2}
+                          value={goalDraft.note}
+                          onChange={(e) => setGoalProofDrafts(prev => ({
+                            ...prev,
+                            [goalId]: {
+                              files: prev[goalId]?.files || [],
+                              note: e.target.value,
+                            },
+                          }))}
+                          className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                          placeholder="What did the team complete? Add context for manager review."
+                        />
+
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => void submitGoalFinalProof(selectedTaskBoardGoal)}
+                            disabled={isGoalProofSubmitting || goalDraft.files.length === 0}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            {isGoalProofSubmitting ? 'Submitting...' : 'Submit Final Proof to Manager'}
+                          </button>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="text-center py-3">
-                        <p className="text-[10px] text-slate-500">No final proof submitted yet. Submit your completed goal proof for manager review.</p>
-                        <button
-                          onClick={() => setLeaderGoalOpenId(Number(selectedTaskBoardGoal.id))}
-                          className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 mt-2"
-                        >
-                          Submit Final Proof →
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                    </div>
+                  );
+                })()}
 
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">Task Board ({memberTasks.length})</p>
                 {memberTasks.length === 0 ? (
