@@ -328,19 +328,11 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
         <Card className="xl:col-span-2">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
             <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">Account Information</h3>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsProfileAccountModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-teal-deep dark:hover:text-teal-green bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-              >
-                <Camera size={12} /> View Profile + Account
+            {!editing && canEditAccountInfo && (
+              <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-teal-deep dark:hover:text-teal-green bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                <Edit3 size={12} /> Edit
               </button>
-              {!editing && canEditAccountInfo && (
-                <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-teal-deep dark:hover:text-teal-green bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                  <Edit3 size={12} /> Edit
-                </button>
-              )}
-            </div>
+            )}
           </div>
           {!canEditAccountInfo && (
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Only HR admin can edit account information.</p>
@@ -474,7 +466,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
           <p className="text-sm text-slate-500 dark:text-slate-400">Theme toggle is available in the sidebar.</p>
           <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
             <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Quick Tip</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Use “View Profile + Account” to quickly verify how your public identity appears.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Use "Quick Profile View" to quickly verify how your public identity appears.</p>
           </div>
         </Card>
       </div>

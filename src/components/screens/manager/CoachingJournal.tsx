@@ -911,7 +911,7 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
 
       {/* ACTION CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 mb-3">
-        <button onClick={() => setView('chat')} className="text-left">
+        <button onClick={() => setView('chat')} className="w-full text-left">
           <Card>
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center"><MessageSquare size={18} className="text-teal-600" /></div>
@@ -922,7 +922,7 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
             </div>
           </Card>
         </button>
-        <button onClick={() => setView('elearning')} className="text-left">
+        <button onClick={() => setView('elearning')} className="w-full text-left">
           <Card>
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center"><GraduationCap size={18} className="text-purple-600" /></div>
@@ -933,7 +933,7 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
             </div>
           </Card>
         </button>
-        <button onClick={() => setView('weaknessAnalysis')} className="text-left">
+        <button onClick={() => setView('weaknessAnalysis')} className="w-full text-left">
           <Card>
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><Brain size={18} className="text-orange-600" /></div>
