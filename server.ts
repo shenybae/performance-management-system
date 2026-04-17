@@ -4051,10 +4051,18 @@ async function startServer() {
          LEFT JOIN goals g ON g.id = t.goal_id
          LEFT JOIN employees e ON e.id = t.member_employee_id
          LEFT JOIN users u ON u.id = t.proof_reviewed_by
-         WHERE t.member_employee_id = ?
-           AND t.deleted_at IS NULL
+          WHERE (
+            t.member_employee_id = ?
+            OR EXISTS (
+              SELECT 1
+              FROM goal_assignees ga
+              WHERE ga.goal_id = t.goal_id
+                AND ga.employee_id = ?
+            )
+          )
+          AND t.deleted_at IS NULL
          ORDER BY COALESCE(t.updated_at, t.created_at) DESC`,
-        [actorEmployeeId]
+        [actorEmployeeId, actorEmployeeId]
       );
       res.json(Array.isArray(rows) ? rows : []);
     } catch (err) {
