@@ -4316,7 +4316,14 @@ async function startServer() {
       );
       const progressRow = Array.isArray(progressRows) ? progressRows[0] : progressRows;
       const avgProgress = Math.max(0, Math.min(100, Number(progressRow?.avg_progress || 0)));
-      await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, task.goal_id]);
+      try {
+        await query('UPDATE goals SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [avgProgress, task.goal_id]);
+      } catch (goalUpdateErr: any) {
+        const msg = String(goalUpdateErr?.message || '').toLowerCase();
+        const missingUpdatedAt = String(goalUpdateErr?.code || '') === '42703' || msg.includes('updated_at') || msg.includes('no such column');
+        if (!missingUpdatedAt) throw goalUpdateErr;
+        await query('UPDATE goals SET progress = ? WHERE id = ?', [avgProgress, task.goal_id]);
+      }
 
       try {
         const updatedTaskRows: any = await query(
