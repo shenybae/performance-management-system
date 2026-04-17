@@ -4282,6 +4282,12 @@ async function startServer() {
         : [];
       const assigneeSubmittedProof = role === 'Employee' && !isGoalLeader && (b.proof_image !== undefined || b.proof_note !== undefined || submittedProofFiles.length > 0);
       const currentProofReviewStatus = String(task.proof_review_status || 'Not Submitted');
+      if (assigneeSubmittedProof && currentProofReviewStatus === 'Approved') {
+        return res.status(409).json({ error: 'Task already approved and closed' });
+      }
+      if (assigneeSubmittedProof && currentProofReviewStatus === 'Rejected') {
+        return res.status(409).json({ error: 'Task is closed. Only revision-requested tasks can be reopened' });
+      }
       if (assigneeSubmittedProof && currentProofReviewStatus === 'Pending Review') {
         const hasExistingProof = String(task.proof_image || '').trim().length > 0;
         if (hasExistingProof && Number(task.progress || 0) < 75) {
@@ -4329,6 +4335,9 @@ async function startServer() {
       }
 
       const reviewerSetStatus = !(role === 'Employee' && !isGoalLeader) && b.proof_review_status !== undefined;
+      if (reviewerSetStatus && String(task.proof_review_status || '') === 'Approved' && String(b.proof_review_status || '') !== 'Approved') {
+        return res.status(409).json({ error: 'Proof decision already finalized as Approved' });
+      }
       if (reviewerSetStatus) {
         const reviewedStatus = String(b.proof_review_status || '');
         const isReviewed = reviewedStatus === 'Approved' || reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected';

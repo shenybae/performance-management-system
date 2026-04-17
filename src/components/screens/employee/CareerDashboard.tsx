@@ -1411,6 +1411,7 @@ export const CareerDashboard = () => {
             <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
               {visibleDelegatedTasks.map((t: any) => {
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
+                const canOpenWorkspace = reviewStatus !== 'Approved';
                 const briefFiles = parseTaskBriefFiles(t);
                 return (
                   <div key={t.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-900/40">
@@ -1428,9 +1429,10 @@ export const CareerDashboard = () => {
                       <span className="text-[10px] text-slate-500">{briefFiles.length > 0 ? `${briefFiles.length} brief file${briefFiles.length > 1 ? 's' : ''} attached` : 'No task brief attached'}</span>
                       <button
                         onClick={() => setDelegatedTaskOpenId(Number(t.id))}
+                        disabled={!canOpenWorkspace}
                         className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300"
                       >
-                        Open Task Workspace
+                        {canOpenWorkspace ? 'Open Task Workspace' : 'Task Closed'}
                       </button>
                     </div>
                   </div>
@@ -1781,6 +1783,7 @@ export const CareerDashboard = () => {
                     const progressValue = taskProgressEdits[t.id] ?? Number(t.progress || 0);
                     const isProgressOpen = taskProgressOpenTaskId === t.id;
                     const proofReviewStatus = String(t.proof_review_status || 'Not Submitted');
+                    const proofDecisionFinalized = proofReviewStatus === 'Approved';
                     const proofFiles = parseTaskProofFiles(t);
                     const hasProof = proofFiles.length > 0;
                     const reviewNoteValue = taskReviewNotes[t.id] ?? String(t.proof_review_note || '');
@@ -1908,15 +1911,7 @@ export const CareerDashboard = () => {
                                 <div className="space-y-2">
                                   {proofFiles.map((file, fileIndex) => (
                                     <div key={`${file.proof_file_name}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
-                                      <div className="flex items-center justify-between gap-2">
-                                        <p className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Proof file ${fileIndex + 1}`}</p>
-                                        <button
-                                          onClick={() => setProofViewerTaskId(Number(t.id))}
-                                          className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
-                                        >
-                                          View Full File
-                                        </button>
-                                      </div>
+                                      <p className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Proof file ${fileIndex + 1}`}</p>
                                     </div>
                                   ))}
                                 </div>
@@ -1925,16 +1920,21 @@ export const CareerDashboard = () => {
                                 rows={2}
                                 value={reviewNoteValue}
                                 onChange={(e) => setTaskReviewNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
+                                readOnly={proofDecisionFinalized}
                                 className="w-full mt-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
                                 placeholder="Add review note (optional)"
                               />
                               <div className="mt-2">
-                                <button
-                                  onClick={() => setTaskReviewActionOpen(prev => ({ ...prev, [Number(t.id)]: !prev[Number(t.id)] }))}
-                                  className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
-                                >
-                                  {taskReviewActionOpen[Number(t.id)] ? 'Hide Review Actions' : 'Open Review Actions'}
-                                </button>
+                                {proofDecisionFinalized ? (
+                                  <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Review finalized as Approved. Actions are locked.</p>
+                                ) : (
+                                  <button
+                                    onClick={() => setTaskReviewActionOpen(prev => ({ ...prev, [Number(t.id)]: !prev[Number(t.id)] }))}
+                                    className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
+                                  >
+                                    {taskReviewActionOpen[Number(t.id)] ? 'Hide Review Actions' : 'Open Review Actions'}
+                                  </button>
+                                )}
                                 {taskReviewActionOpen[Number(t.id)] && (
                                   <div className="mt-2 flex flex-wrap gap-2">
                                     <button
@@ -2019,9 +2019,12 @@ export const CareerDashboard = () => {
           const sentProofFiles = parseTaskProofFiles(t);
           const extensionDraft = taskExtensionDrafts[t.id] || { requested_due_date: '', reason: '' };
           const reviewStatus = t.proof_review_status || 'Not Submitted';
-          const proofLocked = reviewStatus === 'Pending Review';
+          const proofLocked = reviewStatus !== 'Not Submitted' && reviewStatus !== 'Needs Revision';
           const proofFiles = proofLocked ? sentProofFiles : (Array.isArray(draft.proof_files) ? draft.proof_files : []);
           const proofNeedsRevision = reviewStatus === 'Needs Revision';
+          const proofApproved = reviewStatus === 'Approved';
+          const proofPending = reviewStatus === 'Pending Review';
+          const proofRejected = reviewStatus === 'Rejected';
           const pendingTaskExtension = myDeadlineExtensionRequests.find((r: any) => String(r.entity_type || '') === 'task' && Number(r.task_id) === Number(t.id) && String(r.status || '') === 'Pending');
           const briefFiles = parseTaskBriefFiles(t);
 
@@ -2132,7 +2135,7 @@ export const CareerDashboard = () => {
                   )}
                   {proofLocked && (
                     <div className="mt-3 rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/80 dark:bg-emerald-900/20 px-3 py-2">
-                      <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">Proof already submitted successfully and is pending review.</p>
+                      <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">{proofApproved ? 'Task approved. This task is now closed.' : proofPending ? 'Proof already submitted successfully and is pending review.' : 'Task closed. This task can be reopened only when revision is requested.'}</p>
                     </div>
                   )}
                   {proofNeedsRevision && (
@@ -2153,11 +2156,25 @@ export const CareerDashboard = () => {
                   />
                   <div className="mt-3 flex justify-end">
                     <button
-                      onClick={() => (proofLocked ? window.notify?.('Proof already submitted and pending review', 'success') : submitTaskProof(t.id))}
+                      onClick={() => {
+                        if (proofApproved) {
+                          window.notify?.('Task already approved and closed', 'success');
+                          return;
+                        }
+                        if (proofPending) {
+                          window.notify?.('Proof already submitted and pending review', 'success');
+                          return;
+                        }
+                        if (proofRejected) {
+                          window.notify?.('Task is closed. Only revision-requested tasks can be reopened.', 'error');
+                          return;
+                        }
+                        submitTaskProof(t.id);
+                      }}
                       disabled={proofSubmittingTaskId === t.id || proofLocked}
                       className="px-4 py-2 rounded-lg bg-teal-deep text-white text-sm font-bold hover:bg-teal-green disabled:opacity-50"
                     >
-                      {proofSubmittingTaskId === t.id ? 'Submitting...' : proofLocked ? 'Already Submitted' : proofNeedsRevision ? 'Resubmit For Review' : 'Submit For Review'}
+                      {proofSubmittingTaskId === t.id ? 'Submitting...' : proofApproved ? 'Approved - Closed' : proofPending ? 'Pending Review' : proofRejected ? 'Closed' : proofNeedsRevision ? 'Resubmit For Review' : 'Submit For Review'}
                     </button>
                   </div>
                 </div>
@@ -2256,7 +2273,7 @@ export const CareerDashboard = () => {
         open={!!proofViewerTask}
         title={proofViewerTask ? `Proof: ${proofViewerTask.proof_file_name || proofViewerTask.title || 'Task proof'}` : 'Proof Viewer'}
         onClose={() => setProofViewerTaskId(null)}
-        maxWidthClassName="max-w-[96vw]"
+        maxWidthClassName="max-w-4xl"
         bodyClassName="!max-h-[90vh]"
       >
         {proofViewerTask ? (() => {
