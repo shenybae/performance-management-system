@@ -3010,6 +3010,11 @@ async function startServer() {
 
       const { employee_id, statement, metric, target_date, title, status, progress, scope, department, team_name, delegation, priority, quarter, frequency, leader_id } = req.body;
       const targetEmployeeId = normalizeEmployeeId(employee_id);
+      const normalizedScope = String(scope || 'Individual').trim() || 'Individual';
+      const isIndividualScope = normalizedScope === 'Individual';
+      const normalizedLeaderId = isIndividualScope ? null : (leader_id ? parseInt(String(leader_id)) : null);
+      const normalizedDelegation = isIndividualScope ? null : (delegation || null);
+      const normalizedTeamName = isIndividualScope ? null : (team_name || null);
       
       // Department-scoped delegation: Manager can only delegate within their own department
       if (role === 'Manager') {
@@ -3026,7 +3031,7 @@ async function startServer() {
       const { assignee_ids } = req.body;
       const insertResult: any = await query(
         "INSERT INTO goals (employee_id, statement, metric, target_date, title, status, progress, scope, department, team_name, delegation, priority, quarter, frequency, leader_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
-        [targetEmployeeId, statement, metric, target_date, title || statement, status || 'Not Started', progress || 0, scope || 'Individual', department || null, team_name || null, delegation || null, priority || 'Medium', quarter || null, frequency || 'One-time', leader_id ? parseInt(String(leader_id)) : null]
+        [targetEmployeeId, statement, metric, target_date, title || statement, status || 'Not Started', progress || 0, normalizedScope, department || null, normalizedTeamName, normalizedDelegation, priority || 'Medium', quarter || null, frequency || 'One-time', normalizedLeaderId]
       );
       const newGoalId = insertResult?.insertId;
       if (newGoalId && Array.isArray(assignee_ids) && assignee_ids.length > 0) {
@@ -3049,8 +3054,8 @@ async function startServer() {
           }
         }
       }
-      if (newGoalId && leader_id) {
-        const lid = parseInt(String(leader_id));
+      if (newGoalId && normalizedLeaderId) {
+        const lid = parseInt(String(normalizedLeaderId));
         if (!isNaN(lid)) { try { await createNotification({ user_id: lid, type: 'info', message: 'You have been assigned as team leader for a goal', source: 'goals' }); } catch (e) {} }
       }
       res.json({ success: true });
