@@ -1994,10 +1994,11 @@ export const CareerDashboard = () => {
         {delegatedTaskOpen && (() => {
           const t = delegatedTaskOpen;
           const draft = proofDrafts[t.id] || { proof_files: parseTaskProofFiles(t), proof_note: t.proof_note || '' };
-          const proofFiles = Array.isArray(draft.proof_files) ? draft.proof_files : [];
+          const sentProofFiles = parseTaskProofFiles(t);
           const extensionDraft = taskExtensionDrafts[t.id] || { requested_due_date: '', reason: '' };
           const reviewStatus = t.proof_review_status || 'Not Submitted';
-          const proofLocked = reviewStatus === 'Pending Review' && proofFiles.length > 0;
+          const proofLocked = reviewStatus === 'Pending Review';
+          const proofFiles = proofLocked ? sentProofFiles : (Array.isArray(draft.proof_files) ? draft.proof_files : []);
           const proofNeedsRevision = reviewStatus === 'Needs Revision';
           const pendingTaskExtension = myDeadlineExtensionRequests.find((r: any) => String(r.entity_type || '') === 'task' && Number(r.task_id) === Number(t.id) && String(r.status || '') === 'Pending');
           const briefFiles = parseTaskBriefFiles(t);
@@ -2062,13 +2063,15 @@ export const CareerDashboard = () => {
                               >
                                 View Full File
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => removeProofAttachmentDraftFile(t.id, index)}
-                                className="text-xs font-bold text-red-600 hover:text-red-700"
-                              >
-                                Remove
-                              </button>
+                              {!proofLocked && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeProofAttachmentDraftFile(t.id, index)}
+                                  className="text-xs font-bold text-red-600 hover:text-red-700"
+                                >
+                                  Remove
+                                </button>
+                              )}
                             </div>
                           </div>
                           <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
