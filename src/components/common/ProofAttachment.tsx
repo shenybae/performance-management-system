@@ -6,6 +6,7 @@ interface ProofAttachmentProps {
   fileName?: string;
   mimeType?: string;
   compact?: boolean;
+  viewer?: boolean;
 }
 
 const isImageType = (mimeType?: string, src?: string) => {
@@ -44,7 +45,7 @@ const normalizeSrc = (src?: string, mimeType?: string) => {
   return value;
 };
 
-export const ProofAttachment = ({ src, fileName, mimeType, compact = false }: ProofAttachmentProps) => {
+export const ProofAttachment = ({ src, fileName, mimeType, compact = false, viewer = false }: ProofAttachmentProps) => {
   if (!src) return null;
 
   const resolvedSrc = normalizeSrc(src, mimeType);
@@ -124,11 +125,15 @@ export const ProofAttachment = ({ src, fileName, mimeType, compact = false }: Pr
 
       {image ? (
         <a href={resolvedSrc} target="_blank" rel="noreferrer" className="block">
-          <img src={resolvedSrc} alt={displayName} className="w-full max-h-56 object-contain rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800" />
+          <img
+            src={resolvedSrc}
+            alt={displayName}
+            className={`w-full object-contain rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 ${viewer ? 'max-h-[78vh]' : 'max-h-56'}`}
+          />
         </a>
       ) : pdf ? (
-        <object data={resolvedSrc} type="application/pdf" className="w-full h-64 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-          <div className="flex h-64 items-center justify-center text-center px-4 text-xs text-slate-500">
+        <object data={resolvedSrc} type="application/pdf" className={`w-full rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 ${viewer ? 'h-[78vh]' : 'h-64'}`}>
+          <div className={`flex items-center justify-center text-center px-4 text-xs text-slate-500 ${viewer ? 'h-[78vh]' : 'h-64'}`}>
             <div>
               <FileText size={22} className="mx-auto mb-2 text-slate-400" />
               <p>PDF preview is not available in this browser.</p>

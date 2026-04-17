@@ -1531,12 +1531,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           open={!!proofFileViewer}
           title={proofFileViewer ? `File Viewer: ${proofFileViewer.fileName || 'Attachment'}` : 'File Viewer'}
           onClose={() => setProofFileViewer(null)}
-          maxWidthClassName="max-w-5xl"
-          bodyClassName="space-y-3"
+          maxWidthClassName="max-w-[900px]"
+          bodyClassName="space-y-3 !max-h-[92vh]"
         >
           {proofFileViewer?.src ? (
             <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-              <ProofAttachment src={proofFileViewer.src} fileName={proofFileViewer.fileName} mimeType={proofFileViewer.mimeType} />
+              <ProofAttachment src={proofFileViewer.src} fileName={proofFileViewer.fileName} mimeType={proofFileViewer.mimeType} viewer />
             </div>
           ) : (
             <p className="text-sm text-slate-500">No file selected.</p>
@@ -3143,12 +3143,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         open={!!proofFileViewer}
         title={proofFileViewer ? `File Viewer: ${proofFileViewer.fileName || 'Attachment'}` : 'File Viewer'}
         onClose={() => setProofFileViewer(null)}
-        maxWidthClassName="max-w-5xl"
-        bodyClassName="space-y-3"
+        maxWidthClassName="max-w-[900px]"
+        bodyClassName="space-y-3 !max-h-[92vh]"
       >
         {proofFileViewer?.src ? (
           <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-            <ProofAttachment src={proofFileViewer.src} fileName={proofFileViewer.fileName} mimeType={proofFileViewer.mimeType} />
+            <ProofAttachment src={proofFileViewer.src} fileName={proofFileViewer.fileName} mimeType={proofFileViewer.mimeType} viewer />
           </div>
         ) : (
           <p className="text-sm text-slate-500">No file selected.</p>
