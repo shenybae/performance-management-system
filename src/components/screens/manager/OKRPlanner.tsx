@@ -29,6 +29,12 @@ type TaskProofFile = {
   proof_file_type: string;
 };
 
+type GoalProofFile = {
+  proof_file_data: string;
+  proof_file_name: string;
+  proof_file_type: string;
+};
+
 const parseTaskProofFiles = (task: any): TaskProofFile[] => {
   const rawData = String(task?.proof_image || '').trim();
   const fallbackName = String(task?.proof_file_name || 'Submitted proof').trim();
@@ -46,6 +52,34 @@ const parseTaskProofFiles = (task: any): TaskProofFile[] => {
             proof_file_type: String(item?.proof_file_type || item?.type || 'application/octet-stream').trim(),
           }))
           .filter((item: TaskProofFile) => !!item.proof_file_data);
+      }
+    } catch {}
+  }
+
+  return [{
+    proof_file_data: rawData,
+    proof_file_name: fallbackName,
+    proof_file_type: fallbackType,
+  }];
+};
+
+const parseGoalProofFiles = (goal: any): GoalProofFile[] => {
+  const rawData = String(goal?.proof_image || '').trim();
+  const fallbackName = String(goal?.proof_file_name || 'Final proof').trim();
+  const fallbackType = String(goal?.proof_file_type || 'application/octet-stream').trim();
+  if (!rawData) return [];
+
+  if (rawData.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(rawData);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item: any) => ({
+            proof_file_data: String(item?.proof_file_data || item?.data || '').trim(),
+            proof_file_name: String(item?.proof_file_name || item?.name || 'Final proof').trim(),
+            proof_file_type: String(item?.proof_file_type || item?.type || 'application/octet-stream').trim(),
+          }))
+          .filter((item: GoalProofFile) => !!item.proof_file_data);
       }
     } catch {}
   }
@@ -792,6 +826,35 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     }
   };
 
+  const reviewGoalFinalProof = async (goalId: number, status: 'Approved' | 'Needs Revision' | 'Rejected') => {
+    const actionText = status === 'Approved' ? 'approve' : status === 'Needs Revision' ? 'request revision for' : 'reject';
+    if (!(await appConfirm(`Are you sure you want to ${actionText} the final proof?`, { title: 'Confirm Final Proof Decision', confirmText: 'Confirm', icon: 'warning' }))) return;
+
+    const note = String(proofReviewNotes[goalId] || '').trim();
+    setProofReviewSubmittingTaskId(goalId);
+    try {
+      const res = await fetch(`/api/goals/${goalId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ proof_review_status: status, proof_review_note: note })
+      });
+      if (!res.ok) {
+        let msg = 'Failed to review final proof';
+        try {
+          const err = await res.json();
+          if (err?.error) msg = String(err.error);
+        } catch {}
+        throw new Error(msg);
+      }
+      window.notify?.(`Final proof ${status.toLowerCase()}`, 'success');
+      await Promise.all([fetchGoals(), refreshProofReviewTasks(goalId)]);
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to review final proof', 'error');
+    } finally {
+      setProofReviewSubmittingTaskId(null);
+    }
+  };
+
   // Keep proof review panel synced in real time while it is open.
   useEffect(() => {
     if (!proofReviewOpenGoal) return;
@@ -1322,17 +1385,81 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 px-3 py-2">
                 <p className="text-xs font-bold text-blue-700 dark:text-blue-300">Live sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - proofRealtimeSyncAt) / 1000))}s ago</p>
                 <div className="flex items-center gap-2">
-                  {proofReviewGoal && String(proofReviewGoal?.status || '') !== 'Completed' && (
-                    <button
-                      onClick={() => void approveGoalCompletion(Number(proofReviewGoal.id))}
-                      className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700"
-                    >
-                      Manager Approve Goal Completion
-                    </button>
-                  )}
                   <button onClick={() => void refreshProofReviewTasks(proofReviewOpenGoal)} className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30">Refresh proofs</button>
                 </div>
               </div>
+
+              {proofReviewGoal && (() => {
+                const goalProofFiles = parseGoalProofFiles(proofReviewGoal);
+                const goalProofStatus = String(proofReviewGoal.proof_review_status || 'Not Submitted');
+                const hasGoalProof = goalProofFiles.length > 0;
+                return (
+                  <div className="rounded-lg border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-900/15 p-3 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Final Goal Proof</p>
+                        <p className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80">Manager review actions are applied to this final proof.</p>
+                      </div>
+                      <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${goalProofStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : goalProofStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : goalProofStatus === 'Needs Revision' || goalProofStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
+                        {goalProofStatus}
+                      </span>
+                    </div>
+
+                    {!hasGoalProof ? (
+                      <p className="text-[11px] text-slate-500">No final proof has been submitted yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {goalProofFiles.map((file, fileIndex) => (
+                          <div key={`${proofReviewGoal.id}-goal-proof-${fileIndex}`} className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 p-2">
+                            <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
+                            <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {proofReviewGoal.proof_note && <p className="text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {proofReviewGoal.proof_note}</p>}
+                    {proofReviewGoal.proof_submitted_at && <p className="text-[10px] text-slate-500">Submitted: {new Date(proofReviewGoal.proof_submitted_at).toLocaleDateString()}</p>}
+                    {proofReviewGoal.proof_review_note && <p className="text-[10px] text-slate-500 italic">Latest manager note: {proofReviewGoal.proof_review_note}</p>}
+
+                    {hasGoalProof && (
+                      <div className="space-y-2">
+                        <textarea
+                          rows={2}
+                          value={proofReviewNotes[proofReviewGoal.id] ?? String(proofReviewGoal.proof_review_note || '')}
+                          onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [proofReviewGoal.id]: e.target.value }))}
+                          className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
+                          placeholder="Final proof review note (optional)"
+                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Approved')}
+                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                          >
+                            Approve Final Proof
+                          </button>
+                          <button
+                            onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Needs Revision')}
+                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                          >
+                            Needs Revision
+                          </button>
+                          <button
+                            onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Rejected')}
+                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {proofReviewLoadingGoal === proofReviewOpenGoal ? (
                 <p className="text-sm text-slate-500">Loading task proofs...</p>
@@ -1341,7 +1468,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               ) : (
                 (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
                   const reviewStatus = t.proof_review_status || 'Not Submitted';
-                  const uploadNote = proofUploadNotes[t.id] || '';
                   const proofFiles = parseTaskProofFiles(t);
                   const hasProof = proofFiles.length > 0;
                   return (
@@ -1356,38 +1482,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         </span>
                       </div>
 
-                      {!hasProof && (
-                        <div className="mb-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                          <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Attach Proof File</label>
-                          <div className="flex gap-1.5 items-end">
-                            <input
-                              type="file"
-                              accept="*/*"
-                              id={`proof-file-${t.id}`}
-                              className="hidden"
-                              disabled={proofUploadingTaskId === t.id}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file && proofReviewOpenGoal) {
-                                  uploadTaskProof(Number(t.id), proofReviewOpenGoal, file, uploadNote);
-                                  setProofUploadNotes(prev => ({ ...prev, [t.id]: '' }));
-                                }
-                              }}
-                            />
-                            <input
-                              type="text"
-                              placeholder="Add note (optional)"
-                              value={uploadNote}
-                              onChange={(e) => setProofUploadNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
-                              className="flex-1 p-1.5 rounded text-[10px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
-                              disabled={proofUploadingTaskId === t.id}
-                            />
-                            <label htmlFor={`proof-file-${t.id}`} className="cursor-pointer px-2 py-1 bg-blue-600 text-white text-[10px] font-bold rounded hover:bg-blue-700 disabled:opacity-50">
-                              {proofUploadingTaskId === t.id ? 'Uploading...' : 'Choose'}
-                            </label>
-                          </div>
-                        </div>
-                      )}
+                      {!hasProof && <p className="mb-2 text-[10px] text-slate-500">No delegated task proof uploaded yet.</p>}
 
                       {hasProof && (
                         <div className="mb-2 space-y-2 max-w-2xl">
@@ -1404,51 +1499,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
                       {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
 
-                      {hasProof && (
-                        <div className="space-y-2">
-                          <textarea
-                            rows={2}
-                            value={proofReviewNotes[t.id] ?? String(t.proof_review_note || '')}
-                            onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
-                            className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
-                            placeholder="Reviewer note (optional)"
-                            disabled={proofReviewSubmittingTaskId === t.id}
-                          />
-                          <div className="space-y-2">
-                            <button
-                              onClick={() => setProofReviewActionsOpen(prev => ({ ...prev, [Number(t.id)]: !prev[Number(t.id)] }))}
-                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700"
-                            >
-                              {proofReviewActionsOpen[Number(t.id)] ? 'Hide Review Actions' : 'Open Review Actions'}
-                            </button>
-                            {proofReviewActionsOpen[Number(t.id)] && (
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Approved')}
-                                  disabled={proofReviewSubmittingTaskId === t.id}
-                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                                >
-                                  {proofReviewSubmittingTaskId === t.id ? 'Saving...' : 'Approve'}
-                                </button>
-                                <button
-                                  onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Needs Revision')}
-                                  disabled={proofReviewSubmittingTaskId === t.id}
-                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                                >
-                                  Needs Revision
-                                </button>
-                                <button
-                                  onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Rejected')}
-                                  disabled={proofReviewSubmittingTaskId === t.id}
-                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                      {hasProof && <p className="text-[10px] text-slate-500">Delegated task proof is view-only evidence. Review actions are in the final goal proof section above.</p>}
                     </div>
                   );
                 })
@@ -2907,14 +2958,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 Live sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - proofRealtimeSyncAt) / 1000))}s ago
               </p>
               <div className="flex items-center gap-2">
-                {proofReviewGoal && String(proofReviewGoal?.status || '') !== 'Completed' && (
-                  <button
-                    onClick={() => void approveGoalCompletion(Number(proofReviewGoal.id))}
-                    className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700"
-                  >
-                    Manager Approve Goal Completion
-                  </button>
-                )}
                 <button
                   onClick={() => void refreshProofReviewTasks(proofReviewOpenGoal)}
                   className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
@@ -2924,6 +2967,78 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               </div>
             </div>
 
+            {proofReviewGoal && (() => {
+              const goalProofFiles = parseGoalProofFiles(proofReviewGoal);
+              const goalProofStatus = String(proofReviewGoal.proof_review_status || 'Not Submitted');
+              const hasGoalProof = goalProofFiles.length > 0;
+              return (
+                <div className="rounded-lg border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-900/15 p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Final Goal Proof</p>
+                      <p className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80">Manager review actions are applied to this final proof.</p>
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${goalProofStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : goalProofStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : goalProofStatus === 'Needs Revision' || goalProofStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
+                      {goalProofStatus}
+                    </span>
+                  </div>
+
+                  {!hasGoalProof ? (
+                    <p className="text-[11px] text-slate-500">No final proof has been submitted yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {goalProofFiles.map((file, fileIndex) => (
+                        <div key={`${proofReviewGoal.id}-goal-proof-${fileIndex}`} className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 p-2">
+                          <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
+                          <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {proofReviewGoal.proof_note && <p className="text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {proofReviewGoal.proof_note}</p>}
+                  {proofReviewGoal.proof_submitted_at && <p className="text-[10px] text-slate-500">Submitted: {new Date(proofReviewGoal.proof_submitted_at).toLocaleDateString()}</p>}
+                  {proofReviewGoal.proof_review_note && <p className="text-[10px] text-slate-500 italic">Latest manager note: {proofReviewGoal.proof_review_note}</p>}
+
+                  {hasGoalProof && (
+                    <div className="space-y-2">
+                      <textarea
+                        rows={2}
+                        value={proofReviewNotes[proofReviewGoal.id] ?? String(proofReviewGoal.proof_review_note || '')}
+                        onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [proofReviewGoal.id]: e.target.value }))}
+                        className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
+                        placeholder="Final proof review note (optional)"
+                        disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Approved')}
+                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                          className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                        >
+                          Approve Final Proof
+                        </button>
+                        <button
+                          onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Needs Revision')}
+                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                          className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                        >
+                          Needs Revision
+                        </button>
+                        <button
+                          onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Rejected')}
+                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                          className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {proofReviewLoadingGoal === proofReviewOpenGoal ? (
               <p className="text-sm text-slate-500">Loading task proofs...</p>
             ) : ((proofReviewTasksByGoal[proofReviewOpenGoal] || []).length === 0 ? (
@@ -2931,7 +3046,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             ) : (
               (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
-                const uploadNote = proofUploadNotes[t.id] || '';
                 const proofFiles = parseTaskProofFiles(t);
                 const hasProof = proofFiles.length > 0;
                 return (
@@ -2946,38 +3060,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       </span>
                     </div>
 
-                    {!hasProof && (
-                      <div className="mb-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                        <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">Attach Proof File</label>
-                        <div className="flex gap-1.5 items-end">
-                          <input
-                            type="file"
-                            accept="*/*"
-                            id={`proof-file-${t.id}`}
-                            className="hidden"
-                            disabled={proofUploadingTaskId === t.id}
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file && proofReviewOpenGoal) {
-                                uploadTaskProof(Number(t.id), proofReviewOpenGoal, file, uploadNote);
-                                setProofUploadNotes(prev => ({ ...prev, [t.id]: '' }));
-                              }
-                            }}
-                          />
-                          <input
-                            type="text"
-                            placeholder="Add note (optional)"
-                            value={uploadNote}
-                            onChange={(e) => setProofUploadNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
-                            className="flex-1 p-1.5 rounded text-[10px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
-                            disabled={proofUploadingTaskId === t.id}
-                          />
-                          <label htmlFor={`proof-file-${t.id}`} className="cursor-pointer px-2 py-1 bg-blue-600 text-white text-[10px] font-bold rounded hover:bg-blue-700 disabled:opacity-50">
-                            {proofUploadingTaskId === t.id ? 'Uploading...' : 'Choose'}
-                          </label>
-                        </div>
-                      </div>
-                    )}
+                    {!hasProof && <p className="mb-2 text-[10px] text-slate-500">No delegated task proof uploaded yet.</p>}
 
                     {hasProof && (
                       <div className="mb-2 space-y-2 max-w-xl">
@@ -2994,51 +3077,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
                     {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
 
-                    {hasProof && (
-                      <div className="space-y-2">
-                        <textarea
-                          rows={2}
-                          value={proofReviewNotes[t.id] ?? String(t.proof_review_note || '')}
-                          onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
-                          className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
-                          placeholder="Reviewer note (optional)"
-                          disabled={proofReviewSubmittingTaskId === t.id}
-                        />
-                        <div className="space-y-2">
-                          <button
-                            onClick={() => setProofReviewActionsOpen(prev => ({ ...prev, [Number(t.id)]: !prev[Number(t.id)] }))}
-                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700"
-                          >
-                            {proofReviewActionsOpen[Number(t.id)] ? 'Hide Review Actions' : 'Open Review Actions'}
-                          </button>
-                          {proofReviewActionsOpen[Number(t.id)] && (
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Approved')}
-                                disabled={proofReviewSubmittingTaskId === t.id}
-                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                              >
-                                {proofReviewSubmittingTaskId === t.id ? 'Saving...' : 'Approve'}
-                              </button>
-                              <button
-                                onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Needs Revision')}
-                                disabled={proofReviewSubmittingTaskId === t.id}
-                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                              >
-                                Needs Revision
-                              </button>
-                              <button
-                                onClick={() => reviewTaskProof(Number(t.id), proofReviewOpenGoal, 'Rejected')}
-                                disabled={proofReviewSubmittingTaskId === t.id}
-                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                    {hasProof && <p className="text-[10px] text-slate-500">Delegated task proof is view-only evidence. Review actions are in the final goal proof section above.</p>}
                   </div>
                 );
               })

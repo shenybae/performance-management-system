@@ -384,6 +384,15 @@ async function initDb() {
       statement TEXT,
       metric TEXT,
       target_date TEXT,
+      proof_image TEXT,
+      proof_file_name TEXT,
+      proof_file_type TEXT,
+      proof_note TEXT,
+      proof_submitted_at TEXT,
+      proof_review_status TEXT DEFAULT 'Not Submitted',
+      proof_review_note TEXT,
+      proof_reviewed_by INTEGER,
+      proof_reviewed_at TEXT,
       FOREIGN KEY(employee_id) REFERENCES employees(id)
     )`,
     `CREATE TABLE IF NOT EXISTS goal_assignees (
@@ -978,6 +987,15 @@ async function initDb() {
       'ALTER TABLE goals ADD COLUMN quarter TEXT',
       'ALTER TABLE goals ADD COLUMN frequency TEXT DEFAULT \'One-time\'',
       'ALTER TABLE goals ADD COLUMN leader_id INTEGER',
+      'ALTER TABLE goals ADD COLUMN proof_image TEXT',
+      'ALTER TABLE goals ADD COLUMN proof_file_name TEXT',
+      'ALTER TABLE goals ADD COLUMN proof_file_type TEXT',
+      'ALTER TABLE goals ADD COLUMN proof_note TEXT',
+      'ALTER TABLE goals ADD COLUMN proof_submitted_at TEXT',
+      'ALTER TABLE goals ADD COLUMN proof_review_status TEXT DEFAULT \'Not Submitted\'',
+      'ALTER TABLE goals ADD COLUMN proof_review_note TEXT',
+      'ALTER TABLE goals ADD COLUMN proof_reviewed_by INTEGER',
+      'ALTER TABLE goals ADD COLUMN proof_reviewed_at TEXT',
       'ALTER TABLE goal_assignees ADD COLUMN assigned_by INTEGER',
       'ALTER TABLE goal_assignees ADD COLUMN assigned_by_role TEXT',
       'ALTER TABLE goal_assignees ADD COLUMN assigned_at TEXT',
@@ -3070,11 +3088,86 @@ async function startServer() {
     try {
       const actor = (req as any).user || {};
       const role = actor.role;
-      if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
 
-      const existingRows: any = await query('SELECT id, employee_id, department, status, progress FROM goals WHERE id = ?', [req.params.id]);
+      const existingRows: any = await query('SELECT id, employee_id, leader_id, department, status, progress, proof_image, proof_review_status FROM goals WHERE id = ?', [req.params.id]);
       const existing = Array.isArray(existingRows) ? existingRows[0] : existingRows;
       if (!existing) return res.status(404).json({ error: 'Goal not found' });
+
+      const isGoalLeaderUser = Number(existing?.leader_id || 0) > 0 && Number(existing?.leader_id) === Number(actor?.id || 0);
+      if (!isPrivilegedRole(role) && role !== 'Manager' && !isGoalLeaderUser) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      const b = req.body || {};
+
+      if (isGoalLeaderUser && !isPrivilegedRole(role) && role !== 'Manager') {
+        const submittedProofFiles = Array.isArray(b.proof_files)
+          ? b.proof_files
+              .map((item: any) => ({
+                proof_file_data: String(item?.proof_file_data || item?.data || '').trim(),
+                proof_file_name: String(item?.proof_file_name || item?.name || '').trim(),
+                proof_file_type: String(item?.proof_file_type || item?.type || 'application/octet-stream').trim() || 'application/octet-stream',
+              }))
+              .filter((item: any) => !!item.proof_file_data)
+          : [];
+
+        const disallowedFields = Object.keys(b).filter((key) => ![
+          'proof_files',
+          'proof_image',
+          'proof_file_name',
+          'proof_file_type',
+          'proof_note',
+          'proof_submitted_at',
+        ].includes(key));
+        if (disallowedFields.length > 0) {
+          return res.status(403).json({ error: 'Goal leaders can only submit final proof fields' });
+        }
+
+        const proofImagePayload = submittedProofFiles.length > 0
+          ? JSON.stringify(submittedProofFiles)
+          : String(b.proof_image || '').trim();
+        const proofFileName = submittedProofFiles.length > 0
+          ? String(submittedProofFiles[0]?.proof_file_name || '').trim() || null
+          : (b.proof_file_name !== undefined ? String(b.proof_file_name || '').trim() || null : null);
+        const proofFileType = submittedProofFiles.length > 0
+          ? String(submittedProofFiles[0]?.proof_file_type || 'application/octet-stream').trim() || 'application/octet-stream'
+          : (b.proof_file_type !== undefined ? String(b.proof_file_type || '').trim() || 'application/octet-stream' : null);
+
+        const leaderSets: string[] = [];
+        const leaderVals: any[] = [];
+
+        if (b.proof_note !== undefined) {
+          leaderSets.push('proof_note = ?');
+          leaderVals.push(String(b.proof_note || '').trim() || null);
+        }
+
+        if (proofImagePayload) {
+          leaderSets.push('proof_image = ?');
+          leaderVals.push(proofImagePayload);
+          leaderSets.push('proof_file_name = ?');
+          leaderVals.push(proofFileName);
+          leaderSets.push('proof_file_type = ?');
+          leaderVals.push(proofFileType);
+          leaderSets.push('proof_submitted_at = ?');
+          leaderVals.push(String(b.proof_submitted_at || '').trim() || new Date().toISOString());
+          leaderSets.push('proof_review_status = ?');
+          leaderVals.push('Pending Review');
+          leaderSets.push('proof_review_note = ?');
+          leaderVals.push(null);
+          leaderSets.push('proof_reviewed_by = ?');
+          leaderVals.push(null);
+          leaderSets.push('proof_reviewed_at = ?');
+          leaderVals.push(null);
+        }
+
+        if (leaderSets.length === 0) {
+          return res.status(400).json({ error: 'No final proof fields to update' });
+        }
+
+        leaderVals.push(req.params.id);
+        await query(`UPDATE goals SET ${leaderSets.join(', ')} WHERE id = ?`, leaderVals);
+        return res.json({ success: true });
+      }
 
       if (role === 'Manager') {
         const existingEmpId = normalizeEmployeeId(existing.employee_id);
@@ -3095,13 +3188,12 @@ async function startServer() {
         }
       }
 
-      const b = req.body;
       const normalizedProgress = b.progress !== undefined ? normalizeProgressValue(b.progress) : undefined;
       const normalizedStatus = b.status !== undefined ? String(b.status || '').trim() : undefined;
       const effectiveStatus = normalizeGoalStatusFromProgress(normalizedStatus ?? existing.status, normalizedProgress ?? existing.progress);
       const sets: string[] = [];
       const vals: any[] = [];
-      for (const k of ['statement', 'metric', 'target_date', 'title', 'status', 'progress', 'scope', 'department', 'team_name', 'delegation', 'priority', 'quarter', 'frequency', 'leader_id']) {
+      for (const k of ['statement', 'metric', 'target_date', 'title', 'status', 'progress', 'scope', 'department', 'team_name', 'delegation', 'priority', 'quarter', 'frequency', 'leader_id', 'proof_image', 'proof_file_name', 'proof_file_type', 'proof_note', 'proof_submitted_at', 'proof_review_status', 'proof_review_note']) {
         if (k === 'progress') {
           if (normalizedProgress !== undefined) { sets.push('progress = ?'); vals.push(normalizedProgress); }
           continue;
@@ -3112,6 +3204,41 @@ async function startServer() {
         }
         if (b[k] !== undefined) { sets.push(`${k} = ?`); vals.push(b[k]); }
       }
+
+      if (b.proof_review_status !== undefined) {
+        const reviewedStatus = String(b.proof_review_status || '').trim();
+        const hasExistingGoalProof = String(existing?.proof_image || '').trim().length > 0;
+        const hasIncomingGoalProof = typeof b.proof_image === 'string' && String(b.proof_image || '').trim().length > 0;
+
+        if (reviewedStatus === 'Approved' && !hasExistingGoalProof && !hasIncomingGoalProof) {
+          return res.status(400).json({ error: 'Final proof file is required before approval' });
+        }
+
+        sets.push('proof_reviewed_by = ?');
+        vals.push(Number(actor?.id || 0) || null);
+        sets.push('proof_reviewed_at = ?');
+        vals.push(new Date().toISOString());
+
+        if (reviewedStatus === 'Approved') {
+          sets.push('status = ?');
+          vals.push('Completed');
+          sets.push('progress = ?');
+          vals.push(100);
+        } else if (reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected') {
+          if (normalizedStatus === undefined && String(existing?.status || '').toLowerCase() === 'completed') {
+            sets.push('status = ?');
+            vals.push('In Progress');
+          }
+          if (normalizedProgress === undefined) {
+            const currentProgress = normalizeProgressValue(existing?.progress);
+            if (currentProgress >= 100) {
+              sets.push('progress = ?');
+              vals.push(75);
+            }
+          }
+        }
+      }
+
       if (sets.length === 0) return res.status(400).json({ error: "No fields to update" });
       vals.push(req.params.id);
       await query(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, vals);
