@@ -4003,7 +4003,27 @@ async function startServer() {
   app.get('/api/member-tasks/my', authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
-      const actorEmployeeId = normalizeEmployeeId(actor.employee_id);
+      let actorEmployeeId = normalizeEmployeeId(actor.employee_id);
+      if (!actorEmployeeId && actor.id) {
+        const userRows: any = await query(
+          'SELECT id, employee_id, full_name, username, email FROM users WHERE id = ? LIMIT 1',
+          [Number(actor.id)]
+        );
+        const userRow = Array.isArray(userRows) ? userRows[0] : userRows;
+        const storedEmployeeId = normalizeEmployeeId(userRow?.employee_id);
+        if (storedEmployeeId) {
+          actorEmployeeId = storedEmployeeId;
+        } else {
+          const identityHint = String(userRow?.full_name || parseDisplayNameFromEmail(userRow?.email || userRow?.username || '') || '').trim();
+          const inferredEmployeeId = identityHint ? await ensureEmployeeIdByFullName(identityHint) : null;
+          if (inferredEmployeeId) {
+            actorEmployeeId = inferredEmployeeId;
+            try {
+              await query('UPDATE users SET employee_id = ? WHERE id = ? AND (employee_id IS NULL OR employee_id = 0)', [inferredEmployeeId, Number(actor.id)]);
+            } catch {}
+          }
+        }
+      }
       if (!actorEmployeeId) return res.json([]);
 
       // Backfill stale rows: proof already submitted and pending review should not stay at 0%.
