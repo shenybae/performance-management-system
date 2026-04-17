@@ -4135,7 +4135,10 @@ async function startServer() {
       const b = req.body || {};
       const leaderUpdatable = ['title', 'description', 'due_date', 'priority', 'status', 'progress'];
       const leaderReviewUpdatable = ['proof_review_status', 'proof_review_note'];
-      const assigneeUpdatable = ['status', 'progress', 'proof_image', 'proof_file_name', 'proof_file_type', 'proof_note'];
+      // Proof file columns are handled in the assigneeSubmittedProof block below.
+      // Keeping them out of this generic updater avoids duplicate SET assignments
+      // (e.g., proof_image/proof_file_name/proof_file_type), which Postgres rejects.
+      const assigneeUpdatable = ['status', 'progress', 'proof_note'];
       const updatable = role === 'Employee' && !isGoalLeader ? assigneeUpdatable : leaderUpdatable;
 
       const sets: string[] = [];
