@@ -4183,6 +4183,7 @@ async function startServer() {
       let allowed = false;
       if (isPrivilegedRole(role)) allowed = true;
       else if (role === 'Manager') {
+        const actorCtx = await getActorOrgContext(Number(actor.id || 0));
         const goalEmployeeId = normalizeEmployeeId(goal.employee_id);
         if (goalEmployeeId) {
           const allowedMgr = await canManagerAccessEmployee(actor.id, goalEmployeeId);
@@ -4197,10 +4198,28 @@ async function startServer() {
             actor.employee_dept ||
             actor.employee_department ||
             actor.employee?.dept ||
+            actorCtx.dept ||
             ''
           ).trim().toLowerCase();
           const goalDept = String(goal.department || '').trim().toLowerCase();
           if (actorDept && goalDept && actorDept === goalDept) allowed = true;
+
+          // Fallback when goal.department is empty/stale:
+          // allow if at least one member task belongs to manager's department.
+          if (!allowed && actorDept) {
+            const deptTaskRows: any = await query(
+              `SELECT 1
+               FROM goal_member_tasks t
+               LEFT JOIN employees e ON e.id = t.member_employee_id
+               WHERE t.goal_id = ?
+                 AND LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))
+                 AND t.deleted_at IS NULL
+               LIMIT 1`,
+              [goalId, actorDept]
+            );
+            const deptTask = Array.isArray(deptTaskRows) ? deptTaskRows[0] : deptTaskRows;
+            if (deptTask) allowed = true;
+          }
         }
       } else if (role === 'Employee') {
         if (Number(goal.leader_id) === Number(actor.id)) allowed = true;
@@ -4255,6 +4274,7 @@ async function startServer() {
       let allowed = false;
       if (isPrivilegedRole(role)) allowed = true;
       else if (role === 'Manager') {
+        const actorCtx = await getActorOrgContext(Number(actor.id || 0));
         const goalEmployeeId = normalizeEmployeeId(task.goal_employee_id);
         if (goalEmployeeId) {
           const allowedMgr = await canManagerAccessEmployee(actor.id, goalEmployeeId);
@@ -4268,10 +4288,17 @@ async function startServer() {
             actor.employee_dept ||
             actor.employee_department ||
             actor.employee?.dept ||
+            actorCtx.dept ||
             ''
           ).trim().toLowerCase();
           const goalDept = String(task.goal_department || '').trim().toLowerCase();
           if (actorDept && goalDept && actorDept === goalDept) allowed = true;
+
+          // Fallback when goal department is not set: validate against task assignee department.
+          if (!allowed && actorDept) {
+            const allowedByMemberDept = await canActorAccessEmployeeByDept(actorDept, normalizeEmployeeId(task.member_employee_id));
+            if (allowedByMemberDept) allowed = true;
+          }
         }
       } else if (role === 'Employee') {
         const actorEmployeeId = normalizeEmployeeId(actor.employee_id);

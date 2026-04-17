@@ -898,7 +898,7 @@ export default function App() {
       </motion.aside>
 
       {/* Main Content */}
-      <main className="flex-1 min-w-0 overflow-y-auto p-2.5 sm:p-4 lg:p-6 bg-transparent transition-colors duration-500 relative">
+      <main className="flex-1 min-w-0 overflow-y-auto p-2 sm:p-3 lg:p-4 bg-transparent transition-colors duration-500 relative">
         <motion.div
           key={`topnav-${activeScreen}`}
           initial={{ opacity: 0, y: -8 }}
@@ -944,7 +944,7 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
-        <div className="w-full max-w-[88rem] mx-auto min-h-full pb-4 px-1 sm:px-2">
+        <div className="w-full min-h-full pb-3">
           {renderScreen()}
         </div>
       </main>

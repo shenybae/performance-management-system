@@ -910,11 +910,11 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
       </div>
 
       {/* ACTION CARDS */}
-      <div className="grid grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 mb-3">
         <button onClick={() => setView('chat')} className="text-left">
           <Card>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center"><MessageSquare size={20} className="text-teal-600" /></div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center"><MessageSquare size={18} className="text-teal-600" /></div>
               <div>
                 <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Q&A Chat</p>
                 <p className="text-[10px] text-slate-400">Coach employees in real-time</p>
@@ -924,8 +924,8 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
         </button>
         <button onClick={() => setView('elearning')} className="text-left">
           <Card>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center"><GraduationCap size={20} className="text-purple-600" /></div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center"><GraduationCap size={18} className="text-purple-600" /></div>
               <div>
                 <p className="text-sm font-bold text-slate-800 dark:text-slate-100">E-Learning</p>
                 <p className="text-[10px] text-slate-400">{courses.length} courses · {recommendations.length} recommended</p>
@@ -935,8 +935,8 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
         </button>
         <button onClick={() => setView('weaknessAnalysis')} className="text-left">
           <Card>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><Brain size={20} className="text-orange-600" /></div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><Brain size={18} className="text-orange-600" /></div>
               <div>
                 <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Weakness Analysis</p>
                 <p className="text-[10px] text-slate-400">Identify gaps & recommend training</p>
