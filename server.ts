@@ -4027,36 +4027,89 @@ async function startServer() {
       if (!actorEmployeeId) return res.json([]);
 
       // Backfill stale rows: proof already submitted and pending review should not stay at 0%.
-      await query(
-        `UPDATE goal_member_tasks
-         SET progress = 75,
-             status = CASE WHEN COALESCE(status, 'Not Started') IN ('Not Started', 'Blocked') THEN 'In Progress' ELSE status END,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE member_employee_id = ?
-           AND deleted_at IS NULL
-           AND COALESCE(proof_review_status, 'Not Submitted') = 'Pending Review'
-           AND COALESCE(progress, 0) < 75
-           AND COALESCE(TRIM(proof_image), '') <> ''`,
-        [actorEmployeeId]
-      );
-
-      await query(
-        `UPDATE goals
-         SET progress = (
-           SELECT COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0)
-           FROM goal_member_tasks t
-           WHERE t.goal_id = goals.id
-             AND t.deleted_at IS NULL
-         ),
-         updated_at = CURRENT_TIMESTAMP
-         WHERE id IN (
-           SELECT DISTINCT goal_id
-           FROM goal_member_tasks
+      try {
+        await query(
+          `UPDATE goal_member_tasks
+           SET progress = 75,
+               status = CASE WHEN COALESCE(status, 'Not Started') IN ('Not Started', 'Blocked') THEN 'In Progress' ELSE status END,
+               updated_at = CURRENT_TIMESTAMP
            WHERE member_employee_id = ?
              AND deleted_at IS NULL
-         )`,
-        [actorEmployeeId]
-      );
+             AND COALESCE(proof_review_status, 'Not Submitted') = 'Pending Review'
+             AND COALESCE(progress, 0) < 75
+             AND COALESCE(TRIM(proof_image), '') <> ''`,
+          [actorEmployeeId]
+        );
+      } catch (backfillErr: any) {
+        const msg = String(backfillErr?.message || '').toLowerCase();
+        const missingUpdatedAt = String(backfillErr?.code || '') === '42703' || msg.includes('updated_at') || msg.includes('no such column');
+        if (missingUpdatedAt) {
+          try {
+            await query(
+              `UPDATE goal_member_tasks
+               SET progress = 75,
+                   status = CASE WHEN COALESCE(status, 'Not Started') IN ('Not Started', 'Blocked') THEN 'In Progress' ELSE status END
+               WHERE member_employee_id = ?
+                 AND deleted_at IS NULL
+                 AND COALESCE(proof_review_status, 'Not Submitted') = 'Pending Review'
+                 AND COALESCE(progress, 0) < 75
+                 AND COALESCE(TRIM(proof_image), '') <> ''`,
+              [actorEmployeeId]
+            );
+          } catch (fallbackBackfillErr) {
+            console.error('GET /api/member-tasks/my backfill fallback error:', fallbackBackfillErr);
+          }
+        } else {
+          console.error('GET /api/member-tasks/my backfill error:', backfillErr);
+        }
+      }
+
+      try {
+        await query(
+          `UPDATE goals
+           SET progress = (
+             SELECT COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0)
+             FROM goal_member_tasks t
+             WHERE t.goal_id = goals.id
+               AND t.deleted_at IS NULL
+           ),
+           updated_at = CURRENT_TIMESTAMP
+           WHERE id IN (
+             SELECT DISTINCT goal_id
+             FROM goal_member_tasks
+             WHERE member_employee_id = ?
+               AND deleted_at IS NULL
+           )`,
+          [actorEmployeeId]
+        );
+      } catch (goalProgressErr: any) {
+        const msg = String(goalProgressErr?.message || '').toLowerCase();
+        const missingUpdatedAt = String(goalProgressErr?.code || '') === '42703' || msg.includes('updated_at') || msg.includes('no such column');
+        if (missingUpdatedAt) {
+          try {
+            await query(
+              `UPDATE goals
+               SET progress = (
+                 SELECT COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0)
+                 FROM goal_member_tasks t
+                 WHERE t.goal_id = goals.id
+                   AND t.deleted_at IS NULL
+               )
+               WHERE id IN (
+                 SELECT DISTINCT goal_id
+                 FROM goal_member_tasks
+                 WHERE member_employee_id = ?
+                   AND deleted_at IS NULL
+               )`,
+              [actorEmployeeId]
+            );
+          } catch (fallbackGoalProgressErr) {
+            console.error('GET /api/member-tasks/my goal progress fallback error:', fallbackGoalProgressErr);
+          }
+        } else {
+          console.error('GET /api/member-tasks/my goal progress error:', goalProgressErr);
+        }
+      }
 
       const rows: any = await query(
         `SELECT t.*, g.title as goal_title, g.statement as goal_statement,
