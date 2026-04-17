@@ -3220,6 +3220,11 @@ async function startServer() {
         const reviewedStatus = String(b.proof_review_status || '').trim();
         const hasExistingGoalProof = String(existing?.proof_image || '').trim().length > 0;
         const hasIncomingGoalProof = typeof b.proof_image === 'string' && String(b.proof_image || '').trim().length > 0;
+        const currentGoalProofStatus = String(existing?.proof_review_status || 'Not Submitted').trim() || 'Not Submitted';
+
+        if (currentGoalProofStatus === 'Approved' && reviewedStatus !== 'Approved') {
+          return res.status(409).json({ error: 'Final proof decision already finalized as Approved' });
+        }
 
         if (reviewedStatus === 'Approved' && !hasExistingGoalProof && !hasIncomingGoalProof) {
           return res.status(400).json({ error: 'Final proof file is required before approval' });
@@ -3253,6 +3258,20 @@ async function startServer() {
       if (sets.length === 0) return res.status(400).json({ error: "No fields to update" });
       vals.push(req.params.id);
       await query(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, vals);
+
+      if (b.proof_review_status !== undefined && String(b.proof_review_status || '').trim() === 'Approved') {
+        await query(
+          `UPDATE goal_member_tasks
+           SET status = 'Completed',
+               progress = 100,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE goal_id = ?
+             AND deleted_at IS NULL
+             AND COALESCE(status, 'Not Started') <> 'Completed'`,
+          [req.params.id]
+        );
+      }
+
       if (b.assignee_ids !== undefined) {
         await query("DELETE FROM goal_assignees WHERE goal_id = ?", [req.params.id]);
         if (Array.isArray(b.assignee_ids) && b.assignee_ids.length > 0) {

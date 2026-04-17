@@ -1411,7 +1411,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       <div className="space-y-2">
                         {goalProofFiles.map((file, fileIndex) => (
                           <div key={`${proofReviewGoal.id}-goal-proof-${fileIndex}`} className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 p-2">
-                            <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
+                              <button
+                                type="button"
+                                onClick={() => window.open(String(file.proof_file_data || ''), '_blank', 'noopener,noreferrer')}
+                                className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                              >
+                                View Full File
+                              </button>
+                            </div>
                             <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
                           </div>
                         ))}
@@ -2989,7 +2998,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     <div className="space-y-2">
                       {goalProofFiles.map((file, fileIndex) => (
                         <div key={`${proofReviewGoal.id}-goal-proof-${fileIndex}`} className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 p-2">
-                          <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
+                            <button
+                              type="button"
+                              onClick={() => window.open(String(file.proof_file_data || ''), '_blank', 'noopener,noreferrer')}
+                              className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                            >
+                              View Full File
+                            </button>
+                          </div>
                           <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
                         </div>
                       ))}
