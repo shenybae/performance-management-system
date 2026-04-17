@@ -3807,13 +3807,15 @@ async function startServer() {
             })
             .map((a: any) => ({ ...a, employee_name: a.employee_name || a.name || null }));
 
+          const goalAssigneeIds = new Set(g.assignees.map((a: any) => String(normalizeEmployeeId(a?.employee_id))));
+
           const taskRows: any = await query(
             'SELECT t.*, e.name as member_name FROM goal_member_tasks t LEFT JOIN employees e ON t.member_employee_id = e.id WHERE t.goal_id = ? AND t.deleted_at IS NULL ORDER BY t.created_at DESC',
             [g.id]
           );
           g.member_tasks = uniqueById(Array.isArray(taskRows) ? taskRows : []).filter((t: any) => {
             const taskMemberId = normalizeEmployeeId(t?.member_employee_id);
-            return !!taskMemberId && allowedMemberIds.has(String(taskMemberId));
+            return !!taskMemberId && goalAssigneeIds.has(String(taskMemberId));
           });
         })
       );
@@ -4136,7 +4138,9 @@ async function startServer() {
         );
       }
       const task = Array.isArray(taskRows) ? taskRows[0] : taskRows;
-      if (!task) return res.status(404).json({ error: 'Task not found' });
+      if (!task) {
+        return res.json({ success: true, task_id: taskId, already_removed: true });
+      }
 
       const isGoalLeader = Number(task.leader_id) === Number(actor.id);
       let allowed = false;
@@ -4376,7 +4380,10 @@ async function startServer() {
       }
       if (!allowed) return res.status(403).json({ error: 'Forbidden' });
 
-      await query('DELETE FROM goal_member_tasks WHERE id = ?', [taskId]);
+      const deleteResult: any = await query('DELETE FROM goal_member_tasks WHERE id = ?', [taskId]);
+      if (typeof deleteResult?.affectedRows === 'number' && deleteResult.affectedRows === 0) {
+        return res.json({ success: true, task_id: taskId, already_removed: true });
+      }
 
       const progressRows: any = await query(
         'SELECT COALESCE(ROUND(AVG(COALESCE(progress, 0))), 0) AS avg_progress FROM goal_member_tasks WHERE goal_id = ? AND deleted_at IS NULL',

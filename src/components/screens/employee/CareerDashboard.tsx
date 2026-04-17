@@ -735,9 +735,17 @@ export const CareerDashboard = () => {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok && res.status !== 404) throw new Error('Failed');
+
+      setLeaderGoals(prev => prev.map((goal: any) => ({
+        ...goal,
+        member_tasks: Array.isArray(goal?.member_tasks)
+          ? goal.member_tasks.filter((task: any) => Number(task?.id) !== Number(taskId))
+          : goal.member_tasks,
+      })));
+
       window.notify?.('Task removed', 'success');
-      fetchData();
+      await fetchData();
     } catch {
       window.notify?.('Failed to remove task', 'error');
     }
@@ -956,8 +964,18 @@ export const CareerDashboard = () => {
     return (Array.isArray(goal?.assignees) ? goal.assignees : []).filter((a: any) => leaderTeamMemberIdSet.has(String(a?.employee_id ?? '')));
   };
 
+  const getGoalAssigneeIdSet = (goal: any) => {
+    const ids = new Set<string>();
+    for (const assignee of getGoalAssignees(goal)) {
+      const id = String(assignee?.employee_id ?? '').trim();
+      if (id) ids.add(id);
+    }
+    return ids;
+  };
+
   const getGoalMemberTasks = (goal: any) => {
-    return uniqueTasksBySignature(Array.isArray(goal?.member_tasks) ? goal.member_tasks : []).filter((t: any) => leaderTeamMemberIdSet.has(String(t?.member_employee_id ?? '')));
+    const goalAssigneeIds = getGoalAssigneeIdSet(goal);
+    return uniqueTasksBySignature(Array.isArray(goal?.member_tasks) ? goal.member_tasks : []).filter((t: any) => goalAssigneeIds.has(String(t?.member_employee_id ?? '')));
   };
 
   const selectedAssignmentGoal = useMemo(
