@@ -167,9 +167,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     // Use viewport coordinates so the portal can be fixed and won't affect page layout
     const baseWidth = Math.floor(rect.width);
     const desiredWidth = dropdownVariant === 'pills-horizontal'
-      ? Math.max(440, Math.floor(baseWidth * 1.25))
-      : Math.max(460, Math.floor(baseWidth * 1.35));
-    const maxWidth = Math.max(240, window.innerWidth - 16);
+      ? Math.max(360, Math.floor(baseWidth * 1.1))
+      : Math.max(360, Math.floor(baseWidth * 1.1));
+    const maxWidth = Math.max(240, Math.min(760, window.innerWidth - 32));
     const width = Math.min(desiredWidth, maxWidth);
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
 
