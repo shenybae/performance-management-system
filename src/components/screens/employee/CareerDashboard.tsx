@@ -1883,11 +1883,31 @@ export const CareerDashboard = () => {
               <div>
                 {(() => {
                   const goalProofStatus = String(selectedTaskBoardGoal?.proof_review_status || 'Not Submitted');
+                  const taskBoardProgress = Math.max(0, Math.min(100, Number(selectedTaskBoardGoal?.progress || 0)));
+                  const taskBoardStatus = String(selectedTaskBoardGoal?.status || 'Not Started');
                   const submittedGoalProofFiles = parseGoalProofFiles(selectedTaskBoardGoal);
                   const goalDraft = goalProofDrafts[goalId] || { files: [], note: '' };
                   const isGoalProofSubmitting = goalProofSubmittingId === goalId;
                   return (
                     <div className="mb-4 p-4 rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-900/10">
+                      <div className="mb-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Task Board Progress</p>
+                          <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${statusColors[taskBoardStatus] || statusColors['Not Started']}`}>
+                            {taskBoardStatus}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                            <div
+                              className={`h-2 rounded-full ${taskBoardProgress >= 100 ? 'bg-emerald-500' : taskBoardProgress >= 50 ? 'bg-teal-500' : taskBoardProgress >= 25 ? 'bg-amber-500' : 'bg-red-400'}`}
+                              style={{ width: `${taskBoardProgress}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-black text-slate-700 dark:text-slate-200 min-w-[48px] text-right">{taskBoardProgress}%</span>
+                        </div>
+                      </div>
+
                       <div className="flex items-center justify-between gap-2 mb-3">
                         <h3 className="text-sm font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Final Proof for Manager Review</h3>
                         <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${
@@ -1908,7 +1928,16 @@ export const CareerDashboard = () => {
                           <p className="text-[10px] font-bold uppercase text-slate-500">Submitted Final Proof</p>
                           {submittedGoalProofFiles.map((file, fileIndex) => (
                             <div key={`goal-proof-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
-                              <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
+                              <div className="mb-1 flex items-center justify-between gap-2">
+                                <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => setTaskBriefViewer({ src: file.proof_file_data, fileName: file.proof_file_name, mimeType: file.proof_file_type })}
+                                  className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                                >
+                                  View Full File
+                                </button>
+                              </div>
                               <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
                             </div>
                           ))}
@@ -1959,13 +1988,22 @@ export const CareerDashboard = () => {
                               <div key={`goal-draft-${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
                                 <div className="mb-1 flex items-center justify-between gap-2">
                                   <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Draft file ${index + 1}`}</p>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeGoalProofDraftFile(goalId, index)}
-                                    className="text-[10px] font-bold text-red-600 hover:text-red-700"
-                                  >
-                                    Remove
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setTaskBriefViewer({ src: file.proof_file_data, fileName: file.proof_file_name, mimeType: file.proof_file_type })}
+                                      className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                                    >
+                                      View Full File
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeGoalProofDraftFile(goalId, index)}
+                                      className="text-[10px] font-bold text-red-600 hover:text-red-700"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
                                 </div>
                                 <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
                               </div>
@@ -2058,16 +2096,6 @@ export const CareerDashboard = () => {
                           >
                             <Trash2 size={15} />
                           </button>
-                        </div>
-
-                        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2">
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden max-w-[220px]">
-                              <div className={`h-2 rounded-full ${progressValue >= 100 ? 'bg-emerald-500' : progressValue >= 50 ? 'bg-teal-500' : 'bg-amber-500'}`} style={{ width: `${progressValue}%` }} />
-                            </div>
-                            <span className="text-base font-bold text-slate-700 dark:text-slate-200 w-12 text-right">{progressValue}%</span>
-                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statusColors[taskStatusValue] || statusColors['Not Started']}`}>{taskStatusValue}</span>
-                          </div>
                         </div>
 
                         <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
