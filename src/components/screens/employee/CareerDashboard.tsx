@@ -621,6 +621,14 @@ export const CareerDashboard = () => {
   };
 
   const submitTaskProof = async (taskId: number) => {
+    const currentTask = myMemberTasks.find((t: any) => Number(t?.id) === Number(taskId)) || null;
+    const currentReviewStatus = String(currentTask?.proof_review_status || 'Not Submitted');
+    const currentProofFiles = parseTaskProofFiles(currentTask);
+    if (currentReviewStatus === 'Pending Review' && currentProofFiles.length > 0) {
+      window.notify?.('Proof already submitted and pending review', 'success');
+      return;
+    }
+
     const draft = proofDrafts[taskId] || {
       proof_files: [],
       proof_note: '',
@@ -1989,6 +1997,7 @@ export const CareerDashboard = () => {
           const proofFiles = Array.isArray(draft.proof_files) ? draft.proof_files : [];
           const extensionDraft = taskExtensionDrafts[t.id] || { requested_due_date: '', reason: '' };
           const reviewStatus = t.proof_review_status || 'Not Submitted';
+          const proofAlreadySubmitted = reviewStatus === 'Pending Review' && proofFiles.length > 0;
           const pendingTaskExtension = myDeadlineExtensionRequests.find((r: any) => String(r.entity_type || '') === 'task' && Number(r.task_id) === Number(t.id) && String(r.status || '') === 'Pending');
           const briefFiles = parseTaskBriefFiles(t);
 
@@ -2093,6 +2102,11 @@ export const CareerDashboard = () => {
                   {proofFiles.length > 0 && (
                     <p className="mt-2 text-xs text-slate-500 truncate">Selected file{proofFiles.length > 1 ? 's' : ''}: {proofFiles.map((f) => f.proof_file_name).join(', ')}</p>
                   )}
+                  {proofAlreadySubmitted && (
+                    <div className="mt-3 rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/80 dark:bg-emerald-900/20 px-3 py-2">
+                      <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">Proof already submitted successfully and is pending review.</p>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -2105,11 +2119,11 @@ export const CareerDashboard = () => {
                   />
                   <div className="mt-3 flex justify-end">
                     <button
-                      onClick={() => submitTaskProof(t.id)}
+                      onClick={() => (proofAlreadySubmitted ? window.notify?.('Proof already submitted and pending review', 'success') : submitTaskProof(t.id))}
                       disabled={proofSubmittingTaskId === t.id}
                       className="px-4 py-2 rounded-lg bg-teal-deep text-white text-sm font-bold hover:bg-teal-green disabled:opacity-50"
                     >
-                      {proofSubmittingTaskId === t.id ? 'Submitting...' : 'Submit For Review'}
+                      {proofSubmittingTaskId === t.id ? 'Submitting...' : proofAlreadySubmitted ? 'Already Submitted' : 'Submit For Review'}
                     </button>
                   </div>
                 </div>
