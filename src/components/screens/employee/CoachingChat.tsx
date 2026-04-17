@@ -182,7 +182,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-3 gap-4 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <Card>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center"><ClipboardList size={18} className="text-slate-500" /></div>
@@ -493,7 +493,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <SectionHeader title="Coaching & Development" subtitle="Chat with your manager, access e-learning, and view your coaching journal" />
 
-      <div className="grid grid-cols-3 gap-4 mt-4 mb-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-4 mb-5">
         <button onClick={() => setView('chat')} className="text-left">
           <Card>
             <div className="flex items-center gap-4 p-2">

@@ -944,7 +944,7 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
-        <div className="w-full min-h-full pb-3">
+        <div className="w-full min-h-full pb-3 mx-auto max-w-[1560px] px-1 sm:px-2 lg:px-3">
           {renderScreen()}
         </div>
       </main>
