@@ -759,6 +759,13 @@ export const CareerDashboard = () => {
     const goalId = Number(goal?.id || 0);
     if (!goalId) return;
 
+    const goalProofStatus = String(goal?.proof_review_status || 'Not Submitted');
+    const canEditFinalProof = goalProofStatus === 'Not Submitted' || goalProofStatus === 'Needs Revision';
+    if (!canEditFinalProof) {
+      window.notify?.('Final proof can only be edited when status is Not Submitted or Needs Revision', 'error');
+      return;
+    }
+
     const draft = goalProofDrafts[goalId] || { files: [], note: '' };
     const files = Array.isArray(draft.files) ? draft.files : [];
     const note = String(draft.note || '').trim();
@@ -1883,6 +1890,7 @@ export const CareerDashboard = () => {
               <div>
                 {(() => {
                   const goalProofStatus = String(selectedTaskBoardGoal?.proof_review_status || 'Not Submitted');
+                  const canEditFinalProof = goalProofStatus === 'Not Submitted' || goalProofStatus === 'Needs Revision';
                   const taskBoardProgress = Math.max(0, Math.min(100, Number(selectedTaskBoardGoal?.progress || 0)));
                   const taskBoardStatus = String(selectedTaskBoardGoal?.status || 'Not Started');
                   const submittedGoalProofFiles = parseGoalProofFiles(selectedTaskBoardGoal);
@@ -1955,12 +1963,18 @@ export const CareerDashboard = () => {
                         <p className="text-[11px] text-slate-500 mb-3">No final proof submitted yet. Upload files and add notes below.</p>
                       )}
 
+                      {!canEditFinalProof && (
+                        <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300 mb-3">
+                          Final proof is locked while under manager review. You can edit and resubmit only when manager marks it Needs Revision.
+                        </p>
+                      )}
+
                       <div className="rounded-lg border border-dashed border-emerald-300 dark:border-emerald-800 bg-white/70 dark:bg-slate-900/40 p-3 space-y-2">
                         <label className="block text-[10px] font-bold uppercase text-slate-500">Upload Final Proof Files</label>
                         <div className="flex items-center gap-2 flex-wrap">
                           <label
                             htmlFor={`goal-final-proof-${goalId}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-600 text-white cursor-pointer hover:bg-emerald-700"
+                            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold ${canEditFinalProof ? 'bg-emerald-600 text-white cursor-pointer hover:bg-emerald-700' : 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed'}`}
                           >
                             <Upload size={12} /> Choose Files
                           </label>
@@ -1975,6 +1989,7 @@ export const CareerDashboard = () => {
                           type="file"
                           multiple
                           accept="*/*"
+                          disabled={!canEditFinalProof}
                           onChange={(e) => {
                             void handleGoalProofUpload(goalId, e.target.files || []);
                             e.currentTarget.value = '';
@@ -1999,6 +2014,7 @@ export const CareerDashboard = () => {
                                     <button
                                       type="button"
                                       onClick={() => removeGoalProofDraftFile(goalId, index)}
+                                      disabled={!canEditFinalProof}
                                       className="text-[10px] font-bold text-red-600 hover:text-red-700"
                                     >
                                       Remove
@@ -2015,6 +2031,7 @@ export const CareerDashboard = () => {
                         <textarea
                           rows={2}
                           value={goalDraft.note}
+                          disabled={!canEditFinalProof}
                           onChange={(e) => setGoalProofDrafts(prev => ({
                             ...prev,
                             [goalId]: {
@@ -2022,7 +2039,7 @@ export const CareerDashboard = () => {
                               note: e.target.value,
                             },
                           }))}
-                          className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                          className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs disabled:opacity-60"
                           placeholder="What did the team complete? Add context for manager review."
                         />
 
@@ -2030,7 +2047,7 @@ export const CareerDashboard = () => {
                           <button
                             type="button"
                             onClick={() => void submitGoalFinalProof(selectedTaskBoardGoal)}
-                            disabled={isGoalProofSubmitting || goalDraft.files.length === 0}
+                            disabled={isGoalProofSubmitting || goalDraft.files.length === 0 || !canEditFinalProof}
                             className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 disabled:opacity-50"
                           >
                             {isGoalProofSubmitting ? 'Submitting...' : 'Submit Final Proof to Manager'}

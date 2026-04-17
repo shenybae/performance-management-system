@@ -3101,6 +3101,17 @@ async function startServer() {
       const b = req.body || {};
 
       if (isGoalLeaderUser && !isPrivilegedRole(role) && role !== 'Manager') {
+        const currentGoalProofStatus = String(existing?.proof_review_status || 'Not Submitted').trim() || 'Not Submitted';
+        if (currentGoalProofStatus === 'Pending Review') {
+          return res.status(409).json({ error: 'Final proof is already pending manager review' });
+        }
+        if (currentGoalProofStatus === 'Approved') {
+          return res.status(409).json({ error: 'Final proof already approved by manager' });
+        }
+        if (currentGoalProofStatus === 'Rejected') {
+          return res.status(409).json({ error: 'Final proof is closed. Reopen is allowed only for needs revision' });
+        }
+
         const submittedProofFiles = Array.isArray(b.proof_files)
           ? b.proof_files
               .map((item: any) => ({
