@@ -1478,14 +1478,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [proofReviewGoal.id]: e.target.value }))}
                           className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
                           placeholder="Final proof review note (optional)"
-                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || goalProofApproved}
+                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || !goalProofApproved}
                         />
                         <div className="flex items-center gap-2">
                           <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
                           <select
                             value={String((proofReviewRatings[proofReviewGoal.id] ?? Number(proofReviewGoal.proof_review_rating || 0)) || '')}
                             onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [proofReviewGoal.id]: Number(e.target.value || 0) }))}
-                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || goalProofApproved}
+                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || !goalProofApproved}
                             className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
                           >
                             <option value="">Rate 1-5</option>
@@ -3161,14 +3161,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [proofReviewGoal.id]: e.target.value }))}
                         className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
                         placeholder="Final proof review note (optional)"
-                        disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || goalProofApproved}
+                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || !goalProofApproved}
                       />
                       <div className="flex items-center gap-2">
                         <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
                         <select
                           value={String((proofReviewRatings[proofReviewGoal.id] ?? Number(proofReviewGoal.proof_review_rating || 0)) || '')}
                           onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [proofReviewGoal.id]: Number(e.target.value || 0) }))}
-                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || goalProofApproved}
+                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || !goalProofApproved}
                           className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
                         >
                           <option value="">Rate 1-5</option>
