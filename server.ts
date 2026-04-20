@@ -3233,7 +3233,7 @@ async function startServer() {
       const effectiveStatus = normalizeGoalStatusFromProgress(normalizedStatus ?? existing.status, normalizedProgress ?? existing.progress);
       const sets: string[] = [];
       const vals: any[] = [];
-      for (const k of ['statement', 'metric', 'target_date', 'title', 'status', 'progress', 'scope', 'department', 'team_name', 'delegation', 'priority', 'quarter', 'frequency', 'leader_id', 'proof_image', 'proof_file_name', 'proof_file_type', 'proof_note', 'proof_submitted_at', 'proof_review_status', 'proof_review_note', 'proof_review_rating']) {
+      for (const k of ['statement', 'metric', 'target_date', 'title', 'status', 'progress', 'scope', 'department', 'team_name', 'delegation', 'priority', 'quarter', 'frequency', 'leader_id', 'proof_image', 'proof_file_name', 'proof_file_type', 'proof_note', 'proof_submitted_at', 'proof_review_status', 'proof_review_note']) {
         if (k === 'progress') {
           if (normalizedProgress !== undefined) { sets.push('progress = ?'); vals.push(normalizedProgress); }
           continue;
@@ -3310,7 +3310,10 @@ async function startServer() {
         }
       }
       res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: "Database error" }); }
+    } catch (err: any) { 
+      console.error('PUT /api/goals/:id error:', err);
+      res.status(500).json({ error: "Database error", detail: String(err?.message || '') }); 
+    }
   });
 
   app.post("/api/coaching_logs", authenticateToken, async (req, res) => {
