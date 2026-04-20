@@ -4479,8 +4479,8 @@ async function startServer() {
 
       await recomputeGoalProgress(goalId);
 
-      const rows: any = await query(
-          'SELECT t.*, e.name as member_name, COALESCE(u.full_name, u.username, u.email) as reviewer_name, u.role as reviewer_role
+        const rows: any = await query(
+          `SELECT t.*, e.name as member_name, COALESCE(u.full_name, u.username, u.email) as reviewer_name, u.role as reviewer_role
          FROM goal_member_tasks t
          LEFT JOIN employees e ON e.id = t.member_employee_id
          LEFT JOIN users u ON u.id = t.proof_reviewed_by
