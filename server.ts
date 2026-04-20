@@ -113,21 +113,38 @@ async function recomputeGoalProgress(goalId: number) {
   const rows: any = await query(
     `SELECT g.status AS goal_status,
             g.proof_review_status AS goal_proof_review_status,
+            g.proof_review_rating AS goal_proof_review_rating,
+            g.proof_reviewed_by AS goal_proof_reviewed_by,
+            COALESCE(TRIM(g.proof_image), '') AS goal_proof_image,
             COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0) AS avg_progress,
             COUNT(t.id) AS total_tasks,
-            SUM(CASE WHEN COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved' THEN 1 ELSE 0 END) AS approved_tasks
+            SUM(
+              CASE
+                WHEN COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved'
+                 AND COALESCE(TRIM(t.proof_image), '') <> ''
+                 AND t.proof_reviewed_by IS NOT NULL
+                 AND COALESCE(t.proof_review_rating, 0) BETWEEN 1 AND 5
+                THEN 1
+                ELSE 0
+              END
+            ) AS approved_tasks
      FROM goals g
      LEFT JOIN goal_member_tasks t
        ON t.goal_id = g.id
       AND t.deleted_at IS NULL
      WHERE g.id = ?
-     GROUP BY g.id, g.status, g.proof_review_status`,
+     GROUP BY g.id, g.status, g.proof_review_status, g.proof_review_rating, g.proof_reviewed_by, g.proof_image`,
     [goalId]
   );
   const row = Array.isArray(rows) ? rows[0] : rows;
   const totalTasks = Number(row?.total_tasks || 0);
   const approvedTasks = Number(row?.approved_tasks || 0);
-  const leaderProofApproved = String(row?.goal_proof_review_status || '').trim() === 'Approved';
+  const leaderProofApproved =
+    String(row?.goal_proof_review_status || '').trim() === 'Approved'
+    && String(row?.goal_proof_image || '').trim().length > 0
+    && Number(row?.goal_proof_reviewed_by || 0) > 0
+    && Number(row?.goal_proof_review_rating || 0) >= 1
+    && Number(row?.goal_proof_review_rating || 0) <= 5;
   const allMemberProofsApproved = totalTasks === 0 ? true : approvedTasks >= totalTasks;
   const allProofsApproved = leaderProofApproved && allMemberProofsApproved;
 
@@ -4519,12 +4536,17 @@ async function startServer() {
 
       const b = req.body || {};
       const leaderUpdatable = ['title', 'description', 'due_date', 'priority', 'status', 'progress'];
-      const leaderReviewUpdatable = ['proof_review_status', 'proof_review_note', 'proof_review_rating'];
+      const managerReviewUpdatable = ['proof_review_status', 'proof_review_note', 'proof_review_rating'];
       // Proof file columns are handled in the assigneeSubmittedProof block below.
       // Keeping them out of this generic updater avoids duplicate SET assignments
       // (e.g., proof_image/proof_file_name/proof_file_type), which Postgres rejects.
       const assigneeUpdatable = ['status', 'progress', 'proof_note'];
       const updatable = role === 'Employee' && !isGoalLeader ? assigneeUpdatable : leaderUpdatable;
+      const hasReviewDecisionPayload = b.proof_review_status !== undefined || b.proof_review_note !== undefined || b.proof_review_rating !== undefined;
+
+      if (hasReviewDecisionPayload && !(isPrivilegedRole(role) || role === 'Manager')) {
+        return res.status(403).json({ error: 'Only managers can review member proofs' });
+      }
 
       const sets: string[] = [];
       const vals: any[] = [];
@@ -4535,8 +4557,8 @@ async function startServer() {
         }
       }
 
-      if (!(role === 'Employee' && !isGoalLeader)) {
-        for (const k of leaderReviewUpdatable) {
+      if (isPrivilegedRole(role) || role === 'Manager') {
+        for (const k of managerReviewUpdatable) {
           if (b[k] !== undefined) {
             sets.push(`${k} = ?`);
             vals.push(b[k]);
@@ -4602,16 +4624,21 @@ async function startServer() {
       }
 
       const reviewerSetStatus = !(role === 'Employee' && !isGoalLeader) && b.proof_review_status !== undefined;
-      if (reviewerSetStatus && String(task.proof_review_status || '') === 'Approved' && String(b.proof_review_status || '') !== 'Approved') {
+      if (reviewerSetStatus && String(task.proof_review_status || '') === 'Approved' && String(b.proof_review_status || '') !== 'Approved' && !(role === 'Manager' || isPrivilegedRole(role))) {
         return res.status(409).json({ error: 'Proof decision already finalized as Approved' });
       }
       if (reviewerSetStatus) {
         const reviewedStatus = String(b.proof_review_status || '');
         const isReviewed = reviewedStatus === 'Approved' || reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected';
         const normalizedRating = normalizeProofReviewRating(b.proof_review_rating);
+        const hasExistingProof = String(task.proof_image || '').trim().length > 0;
 
         if (role === 'Manager' && isReviewed && normalizedRating === null) {
           return res.status(400).json({ error: 'Manager rating (1-5) is required when reviewing member proof' });
+        }
+
+        if (reviewedStatus === 'Approved' && !hasExistingProof) {
+          return res.status(400).json({ error: 'Member proof file is required before approval' });
         }
 
         if (reviewedStatus === 'Approved') {

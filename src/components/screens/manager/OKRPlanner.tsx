@@ -1579,47 +1579,43 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             onChange={(e) => setProofReviewNotes((prev) => ({ ...prev, [t.id]: e.target.value }))}
                             className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
                             placeholder="Member proof review note (optional)"
-                            disabled={proofReviewSubmittingTaskId === t.id || reviewStatus === 'Approved'}
+                            disabled={proofReviewSubmittingTaskId === t.id}
                           />
                           <div className="flex items-center gap-2">
                             <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
                             <select
                               value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
                               onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
-                              disabled={proofReviewSubmittingTaskId === t.id || reviewStatus === 'Approved'}
+                              disabled={proofReviewSubmittingTaskId === t.id}
                               className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
                             >
                               <option value="">Rate 1-5</option>
                               {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
                             </select>
                           </div>
-                          {reviewStatus === 'Approved' ? (
-                            <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Member proof already approved. Decision is locked.</p>
-                          ) : (
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
-                                disabled={proofReviewSubmittingTaskId === t.id}
-                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                              >
-                                Approve Proof
-                              </button>
-                              <button
-                                onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
-                                disabled={proofReviewSubmittingTaskId === t.id}
-                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                              >
-                                Needs Revision
-                              </button>
-                              <button
-                                onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Rejected')}
-                                disabled={proofReviewSubmittingTaskId === t.id}
-                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          )}
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
+                              disabled={proofReviewSubmittingTaskId === t.id}
+                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                            >
+                              Approve Proof
+                            </button>
+                            <button
+                              onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
+                              disabled={proofReviewSubmittingTaskId === t.id}
+                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                            >
+                              Needs Revision
+                            </button>
+                            <button
+                              onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Rejected')}
+                              disabled={proofReviewSubmittingTaskId === t.id}
+                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                            >
+                              Reject
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -3262,47 +3258,43 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           onChange={(e) => setProofReviewNotes((prev) => ({ ...prev, [t.id]: e.target.value }))}
                           className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
                           placeholder="Member proof review note (optional)"
-                          disabled={proofReviewSubmittingTaskId === t.id || reviewStatus === 'Approved'}
+                          disabled={proofReviewSubmittingTaskId === t.id}
                         />
                         <div className="flex items-center gap-2">
                           <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
                           <select
                             value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
                             onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
-                            disabled={proofReviewSubmittingTaskId === t.id || reviewStatus === 'Approved'}
+                            disabled={proofReviewSubmittingTaskId === t.id}
                             className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
                           >
                             <option value="">Rate 1-5</option>
                             {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
                           </select>
                         </div>
-                        {reviewStatus === 'Approved' ? (
-                          <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Member proof already approved. Decision is locked.</p>
-                        ) : (
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
-                              disabled={proofReviewSubmittingTaskId === t.id}
-                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                            >
-                              Approve Proof
-                            </button>
-                            <button
-                              onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
-                              disabled={proofReviewSubmittingTaskId === t.id}
-                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                            >
-                              Needs Revision
-                            </button>
-                            <button
-                              onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Rejected')}
-                              disabled={proofReviewSubmittingTaskId === t.id}
-                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
+                            disabled={proofReviewSubmittingTaskId === t.id}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                          >
+                            Approve Proof
+                          </button>
+                          <button
+                            onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
+                            disabled={proofReviewSubmittingTaskId === t.id}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                          >
+                            Needs Revision
+                          </button>
+                          <button
+                            onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Rejected')}
+                            disabled={proofReviewSubmittingTaskId === t.id}
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                          >
+                            Reject
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
