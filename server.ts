@@ -4667,10 +4667,14 @@ async function startServer() {
         }
 
         if (reviewedStatus === 'Approved') {
-          sets.push('status = ?');
-          vals.push('Completed');
-          sets.push('progress = ?');
-          vals.push(TASK_PROGRESS_REVIEW_APPROVED);
+            const isManagerApproval = normalizeUserRole(role) === 'Manager';
+            const nextProgress = isManagerApproval
+              ? TASK_PROGRESS_REVIEW_APPROVED
+              : Math.max(Number(task.progress || 0), 75);
+            sets.push('status = ?');
+            vals.push(isManagerApproval ? 'Completed' : 'In Progress');
+            sets.push('progress = ?');
+            vals.push(nextProgress);
         } else if (reviewedStatus === 'Needs Revision') {
           const currentProgress = Math.max(0, Math.min(100, Number(task.progress || 0)));
           sets.push('status = ?');
