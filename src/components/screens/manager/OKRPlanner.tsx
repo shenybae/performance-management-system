@@ -1551,6 +1551,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     {proofReviewGoal.proof_note && <p className="text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {proofReviewGoal.proof_note}</p>}
                     {proofReviewGoal.proof_submitted_at && <p className="text-[10px] text-slate-500">Submitted: {new Date(proofReviewGoal.proof_submitted_at).toLocaleDateString()}</p>}
                     {proofReviewGoal.proof_review_note && <p className="text-[10px] text-slate-500 italic">Latest manager note: {proofReviewGoal.proof_review_note}</p>}
+                    {goalProofApproved && Number(proofReviewGoal.proof_review_rating || 0) > 0 && (
+                      <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Number(proofReviewGoal.proof_review_rating || 0)}/5</span></p>
+                    )}
 
                     {hasGoalProof && (
                       <div className="space-y-2">
@@ -1620,7 +1623,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 (() => {
                   const currentTasks = proofReviewTasksByGoal[proofReviewOpenGoal] || [];
                   const submittedTasks = currentTasks.filter((row: any) => parseTaskProofFiles(row).length > 0);
-                  const allSubmittedProofsApproved = submittedTasks.length > 0 && submittedTasks.every((row: any) => String(row?.proof_review_status || '') === 'Approved');
+                  const allSubmittedProofsApproved = submittedTasks.length > 0 && submittedTasks.every((row: any) => {
+                    const reviewStatus = String(row?.proof_review_status || '').trim();
+                    const reviewRole = String(row?.reviewer_role || row?.proof_reviewed_role || '').trim().toLowerCase();
+                    return reviewStatus === 'Approved' && reviewRole === 'manager';
+                  });
                   return currentTasks.map((t: any) => {
                   const reviewStatus = t.proof_review_status || 'Not Submitted';
                   const managerReviewVisible = reviewStatus === 'Approved' || Number((t as any).tl_review_locked || 0) === 1;
@@ -1708,7 +1715,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                   </button>
                                 </div>
                               ) : (
-                                allSubmittedProofsApproved && managerApproved && managerRatingLocked ? null : <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Math.max(1, Math.min(5, Number(t.proof_review_rating || proofReviewRatings[t.id] || 5)))}/5</span></p>
+                                managerApproved && Number(t.proof_review_rating || proofReviewRatings[t.id] || 0) > 0
+                                  ? <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Math.max(1, Math.min(5, Number(t.proof_review_rating || proofReviewRatings[t.id] || 5)))}/5</span></p>
+                                  : null
                               )}
                               {managerApproved ? (
                                 <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Member proof already approved. Review action is locked.</p>
@@ -3276,6 +3285,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   {proofReviewGoal.proof_note && <p className="text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {proofReviewGoal.proof_note}</p>}
                   {proofReviewGoal.proof_submitted_at && <p className="text-[10px] text-slate-500">Submitted: {new Date(proofReviewGoal.proof_submitted_at).toLocaleDateString()}</p>}
                   {proofReviewGoal.proof_review_note && <p className="text-[10px] text-slate-500 italic">Latest manager note: {proofReviewGoal.proof_review_note}</p>}
+                  {goalProofApproved && Number(proofReviewGoal.proof_review_rating || 0) > 0 && (
+                    <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Number(proofReviewGoal.proof_review_rating || 0)}/5</span></p>
+                  )}
 
                   {hasGoalProof && (
                     <div className="space-y-2">
@@ -3345,7 +3357,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               (() => {
                 const currentTasks = proofReviewTasksByGoal[proofReviewOpenGoal] || [];
                 const submittedTasks = currentTasks.filter((row: any) => parseTaskProofFiles(row).length > 0);
-                const allSubmittedProofsApproved = submittedTasks.length > 0 && submittedTasks.every((row: any) => String(row?.proof_review_status || '') === 'Approved');
+                const allSubmittedProofsApproved = submittedTasks.length > 0 && submittedTasks.every((row: any) => {
+                  const reviewStatus = String(row?.proof_review_status || '').trim();
+                  const reviewRole = String(row?.reviewer_role || row?.proof_reviewed_role || '').trim().toLowerCase();
+                  return reviewStatus === 'Approved' && reviewRole === 'manager';
+                });
                 return currentTasks.map((t: any) => {
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
                 const managerReviewVisible = reviewStatus === 'Approved' || Number((t as any).tl_review_locked || 0) === 1;
@@ -3433,7 +3449,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 </button>
                               </div>
                             ) : (
-                              allSubmittedProofsApproved && managerApproved && managerRatingLocked ? null : <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Math.max(1, Math.min(5, Number(t.proof_review_rating || proofReviewRatings[t.id] || 5)))}/5</span></p>
+                              managerApproved && Number(t.proof_review_rating || proofReviewRatings[t.id] || 0) > 0
+                                ? <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Math.max(1, Math.min(5, Number(t.proof_review_rating || proofReviewRatings[t.id] || 5)))}/5</span></p>
+                                : null
                             )}
                             {managerApproved ? (
                               <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Member proof already approved. Review action is locked.</p>
