@@ -34,6 +34,12 @@ interface EmployeePerformanceSnapshot {
   proofs_approved: number;
   proofs_rejected: number;
   proofs_needs_revision: number;
+  member_proof_ratings_count: number;
+  member_proof_rating_avg: number;
+  leader_proof_ratings_count: number;
+  leader_proof_rating_avg: number;
+  proof_ratings_count: number;
+  proof_rating_avg: number;
   self_assessments_count: number;
   last_self_assessment_at: string | null;
   appraisals_count: number;
@@ -279,6 +285,10 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                   <p className="text-[10px] font-bold uppercase text-rose-700 dark:text-rose-300">Disciplinary</p>
                   <p className="text-lg font-black text-rose-700 dark:text-rose-300">{employeePerformanceSummary?.total_disciplinary ?? 0}</p>
                 </div>
+                <div className="rounded-lg bg-violet-50 dark:bg-violet-900/20 px-2.5 py-2">
+                  <p className="text-[10px] font-bold uppercase text-violet-700 dark:text-violet-300">Avg Proof Rating</p>
+                  <p className="text-lg font-black text-violet-700 dark:text-violet-300">{Number(employeePerformanceSummary?.avg_proof_rating ?? 0).toFixed(2)} / 5</p>
+                </div>
               </div>
 
               <div className="relative">
@@ -411,12 +421,14 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">At Risk / Overdue</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goals_at_risk} / {selectedPerformanceEmployee.goals_overdue}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Recovery Open</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.recovery_tasks_open}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Proof Outcomes</p><p className="font-black text-slate-700 dark:text-slate-200">+{selectedPerformanceEmployee.proofs_approved} / -{selectedPerformanceEmployee.proofs_rejected}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Proof Rating</p><p className="font-black text-slate-700 dark:text-slate-200">{Number(selectedPerformanceEmployee.proof_rating_avg || 0).toFixed(2)} / 5</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Feedback 360</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.feedback_360_count}</p></div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px] text-slate-500">
                   <p><span className="font-bold">Last Self-Assessment:</span> {selectedPerformanceEmployee.last_self_assessment_at ? new Date(selectedPerformanceEmployee.last_self_assessment_at).toLocaleDateString() : 'N/A'}</p>
                   <p><span className="font-bold">Last Appraisal:</span> {selectedPerformanceEmployee.last_appraisal_signoff || 'N/A'}</p>
                   <p><span className="font-bold">Last Disciplinary:</span> {selectedPerformanceEmployee.last_disciplinary_date || 'N/A'}</p>
+                  <p><span className="font-bold">Rated Proofs:</span> {selectedPerformanceEmployee.proof_ratings_count || 0}</p>
                 </div>
               </div>
             )}

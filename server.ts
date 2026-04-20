@@ -102,21 +102,44 @@ function normalizeGoalStatusFromProgress(currentStatus: any, progressValue: any)
   return 'Not Started';
 }
 
+function normalizeProofReviewRating(value: any): number | null {
+  if (value === undefined || value === null || String(value).trim() === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(1, Math.min(5, Math.round(n)));
+}
+
 async function recomputeGoalProgress(goalId: number) {
   const rows: any = await query(
     `SELECT g.status AS goal_status,
-            COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0) AS avg_progress
+            g.proof_review_status AS goal_proof_review_status,
+            COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0) AS avg_progress,
+            COUNT(t.id) AS total_tasks,
+            SUM(CASE WHEN COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved' THEN 1 ELSE 0 END) AS approved_tasks
      FROM goals g
      LEFT JOIN goal_member_tasks t
        ON t.goal_id = g.id
       AND t.deleted_at IS NULL
      WHERE g.id = ?
-     GROUP BY g.id, g.status`,
+     GROUP BY g.id, g.status, g.proof_review_status`,
     [goalId]
   );
   const row = Array.isArray(rows) ? rows[0] : rows;
-  const nextProgress = computeGoalProgressFromTaskAverage(row?.avg_progress || 0, row?.goal_status);
-  const nextStatus = normalizeGoalStatusFromProgress(row?.goal_status, nextProgress);
+  const totalTasks = Number(row?.total_tasks || 0);
+  const approvedTasks = Number(row?.approved_tasks || 0);
+  const leaderProofApproved = String(row?.goal_proof_review_status || '').trim() === 'Approved';
+  const allMemberProofsApproved = totalTasks === 0 ? true : approvedTasks >= totalTasks;
+  const allProofsApproved = leaderProofApproved && allMemberProofsApproved;
+
+  const statusForComputation = allProofsApproved
+    ? row?.goal_status
+    : (isGoalMarkedCompleted(row?.goal_status) ? 'In Progress' : row?.goal_status);
+  const nextProgress = allProofsApproved
+    ? 100
+    : computeGoalProgressFromTaskAverage(row?.avg_progress || 0, statusForComputation);
+  const nextStatus = allProofsApproved
+    ? 'Completed'
+    : normalizeGoalStatusFromProgress(statusForComputation, nextProgress);
 
   try {
     await query('UPDATE goals SET progress = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [nextProgress, nextStatus, goalId]);
@@ -391,6 +414,7 @@ async function initDb() {
       proof_submitted_at TEXT,
       proof_review_status TEXT DEFAULT 'Not Submitted',
       proof_review_note TEXT,
+      proof_review_rating INTEGER,
       proof_reviewed_by INTEGER,
       proof_reviewed_at TEXT,
       FOREIGN KEY(employee_id) REFERENCES employees(id)
@@ -427,6 +451,7 @@ async function initDb() {
       proof_submitted_at TEXT,
       proof_review_status TEXT DEFAULT 'Not Submitted',
       proof_review_note TEXT,
+      proof_review_rating INTEGER,
       proof_reviewed_by INTEGER,
       proof_reviewed_at TEXT,
       created_by INTEGER,
@@ -994,6 +1019,7 @@ async function initDb() {
       'ALTER TABLE goals ADD COLUMN proof_submitted_at TEXT',
       'ALTER TABLE goals ADD COLUMN proof_review_status TEXT DEFAULT \'Not Submitted\'',
       'ALTER TABLE goals ADD COLUMN proof_review_note TEXT',
+      'ALTER TABLE goals ADD COLUMN proof_review_rating INTEGER',
       'ALTER TABLE goals ADD COLUMN proof_reviewed_by INTEGER',
       'ALTER TABLE goals ADD COLUMN proof_reviewed_at TEXT',
       'ALTER TABLE goal_assignees ADD COLUMN assigned_by INTEGER',
@@ -1025,6 +1051,7 @@ async function initDb() {
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_submitted_at TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_status TEXT DEFAULT \'Not Submitted\'',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_note TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_rating INTEGER',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_by INTEGER',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_at TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN created_by INTEGER',
@@ -3089,7 +3116,7 @@ async function startServer() {
       const actor = (req as any).user || {};
       const role = actor.role;
 
-      const existingRows: any = await query('SELECT id, employee_id, leader_id, department, status, progress, proof_image, proof_review_status FROM goals WHERE id = ?', [req.params.id]);
+      const existingRows: any = await query('SELECT id, employee_id, leader_id, department, status, progress, proof_image, proof_review_status, proof_review_rating FROM goals WHERE id = ?', [req.params.id]);
       const existing = Array.isArray(existingRows) ? existingRows[0] : existingRows;
       if (!existing) return res.status(404).json({ error: 'Goal not found' });
 
@@ -3165,6 +3192,8 @@ async function startServer() {
           leaderVals.push('Pending Review');
           leaderSets.push('proof_review_note = ?');
           leaderVals.push(null);
+          leaderSets.push('proof_review_rating = ?');
+          leaderVals.push(null);
           leaderSets.push('proof_reviewed_by = ?');
           leaderVals.push(null);
           leaderSets.push('proof_reviewed_at = ?');
@@ -3204,7 +3233,7 @@ async function startServer() {
       const effectiveStatus = normalizeGoalStatusFromProgress(normalizedStatus ?? existing.status, normalizedProgress ?? existing.progress);
       const sets: string[] = [];
       const vals: any[] = [];
-      for (const k of ['statement', 'metric', 'target_date', 'title', 'status', 'progress', 'scope', 'department', 'team_name', 'delegation', 'priority', 'quarter', 'frequency', 'leader_id', 'proof_image', 'proof_file_name', 'proof_file_type', 'proof_note', 'proof_submitted_at', 'proof_review_status', 'proof_review_note']) {
+      for (const k of ['statement', 'metric', 'target_date', 'title', 'status', 'progress', 'scope', 'department', 'team_name', 'delegation', 'priority', 'quarter', 'frequency', 'leader_id', 'proof_image', 'proof_file_name', 'proof_file_type', 'proof_note', 'proof_submitted_at', 'proof_review_status', 'proof_review_note', 'proof_review_rating']) {
         if (k === 'progress') {
           if (normalizedProgress !== undefined) { sets.push('progress = ?'); vals.push(normalizedProgress); }
           continue;
@@ -3218,9 +3247,15 @@ async function startServer() {
 
       if (b.proof_review_status !== undefined) {
         const reviewedStatus = String(b.proof_review_status || '').trim();
+        const normalizedRating = normalizeProofReviewRating(b.proof_review_rating);
         const hasExistingGoalProof = String(existing?.proof_image || '').trim().length > 0;
         const hasIncomingGoalProof = typeof b.proof_image === 'string' && String(b.proof_image || '').trim().length > 0;
         const currentGoalProofStatus = String(existing?.proof_review_status || 'Not Submitted').trim() || 'Not Submitted';
+        const isReviewed = reviewedStatus === 'Approved' || reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected';
+
+        if (role === 'Manager' && isReviewed && normalizedRating === null) {
+          return res.status(400).json({ error: 'Manager rating (1-5) is required when reviewing final proof' });
+        }
 
         if (currentGoalProofStatus === 'Approved' && reviewedStatus !== 'Approved') {
           return res.status(409).json({ error: 'Final proof decision already finalized as Approved' });
@@ -3234,12 +3269,14 @@ async function startServer() {
         vals.push(Number(actor?.id || 0) || null);
         sets.push('proof_reviewed_at = ?');
         vals.push(new Date().toISOString());
+        sets.push('proof_review_rating = ?');
+        vals.push(normalizedRating);
 
         if (reviewedStatus === 'Approved') {
-          sets.push('status = ?');
-          vals.push('Completed');
-          sets.push('progress = ?');
-          vals.push(100);
+          if (normalizedStatus === undefined && String(existing?.status || '').toLowerCase() === 'completed') {
+            sets.push('status = ?');
+            vals.push('In Progress');
+          }
         } else if (reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected') {
           if (normalizedStatus === undefined && String(existing?.status || '').toLowerCase() === 'completed') {
             sets.push('status = ?');
@@ -3259,16 +3296,8 @@ async function startServer() {
       vals.push(req.params.id);
       await query(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, vals);
 
-      if (b.proof_review_status !== undefined && String(b.proof_review_status || '').trim() === 'Approved') {
-        await query(
-          `UPDATE goal_member_tasks
-           SET status = 'Completed',
-               progress = 100,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE goal_id = ?
-             AND deleted_at IS NULL`,
-          [req.params.id]
-        );
+      if (b.proof_review_status !== undefined) {
+        await recomputeGoalProgress(Number(req.params.id));
       }
 
       if (b.assignee_ids !== undefined) {
@@ -3625,6 +3654,20 @@ async function startServer() {
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved') AS proofs_approved,
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Rejected') AS proofs_rejected,
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision') AS proofs_needs_revision,
+          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_ratings_count,
+          (SELECT ROUND(COALESCE(AVG(COALESCE(t.proof_review_rating, 0)), 0), 2) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_rating_avg,
+          (SELECT COUNT(*) FROM goals g LEFT JOIN users u ON u.id = g.leader_id WHERE u.employee_id = e.id AND g.proof_review_rating IS NOT NULL) AS leader_proof_ratings_count,
+          (SELECT ROUND(COALESCE(AVG(COALESCE(g.proof_review_rating, 0)), 0), 2) FROM goals g LEFT JOIN users u ON u.id = g.leader_id WHERE u.employee_id = e.id AND g.proof_review_rating IS NOT NULL) AS leader_proof_rating_avg,
+          (SELECT COUNT(*) FROM (
+            SELECT t.proof_review_rating AS rating FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL
+            UNION ALL
+            SELECT g.proof_review_rating AS rating FROM goals g LEFT JOIN users u ON u.id = g.leader_id WHERE u.employee_id = e.id AND g.proof_review_rating IS NOT NULL
+          ) proof_ratings) AS proof_ratings_count,
+          (SELECT ROUND(COALESCE(AVG(proof_ratings.rating), 0), 2) FROM (
+            SELECT t.proof_review_rating AS rating FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL
+            UNION ALL
+            SELECT g.proof_review_rating AS rating FROM goals g LEFT JOIN users u ON u.id = g.leader_id WHERE u.employee_id = e.id AND g.proof_review_rating IS NOT NULL
+          ) proof_ratings) AS proof_rating_avg,
 
           (SELECT COUNT(*) FROM self_assessments s WHERE s.employee_id = e.id) AS self_assessments_count,
           (SELECT MAX(s.created_at) FROM self_assessments s WHERE s.employee_id = e.id) AS last_self_assessment_at,
@@ -3676,6 +3719,12 @@ async function startServer() {
           proofs_approved: Number(r.proofs_approved || 0),
           proofs_rejected: Number(r.proofs_rejected || 0),
           proofs_needs_revision: Number(r.proofs_needs_revision || 0),
+          member_proof_ratings_count: Number(r.member_proof_ratings_count || 0),
+          member_proof_rating_avg: Number(r.member_proof_rating_avg || 0),
+          leader_proof_ratings_count: Number(r.leader_proof_ratings_count || 0),
+          leader_proof_rating_avg: Number(r.leader_proof_rating_avg || 0),
+          proof_ratings_count: Number(r.proof_ratings_count || 0),
+          proof_rating_avg: Number(r.proof_rating_avg || 0),
           self_assessments_count: Number(r.self_assessments_count || 0),
           last_self_assessment_at: r.last_self_assessment_at || null,
           appraisals_count: Number(r.appraisals_count || 0),
@@ -3694,6 +3743,7 @@ async function startServer() {
       const summary = list.length === 0 ? null : {
         employees: list.length,
         avg_goal_progress: Math.round(list.reduce((sum: number, item: any) => sum + Number(item.goals_avg_progress || 0), 0) / list.length),
+        avg_proof_rating: Number((list.reduce((sum: number, item: any) => sum + Number(item.proof_rating_avg || 0), 0) / list.length).toFixed(2)),
         total_goals: list.reduce((sum: number, item: any) => sum + Number(item.goals_total || 0), 0),
         total_pips: list.reduce((sum: number, item: any) => sum + Number(item.pip_count || 0), 0),
         total_idps: list.reduce((sum: number, item: any) => sum + Number(item.idp_count || 0), 0),
@@ -4382,19 +4432,7 @@ async function startServer() {
       }
       if (!allowed) return res.status(403).json({ error: 'Forbidden' });
 
-      if (String(goal?.proof_review_status || '').trim() === 'Approved') {
-        await query(
-          `UPDATE goal_member_tasks
-           SET status = 'Completed',
-               progress = 100,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE goal_id = ?
-             AND deleted_at IS NULL
-             AND (COALESCE(status, 'Not Started') <> 'Completed' OR COALESCE(progress, 0) < 100)`,
-          [goalId]
-        );
-        await recomputeGoalProgress(goalId);
-      }
+      await recomputeGoalProgress(goalId);
 
       const rows: any = await query(
         `SELECT t.*, e.name as member_name, COALESCE(u.full_name, u.username, u.email) as reviewer_name
@@ -4478,7 +4516,7 @@ async function startServer() {
 
       const b = req.body || {};
       const leaderUpdatable = ['title', 'description', 'due_date', 'priority', 'status', 'progress'];
-      const leaderReviewUpdatable = ['proof_review_status', 'proof_review_note'];
+      const leaderReviewUpdatable = ['proof_review_status', 'proof_review_note', 'proof_review_rating'];
       // Proof file columns are handled in the assigneeSubmittedProof block below.
       // Keeping them out of this generic updater avoids duplicate SET assignments
       // (e.g., proof_image/proof_file_name/proof_file_type), which Postgres rejects.
@@ -4567,10 +4605,15 @@ async function startServer() {
       if (reviewerSetStatus) {
         const reviewedStatus = String(b.proof_review_status || '');
         const isReviewed = reviewedStatus === 'Approved' || reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected';
+        const normalizedRating = normalizeProofReviewRating(b.proof_review_rating);
+
+        if (role === 'Manager' && isReviewed && normalizedRating === null) {
+          return res.status(400).json({ error: 'Manager rating (1-5) is required when reviewing member proof' });
+        }
 
         if (reviewedStatus === 'Approved') {
           sets.push('status = ?');
-          vals.push('In Progress');
+          vals.push('Completed');
           sets.push('progress = ?');
           vals.push(TASK_PROGRESS_REVIEW_APPROVED);
         } else if (reviewedStatus === 'Needs Revision') {
@@ -4591,6 +4634,8 @@ async function startServer() {
         vals.push(isReviewed ? (actor.id || null) : null);
         sets.push('proof_reviewed_at = ?');
         vals.push(isReviewed ? new Date().toISOString() : null);
+        sets.push('proof_review_rating = ?');
+        vals.push(normalizedRating);
       }
       if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
 
@@ -4602,7 +4647,7 @@ async function startServer() {
 
       try {
         const updatedTaskRows: any = await query(
-          'SELECT id, goal_id, member_employee_id, status, progress, proof_review_status FROM goal_member_tasks WHERE id = ?',
+          'SELECT id, goal_id, member_employee_id, status, progress, proof_review_status, proof_review_rating FROM goal_member_tasks WHERE id = ?',
           [taskId]
         );
         const updatedTask = Array.isArray(updatedTaskRows) ? updatedTaskRows[0] : updatedTaskRows;
@@ -4614,6 +4659,7 @@ async function startServer() {
           task_status: String(updatedTask?.status || task.status || ''),
           task_progress: Number(updatedTask?.progress ?? task.progress ?? 0),
           proof_review_status: String(updatedTask?.proof_review_status || b?.proof_review_status || task.proof_review_status || ''),
+          proof_review_rating: Number(updatedTask?.proof_review_rating ?? b?.proof_review_rating ?? task.proof_review_rating ?? 0),
           updated_at: new Date().toISOString(),
         };
         if (task.leader_id) io.to(`user_${task.leader_id}`).emit('goals:updated', payload);
