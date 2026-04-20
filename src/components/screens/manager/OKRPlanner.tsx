@@ -1532,6 +1532,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               ) : (
                 (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
                   const reviewStatus = t.proof_review_status || 'Not Submitted';
+                  const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
+                  const goalLeaderId = Number((proofReviewGoal as any)?.leader_id || 0);
+                  const reviewedByLeader = goalLeaderId > 0 && Number((t as any).proof_reviewed_by || 0) === goalLeaderId;
+                  const reviewLabel = reviewStatus === 'Approved'
+                    ? (reviewRole === 'manager' ? 'Approved by Manager' : (reviewedByLeader || reviewRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved'))
+                    : reviewStatus;
                   const proofFiles = parseTaskProofFiles(t);
                   const hasProof = proofFiles.length > 0;
                   return (
@@ -1542,7 +1548,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           <p className="text-[10px] text-slate-500">{t.member_name || `#${t.member_employee_id}`} • Status: <span className="font-bold">{t.status || 'Not Started'}</span> • Progress: <span className="font-bold">{t.progress || 0}%</span></p>
                         </div>
                         <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full whitespace-nowrap ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
-                          {reviewStatus}
+                          {reviewLabel}
                         </span>
                       </div>
 
@@ -1588,7 +1594,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             <select
                               value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
                               onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
-                              disabled={proofReviewSubmittingTaskId === t.id}
+                              disabled={proofReviewSubmittingTaskId === t.id || reviewStatus !== 'Approved'}
                               className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
                             >
                               <option value="">Rate 1-5</option>
@@ -3214,7 +3220,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 const proofFiles = parseTaskProofFiles(t);
                 const hasProof = proofFiles.length > 0;
                 const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
-                const reviewLabel = reviewStatus === 'Approved' ? (reviewRole === 'manager' ? 'Approved by Manager' : reviewRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved') : reviewStatus;
+                const goalLeaderId = Number((proofReviewGoal as any)?.leader_id || 0);
+                const reviewedByLeader = goalLeaderId > 0 && Number((t as any).proof_reviewed_by || 0) === goalLeaderId;
+                const reviewLabel = reviewStatus === 'Approved'
+                  ? (reviewRole === 'manager' ? 'Approved by Manager' : (reviewedByLeader || reviewRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved'))
+                  : reviewStatus;
                 return (
                   <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
                     <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
@@ -3269,7 +3279,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           <select
                             value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
                             onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
-                            disabled={proofReviewSubmittingTaskId === t.id}
+                            disabled={proofReviewSubmittingTaskId === t.id || reviewStatus !== 'Approved'}
                             className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
                           >
                             <option value="">Rate 1-5</option>
