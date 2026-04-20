@@ -2145,6 +2145,12 @@ export const CareerDashboard = () => {
                                   ))}
                                 </div>
                               </div>
+                              {String(t.proof_note || '').trim() && (
+                                <div className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
+                                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Member Note</p>
+                                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{String(t.proof_note || '').trim()}</p>
+                                </div>
+                              )}
                               <textarea
                                 rows={2}
                                 value={reviewNoteValue}

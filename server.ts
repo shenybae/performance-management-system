@@ -201,6 +201,17 @@ function escapeRegExp(value: string) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function parseDisplayNameFromEmail(value: any) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+  const localPart = raw.includes('@') ? raw.split('@')[0] : raw;
+  return localPart
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (c: string) => c.toUpperCase())
+    .trim();
+}
+
 // Normalize user-entered full names so UI labels stay readable even with legacy encoding artifacts.
 function sanitizeUserFullName(rawFullName: any, email?: string | null) {
   let name = String(rawFullName || '')
