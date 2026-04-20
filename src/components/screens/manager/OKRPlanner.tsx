@@ -1468,7 +1468,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     {proofReviewGoal.proof_note && <p className="text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {proofReviewGoal.proof_note}</p>}
                     {proofReviewGoal.proof_submitted_at && <p className="text-[10px] text-slate-500">Submitted: {new Date(proofReviewGoal.proof_submitted_at).toLocaleDateString()}</p>}
                     {proofReviewGoal.proof_review_note && <p className="text-[10px] text-slate-500 italic">Latest manager note: {proofReviewGoal.proof_review_note}</p>}
-                    {Number(proofReviewGoal.proof_review_rating || 0) > 0 && <p className="text-[10px] text-slate-500">Latest manager rating: <span className="font-bold">{Number(proofReviewGoal.proof_review_rating || 0)}/5</span></p>}
+                    {goalProofApproved && Number(proofReviewGoal.proof_review_rating || 0) > 0 && <p className="text-[10px] text-slate-500">Latest manager rating: <span className="font-bold">{Number(proofReviewGoal.proof_review_rating || 0)}/5</span></p>}
 
                     {hasGoalProof && (
                       <div className="space-y-2">
@@ -1480,18 +1480,20 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           placeholder="Final proof review note (optional)"
                           disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || !goalProofApproved}
                         />
-                        <div className="flex items-center gap-2">
-                          <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
-                          <select
-                            value={String((proofReviewRatings[proofReviewGoal.id] ?? Number(proofReviewGoal.proof_review_rating || 0)) || '')}
-                            onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [proofReviewGoal.id]: Number(e.target.value || 0) }))}
-                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || !goalProofApproved}
-                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
-                          >
-                            <option value="">Rate 1-5</option>
-                            {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
-                          </select>
-                        </div>
+                        {goalProofApproved && (
+                          <div className="flex items-center gap-2">
+                            <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
+                            <select
+                              value={String((proofReviewRatings[proofReviewGoal.id] ?? Number(proofReviewGoal.proof_review_rating || 0)) || '')}
+                              onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [proofReviewGoal.id]: Number(e.target.value || 0) }))}
+                              disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
+                            >
+                              <option value="">Rate 1-5</option>
+                              {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                            </select>
+                          </div>
+                        )}
                         {goalProofApproved ? (
                           <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
                         ) : (
@@ -1577,7 +1579,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
                       {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
                       {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
-                      {Number(t.proof_review_rating || 0) > 0 && <p className="mb-2 text-[10px] text-slate-500">Latest manager rating: <span className="font-bold">{Number(t.proof_review_rating || 0)}/5</span></p>}
+                      {reviewStatus === 'Approved' && Number(t.proof_review_rating || 0) > 0 && <p className="mb-2 text-[10px] text-slate-500">Latest manager rating: <span className="font-bold">{Number(t.proof_review_rating || 0)}/5</span></p>}
 
                       {hasProof && (
                         <div className="space-y-2">
@@ -1589,18 +1591,20 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             placeholder="Member proof review note (optional)"
                             disabled={proofReviewSubmittingTaskId === t.id}
                           />
-                          <div className="flex items-center gap-2">
-                            <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
-                            <select
-                              value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
-                              onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
-                              disabled={proofReviewSubmittingTaskId === t.id || reviewStatus !== 'Approved'}
-                              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
-                            >
-                              <option value="">Rate 1-5</option>
-                              {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
-                            </select>
-                          </div>
+                          {reviewStatus === 'Approved' && (
+                            <div className="flex items-center gap-2">
+                              <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
+                              <select
+                                value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
+                                onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
+                                disabled={proofReviewSubmittingTaskId === t.id}
+                                className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
+                              >
+                                <option value="">Rate 1-5</option>
+                                {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                              </select>
+                            </div>
+                          )}
                           <div className="flex flex-wrap gap-2">
                             <button
                               onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
@@ -3151,7 +3155,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   {proofReviewGoal.proof_note && <p className="text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {proofReviewGoal.proof_note}</p>}
                   {proofReviewGoal.proof_submitted_at && <p className="text-[10px] text-slate-500">Submitted: {new Date(proofReviewGoal.proof_submitted_at).toLocaleDateString()}</p>}
                   {proofReviewGoal.proof_review_note && <p className="text-[10px] text-slate-500 italic">Latest manager note: {proofReviewGoal.proof_review_note}</p>}
-                    {Number(proofReviewGoal.proof_review_rating || 0) > 0 && <p className="text-[10px] text-slate-500">Latest manager rating: <span className="font-bold">{Number(proofReviewGoal.proof_review_rating || 0)}/5</span></p>}
+                    {goalProofApproved && Number(proofReviewGoal.proof_review_rating || 0) > 0 && <p className="text-[10px] text-slate-500">Latest manager rating: <span className="font-bold">{Number(proofReviewGoal.proof_review_rating || 0)}/5</span></p>}
 
                   {hasGoalProof && (
                     <div className="space-y-2">
@@ -3163,18 +3167,20 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         placeholder="Final proof review note (optional)"
                           disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || !goalProofApproved}
                       />
-                      <div className="flex items-center gap-2">
-                        <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
-                        <select
-                          value={String((proofReviewRatings[proofReviewGoal.id] ?? Number(proofReviewGoal.proof_review_rating || 0)) || '')}
-                          onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [proofReviewGoal.id]: Number(e.target.value || 0) }))}
-                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || !goalProofApproved}
-                          className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
-                        >
-                          <option value="">Rate 1-5</option>
-                          {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
-                        </select>
-                      </div>
+                      {goalProofApproved && (
+                        <div className="flex items-center gap-2">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
+                          <select
+                            value={String((proofReviewRatings[proofReviewGoal.id] ?? Number(proofReviewGoal.proof_review_rating || 0)) || '')}
+                            onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [proofReviewGoal.id]: Number(e.target.value || 0) }))}
+                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
+                          >
+                            <option value="">Rate 1-5</option>
+                            {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                          </select>
+                        </div>
+                      )}
                       {goalProofApproved ? (
                         <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
                       ) : (
@@ -3262,7 +3268,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
                     {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
                     {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
-                    {Number(t.proof_review_rating || 0) > 0 && <p className="mb-2 text-[10px] text-slate-500">Latest manager rating: <span className="font-bold">{Number(t.proof_review_rating || 0)}/5</span></p>}
+                    {reviewStatus === 'Approved' && Number(t.proof_review_rating || 0) > 0 && <p className="mb-2 text-[10px] text-slate-500">Latest manager rating: <span className="font-bold">{Number(t.proof_review_rating || 0)}/5</span></p>}
 
                     {hasProof && (
                       <div className="space-y-2">
@@ -3274,18 +3280,20 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           placeholder="Member proof review note (optional)"
                           disabled={proofReviewSubmittingTaskId === t.id}
                         />
-                        <div className="flex items-center gap-2">
-                          <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
-                          <select
-                            value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
-                            onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
-                            disabled={proofReviewSubmittingTaskId === t.id || reviewStatus !== 'Approved'}
-                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
-                          >
-                            <option value="">Rate 1-5</option>
-                            {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
-                          </select>
-                        </div>
+                        {reviewStatus === 'Approved' && (
+                          <div className="flex items-center gap-2">
+                            <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
+                            <select
+                              value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
+                              onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
+                              disabled={proofReviewSubmittingTaskId === t.id}
+                              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
+                            >
+                              <option value="">Rate 1-5</option>
+                              {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                            </select>
+                          </div>
+                        )}
                         <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
