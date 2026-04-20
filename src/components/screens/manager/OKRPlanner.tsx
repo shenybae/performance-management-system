@@ -460,7 +460,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           leader_id: leaderIdNum,
         }),
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        let msg = 'Failed to review proof';
+        try {
+          const err = await res.json();
+          if (err?.error) msg = String(err.error);
+        } catch {}
+        throw new Error(msg);
+      }
 
       // Keep leader-member mapping in one place: when creating a Team/Department goal.
       if ((form.scope === 'Team' || form.scope === 'Department') && leaderIdNum && assigneeIds.length > 0) {
@@ -929,8 +936,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       }));
       window.notify?.(`Proof ${status.toLowerCase()}`, 'success');
       await refreshProofReviewTasks(goalId);
-    } catch {
-      window.notify?.('Failed to review proof', 'error');
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to review proof', 'error');
       await refreshProofReviewTasks(goalId);
     } finally {
       setProofReviewSubmittingTaskId(null);
@@ -3193,11 +3200,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             ) : (
               (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
-                const effectiveProgress = Math.max(0, Math.min(100, Number(t.progress || 0)));
+                const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
+                const effectiveProgress = reviewStatus === 'Approved'
+                  ? (reviewRole === 'manager' ? 100 : Math.min(Math.max(0, Math.min(100, Number(t.progress || 0))), 75))
+                  : Math.max(0, Math.min(100, Number(t.progress || 0)));
                 const effectiveStatus = t.status || 'Not Started';
                 const proofFiles = parseTaskProofFiles(t);
                 const hasProof = proofFiles.length > 0;
-                const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
                 const goalLeaderId = Number((proofReviewGoal as any)?.leader_id || 0);
                 const reviewedByLeader = goalLeaderId > 0 && Number((t as any).proof_reviewed_by || 0) === goalLeaderId;
                 const reviewLabel = reviewStatus === 'Approved'

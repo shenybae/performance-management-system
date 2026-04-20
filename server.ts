@@ -4561,7 +4561,7 @@ async function startServer() {
 
       const b = req.body || {};
       const leaderUpdatable = ['title', 'description', 'due_date', 'priority', 'status', 'progress'];
-      const managerReviewUpdatable = ['proof_review_status', 'proof_review_note', 'proof_review_rating'];
+      const managerReviewUpdatable = ['proof_review_note', 'proof_review_rating'];
       // Proof file columns are handled in the assigneeSubmittedProof block below.
       // Keeping them out of this generic updater avoids duplicate SET assignments
       // (e.g., proof_image/proof_file_name/proof_file_type), which Postgres rejects.
@@ -4582,7 +4582,7 @@ async function startServer() {
         }
       }
 
-      if (isPrivilegedRole(role) || role === 'Manager' || isGoalLeader) {
+      if ((isPrivilegedRole(role) || role === 'Manager' || isGoalLeader) && b.proof_review_status === undefined) {
         for (const k of managerReviewUpdatable) {
           if (b[k] !== undefined) {
             sets.push(`${k} = ?`);
@@ -4649,18 +4649,24 @@ async function startServer() {
       }
 
       const reviewerSetStatus = !(role === 'Employee' && !isGoalLeader) && b.proof_review_status !== undefined;
+      if (reviewerSetStatus && isGoalLeader && !(isPrivilegedRole(role) || role === 'Manager')) {
+        const lastReviewerRole = normalizeUserRole(task.proof_reviewed_role || '');
+        const currentReviewStatus = String(task.proof_review_status || 'Not Submitted');
+        const managerRevisionLocked = lastReviewerRole === 'Manager' && (currentReviewStatus === 'Needs Revision' || currentReviewStatus === 'Pending Review');
+        if (managerRevisionLocked) {
+          return res.status(403).json({ error: 'Only the manager can review this member proof after requesting revision' });
+        }
+      }
       if (reviewerSetStatus && String(task.proof_review_status || '') === 'Approved' && String(b.proof_review_status || '') !== 'Approved' && !(role === 'Manager' || isPrivilegedRole(role))) {
         return res.status(409).json({ error: 'Proof decision already finalized as Approved' });
       }
       if (reviewerSetStatus) {
         const reviewedStatus = String(b.proof_review_status || '');
         const isReviewed = reviewedStatus === 'Approved' || reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected';
+        const existingRating = normalizeProofReviewRating(task.proof_review_rating);
         const normalizedRating = normalizeProofReviewRating(b.proof_review_rating);
+        const effectiveRating = normalizedRating ?? existingRating ?? ((role === 'Manager' && isReviewed) ? 5 : null);
         const hasExistingProof = String(task.proof_image || '').trim().length > 0;
-
-        if (role === 'Manager' && isReviewed && normalizedRating === null) {
-          return res.status(400).json({ error: 'Manager rating (1-5) is required when reviewing member proof' });
-        }
 
         if (reviewedStatus === 'Approved' && !hasExistingProof) {
           return res.status(400).json({ error: 'Member proof file is required before approval' });
@@ -4680,7 +4686,7 @@ async function startServer() {
           sets.push('status = ?');
           vals.push('In Progress');
           sets.push('progress = ?');
-          vals.push(currentProgress >= TASK_PROGRESS_REVIEW_APPROVED ? TASK_PROGRESS_REVIEW_APPROVED : Math.max(currentProgress, 50));
+          vals.push(Math.max(50, Math.min(currentProgress, 75)));
         } else if (reviewedStatus === 'Rejected') {
           const currentProgress = Math.max(0, Math.min(100, Number(task.progress || 0)));
           sets.push('status = ?');
@@ -4696,7 +4702,7 @@ async function startServer() {
         sets.push('proof_reviewed_at = ?');
         vals.push(isReviewed ? new Date().toISOString() : null);
         sets.push('proof_review_rating = ?');
-        vals.push(normalizedRating);
+        vals.push(effectiveRating);
       }
       if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
 
