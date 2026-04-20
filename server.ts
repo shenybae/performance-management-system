@@ -4649,14 +4649,6 @@ async function startServer() {
       }
 
       const reviewerSetStatus = !(role === 'Employee' && !isGoalLeader) && b.proof_review_status !== undefined;
-      if (reviewerSetStatus && isGoalLeader && !(isPrivilegedRole(role) || role === 'Manager')) {
-        const lastReviewerRole = normalizeUserRole(task.proof_reviewed_role || '');
-        const currentReviewStatus = String(task.proof_review_status || 'Not Submitted');
-        const managerRevisionLocked = lastReviewerRole === 'Manager' && (currentReviewStatus === 'Needs Revision' || currentReviewStatus === 'Pending Review');
-        if (managerRevisionLocked) {
-          return res.status(403).json({ error: 'Only the manager can review this member proof after requesting revision' });
-        }
-      }
       if (reviewerSetStatus && String(task.proof_review_status || '') === 'Approved' && String(b.proof_review_status || '') !== 'Approved' && !(role === 'Manager' || isPrivilegedRole(role))) {
         return res.status(409).json({ error: 'Proof decision already finalized as Approved' });
       }
