@@ -115,7 +115,6 @@ async function recomputeGoalProgress(goalId: number) {
             g.proof_review_status AS goal_proof_review_status,
             g.proof_review_rating AS goal_proof_review_rating,
             g.proof_reviewed_by AS goal_proof_reviewed_by,
-            g.proof_reviewed_role AS goal_proof_reviewed_role,
             ug.role AS goal_proof_reviewer_role,
             COALESCE(TRIM(g.proof_image), '') AS goal_proof_image,
             COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0) AS avg_progress,
@@ -126,7 +125,7 @@ async function recomputeGoalProgress(goalId: number) {
                  AND COALESCE(TRIM(t.proof_image), '') <> ''
                  AND t.proof_reviewed_by IS NOT NULL
                  AND COALESCE(t.proof_review_rating, 0) BETWEEN 1 AND 5
-                 AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ut.role, ''))) = 'manager'
+                 AND LOWER(TRIM(COALESCE(ut.role, ''))) = 'manager'
                 THEN 1
                 ELSE 0
               END
@@ -138,7 +137,7 @@ async function recomputeGoalProgress(goalId: number) {
       AND t.deleted_at IS NULL
      LEFT JOIN users ut ON ut.id = t.proof_reviewed_by
      WHERE g.id = ?
-     GROUP BY g.id, g.status, g.proof_review_status, g.proof_review_rating, g.proof_reviewed_by, g.proof_reviewed_role, ug.role, g.proof_image`,
+     GROUP BY g.id, g.status, g.proof_review_status, g.proof_review_rating, g.proof_reviewed_by, ug.role, g.proof_image`,
     [goalId]
   );
   const row = Array.isArray(rows) ? rows[0] : rows;
@@ -148,7 +147,7 @@ async function recomputeGoalProgress(goalId: number) {
     String(row?.goal_proof_review_status || '').trim() === 'Approved'
     && String(row?.goal_proof_image || '').trim().length > 0
     && Number(row?.goal_proof_reviewed_by || 0) > 0
-    && String(row?.goal_proof_reviewed_role || row?.goal_proof_reviewer_role || '').trim().toLowerCase() === 'manager'
+    && String(row?.goal_proof_reviewer_role || '').trim().toLowerCase() === 'manager'
     && Number(row?.goal_proof_review_rating || 0) >= 1
     && Number(row?.goal_proof_review_rating || 0) <= 5;
   const allMemberProofsApproved = totalTasks === 0 ? true : approvedTasks >= totalTasks;
@@ -3235,8 +3234,6 @@ async function startServer() {
           leaderVals.push(null);
           leaderSets.push('proof_reviewed_by = ?');
           leaderVals.push(null);
-          leaderSets.push('proof_reviewed_role = ?');
-          leaderVals.push(null);
           leaderSets.push('proof_reviewed_at = ?');
           leaderVals.push(null);
         }
@@ -3308,8 +3305,6 @@ async function startServer() {
 
         sets.push('proof_reviewed_by = ?');
         vals.push(Number(actor?.id || 0) || null);
-        sets.push('proof_reviewed_role = ?');
-        vals.push(normalizeUserRole(role) || String(role || '') || null);
         sets.push('proof_reviewed_at = ?');
         vals.push(new Date().toISOString());
         sets.push('proof_review_rating = ?');
@@ -3603,18 +3598,18 @@ async function startServer() {
 
       if (isPrivilegedRole(role)) {
         const rows: any = queryEmployeeId
-          ? await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ? ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`, [queryEmployeeId])
-          : await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id ${includeArchived ? '' : 'WHERE g.deleted_at IS NULL'}`);
+          ? await query(`SELECT g.*, e.name as employee_name, rg.role AS proof_reviewer_role FROM goals g LEFT JOIN employees e ON g.employee_id = e.id LEFT JOIN users rg ON rg.id = g.proof_reviewed_by WHERE g.employee_id = ? ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`, [queryEmployeeId])
+          : await query(`SELECT g.*, e.name as employee_name, rg.role AS proof_reviewer_role FROM goals g LEFT JOIN employees e ON g.employee_id = e.id LEFT JOIN users rg ON rg.id = g.proof_reviewed_by ${includeArchived ? '' : 'WHERE g.deleted_at IS NULL'}`);
         return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
       }
 
       if (role === 'Manager') {
         // Managers can view goals across all departments: Department, Team, and Individual.
         if (queryEmployeeId) {
-          const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.employee_id = ? ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`, [queryEmployeeId]);
+          const rows: any = await query(`SELECT g.*, e.name as employee_name, rg.role AS proof_reviewer_role FROM goals g LEFT JOIN employees e ON g.employee_id = e.id LEFT JOIN users rg ON rg.id = g.proof_reviewed_by WHERE g.employee_id = ? ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`, [queryEmployeeId]);
           return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
         }
-        const rows: any = await query(`SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id ${includeArchived ? '' : 'WHERE g.deleted_at IS NULL'}`);
+        const rows: any = await query(`SELECT g.*, e.name as employee_name, rg.role AS proof_reviewer_role FROM goals g LEFT JOIN employees e ON g.employee_id = e.id LEFT JOIN users rg ON rg.id = g.proof_reviewed_by ${includeArchived ? '' : 'WHERE g.deleted_at IS NULL'}`);
         return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
       }
 
@@ -3623,7 +3618,7 @@ async function startServer() {
         const employeeId = normalizeEmployeeId(actor.employee_id);
         if (!employeeId) return res.json([]);
         const rows: any = await query(
-          `SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE (g.employee_id = ? OR g.id IN (SELECT goal_id FROM goal_assignees WHERE employee_id = ?)) ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`,
+          `SELECT g.*, e.name as employee_name, rg.role AS proof_reviewer_role FROM goals g LEFT JOIN employees e ON g.employee_id = e.id LEFT JOIN users rg ON rg.id = g.proof_reviewed_by WHERE (g.employee_id = ? OR g.id IN (SELECT goal_id FROM goal_assignees WHERE employee_id = ?)) ${includeArchived ? '' : 'AND g.deleted_at IS NULL'}`,
           [employeeId, employeeId]
         );
         return res.json(await enrichGoalsWithAssignees(Array.isArray(rows) ? rows : []));
@@ -4399,7 +4394,8 @@ async function startServer() {
       const rows: any = await query(
         `SELECT t.*, g.title as goal_title, g.statement as goal_statement,
                 COALESCE(e.name, 'Unknown') as member_name,
-                COALESCE(u.full_name, u.username, u.email) as reviewer_name
+          COALESCE(u.full_name, u.username, u.email) as reviewer_name,
+          u.role as reviewer_role
          FROM goal_member_tasks t
          LEFT JOIN goals g ON g.id = t.goal_id
          LEFT JOIN employees e ON e.id = t.member_employee_id
@@ -4484,7 +4480,7 @@ async function startServer() {
       await recomputeGoalProgress(goalId);
 
       const rows: any = await query(
-        `SELECT t.*, e.name as member_name, COALESCE(u.full_name, u.username, u.email) as reviewer_name
+          'SELECT t.*, e.name as member_name, COALESCE(u.full_name, u.username, u.email) as reviewer_name, u.role as reviewer_role
          FROM goal_member_tasks t
          LEFT JOIN employees e ON e.id = t.member_employee_id
          LEFT JOIN users u ON u.id = t.proof_reviewed_by

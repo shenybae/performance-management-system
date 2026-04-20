@@ -1428,7 +1428,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 const goalProofFiles = parseGoalProofFiles(proofReviewGoal);
                 const goalProofStatus = String(proofReviewGoal.proof_review_status || 'Not Submitted');
                 const goalProofApproved = goalProofStatus === 'Approved';
-                const goalProofReviewerRole = String((proofReviewGoal as any).proof_reviewed_role || '').trim().toLowerCase();
+                const goalProofReviewerRole = String((proofReviewGoal as any).proof_reviewer_role || (proofReviewGoal as any).proof_reviewed_role || '').trim().toLowerCase();
                 const goalProofStatusLabel = goalProofApproved ? (goalProofReviewerRole === 'manager' ? 'Approved by Manager' : goalProofReviewerRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved') : goalProofStatus;
                 const hasGoalProof = goalProofFiles.length > 0;
                 return (
@@ -3213,7 +3213,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 const effectiveStatus = t.status || 'Not Started';
                 const proofFiles = parseTaskProofFiles(t);
                 const hasProof = proofFiles.length > 0;
-                const reviewRole = String((t as any).proof_reviewed_role || '').trim().toLowerCase();
+                const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
                 const reviewLabel = reviewStatus === 'Approved' ? (reviewRole === 'manager' ? 'Approved by Manager' : reviewRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved') : reviewStatus;
                 return (
                   <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
