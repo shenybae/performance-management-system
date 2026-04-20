@@ -1530,6 +1530,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               ) : (
                 (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
                   const reviewStatus = t.proof_review_status || 'Not Submitted';
+                  const managerReviewVisible = reviewStatus === 'Approved' || Number((t as any).tl_review_locked || 0) === 1;
                   const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
                   const goalLeaderId = Number((proofReviewGoal as any)?.leader_id || 0);
                   const reviewedByLeader = goalLeaderId > 0 && Number((t as any).proof_reviewed_by || 0) === goalLeaderId;
@@ -1575,7 +1576,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         </div>
                       )}
 
-                      {reviewStatus === 'Approved' && (
+                      {managerReviewVisible && (
                         <>
                           {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
                           {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
@@ -3200,6 +3201,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             ) : (
               (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
+                const managerReviewVisible = reviewStatus === 'Approved' || Number((t as any).tl_review_locked || 0) === 1;
                 const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
                 const effectiveProgress = reviewStatus === 'Approved'
                   ? (reviewRole === 'manager' ? 100 : Math.min(Math.max(0, Math.min(100, Number(t.progress || 0))), 75))
@@ -3224,7 +3226,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       </span>
                     </div>
 
-                    {reviewStatus === 'Approved' && (
+                    {managerReviewVisible && (
                       <>
                         {!hasProof && <p className="mb-2 text-[10px] text-slate-500">No delegated task proof uploaded yet.</p>}
                         {hasProof && (
