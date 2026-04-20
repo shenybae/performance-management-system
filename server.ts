@@ -109,6 +109,13 @@ function normalizeProofReviewRating(value: any): number | null {
   return Math.max(1, Math.min(5, Math.round(n)));
 }
 
+function normalizeDateOnly(value: any): string | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+}
+
 async function recomputeGoalProgress(goalId: number) {
   const rows: any = await query(
     `SELECT g.status AS goal_status,
@@ -3166,6 +3173,16 @@ async function startServer() {
 
       const b = req.body || {};
 
+      const isFinalReviewMutation = b.proof_review_status !== undefined || b.proof_review_note !== undefined || b.proof_review_rating !== undefined;
+      if (
+        normalizeUserRole(role) === 'Manager'
+        && String(existing?.proof_review_status || '').trim() === 'Approved'
+        && Number(existing?.proof_review_rating || 0) >= 1
+        && isFinalReviewMutation
+      ) {
+        return res.status(409).json({ error: 'Final goal proof rating is locked after manager completion' });
+      }
+
       if (isGoalLeaderUser && !isPrivilegedRole(role) && role !== 'Manager') {
         const currentGoalProofStatus = String(existing?.proof_review_status || 'Not Submitted').trim() || 'Not Submitted';
         if (currentGoalProofStatus === 'Pending Review') {
@@ -3292,11 +3309,11 @@ async function startServer() {
         const currentGoalProofStatus = String(existing?.proof_review_status || 'Not Submitted').trim() || 'Not Submitted';
         const isReviewed = reviewedStatus === 'Approved' || reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected';
 
-        if (role === 'Manager' && isReviewed && normalizedRating === null) {
-          return res.status(400).json({ error: 'Manager rating (1-5) is required when reviewing final proof' });
+        if (role === 'Manager' && reviewedStatus === 'Approved' && normalizedRating === null) {
+          return res.status(400).json({ error: 'Manager rating (1-5) is required when approving final proof' });
         }
 
-        if (currentGoalProofStatus === 'Approved' && reviewedStatus !== 'Approved') {
+        if (currentGoalProofStatus === 'Approved') {
           return res.status(409).json({ error: 'Final proof decision already finalized as Approved' });
         }
 
@@ -3304,12 +3321,41 @@ async function startServer() {
           return res.status(400).json({ error: 'Final proof file is required before approval' });
         }
 
+        if (normalizeUserRole(role) === 'Manager' && reviewedStatus === 'Approved') {
+          const approvalRows: any = await query(
+            `SELECT
+               SUM(CASE WHEN COALESCE(TRIM(t.proof_image), '') <> '' THEN 1 ELSE 0 END) AS submitted_count,
+               SUM(
+                 CASE
+                   WHEN COALESCE(TRIM(t.proof_image), '') <> ''
+                    AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved'
+                    AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager'
+                   THEN 1
+                   ELSE 0
+                 END
+               ) AS manager_approved_count
+             FROM goal_member_tasks t
+             LEFT JOIN users ur ON ur.id = t.proof_reviewed_by
+             WHERE t.goal_id = ?
+               AND t.deleted_at IS NULL`,
+            [Number(req.params.id)]
+          );
+          const approvalSummary = Array.isArray(approvalRows) ? approvalRows[0] : approvalRows;
+          const submittedCount = Number(approvalSummary?.submitted_count || 0);
+          const managerApprovedCount = Number(approvalSummary?.manager_approved_count || 0);
+          if (submittedCount > 0 && managerApprovedCount < submittedCount) {
+            return res.status(409).json({ error: 'Final goal proof can be approved only after all submitted member proofs are approved by manager' });
+          }
+        }
+
         sets.push('proof_reviewed_by = ?');
         vals.push(Number(actor?.id || 0) || null);
+        sets.push('proof_reviewed_role = ?');
+        vals.push(normalizeUserRole(role) || String(role || '') || null);
         sets.push('proof_reviewed_at = ?');
         vals.push(new Date().toISOString());
         sets.push('proof_review_rating = ?');
-        vals.push(normalizedRating);
+        vals.push(reviewedStatus === 'Approved' ? normalizedRating : null);
 
         if (reviewedStatus === 'Approved') {
           if (normalizedStatus === undefined && String(existing?.status || '').toLowerCase() === 'completed') {
@@ -4169,9 +4215,15 @@ async function startServer() {
 
       if (!goalId || !memberId || !title) return res.status(400).json({ error: 'Invalid task payload' });
 
-      const goalRows: any = await query('SELECT id, employee_id, leader_id, department, proof_review_status FROM goals WHERE id = ?', [goalId]);
+      const goalRows: any = await query('SELECT id, employee_id, leader_id, department, target_date, proof_review_status FROM goals WHERE id = ?', [goalId]);
       const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
       if (!goal) return res.status(404).json({ error: 'Goal not found' });
+
+      const normalizedDueDate = normalizeDateOnly(dueDate);
+      const normalizedGoalDueDate = normalizeDateOnly(goal.target_date);
+      if (normalizedDueDate && normalizedGoalDueDate && normalizedDueDate > normalizedGoalDueDate) {
+        return res.status(400).json({ error: 'Task due date cannot be later than the goal due date unless the goal deadline extension is approved' });
+      }
 
       let allowed = false;
       if (isPrivilegedRole(role)) allowed = true;
@@ -4507,7 +4559,7 @@ async function startServer() {
       let taskRows: any;
       try {
         taskRows = await query(
-          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL AND g.deleted_at IS NULL',
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department, g.target_date as goal_target_date FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL AND g.deleted_at IS NULL',
           [taskId]
         );
       } catch (e: any) {
@@ -4515,7 +4567,7 @@ async function startServer() {
         const missingGoalDeptColumn = String(e?.code || '') === '42703' || msg.includes('g.department') || msg.includes('goal_department');
         if (!missingGoalDeptColumn) throw e;
         taskRows = await query(
-          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL AND g.deleted_at IS NULL',
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.target_date as goal_target_date FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL AND g.deleted_at IS NULL',
           [taskId]
         );
       }
@@ -4561,6 +4613,13 @@ async function startServer() {
       if (!allowed) return res.status(403).json({ error: 'Forbidden' });
 
       const b = req.body || {};
+      if (b.due_date !== undefined) {
+        const normalizedNextDueDate = normalizeDateOnly(b.due_date);
+        const normalizedGoalDueDate = normalizeDateOnly(task.goal_target_date);
+        if (normalizedNextDueDate && normalizedGoalDueDate && normalizedNextDueDate > normalizedGoalDueDate) {
+          return res.status(400).json({ error: 'Task due date cannot be later than the goal due date unless the goal deadline extension is approved' });
+        }
+      }
       const leaderUpdatable = ['title', 'description', 'due_date', 'priority', 'status', 'progress'];
       const managerReviewUpdatable = ['proof_review_note', 'proof_review_rating'];
       // Proof file columns are handled in the assigneeSubmittedProof block below.
@@ -4658,6 +4717,16 @@ async function startServer() {
       }
 
       const reviewerSetStatus = !(role === 'Employee' && !isGoalLeader) && b.proof_review_status !== undefined;
+      const managerEditingRatingOnly = normalizeUserRole(role) === 'Manager' && b.proof_review_status === undefined && b.proof_review_rating !== undefined;
+      const existingTaskReviewerRole = String(task.proof_reviewed_role || '').trim().toLowerCase();
+      if (
+        managerEditingRatingOnly
+        && String(task.proof_review_status || '').trim() === 'Approved'
+        && existingTaskReviewerRole === 'manager'
+        && normalizeProofReviewRating(task.proof_review_rating) !== null
+      ) {
+        return res.status(409).json({ error: 'Manager rating is already locked for this approved proof' });
+      }
       if (reviewerSetStatus && isGoalLeader && !(isPrivilegedRole(role) || role === 'Manager') && Number(task.tl_review_locked || 0) === 1) {
         return res.status(403).json({ error: 'Team leader review is locked for this proof. Only manager review actions are allowed.' });
       }
@@ -4908,7 +4977,7 @@ async function startServer() {
 
       const taskRows: any = await query(
         `SELECT t.id, t.goal_id, t.member_employee_id, t.due_date,
-                g.leader_id, g.employee_id AS goal_employee_id
+                g.leader_id, g.employee_id AS goal_employee_id, g.target_date AS goal_target_date
          FROM goal_member_tasks t
          LEFT JOIN goals g ON g.id = t.goal_id
          WHERE t.id = ?`,
@@ -4922,6 +4991,12 @@ async function startServer() {
       }
       if (!task.leader_id) {
         return res.status(400).json({ error: 'Task has no team leader approver configured' });
+      }
+
+      const normalizedRequestedTaskDueDate = normalizeDateOnly(requestedDueDate);
+      const normalizedGoalDueDateForTask = normalizeDateOnly(task.goal_target_date);
+      if (normalizedRequestedTaskDueDate && normalizedGoalDueDateForTask && normalizedRequestedTaskDueDate > normalizedGoalDueDateForTask) {
+        return res.status(400).json({ error: 'Requested task due date cannot exceed the goal due date unless the goal deadline extension is approved' });
       }
 
       const pendingRows: any = await query(
@@ -5055,7 +5130,7 @@ async function startServer() {
       }
 
       const rows: any = await query(
-        `SELECT r.*, g.employee_id AS goal_employee_id, g.leader_id, g.department AS goal_department
+        `SELECT r.*, g.employee_id AS goal_employee_id, g.leader_id, g.department AS goal_department, g.target_date AS goal_target_date
          FROM deadline_extension_requests r
          LEFT JOIN goals g ON g.id = r.goal_id
          WHERE r.id = ?
@@ -5088,6 +5163,11 @@ async function startServer() {
         if (String(ext.entity_type) === 'goal') {
           await query('UPDATE goals SET target_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [ext.requested_due_date, ext.goal_id]);
         } else if (String(ext.entity_type) === 'task') {
+          const normalizedRequestedTaskDueDate = normalizeDateOnly(ext.requested_due_date);
+          const normalizedGoalDueDateForTask = normalizeDateOnly(ext.goal_target_date);
+          if (normalizedRequestedTaskDueDate && normalizedGoalDueDateForTask && normalizedRequestedTaskDueDate > normalizedGoalDueDateForTask) {
+            return res.status(409).json({ error: 'Cannot approve task deadline extension beyond the goal due date. Approve goal extension first.' });
+          }
           await query('UPDATE goal_member_tasks SET due_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [ext.requested_due_date, ext.task_id]);
         }
       }
