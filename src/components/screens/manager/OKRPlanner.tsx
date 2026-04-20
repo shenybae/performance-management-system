@@ -1429,7 +1429,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 const goalProofStatus = String(proofReviewGoal.proof_review_status || 'Not Submitted');
                 const goalProofApproved = goalProofStatus === 'Approved';
                 const goalProofReviewerRole = String((proofReviewGoal as any).proof_reviewer_role || (proofReviewGoal as any).proof_reviewed_role || '').trim().toLowerCase();
-                const goalProofStatusLabel = goalProofApproved ? (goalProofReviewerRole === 'manager' ? 'Approved by Manager' : goalProofReviewerRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved') : goalProofStatus;
+                const goalProofStatusLabel = goalProofApproved ? (goalProofReviewerRole === 'manager' ? 'Approved by Team Leader and Manager' : goalProofReviewerRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved') : goalProofStatus;
                 const hasGoalProof = goalProofFiles.length > 0;
                 return (
                   <div className="rounded-lg border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-900/15 p-3 space-y-2">
@@ -1536,7 +1536,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   const goalLeaderId = Number((proofReviewGoal as any)?.leader_id || 0);
                   const reviewedByLeader = goalLeaderId > 0 && Number((t as any).proof_reviewed_by || 0) === goalLeaderId;
                   const reviewLabel = reviewStatus === 'Approved'
-                    ? (reviewRole === 'manager' ? 'Approved by Manager' : (reviewedByLeader || reviewRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved'))
+                    ? (reviewRole === 'manager' ? 'Approved by Team Leader and Manager' : (reviewedByLeader || reviewRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved'))
                     : reviewStatus;
                   const proofFiles = parseTaskProofFiles(t);
                   const hasProof = proofFiles.length > 0;
@@ -3223,7 +3223,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 const goalLeaderId = Number((proofReviewGoal as any)?.leader_id || 0);
                 const reviewedByLeader = goalLeaderId > 0 && Number((t as any).proof_reviewed_by || 0) === goalLeaderId;
                 const reviewLabel = reviewStatus === 'Approved'
-                  ? (reviewRole === 'manager' ? 'Approved by Manager' : (reviewedByLeader || reviewRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved'))
+                  ? (reviewRole === 'manager' ? 'Approved by Team Leader and Manager' : (reviewedByLeader || reviewRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved'))
                   : reviewStatus;
                 return (
                   <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
