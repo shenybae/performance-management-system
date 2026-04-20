@@ -944,6 +944,38 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     }
   };
 
+  const saveTaskReviewRating = async (taskId: number, goalId: number) => {
+    const task = (proofReviewTasksByGoal[goalId] || []).find((item: any) => Number(item?.id) === Number(taskId));
+    const rating = Math.max(1, Math.min(5, Number(proofReviewRatings[taskId] || Number(task?.proof_review_rating || 0) || 0)));
+    const note = String(proofReviewNotes[taskId] || '').trim();
+    if (!rating) {
+      window.notify?.('Please choose a manager rating (1-5)', 'error');
+      return;
+    }
+    setProofReviewSubmittingTaskId(taskId);
+    try {
+      const res = await fetch(`/api/member-tasks/${taskId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ proof_review_note: note, proof_review_rating: rating })
+      });
+      if (!res.ok) {
+        let msg = 'Failed to save manager rating';
+        try {
+          const err = await res.json();
+          if (err?.error) msg = String(err.error);
+        } catch {}
+        throw new Error(msg);
+      }
+      window.notify?.('Manager rating saved', 'success');
+      await refreshProofReviewTasks(goalId);
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to save manager rating', 'error');
+    } finally {
+      setProofReviewSubmittingTaskId(null);
+    }
+  };
+
   const uploadTaskProof = async (taskId: number, goalId: number, file: File, note: string) => {
     setProofUploadingTaskId(taskId);
     try {
@@ -1528,10 +1560,15 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               ) : ((proofReviewTasksByGoal[proofReviewOpenGoal] || []).length === 0 ? (
                 <p className="text-sm text-slate-500">No delegated tasks found for this goal yet.</p>
               ) : (
-                (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
+                (() => {
+                  const currentTasks = proofReviewTasksByGoal[proofReviewOpenGoal] || [];
+                  const submittedTasks = currentTasks.filter((row: any) => parseTaskProofFiles(row).length > 0);
+                  const allSubmittedProofsApproved = submittedTasks.length > 0 && submittedTasks.every((row: any) => String(row?.proof_review_status || '') === 'Approved');
+                  return currentTasks.map((t: any) => {
                   const reviewStatus = t.proof_review_status || 'Not Submitted';
                   const managerReviewVisible = reviewStatus === 'Approved' || Number((t as any).tl_review_locked || 0) === 1;
                   const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
+                  const managerApproved = reviewStatus === 'Approved' && reviewRole === 'manager';
                   const goalLeaderId = Number((proofReviewGoal as any)?.leader_id || 0);
                   const reviewedByLeader = goalLeaderId > 0 && Number((t as any).proof_reviewed_by || 0) === goalLeaderId;
                   const effectiveProgress = reviewStatus === 'Approved'
@@ -1591,39 +1628,66 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 onChange={(e) => setProofReviewNotes((prev) => ({ ...prev, [t.id]: e.target.value }))}
                                 className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
                                 placeholder="Member proof review note (optional)"
-                                disabled={proofReviewSubmittingTaskId === t.id}
+                                disabled={proofReviewSubmittingTaskId === t.id || managerApproved}
                               />
-                              <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Math.max(1, Math.min(5, Number(t.proof_review_rating || proofReviewRatings[t.id] || 5)))}/5</span></p>
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
-                                  disabled={proofReviewSubmittingTaskId === t.id}
-                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                                >
-                                  Approve Proof
-                                </button>
-                                <button
-                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
-                                  disabled={proofReviewSubmittingTaskId === t.id}
-                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                                >
-                                  Needs Revision
-                                </button>
-                                <button
-                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Rejected')}
-                                  disabled={proofReviewSubmittingTaskId === t.id}
-                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                                >
-                                  Reject
-                                </button>
-                              </div>
+                              {allSubmittedProofsApproved && managerApproved ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
+                                  <select
+                                    value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
+                                    onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
+                                    disabled={proofReviewSubmittingTaskId === t.id}
+                                    className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
+                                  >
+                                    <option value="">Rate 1-5</option>
+                                    {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                                  </select>
+                                  <button
+                                    onClick={() => void saveTaskReviewRating(Number(t.id), Number(proofReviewOpenGoal))}
+                                    disabled={proofReviewSubmittingTaskId === t.id}
+                                    className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-60"
+                                  >
+                                    Save Rating
+                                  </button>
+                                </div>
+                              ) : (
+                                <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Math.max(1, Math.min(5, Number(t.proof_review_rating || proofReviewRatings[t.id] || 5)))}/5</span></p>
+                              )}
+                              {managerApproved ? (
+                                <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Member proof already approved. Review action is locked.</p>
+                              ) : (
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
+                                    disabled={proofReviewSubmittingTaskId === t.id}
+                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                                  >
+                                    Approve Proof
+                                  </button>
+                                  <button
+                                    onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
+                                    disabled={proofReviewSubmittingTaskId === t.id}
+                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                                  >
+                                    Needs Revision
+                                  </button>
+                                  <button
+                                    onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Rejected')}
+                                    disabled={proofReviewSubmittingTaskId === t.id}
+                                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )}
                         </>
                       )}
                     </div>
                   );
-                })
+                  });
+                })()
               ))}
             </div>
           )}
@@ -3199,10 +3263,15 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             ) : ((proofReviewTasksByGoal[proofReviewOpenGoal] || []).length === 0 ? (
               <p className="text-sm text-slate-500">No delegated tasks found for this goal yet.</p>
             ) : (
-              (proofReviewTasksByGoal[proofReviewOpenGoal] || []).map((t: any) => {
+              (() => {
+                const currentTasks = proofReviewTasksByGoal[proofReviewOpenGoal] || [];
+                const submittedTasks = currentTasks.filter((row: any) => parseTaskProofFiles(row).length > 0);
+                const allSubmittedProofsApproved = submittedTasks.length > 0 && submittedTasks.every((row: any) => String(row?.proof_review_status || '') === 'Approved');
+                return currentTasks.map((t: any) => {
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
                 const managerReviewVisible = reviewStatus === 'Approved' || Number((t as any).tl_review_locked || 0) === 1;
                 const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
+                const managerApproved = reviewStatus === 'Approved' && reviewRole === 'manager';
                 const effectiveProgress = reviewStatus === 'Approved'
                   ? (reviewRole === 'manager' ? 100 : Math.min(Math.max(0, Math.min(100, Number(t.progress || 0))), 75))
                   : Math.max(0, Math.min(100, Number(t.progress || 0)));
@@ -3262,39 +3331,66 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               onChange={(e) => setProofReviewNotes((prev) => ({ ...prev, [t.id]: e.target.value }))}
                               className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
                               placeholder="Member proof review note (optional)"
-                              disabled={proofReviewSubmittingTaskId === t.id}
+                              disabled={proofReviewSubmittingTaskId === t.id || managerApproved}
                             />
-                              {Number(t.proof_review_rating || 0) > 0 && <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Number(t.proof_review_rating || 0)}/5</span></p>}
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
-                                disabled={proofReviewSubmittingTaskId === t.id}
-                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                              >
-                                Approve Proof
-                              </button>
-                              <button
-                                onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
-                                disabled={proofReviewSubmittingTaskId === t.id}
-                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                              >
-                                Needs Revision
-                              </button>
-                              <button
-                                onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Rejected')}
-                                disabled={proofReviewSubmittingTaskId === t.id}
-                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                              >
-                                Reject
-                              </button>
-                            </div>
+                            {allSubmittedProofsApproved && managerApproved ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
+                                <select
+                                  value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
+                                  onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
+                                >
+                                  <option value="">Rate 1-5</option>
+                                  {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                                </select>
+                                <button
+                                  onClick={() => void saveTaskReviewRating(Number(t.id), Number(proofReviewOpenGoal))}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-60"
+                                >
+                                  Save Rating
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Math.max(1, Math.min(5, Number(t.proof_review_rating || proofReviewRatings[t.id] || 5)))}/5</span></p>
+                            )}
+                            {managerApproved ? (
+                              <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Member proof already approved. Review action is locked.</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                  Approve Proof
+                                </button>
+                                <button
+                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                                >
+                                  Needs Revision
+                                </button>
+                                <button
+                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Rejected')}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </>
                     )}
                   </div>
                 );
-              })
+                });
+              })()
             ))}
           </div>
         )}
