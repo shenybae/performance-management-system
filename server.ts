@@ -115,6 +115,8 @@ async function recomputeGoalProgress(goalId: number) {
             g.proof_review_status AS goal_proof_review_status,
             g.proof_review_rating AS goal_proof_review_rating,
             g.proof_reviewed_by AS goal_proof_reviewed_by,
+            g.proof_reviewed_role AS goal_proof_reviewed_role,
+            ug.role AS goal_proof_reviewer_role,
             COALESCE(TRIM(g.proof_image), '') AS goal_proof_image,
             COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0) AS avg_progress,
             COUNT(t.id) AS total_tasks,
@@ -124,16 +126,19 @@ async function recomputeGoalProgress(goalId: number) {
                  AND COALESCE(TRIM(t.proof_image), '') <> ''
                  AND t.proof_reviewed_by IS NOT NULL
                  AND COALESCE(t.proof_review_rating, 0) BETWEEN 1 AND 5
+                 AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ut.role, ''))) = 'manager'
                 THEN 1
                 ELSE 0
               END
             ) AS approved_tasks
      FROM goals g
+     LEFT JOIN users ug ON ug.id = g.proof_reviewed_by
      LEFT JOIN goal_member_tasks t
        ON t.goal_id = g.id
       AND t.deleted_at IS NULL
+     LEFT JOIN users ut ON ut.id = t.proof_reviewed_by
      WHERE g.id = ?
-     GROUP BY g.id, g.status, g.proof_review_status, g.proof_review_rating, g.proof_reviewed_by, g.proof_image`,
+     GROUP BY g.id, g.status, g.proof_review_status, g.proof_review_rating, g.proof_reviewed_by, g.proof_reviewed_role, ug.role, g.proof_image`,
     [goalId]
   );
   const row = Array.isArray(rows) ? rows[0] : rows;
@@ -143,6 +148,7 @@ async function recomputeGoalProgress(goalId: number) {
     String(row?.goal_proof_review_status || '').trim() === 'Approved'
     && String(row?.goal_proof_image || '').trim().length > 0
     && Number(row?.goal_proof_reviewed_by || 0) > 0
+    && String(row?.goal_proof_reviewed_role || row?.goal_proof_reviewer_role || '').trim().toLowerCase() === 'manager'
     && Number(row?.goal_proof_review_rating || 0) >= 1
     && Number(row?.goal_proof_review_rating || 0) <= 5;
   const allMemberProofsApproved = totalTasks === 0 ? true : approvedTasks >= totalTasks;
@@ -433,6 +439,7 @@ async function initDb() {
       proof_review_note TEXT,
       proof_review_rating INTEGER,
       proof_reviewed_by INTEGER,
+      proof_reviewed_role TEXT,
       proof_reviewed_at TEXT,
       FOREIGN KEY(employee_id) REFERENCES employees(id)
     )`,
@@ -470,6 +477,7 @@ async function initDb() {
       proof_review_note TEXT,
       proof_review_rating INTEGER,
       proof_reviewed_by INTEGER,
+      proof_reviewed_role TEXT,
       proof_reviewed_at TEXT,
       created_by INTEGER,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1038,6 +1046,7 @@ async function initDb() {
       'ALTER TABLE goals ADD COLUMN proof_review_note TEXT',
       'ALTER TABLE goals ADD COLUMN proof_review_rating INTEGER',
       'ALTER TABLE goals ADD COLUMN proof_reviewed_by INTEGER',
+      'ALTER TABLE goals ADD COLUMN proof_reviewed_role TEXT',
       'ALTER TABLE goals ADD COLUMN proof_reviewed_at TEXT',
       'ALTER TABLE goal_assignees ADD COLUMN assigned_by INTEGER',
       'ALTER TABLE goal_assignees ADD COLUMN assigned_by_role TEXT',
@@ -1070,6 +1079,7 @@ async function initDb() {
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_note TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_rating INTEGER',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_by INTEGER',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_role TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_at TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN created_by INTEGER',
       'ALTER TABLE goal_member_tasks ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
@@ -3213,6 +3223,8 @@ async function startServer() {
           leaderVals.push(null);
           leaderSets.push('proof_reviewed_by = ?');
           leaderVals.push(null);
+          leaderSets.push('proof_reviewed_role = ?');
+          leaderVals.push(null);
           leaderSets.push('proof_reviewed_at = ?');
           leaderVals.push(null);
         }
@@ -3284,6 +3296,8 @@ async function startServer() {
 
         sets.push('proof_reviewed_by = ?');
         vals.push(Number(actor?.id || 0) || null);
+        sets.push('proof_reviewed_role = ?');
+        vals.push(normalizeUserRole(role) || String(role || '') || null);
         sets.push('proof_reviewed_at = ?');
         vals.push(new Date().toISOString());
         sets.push('proof_review_rating = ?');
@@ -3671,22 +3685,22 @@ async function startServer() {
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id) AS recovery_tasks_total,
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS recovery_tasks_open,
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.status, 'Not Started') = 'Completed') AS recovery_tasks_completed,
-          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved') AS proofs_approved,
+          (SELECT COUNT(*) FROM goal_member_tasks t LEFT JOIN users ur ON ur.id = t.proof_reviewed_by WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved' AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager') AS proofs_approved,
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Rejected') AS proofs_rejected,
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision') AS proofs_needs_revision,
-          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_ratings_count,
-          (SELECT ROUND(COALESCE(AVG(COALESCE(t.proof_review_rating, 0)), 0), 2) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_rating_avg,
-          (SELECT COUNT(*) FROM goals g LEFT JOIN users u ON u.id = g.leader_id WHERE u.employee_id = e.id AND g.proof_review_rating IS NOT NULL) AS leader_proof_ratings_count,
-          (SELECT ROUND(COALESCE(AVG(COALESCE(g.proof_review_rating, 0)), 0), 2) FROM goals g LEFT JOIN users u ON u.id = g.leader_id WHERE u.employee_id = e.id AND g.proof_review_rating IS NOT NULL) AS leader_proof_rating_avg,
+          (SELECT COUNT(*) FROM goal_member_tasks t LEFT JOIN users ur ON ur.id = t.proof_reviewed_by WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager') AS member_proof_ratings_count,
+          (SELECT ROUND(COALESCE(AVG(COALESCE(t.proof_review_rating, 0)), 0), 2) FROM goal_member_tasks t LEFT JOIN users ur ON ur.id = t.proof_reviewed_by WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager') AS member_proof_rating_avg,
+          (SELECT COUNT(*) FROM goals g LEFT JOIN users ul ON ul.id = g.leader_id LEFT JOIN users ur ON ur.id = g.proof_reviewed_by WHERE ul.employee_id = e.id AND g.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager') AS leader_proof_ratings_count,
+          (SELECT ROUND(COALESCE(AVG(COALESCE(g.proof_review_rating, 0)), 0), 2) FROM goals g LEFT JOIN users ul ON ul.id = g.leader_id LEFT JOIN users ur ON ur.id = g.proof_reviewed_by WHERE ul.employee_id = e.id AND g.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager') AS leader_proof_rating_avg,
           (SELECT COUNT(*) FROM (
-            SELECT t.proof_review_rating AS rating FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL
+            SELECT t.proof_review_rating AS rating FROM goal_member_tasks t LEFT JOIN users ur ON ur.id = t.proof_reviewed_by WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager'
             UNION ALL
-            SELECT g.proof_review_rating AS rating FROM goals g LEFT JOIN users u ON u.id = g.leader_id WHERE u.employee_id = e.id AND g.proof_review_rating IS NOT NULL
+            SELECT g.proof_review_rating AS rating FROM goals g LEFT JOIN users ul ON ul.id = g.leader_id LEFT JOIN users ur ON ur.id = g.proof_reviewed_by WHERE ul.employee_id = e.id AND g.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager'
           ) proof_ratings) AS proof_ratings_count,
           (SELECT ROUND(COALESCE(AVG(proof_ratings.rating), 0), 2) FROM (
-            SELECT t.proof_review_rating AS rating FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL
+            SELECT t.proof_review_rating AS rating FROM goal_member_tasks t LEFT JOIN users ur ON ur.id = t.proof_reviewed_by WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager'
             UNION ALL
-            SELECT g.proof_review_rating AS rating FROM goals g LEFT JOIN users u ON u.id = g.leader_id WHERE u.employee_id = e.id AND g.proof_review_rating IS NOT NULL
+            SELECT g.proof_review_rating AS rating FROM goals g LEFT JOIN users ul ON ul.id = g.leader_id LEFT JOIN users ur ON ur.id = g.proof_reviewed_by WHERE ul.employee_id = e.id AND g.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager'
           ) proof_ratings) AS proof_rating_avg,
 
           (SELECT COUNT(*) FROM self_assessments s WHERE s.employee_id = e.id) AS self_assessments_count,
@@ -4091,7 +4105,7 @@ async function startServer() {
       const allowedMemberIds = new Set(teamMembers.map((m: any) => String(normalizeEmployeeId(m.member_id))));
 
       const goalRows: any = await query(
-        'SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.leader_id = ?',
+        'SELECT g.*, e.name as employee_name FROM goals g LEFT JOIN employees e ON g.employee_id = e.id WHERE g.leader_id = ? AND g.deleted_at IS NULL',
         [actor.id]
       );
       const goals = uniqueById(await enrichGoalsWithAssignees(Array.isArray(goalRows) ? goalRows : []));
@@ -4351,11 +4365,13 @@ async function startServer() {
 
       try {
         const goalRows: any = await query(
-          `SELECT DISTINCT goal_id
-           FROM goal_member_tasks
-           WHERE member_employee_id = ?
-             AND deleted_at IS NULL
-             AND goal_id IS NOT NULL`,
+          `SELECT DISTINCT t.goal_id
+           FROM goal_member_tasks t
+           LEFT JOIN goals g ON g.id = t.goal_id
+           WHERE t.member_employee_id = ?
+             AND t.deleted_at IS NULL
+             AND g.deleted_at IS NULL
+             AND t.goal_id IS NOT NULL`,
           [actorEmployeeId]
         );
         const goalIds = (Array.isArray(goalRows) ? goalRows : [goalRows])
@@ -4386,6 +4402,7 @@ async function startServer() {
             )
           )
           AND t.deleted_at IS NULL
+          AND g.deleted_at IS NULL
          ORDER BY COALESCE(t.updated_at, t.created_at) DESC`,
         [actorEmployeeId, actorEmployeeId]
       );
@@ -4402,7 +4419,7 @@ async function startServer() {
       const goalId = parseInt(String(req.params.id));
       if (!goalId) return res.status(400).json({ error: 'Invalid goal id' });
 
-      const goalRows: any = await query('SELECT id, employee_id, leader_id, department FROM goals WHERE id = ?', [goalId]);
+      const goalRows: any = await query('SELECT id, employee_id, leader_id, department FROM goals WHERE id = ? AND deleted_at IS NULL', [goalId]);
       const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
       if (!goal) return res.status(404).json({ error: 'Goal not found' });
 
@@ -4481,7 +4498,7 @@ async function startServer() {
       let taskRows: any;
       try {
         taskRows = await query(
-          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL',
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL AND g.deleted_at IS NULL',
           [taskId]
         );
       } catch (e: any) {
@@ -4489,7 +4506,7 @@ async function startServer() {
         const missingGoalDeptColumn = String(e?.code || '') === '42703' || msg.includes('g.department') || msg.includes('goal_department');
         if (!missingGoalDeptColumn) throw e;
         taskRows = await query(
-          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL',
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL AND g.deleted_at IS NULL',
           [taskId]
         );
       }
@@ -4544,8 +4561,8 @@ async function startServer() {
       const updatable = role === 'Employee' && !isGoalLeader ? assigneeUpdatable : leaderUpdatable;
       const hasReviewDecisionPayload = b.proof_review_status !== undefined || b.proof_review_note !== undefined || b.proof_review_rating !== undefined;
 
-      if (hasReviewDecisionPayload && !(isPrivilegedRole(role) || role === 'Manager')) {
-        return res.status(403).json({ error: 'Only managers can review member proofs' });
+      if (hasReviewDecisionPayload && !(isPrivilegedRole(role) || role === 'Manager' || isGoalLeader)) {
+        return res.status(403).json({ error: 'Only managers or the assigned team leader can review member proofs' });
       }
 
       const sets: string[] = [];
@@ -4557,7 +4574,7 @@ async function startServer() {
         }
       }
 
-      if (isPrivilegedRole(role) || role === 'Manager') {
+      if (isPrivilegedRole(role) || role === 'Manager' || isGoalLeader) {
         for (const k of managerReviewUpdatable) {
           if (b[k] !== undefined) {
             sets.push(`${k} = ?`);
@@ -4662,6 +4679,8 @@ async function startServer() {
 
         sets.push('proof_reviewed_by = ?');
         vals.push(isReviewed ? (actor.id || null) : null);
+        sets.push('proof_reviewed_role = ?');
+        vals.push(isReviewed ? (normalizeUserRole(role) || String(role || '') || null) : null);
         sets.push('proof_reviewed_at = ?');
         vals.push(isReviewed ? new Date().toISOString() : null);
         sets.push('proof_review_rating = ?');
@@ -4722,7 +4741,7 @@ async function startServer() {
       let taskRows: any;
       try {
         taskRows = await query(
-          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL',
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id, g.department as goal_department FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL AND g.deleted_at IS NULL',
           [taskId]
         );
       } catch (e: any) {
@@ -4730,7 +4749,7 @@ async function startServer() {
         const missingGoalDeptColumn = String(e?.code || '') === '42703' || msg.includes('g.department') || msg.includes('goal_department');
         if (!missingGoalDeptColumn) throw e;
         taskRows = await query(
-          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL',
+          'SELECT t.*, g.leader_id, g.employee_id as goal_employee_id FROM goal_member_tasks t LEFT JOIN goals g ON g.id = t.goal_id WHERE t.id = ? AND t.deleted_at IS NULL AND g.deleted_at IS NULL',
           [taskId]
         );
       }
