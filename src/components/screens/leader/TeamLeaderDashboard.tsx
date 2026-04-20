@@ -958,6 +958,9 @@ export const TeamLeaderDashboard = () => {
                               const draft = goalProofDrafts[goal.id] || { files: [], note: '' };
                               const goalProofStatus = String(goal.proof_review_status || 'Not Submitted');
                               const isSubmitting = goalProofSubmittingId === Number(goal.id);
+                              const goalMemberTasks = Array.isArray(goal.member_tasks) ? goal.member_tasks : [];
+                              const submittedMemberProofs = goalMemberTasks.filter((task: any) => String(task?.proof_image || '').trim().length > 0);
+                              const allSubmittedMemberProofsApproved = submittedMemberProofs.length === 0 || submittedMemberProofs.every((task: any) => String(task?.proof_review_status || '').trim() === 'Approved');
                               return (
                                 <div className="p-3 rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-900/10 space-y-2">
                                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -984,6 +987,12 @@ export const TeamLeaderDashboard = () => {
                                       {goal.proof_review_note && <p className="text-[10px] text-slate-500 italic">Manager note: {goal.proof_review_note}</p>}
                                     </div>
                                   )}
+
+                                  <p className={`text-[10px] ${allSubmittedMemberProofsApproved ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                                    {allSubmittedMemberProofsApproved
+                                      ? 'Manager final-goal rating chooser is now eligible when final proof is reviewed.'
+                                      : 'Manager final-goal rating chooser stays hidden until all submitted delegated proofs are approved.'}
+                                  </p>
 
                                   <div className="space-y-2">
                                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Add final proof files</label>
