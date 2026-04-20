@@ -1576,59 +1576,63 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         </div>
                       )}
 
-                      {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
-                      {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
-                      {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
-                      {reviewStatus === 'Approved' && Number(t.proof_review_rating || 0) > 0 && <p className="mb-2 text-[10px] text-slate-500">Latest manager rating: <span className="font-bold">{Number(t.proof_review_rating || 0)}/5</span></p>}
+                      {reviewStatus === 'Approved' && (
+                        <>
+                          {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
+                          {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
+                          {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
+                          {reviewRole === 'manager' && Number(t.proof_review_rating || 0) > 0 && <p className="mb-2 text-[10px] text-slate-500">Latest manager rating: <span className="font-bold">{Number(t.proof_review_rating || 0)}/5</span></p>}
 
-                      {hasProof && (
-                        <div className="space-y-2">
-                          <textarea
-                            rows={2}
-                            value={proofReviewNotes[t.id] ?? String(t.proof_review_note || '')}
-                            onChange={(e) => setProofReviewNotes((prev) => ({ ...prev, [t.id]: e.target.value }))}
-                            className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
-                            placeholder="Member proof review note (optional)"
-                            disabled={proofReviewSubmittingTaskId === t.id}
-                          />
-                          {reviewStatus === 'Approved' && (
-                            <div className="flex items-center gap-2">
-                              <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
-                              <select
-                                value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
-                                onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
+                          {hasProof && (
+                            <div className="space-y-2">
+                              <textarea
+                                rows={2}
+                                value={proofReviewNotes[t.id] ?? String(t.proof_review_note || '')}
+                                onChange={(e) => setProofReviewNotes((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                                className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
+                                placeholder="Member proof review note (optional)"
                                 disabled={proofReviewSubmittingTaskId === t.id}
-                                className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
-                              >
-                                <option value="">Rate 1-5</option>
-                                {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
-                              </select>
+                              />
+                              {reviewRole === 'manager' && (
+                                <div className="flex items-center gap-2">
+                                  <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
+                                  <select
+                                    value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
+                                    onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
+                                    disabled={proofReviewSubmittingTaskId === t.id}
+                                    className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
+                                  >
+                                    <option value="">Rate 1-5</option>
+                                    {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                                  </select>
+                                </div>
+                              )}
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                  Approve Proof
+                                </button>
+                                <button
+                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                                >
+                                  Needs Revision
+                                </button>
+                                <button
+                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Rejected')}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                                >
+                                  Reject
+                                </button>
+                              </div>
                             </div>
                           )}
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
-                              disabled={proofReviewSubmittingTaskId === t.id}
-                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                            >
-                              Approve Proof
-                            </button>
-                            <button
-                              onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
-                              disabled={proofReviewSubmittingTaskId === t.id}
-                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                            >
-                              Needs Revision
-                            </button>
-                            <button
-                              onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Rejected')}
-                              disabled={proofReviewSubmittingTaskId === t.id}
-                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        </div>
+                        </>
                       )}
                     </div>
                   );
@@ -3243,9 +3247,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       </span>
                     </div>
 
-                    {!hasProof && <p className="mb-2 text-[10px] text-slate-500">No delegated task proof uploaded yet.</p>}
-
-                    {hasProof && (
+                    {reviewStatus === 'Approved' && (
+                      {!hasProof && <p className="mb-2 text-[10px] text-slate-500">No delegated task proof uploaded yet.</p>}
+                      {hasProof && (
                       <div className="mb-2 space-y-2 max-w-xl">
                         {proofFiles.map((file, fileIndex) => (
                           <div key={`${file.proof_file_name}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-2">
@@ -3265,60 +3269,64 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       </div>
                     )}
 
-                    {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
-                    {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
-                    {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
-                    {reviewStatus === 'Approved' && Number(t.proof_review_rating || 0) > 0 && <p className="mb-2 text-[10px] text-slate-500">Latest manager rating: <span className="font-bold">{Number(t.proof_review_rating || 0)}/5</span></p>}
+                      {reviewStatus === 'Approved' && (
+                        <>
+                          {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
+                          {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
+                          {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
+                          {reviewRole === 'manager' && Number(t.proof_review_rating || 0) > 0 && <p className="mb-2 text-[10px] text-slate-500">Latest manager rating: <span className="font-bold">{Number(t.proof_review_rating || 0)}/5</span></p>}
 
-                    {hasProof && (
-                      <div className="space-y-2">
-                        <textarea
-                          rows={2}
-                          value={proofReviewNotes[t.id] ?? String(t.proof_review_note || '')}
-                          onChange={(e) => setProofReviewNotes((prev) => ({ ...prev, [t.id]: e.target.value }))}
-                          className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
-                          placeholder="Member proof review note (optional)"
-                          disabled={proofReviewSubmittingTaskId === t.id}
-                        />
-                        {reviewStatus === 'Approved' && (
-                          <div className="flex items-center gap-2">
-                            <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
-                            <select
-                              value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
-                              onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
-                              disabled={proofReviewSubmittingTaskId === t.id}
-                              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
-                            >
-                              <option value="">Rate 1-5</option>
-                              {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
-                            </select>
-                          </div>
-                        )}
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
-                            disabled={proofReviewSubmittingTaskId === t.id}
-                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                          >
-                            Approve Proof
-                          </button>
-                          <button
-                            onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
-                            disabled={proofReviewSubmittingTaskId === t.id}
-                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-                          >
-                            Needs Revision
-                          </button>
-                          <button
-                            onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Rejected')}
-                            disabled={proofReviewSubmittingTaskId === t.id}
-                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                          {hasProof && (
+                            <div className="space-y-2">
+                              <textarea
+                                rows={2}
+                                value={proofReviewNotes[t.id] ?? String(t.proof_review_note || '')}
+                                onChange={(e) => setProofReviewNotes((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                                className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
+                                placeholder="Member proof review note (optional)"
+                                disabled={proofReviewSubmittingTaskId === t.id}
+                              />
+                              {reviewRole === 'manager' && (
+                                <div className="flex items-center gap-2">
+                                  <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
+                                  <select
+                                    value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
+                                    onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
+                                    disabled={proofReviewSubmittingTaskId === t.id}
+                                    className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
+                                  >
+                                    <option value="">Rate 1-5</option>
+                                    {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                                  </select>
+                                </div>
+                              )}
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Approved')}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                  Approve Proof
+                                </button>
+                                <button
+                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                                >
+                                  Needs Revision
+                                </button>
+                                <button
+                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Rejected')}
+                                  disabled={proofReviewSubmittingTaskId === t.id}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
                   </div>
                 );
               })
