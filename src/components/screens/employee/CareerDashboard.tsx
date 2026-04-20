@@ -821,10 +821,18 @@ export const CareerDashboard = () => {
       if (!confirmed) return;
     }
 
+    const actorRole = String(localUser?.role || '').trim().toLowerCase();
+    const isManagerActor = actorRole === 'manager' || actorRole === 'hr' || actorRole === 'admin';
     const applyReviewOutcomeLocally = (task: any) => {
       const reviewStatus = String(updates?.proof_review_status || '');
       if (reviewStatus === 'Approved') {
-        return { ...task, ...updates, status: 'Completed', progress: 100 };
+        return {
+          ...task,
+          ...updates,
+          status: isManagerActor ? 'Completed' : 'In Progress',
+          progress: isManagerActor ? 100 : Math.max(75, Math.min(100, Number(task?.progress || 0))),
+          tl_review_locked: !isManagerActor ? 1 : Number(task?.tl_review_locked || 0),
+        };
       }
       if (reviewStatus === 'Needs Revision') {
         const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));
@@ -2067,7 +2075,10 @@ export const CareerDashboard = () => {
                     const progressValue = Number(t.progress || 0);
                     const proofReviewStatus = String(t.proof_review_status || 'Not Submitted');
                     const taskStatusValue = proofReviewStatus === 'Approved' && progressValue < 100 ? 'In Progress' : (t.status || 'Not Started');
-                    const proofDecisionFinalized = proofReviewStatus === 'Approved';
+                    const actorRole = String(localUser?.role || '').trim().toLowerCase();
+                    const isTeamLeaderActor = actorRole === 'team leader' || actorRole === 'team_leader';
+                    const teamLeaderReviewLocked = isTeamLeaderActor && Number((t as any).tl_review_locked || 0) === 1;
+                    const proofDecisionFinalized = proofReviewStatus === 'Approved' || teamLeaderReviewLocked;
                     const proofFiles = parseTaskProofFiles(t);
                     const hasProof = proofFiles.length > 0;
                     const reviewNoteValue = taskReviewNotes[t.id] ?? String(t.proof_review_note || '');
@@ -2161,7 +2172,7 @@ export const CareerDashboard = () => {
                               />
                               <div className="mt-2">
                                 {proofDecisionFinalized ? (
-                                  <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Review finalized as Approved. Actions are locked.</p>
+                                  <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">{teamLeaderReviewLocked ? 'Team leader review is locked. Waiting for manager decision.' : 'Review finalized as Approved. Actions are locked.'}</p>
                                 ) : (
                                   <button
                                     onClick={() => setTaskReviewActionOpen(prev => ({ ...prev, [Number(t.id)]: !prev[Number(t.id)] }))}

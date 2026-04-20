@@ -1091,6 +1091,7 @@ async function initDb() {
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_by INTEGER',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_role TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_at TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN tl_review_locked INTEGER DEFAULT 0',
       'ALTER TABLE goal_member_tasks ADD COLUMN created_by INTEGER',
       'ALTER TABLE goal_member_tasks ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
       'ALTER TABLE goal_member_tasks ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
@@ -4632,6 +4633,14 @@ async function startServer() {
         vals.push(hasProofImage ? new Date().toISOString() : null);
         sets.push('proof_review_status = ?');
         vals.push(hasProofImage ? 'Pending Review' : 'Not Submitted');
+        sets.push('proof_reviewed_by = ?');
+        vals.push(null);
+        sets.push('proof_reviewed_role = ?');
+        vals.push(null);
+        sets.push('proof_reviewed_at = ?');
+        vals.push(null);
+        sets.push('proof_review_rating = ?');
+        vals.push(null);
         if (hasProofImage) {
           if (submittedProofFiles.length > 0) {
             sets.push('proof_image = ?');
@@ -4649,6 +4658,9 @@ async function startServer() {
       }
 
       const reviewerSetStatus = !(role === 'Employee' && !isGoalLeader) && b.proof_review_status !== undefined;
+      if (reviewerSetStatus && isGoalLeader && !(isPrivilegedRole(role) || role === 'Manager') && Number(task.tl_review_locked || 0) === 1) {
+        return res.status(403).json({ error: 'Team leader review is locked for this proof. Only manager review actions are allowed.' });
+      }
       if (reviewerSetStatus && String(task.proof_review_status || '') === 'Approved' && String(b.proof_review_status || '') !== 'Approved' && !(role === 'Manager' || isPrivilegedRole(role))) {
         return res.status(409).json({ error: 'Proof decision already finalized as Approved' });
       }
@@ -4673,6 +4685,10 @@ async function startServer() {
             vals.push(isManagerApproval ? 'Completed' : 'In Progress');
             sets.push('progress = ?');
             vals.push(nextProgress);
+            if (!isManagerApproval && isGoalLeader && !isPrivilegedRole(role)) {
+              sets.push('tl_review_locked = ?');
+              vals.push(1);
+            }
         } else if (reviewedStatus === 'Needs Revision') {
           const currentProgress = Math.max(0, Math.min(100, Number(task.progress || 0)));
           sets.push('status = ?');
