@@ -1428,6 +1428,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 const goalProofFiles = parseGoalProofFiles(proofReviewGoal);
                 const goalProofStatus = String(proofReviewGoal.proof_review_status || 'Not Submitted');
                 const goalProofApproved = goalProofStatus === 'Approved';
+                const goalProofReviewerRole = String((proofReviewGoal as any).proof_reviewed_role || '').trim().toLowerCase();
+                const goalProofStatusLabel = goalProofApproved ? (goalProofReviewerRole === 'manager' ? 'Approved by Manager' : goalProofReviewerRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved') : goalProofStatus;
                 const hasGoalProof = goalProofFiles.length > 0;
                 return (
                   <div className="rounded-lg border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-900/15 p-3 space-y-2">
@@ -1437,7 +1439,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         <p className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80">Manager review actions are applied to this final proof.</p>
                       </div>
                       <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${goalProofStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : goalProofStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : goalProofStatus === 'Needs Revision' || goalProofStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
-                        {goalProofStatus}
+                        {goalProofStatusLabel}
                       </span>
                     </div>
 
@@ -3211,6 +3213,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 const effectiveStatus = t.status || 'Not Started';
                 const proofFiles = parseTaskProofFiles(t);
                 const hasProof = proofFiles.length > 0;
+                const reviewRole = String((t as any).proof_reviewed_role || '').trim().toLowerCase();
+                const reviewLabel = reviewStatus === 'Approved' ? (reviewRole === 'manager' ? 'Approved by Manager' : reviewRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved') : reviewStatus;
                 return (
                   <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
                     <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
@@ -3219,7 +3223,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         <p className="text-[10px] text-slate-500">{t.member_name || `#${t.member_employee_id}`} • Status: <span className="font-bold">{effectiveStatus}</span> • Progress: <span className="font-bold">{effectiveProgress}%</span></p>
                       </div>
                       <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full whitespace-nowrap ${reviewStatus === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : reviewStatus === 'Pending Review' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : reviewStatus === 'Needs Revision' || reviewStatus === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'}`}>
-                        {reviewStatus}
+                        {reviewLabel}
                       </span>
                     </div>
 

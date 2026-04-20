@@ -2051,12 +2051,13 @@ async function startServer() {
       let shouldAudit = false;
       if (explicitAction) shouldAudit = true;
       else if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+        const actorCtx = await getActorOrgContext(Number(actor.id || 0));
         const candidate = resource ? resource.toString() : null;
         if (candidate && auditInterestTables.includes(candidate)) shouldAudit = true;
       }
 
       if (!shouldAudit) return next();
-
+        // Managers can review task proofs for goals in their department.
       const normalizedAction = explicitAction || (method === 'POST' ? 'create' : (method === 'PUT' || method === 'PATCH' ? 'update' : (method === 'DELETE' ? 'delete' : `${method} ${req.path}`)));
       const tableName = resource || 'http';
 
