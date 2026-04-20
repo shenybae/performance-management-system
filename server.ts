@@ -4672,6 +4672,15 @@ async function startServer() {
         const effectiveRating = normalizedRating ?? existingRating ?? ((role === 'Manager' && isReviewed) ? 5 : null);
         const hasExistingProof = String(task.proof_image || '').trim().length > 0;
 
+        // Persist the explicit review state from the reviewer action.
+        sets.push('proof_review_status = ?');
+        vals.push(reviewedStatus || 'Not Submitted');
+
+        if (b.proof_review_note !== undefined) {
+          sets.push('proof_review_note = ?');
+          vals.push(b.proof_review_note);
+        }
+
         if (reviewedStatus === 'Approved' && !hasExistingProof) {
           return res.status(400).json({ error: 'Member proof file is required before approval' });
         }
