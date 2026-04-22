@@ -2123,7 +2123,12 @@ export const CareerDashboard = () => {
                             <p className="text-[10px] text-slate-500">Submitted: {new Date(selectedTaskBoardGoal.proof_submitted_at).toLocaleDateString()}</p>
                           )}
                           {selectedTaskBoardGoal.proof_review_note && (
-                            <p className="text-[10px] text-slate-500 italic">Manager note: {selectedTaskBoardGoal.proof_review_note}</p>
+                            <p className="text-[10px] text-slate-500 italic">
+                              {String(selectedTaskBoardGoal?.proof_review_status || '') === 'Needs Revision'
+                                ? `Requested revision from ${String(selectedTaskBoardGoal?.proof_reviewed_role || '').toLowerCase().includes('team') ? 'your team leader' : 'your manager'}`
+                                : `${String(selectedTaskBoardGoal?.proof_reviewed_role || '').toLowerCase().includes('team') ? 'Team leader note' : 'Manager note'}`
+                              }: {selectedTaskBoardGoal.proof_review_note}
+                            </p>
                           )}
                           {Number(selectedTaskBoardGoal.proof_review_rating || 0) > 0 && (
                             <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Number(selectedTaskBoardGoal.proof_review_rating || 0)}/5</span></p>
@@ -2262,11 +2267,21 @@ export const CareerDashboard = () => {
                     const actorRole = String(localUser?.role || '').trim().toLowerCase();
                     const isTeamLeaderActor = actorRole === 'team leader' || actorRole === 'team_leader';
                     const teamLeaderReviewLocked = isTeamLeaderActor && Number((t as any).tl_review_locked || 0) === 1;
+                    const awaitingRevisionResubmission = proofReviewStatus === 'Needs Revision';
                     const proofDecisionFinalized = proofReviewStatus === 'Approved' || teamLeaderReviewLocked;
                     const proofFiles = parseTaskProofFiles(t);
                     const taskProofHistory = parseProofRevisionHistory(t?.proof_revision_history);
                     const taskCurrentRevisionNumber = taskProofHistory.length + 1;
                     const taskCurrentRevisionLabel = taskProofHistory.length > 0 ? `${ordinalLabel(taskCurrentRevisionNumber)} revision` : 'Initial submission';
+                    const reviewerRole = String((t as any)?.proof_reviewed_role || (t as any)?.reviewer_role || '').trim().toLowerCase();
+                    const reviewerLabel = reviewerRole.includes('team') ? 'your team leader' : reviewerRole.includes('manager') ? 'your manager' : 'reviewer';
+                    const reviewAttachment = String((t as any)?.proof_review_file_data || '').trim()
+                      ? {
+                          proof_file_data: String((t as any)?.proof_review_file_data || '').trim(),
+                          proof_file_name: String((t as any)?.proof_review_file_name || '').trim() || 'Revision attachment',
+                          proof_file_type: String((t as any)?.proof_review_file_type || '').trim() || 'application/octet-stream',
+                        }
+                      : null;
                     const hasProof = proofFiles.length > 0;
                     const reviewNoteValue = taskReviewNotes[t.id] ?? String(t.proof_review_note || '');
                     const briefFiles = parseTaskBriefFiles(t);
@@ -2349,6 +2364,29 @@ export const CareerDashboard = () => {
                                   <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{String(t.proof_note || '').trim()}</p>
                                 </div>
                               )}
+                              {(awaitingRevisionResubmission && (String(t.proof_review_note || '').trim() || reviewAttachment)) && (
+                                <div className="mt-2 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-900/20 p-2.5 space-y-2">
+                                  <p className="text-[10px] font-black uppercase tracking-wide text-amber-700 dark:text-amber-300">Requested revision from {reviewerLabel}</p>
+                                  {String(t.proof_review_note || '').trim() && (
+                                    <p className="text-[11px] text-amber-800 dark:text-amber-200 whitespace-pre-wrap">{String(t.proof_review_note || '').trim()}</p>
+                                  )}
+                                  {reviewAttachment && (
+                                    <div className="rounded-lg border border-amber-200 dark:border-amber-900/40 bg-white/80 dark:bg-slate-900 p-2">
+                                      <div className="mb-1 flex items-center justify-between gap-2">
+                                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{reviewAttachment.proof_file_name}</p>
+                                        <button
+                                          type="button"
+                                          onClick={() => setTaskBriefViewer({ src: reviewAttachment.proof_file_data, fileName: reviewAttachment.proof_file_name, mimeType: reviewAttachment.proof_file_type })}
+                                          className="text-[10px] font-bold text-teal-600 hover:text-teal-700"
+                                        >
+                                          View Full File
+                                        </button>
+                                      </div>
+                                      <ProofAttachment src={reviewAttachment.proof_file_data} fileName={reviewAttachment.proof_file_name} mimeType={reviewAttachment.proof_file_type} compact />
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               {Number(t.proof_review_rating || 0) > 0 && (
                                 <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Number(t.proof_review_rating || 0)}/5</span></p>
                               )}
@@ -2363,6 +2401,8 @@ export const CareerDashboard = () => {
                               <div className="mt-2">
                                 {proofDecisionFinalized ? (
                                   <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">{teamLeaderReviewLocked ? 'Team leader review is locked. Waiting for manager decision.' : 'Review finalized as Approved. Actions are locked.'}</p>
+                                ) : awaitingRevisionResubmission ? (
+                                  <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300">Review actions are locked until the assignee submits a revised proof file.</p>
                                 ) : (
                                   <button
                                     onClick={() => setTaskReviewActionOpen(prev => ({ ...prev, [Number(t.id)]: !prev[Number(t.id)] }))}
@@ -2371,7 +2411,7 @@ export const CareerDashboard = () => {
                                     {taskReviewActionOpen[Number(t.id)] ? 'Hide Review Actions' : 'Open Review Actions'}
                                   </button>
                                 )}
-                                {taskReviewActionOpen[Number(t.id)] && (
+                                {!awaitingRevisionResubmission && taskReviewActionOpen[Number(t.id)] && (
                                   <div className="mt-2 flex flex-wrap gap-2">
                                     <button
                                       onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Approved', proof_review_note: reviewNoteValue }, 'Proof approved', 'Approve this submitted proof?')}
@@ -2464,6 +2504,15 @@ export const CareerDashboard = () => {
           const proofApproved = reviewStatus === 'Approved';
           const proofPending = reviewStatus === 'Pending Review';
           const proofRejected = reviewStatus === 'Rejected';
+          const reviewActorRole = String((t as any)?.proof_reviewed_role || (t as any)?.reviewer_role || '').trim().toLowerCase();
+          const reviewActorLabel = reviewActorRole.includes('team') ? 'your team leader' : reviewActorRole.includes('manager') ? 'your manager' : 'reviewer';
+          const reviewAttachment = String((t as any)?.proof_review_file_data || '').trim()
+            ? {
+                proof_file_data: String((t as any)?.proof_review_file_data || '').trim(),
+                proof_file_name: String((t as any)?.proof_review_file_name || '').trim() || 'Revision attachment',
+                proof_file_type: String((t as any)?.proof_review_file_type || '').trim() || 'application/octet-stream',
+              }
+            : null;
           const pendingTaskExtension = myDeadlineExtensionRequests.find((r: any) => String(r.entity_type || '') === 'task' && Number(r.task_id) === Number(t.id) && String(r.status || '') === 'Pending');
           const briefFiles = parseTaskBriefFiles(t);
 
@@ -2579,7 +2628,7 @@ export const CareerDashboard = () => {
                   )}
                   {proofNeedsRevision && (
                     <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/80 dark:bg-amber-900/20 px-3 py-2">
-                      <p className="text-xs font-bold text-amber-700 dark:text-amber-300">Revision requested. Update the proof and resubmit.</p>
+                      <p className="text-xs font-bold text-amber-700 dark:text-amber-300">Requested revision from {reviewActorLabel}. Update the proof and resubmit.</p>
                     </div>
                   )}
                 </div>
@@ -2618,6 +2667,32 @@ export const CareerDashboard = () => {
                   </div>
                 </div>
               </div>
+
+              {(proofNeedsRevision || proofRejected) && (String(t.proof_review_note || '').trim() || reviewAttachment) && (
+                <div className="rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-900/20 p-3 sm:p-4 space-y-2">
+                  <p className="text-xs sm:text-sm font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                    {proofNeedsRevision ? `Requested revision from ${reviewActorLabel}` : `Feedback from ${reviewActorLabel}`}
+                  </p>
+                  {String(t.proof_review_note || '').trim() && (
+                    <p className="text-sm text-amber-800 dark:text-amber-200 whitespace-pre-wrap">{String(t.proof_review_note || '').trim()}</p>
+                  )}
+                  {reviewAttachment && (
+                    <div className="rounded-lg border border-amber-200 dark:border-amber-900/40 bg-white/80 dark:bg-slate-900 p-2">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">{reviewAttachment.proof_file_name}</p>
+                        <button
+                          type="button"
+                          onClick={() => setTaskBriefViewer({ src: reviewAttachment.proof_file_data, fileName: reviewAttachment.proof_file_name, mimeType: reviewAttachment.proof_file_type })}
+                          className="text-xs font-bold text-teal-600 hover:text-teal-700"
+                        >
+                          View Full File
+                        </button>
+                      </div>
+                      <ProofAttachment src={reviewAttachment.proof_file_data} fileName={reviewAttachment.proof_file_name} mimeType={reviewAttachment.proof_file_type} compact />
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-900/20 p-3 sm:p-4">
                 <p className="text-xs sm:text-sm font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Need More Time?</p>
