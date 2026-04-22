@@ -84,6 +84,12 @@ type ProofRevisionEntry = {
   archived_at?: string;
 };
 
+type ReviewAttachment = {
+  file_data: string;
+  file_name: string;
+  file_type: string;
+};
+
 const parseGoalProofFiles = (goal: any): GoalProofFile[] => {
   const rawData = String(goal?.proof_image || '').trim();
   const fallbackName = String(goal?.proof_file_name || 'Final proof').trim();
@@ -167,7 +173,22 @@ export const TeamLeaderDashboard = () => {
   const [goalProofDrafts, setGoalProofDrafts] = useState<Record<number, { files: GoalProofFile[]; note: string }>>({});
   const [goalProofSubmittingId, setGoalProofSubmittingId] = useState<number | null>(null);
   const [proofReviewNotes, setProofReviewNotes] = useState<Record<number, string>>({});
-  const [proofReviewAttachments, setProofReviewAttachments] = useState<Record<number, { file_data: string; file_name: string; file_type: string } | null>>({});
+  const [proofReviewAttachments, setProofReviewAttachments] = useState<Record<number, ReviewAttachment | null>>({});
+  const [needsRevisionModal, setNeedsRevisionModal] = useState<{
+    open: boolean;
+    taskId: number | null;
+    taskTitle: string;
+    note: string;
+    attachment: ReviewAttachment | null;
+    submitting: boolean;
+  }>({
+    open: false,
+    taskId: null,
+    taskTitle: '',
+    note: '',
+    attachment: null,
+    submitting: false,
+  });
 
   const [subtaskForm, setSubtaskForm] = useState({
     title: '',
@@ -316,9 +337,30 @@ export const TeamLeaderDashboard = () => {
     }
   };
 
-  const reviewTaskProof = async (taskId: number, status: 'Approved' | 'Needs Revision' | 'Rejected') => {
-    const note = String(proofReviewNotes[taskId] || '').trim();
-    const attachment = proofReviewAttachments[taskId];
+  const openNeedsRevisionModal = (task: any) => {
+    const taskId = Number(task?.id || 0);
+    if (!taskId) return;
+    setNeedsRevisionModal({
+      open: true,
+      taskId,
+      taskTitle: String(task?.title || '').trim() || `Task #${taskId}`,
+      note: String(proofReviewNotes[taskId] || '').trim(),
+      attachment: proofReviewAttachments[taskId] || null,
+      submitting: false,
+    });
+  };
+
+  const closeNeedsRevisionModal = () => {
+    setNeedsRevisionModal((prev) => ({ ...prev, open: false, submitting: false }));
+  };
+
+  const reviewTaskProof = async (
+    taskId: number,
+    status: 'Approved' | 'Needs Revision' | 'Rejected',
+    options?: { note?: string; attachment?: ReviewAttachment | null }
+  ) => {
+    const note = String(options?.note ?? proofReviewNotes[taskId] ?? '').trim();
+    const attachment = options?.attachment ?? proofReviewAttachments[taskId];
     try {
       const res = await fetch(`/api/member-tasks/${taskId}`, {
         method: 'PUT',
@@ -340,6 +382,26 @@ export const TeamLeaderDashboard = () => {
       fetchLeaderGoals();
     } catch (error) {
       window.notify?.('Failed to update proof review', 'error');
+    }
+  };
+
+  const submitNeedsRevisionRequest = async () => {
+    const taskId = Number(needsRevisionModal.taskId || 0);
+    const note = String(needsRevisionModal.note || '').trim();
+    if (!taskId) return;
+    if (!note) {
+      window.notify?.('Please describe what needs to be revised', 'error');
+      return;
+    }
+
+    setNeedsRevisionModal((prev) => ({ ...prev, submitting: true }));
+    try {
+      setProofReviewNotes((prev) => ({ ...prev, [taskId]: note }));
+      setProofReviewAttachments((prev) => ({ ...prev, [taskId]: needsRevisionModal.attachment || null }));
+      await reviewTaskProof(taskId, 'Needs Revision', { note, attachment: needsRevisionModal.attachment });
+      closeNeedsRevisionModal();
+    } finally {
+      setNeedsRevisionModal((prev) => ({ ...prev, submitting: false }));
     }
   };
 
@@ -1225,7 +1287,7 @@ export const TeamLeaderDashboard = () => {
                                           )}
                                           <div className="flex flex-wrap gap-2">
                                           <button onClick={() => reviewTaskProof(task.id, 'Approved')} className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Approve</button>
-                                          <button onClick={() => reviewTaskProof(task.id, 'Needs Revision')} className="text-[10px] font-bold px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Needs Revision</button>
+                                          <button onClick={() => openNeedsRevisionModal(task)} className="text-[10px] font-bold px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Needs Revision</button>
                                           <button onClick={() => reviewTaskProof(task.id, 'Rejected')} className="text-[10px] font-bold px-2 py-1 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">Reject</button>
                                           </div>
                                         </div>
@@ -1246,6 +1308,82 @@ export const TeamLeaderDashboard = () => {
           </div>
         )}
       </div>
+
+      <Modal
+        open={needsRevisionModal.open}
+        title={needsRevisionModal.taskTitle ? `Needs Revision - ${needsRevisionModal.taskTitle}` : 'Needs Revision'}
+        onClose={closeNeedsRevisionModal}
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Specify what should be corrected before the employee resubmits proof.
+          </p>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+              Revision Instructions <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              rows={4}
+              value={needsRevisionModal.note}
+              onChange={(event) => setNeedsRevisionModal((prev) => ({ ...prev, note: event.target.value }))}
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-sm"
+              placeholder="Example: Upload the signed document and include before/after photos for this task."
+              disabled={needsRevisionModal.submitting}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+              Attachment (optional)
+            </label>
+            <input
+              type="file"
+              disabled={needsRevisionModal.submitting}
+              onChange={async (event) => {
+                const file = event.target.files?.[0] || null;
+                if (!file) {
+                  setNeedsRevisionModal((prev) => ({ ...prev, attachment: null }));
+                  return;
+                }
+                try {
+                  const fileData = await readFileAsDataUrl(file);
+                  setNeedsRevisionModal((prev) => ({
+                    ...prev,
+                    attachment: {
+                      file_data: fileData,
+                      file_name: file.name,
+                      file_type: file.type || 'application/octet-stream',
+                    },
+                  }));
+                } catch {
+                  window.notify?.('Failed to read review attachment', 'error');
+                }
+              }}
+              className="text-[11px] text-slate-500 dark:text-slate-400"
+            />
+            {needsRevisionModal.attachment?.file_name && (
+              <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Attached: {needsRevisionModal.attachment.file_name}</p>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={closeNeedsRevisionModal}
+              disabled={needsRevisionModal.submitting}
+              className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void submitNeedsRevisionRequest()}
+              disabled={needsRevisionModal.submitting}
+              className="px-3 py-1.5 rounded bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 disabled:opacity-60"
+            >
+              {needsRevisionModal.submitting ? 'Sending...' : 'Send Revision Request'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Subtask Creation Modal */}
       <Modal

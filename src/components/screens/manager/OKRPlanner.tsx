@@ -47,6 +47,23 @@ type ProofRevisionEntry = {
   archived_at?: string;
 };
 
+type ReviewAttachment = {
+  file_data: string;
+  file_name: string;
+  file_type: string;
+};
+
+type NeedsRevisionModalState = {
+  open: boolean;
+  entity: 'goal' | 'task';
+  targetId: number;
+  goalId: number | null;
+  targetLabel: string;
+  note: string;
+  attachment: ReviewAttachment | null;
+  submitting: boolean;
+};
+
 const parseTaskProofFiles = (task: any): TaskProofFile[] => {
   const rawData = String(task?.proof_image || '').trim();
   const fallbackName = String(task?.proof_file_name || 'Submitted proof').trim();
@@ -190,7 +207,17 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [proofUploadNotes, setProofUploadNotes] = useState<Record<number, string>>({});
   const [proofReviewNotes, setProofReviewNotes] = useState<Record<number, string>>({});
   const [proofReviewRatings, setProofReviewRatings] = useState<Record<number, number>>({});
-  const [proofReviewAttachments, setProofReviewAttachments] = useState<Record<number, { file_data: string; file_name: string; file_type: string } | null>>({});
+  const [proofReviewAttachments, setProofReviewAttachments] = useState<Record<number, ReviewAttachment | null>>({});
+  const [needsRevisionModal, setNeedsRevisionModal] = useState<NeedsRevisionModalState>({
+    open: false,
+    entity: 'task',
+    targetId: 0,
+    goalId: null,
+    targetLabel: '',
+    note: '',
+    attachment: null,
+    submitting: false,
+  });
   const [proofReviewSubmittingTaskId, setProofReviewSubmittingTaskId] = useState<number | null>(null);
   const [proofFileViewer, setProofFileViewer] = useState<{ src: string; fileName?: string; mimeType?: string } | null>(null);
   const [lastRealtimeSyncAt, setLastRealtimeSyncAt] = useState<number>(Date.now());
@@ -923,7 +950,36 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     }
   };
 
-  const reviewGoalFinalProof = async (goalId: number, status: 'Approved' | 'Needs Revision' | 'Rejected') => {
+  const openNeedsRevisionModal = (payload: {
+    entity: 'goal' | 'task';
+    targetId: number;
+    goalId?: number | null;
+    targetLabel: string;
+  }) => {
+    const targetId = Number(payload.targetId || 0);
+    const currentAttachment = proofReviewAttachments[targetId] || null;
+    const currentNote = String(proofReviewNotes[targetId] || '').trim();
+    setNeedsRevisionModal({
+      open: true,
+      entity: payload.entity,
+      targetId,
+      goalId: payload.goalId ?? null,
+      targetLabel: payload.targetLabel,
+      note: currentNote,
+      attachment: currentAttachment,
+      submitting: false,
+    });
+  };
+
+  const closeNeedsRevisionModal = () => {
+    setNeedsRevisionModal((prev) => ({ ...prev, open: false, submitting: false }));
+  };
+
+  const reviewGoalFinalProof = async (
+    goalId: number,
+    status: 'Approved' | 'Needs Revision' | 'Rejected',
+    options?: { note?: string; attachment?: ReviewAttachment | null; skipConfirm?: boolean }
+  ) => {
     const currentTasks = proofReviewTasksByGoal[goalId] || [];
     const submittedTasks = currentTasks.filter((row: any) => parseTaskProofFiles(row).length > 0);
     const allSubmittedProofsApproved = submittedTasks.length === 0 || submittedTasks.every((row: any) => {
@@ -945,10 +1001,12 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     }
 
     const actionText = status === 'Approved' ? 'approve' : status === 'Needs Revision' ? 'request revision for' : 'reject';
-    if (!(await appConfirm(`Are you sure you want to ${actionText} the final proof?`, { title: 'Confirm Final Proof Decision', confirmText: 'Confirm', icon: 'warning' }))) return;
+    if (!options?.skipConfirm) {
+      if (!(await appConfirm(`Are you sure you want to ${actionText} the final proof?`, { title: 'Confirm Final Proof Decision', confirmText: 'Confirm', icon: 'warning' }))) return;
+    }
 
-    const note = String(proofReviewNotes[goalId] || '').trim();
-    const attachment = proofReviewAttachments[goalId];
+    const note = String(options?.note ?? proofReviewNotes[goalId] ?? '').trim();
+    const attachment = options?.attachment ?? proofReviewAttachments[goalId];
     const selectedRating = Number(proofReviewRatings[goalId] || 0);
     const existingRating = Number(proofReviewGoal?.proof_review_rating || 0);
     const rating = Math.max(1, Math.min(5, Number(selectedRating || existingRating || 0)));
@@ -1031,12 +1089,19 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     return () => clearInterval(interval);
   }, [proofReviewOpenGoal]);
 
-  const reviewTaskProof = async (taskId: number, goalId: number, status: 'Approved' | 'Needs Revision' | 'Rejected') => {
+  const reviewTaskProof = async (
+    taskId: number,
+    goalId: number,
+    status: 'Approved' | 'Needs Revision' | 'Rejected',
+    options?: { note?: string; attachment?: ReviewAttachment | null; skipConfirm?: boolean }
+  ) => {
     const actionText = status === 'Approved' ? 'approve' : status === 'Needs Revision' ? 'request revision for' : 'reject';
-    if (!(await appConfirm(`Are you sure you want to ${actionText} this proof?`, { title: 'Confirm Proof Decision', confirmText: 'Confirm', icon: 'warning' }))) return;
+    if (!options?.skipConfirm) {
+      if (!(await appConfirm(`Are you sure you want to ${actionText} this proof?`, { title: 'Confirm Proof Decision', confirmText: 'Confirm', icon: 'warning' }))) return;
+    }
 
-    const note = String(proofReviewNotes[taskId] || '').trim();
-    const attachment = proofReviewAttachments[taskId];
+    const note = String(options?.note ?? proofReviewNotes[taskId] ?? '').trim();
+    const attachment = options?.attachment ?? proofReviewAttachments[taskId];
     const task = (proofReviewTasksByGoal[goalId] || []).find((item: any) => Number(item?.id) === Number(taskId));
     const rating = Math.max(1, Math.min(5, Number(task?.proof_review_rating || proofReviewRatings[taskId] || 5)));
     const isCurrentManager = userRole === 'manager';
@@ -1087,6 +1152,35 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       await refreshProofReviewTasks(goalId);
     } finally {
       setProofReviewSubmittingTaskId(null);
+    }
+  };
+
+  const submitNeedsRevisionRequest = async () => {
+    const note = String(needsRevisionModal.note || '').trim();
+    if (!note) {
+      window.notify?.('Please describe what needs to be revised', 'error');
+      return;
+    }
+
+    setNeedsRevisionModal((prev) => ({ ...prev, submitting: true }));
+    const targetId = Number(needsRevisionModal.targetId || 0);
+    const goalId = Number(needsRevisionModal.goalId || 0);
+    const attachment = needsRevisionModal.attachment;
+
+    try {
+      setProofReviewNotes((prev) => ({ ...prev, [targetId]: note }));
+      setProofReviewAttachments((prev) => ({ ...prev, [targetId]: attachment || null }));
+
+      if (needsRevisionModal.entity === 'goal') {
+        await reviewGoalFinalProof(targetId, 'Needs Revision', { note, attachment, skipConfirm: true });
+      } else {
+        if (!goalId) throw new Error('Goal context is required for task revision request');
+        await reviewTaskProof(targetId, goalId, 'Needs Revision', { note, attachment, skipConfirm: true });
+      }
+
+      closeNeedsRevisionModal();
+    } finally {
+      setNeedsRevisionModal((prev) => ({ ...prev, submitting: false }));
     }
   };
 
@@ -1744,7 +1838,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               Approve Final Proof
                             </button>
                             <button
-                              onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Needs Revision')}
+                              onClick={() => openNeedsRevisionModal({ entity: 'goal', targetId: Number(proofReviewGoal.id), targetLabel: `Final proof for ${proofReviewGoal.title || 'Goal'}` })}
                               disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
                               className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
                             >
@@ -1916,7 +2010,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                     Approve Proof
                                   </button>
                                   <button
-                                    onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
+                                    onClick={() => openNeedsRevisionModal({ entity: 'task', targetId: Number(t.id), goalId: Number(proofReviewOpenGoal), targetLabel: t.title || `Task #${t.id}` })}
                                     disabled={proofReviewSubmittingTaskId === t.id}
                                     className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
                                   >
@@ -3600,7 +3694,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             Approve Final Proof
                           </button>
                           <button
-                            onClick={() => void reviewGoalFinalProof(Number(proofReviewGoal.id), 'Needs Revision')}
+                            onClick={() => openNeedsRevisionModal({ entity: 'goal', targetId: Number(proofReviewGoal.id), targetLabel: `Final proof for ${proofReviewGoal.title || 'Goal'}` })}
                             disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
                             className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
                           >
@@ -3772,7 +3866,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                   Approve Proof
                                 </button>
                                 <button
-                                  onClick={() => void reviewTaskProof(Number(t.id), Number(proofReviewOpenGoal), 'Needs Revision')}
+                                  onClick={() => openNeedsRevisionModal({ entity: 'task', targetId: Number(t.id), goalId: Number(proofReviewOpenGoal), targetLabel: t.title || `Task #${t.id}` })}
                                   disabled={proofReviewSubmittingTaskId === t.id}
                                   className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
                                 >
@@ -3833,6 +3927,84 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         ) : (
           <p className="text-sm text-slate-500">No file selected.</p>
         )}
+      </Modal>
+
+      <Modal
+        open={needsRevisionModal.open}
+        title={`Needs Revision${needsRevisionModal.targetLabel ? ` - ${needsRevisionModal.targetLabel}` : ''}`}
+        onClose={closeNeedsRevisionModal}
+        maxWidthClassName="max-w-xl"
+        bodyClassName="space-y-3"
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500">
+            Tell the employee exactly what to revise. You can also attach a reference file.
+          </p>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">
+              Revision Instructions <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              rows={4}
+              value={needsRevisionModal.note}
+              onChange={(event) => setNeedsRevisionModal((prev) => ({ ...prev, note: event.target.value }))}
+              className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[12px]"
+              placeholder="Example: Re-upload proof with date-stamped screenshots and include signed client confirmation."
+              disabled={needsRevisionModal.submitting}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">
+              Attachment (optional)
+            </label>
+            <input
+              type="file"
+              disabled={needsRevisionModal.submitting}
+              onChange={async (event) => {
+                const file = event.target.files?.[0] || null;
+                if (!file) {
+                  setNeedsRevisionModal((prev) => ({ ...prev, attachment: null }));
+                  return;
+                }
+                try {
+                  const fileData = await readFileAsDataUrl(file);
+                  setNeedsRevisionModal((prev) => ({
+                    ...prev,
+                    attachment: {
+                      file_data: fileData,
+                      file_name: file.name,
+                      file_type: file.type || 'application/octet-stream',
+                    },
+                  }));
+                } catch {
+                  window.notify?.('Failed to read review attachment', 'error');
+                }
+              }}
+              className="text-[11px] text-slate-600 dark:text-slate-300"
+            />
+            {needsRevisionModal.attachment?.file_name && (
+              <p className="mt-1 text-[10px] text-slate-500">Attached: {needsRevisionModal.attachment.file_name}</p>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={closeNeedsRevisionModal}
+              disabled={needsRevisionModal.submitting}
+              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void submitNeedsRevisionRequest()}
+              disabled={needsRevisionModal.submitting}
+              className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-[11px] font-bold hover:bg-amber-600 disabled:opacity-60"
+            >
+              {needsRevisionModal.submitting ? 'Sending...' : 'Send Revision Request'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </motion.div>
   );
