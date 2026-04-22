@@ -27,12 +27,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DB_HOST: postgres.railway.internal
+      DB_HOST: db
       DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: YjCucYQyCRZlrUgNNEAfjalswGzSUDpw
-      DB_NAME: railway
-      DATABASE_URL: postgresql://postgres:wzppxYvPeuUbNKfKjjkHwEVBXMwKtlgI@postgres.railway.internal:5432/railway
+      DB_USER: pm_user
+      DB_PASSWORD: pm_pass
+      DB_NAME: performance_db
+      DATABASE_URL: postgresql://pm_user:pm_pass@db:5432/performance_db
       JWT_SECRET: c6f7b9d8e2a1f3c4d5b6a7c8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f
     ports:
       - "3000:3000"
