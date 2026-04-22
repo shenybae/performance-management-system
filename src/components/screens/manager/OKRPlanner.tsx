@@ -1115,11 +1115,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     try {
       const goal = goals.find(g => Number(g.id) === Number(goalId));
       const tasks = proofReviewTasksByGoal[goalId] || [];
+      const submittedTasks = tasks.filter((t: any) => {
+        const files = parseTaskProofFiles(t);
+        const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
+        return files.length > 0 && t.proof_review_status === 'Approved' && reviewRole === 'manager';
+      });
 
       const savePromises: Promise<any>[] = [];
 
       // Save ratings for each task
-      tasks.forEach((t: any) => {
+      submittedTasks.forEach((t: any) => {
         const memberId = `task-${t.id}`;
         const rating = memberRatingsModal.ratings[memberId];
         if (rating && rating > 0 && rating <= 5) {
@@ -1145,8 +1150,15 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       }
 
       const results = await Promise.all(savePromises);
-      const allOk = results.every(r => r.ok);
-      if (!allOk) throw new Error('One or more ratings failed to save');
+      const failedResult = results.find(r => !r.ok);
+      if (failedResult) {
+        let msg = 'One or more ratings failed to save';
+        try {
+          const err = await failedResult.json();
+          if (err?.error) msg = String(err.error);
+        } catch {}
+        throw new Error(msg);
+      }
 
       window.notify?.('All member ratings saved successfully', 'success');
       setMemberRatingsModal({ open: false, goalId: null, ratings: {}, submitting: false });

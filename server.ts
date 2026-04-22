@@ -172,7 +172,12 @@ async function recomputeGoalProgress(goalId: number) {
             ug.role AS goal_proof_reviewer_role,
             COALESCE(TRIM(g.proof_image), '') AS goal_proof_image,
             COALESCE(ROUND(AVG(COALESCE(t.progress, 0))), 0) AS avg_progress,
-            COUNT(t.id) AS total_tasks,
+            SUM(
+              CASE
+                WHEN COALESCE(TRIM(t.proof_image), '') <> '' THEN 1
+                ELSE 0
+              END
+            ) AS submitted_tasks,
             SUM(
               CASE
                 WHEN COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved'
@@ -195,7 +200,7 @@ async function recomputeGoalProgress(goalId: number) {
     [goalId]
   );
   const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-  const totalTasks = Number(row?.total_tasks || 0);
+  const submittedTasks = Number(row?.submitted_tasks || 0);
   const approvedTasks = Number(row?.approved_tasks || 0);
   const leaderProofApproved =
     String(row?.goal_proof_review_status || '').trim() === 'Approved'
@@ -204,7 +209,7 @@ async function recomputeGoalProgress(goalId: number) {
     && String(row?.goal_proof_reviewer_role || '').trim().toLowerCase() === 'manager'
     && Number(row?.goal_proof_review_rating || 0) >= 1
     && Number(row?.goal_proof_review_rating || 0) <= 5;
-  const allMemberProofsApproved = totalTasks === 0 ? true : approvedTasks >= totalTasks;
+  const allMemberProofsApproved = submittedTasks === 0 ? true : approvedTasks >= submittedTasks;
   const allProofsApproved = leaderProofApproved && allMemberProofsApproved;
 
   const statusForComputation = allProofsApproved
@@ -3511,7 +3516,7 @@ async function startServer() {
       vals.push(req.params.id);
       await query(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, vals);
 
-      if (b.proof_review_status !== undefined) {
+      if (b.proof_review_status !== undefined || b.proof_review_rating !== undefined) {
         await recomputeGoalProgress(Number(req.params.id));
       }
 
@@ -4751,7 +4756,7 @@ async function startServer() {
         }
       }
       const leaderUpdatable = ['title', 'description', 'due_date', 'priority', 'status', 'progress'];
-      const managerReviewUpdatable = ['proof_review_note', 'proof_review_rating', 'proof_review_file_data', 'proof_review_file_name', 'proof_review_file_type'];
+      const managerReviewUpdatable = ['proof_review_note', 'proof_review_file_data', 'proof_review_file_name', 'proof_review_file_type'];
       // Proof file columns are handled in the assigneeSubmittedProof block below.
       // Keeping them out of this generic updater avoids duplicate SET assignments
       // (e.g., proof_image/proof_file_name/proof_file_type), which Postgres rejects.
