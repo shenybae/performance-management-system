@@ -225,6 +225,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [lastRealtimeSyncAt, setLastRealtimeSyncAt] = useState<number>(Date.now());
   const [proofRealtimeSyncAt, setProofRealtimeSyncAt] = useState<number>(Date.now());
   const [memberRatingsModal, setMemberRatingsModal] = useState<{ open: boolean; goalId: number | null; ratings: Record<string, number>; submitting: boolean }>({ open: false, goalId: null, ratings: {}, submitting: false });
+  const [inlineMemberRatingsByGoal, setInlineMemberRatingsByGoal] = useState<Record<number, Record<string, number>>>({});
+  const [inlineMemberRatingsSavingGoalId, setInlineMemberRatingsSavingGoalId] = useState<number | null>(null);
   const [pendingDeadlineExtensionRequests, setPendingDeadlineExtensionRequests] = useState<any[]>([]);
   const [pendingDeadlineExtensionLoading, setPendingDeadlineExtensionLoading] = useState(false);
   const [pendingDeadlineExtensionDecisionId, setPendingDeadlineExtensionDecisionId] = useState<number | null>(null);
@@ -1165,6 +1167,118 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     }
   };
 
+  const buildInitialRatingsForGoal = (goalId: number) => {
+    const goal = goals.find(g => Number(g.id) === Number(goalId));
+    const tasks = proofReviewTasksByGoal[goalId] || [];
+    const submittedTasks = tasks.filter((t: any) => {
+      const files = parseTaskProofFiles(t);
+      const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
+      return files.length > 0 && t.proof_review_status === 'Approved' && reviewRole === 'manager';
+    });
+
+    const initialRatings: Record<string, number> = {};
+    submittedTasks.forEach((t: any) => {
+      initialRatings[`task-${t.id}`] = Number(t.proof_review_rating || 0);
+    });
+
+    const goalReviewRole = String((goal as any)?.proof_reviewer_role || (goal as any)?.proof_reviewed_role || '').trim().toLowerCase();
+    if (goal && goal.proof_review_status === 'Approved' && goalReviewRole === 'manager') {
+      initialRatings.leader = Number(goal.proof_review_rating || 0);
+    }
+
+    return initialRatings;
+  };
+
+  const setInlineMemberRating = (goalId: number, key: string, rating: number) => {
+    setInlineMemberRatingsByGoal((prev) => {
+      const current = prev[goalId] || buildInitialRatingsForGoal(goalId);
+      return {
+        ...prev,
+        [goalId]: {
+          ...current,
+          [key]: rating,
+        },
+      };
+    });
+  };
+
+  const saveInlineMemberRatings = async (goalId: number) => {
+    const goal = goals.find(g => Number(g.id) === Number(goalId));
+    if (!goal) return;
+
+    const tasks = proofReviewTasksByGoal[goalId] || [];
+    const submittedTasks = tasks.filter((t: any) => {
+      const files = parseTaskProofFiles(t);
+      const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
+      return files.length > 0 && t.proof_review_status === 'Approved' && reviewRole === 'manager';
+    });
+
+    const goalReviewRole = String((goal as any)?.proof_reviewer_role || (goal as any)?.proof_reviewed_role || '').trim().toLowerCase();
+    const leaderEligible = goal.proof_review_status === 'Approved' && goalReviewRole === 'manager';
+    const ratings = inlineMemberRatingsByGoal[goalId] || buildInitialRatingsForGoal(goalId);
+
+    if (leaderEligible) {
+      const leaderRating = Number(ratings.leader || 0);
+      if (leaderRating < 1 || leaderRating > 5) {
+        window.notify?.('Please rate the team leader before saving', 'error');
+        return;
+      }
+    }
+
+    const unratedMember = submittedTasks.find((t: any) => {
+      const value = Number(ratings[`task-${t.id}`] || 0);
+      return value < 1 || value > 5;
+    });
+    if (unratedMember) {
+      window.notify?.(`Please rate ${unratedMember.member_name || 'all approved members'} before saving`, 'error');
+      return;
+    }
+
+    setInlineMemberRatingsSavingGoalId(goalId);
+    try {
+      const savePromises: Promise<Response>[] = [];
+
+      submittedTasks.forEach((t: any) => {
+        const rating = Number(ratings[`task-${t.id}`] || 0);
+        savePromises.push(
+          fetch(`/api/member-tasks/${t.id}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ proof_review_rating: rating })
+          })
+        );
+      });
+
+      if (leaderEligible) {
+        savePromises.push(
+          fetch(`/api/goals/${goalId}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ proof_review_rating: Number(ratings.leader || 0) })
+          })
+        );
+      }
+
+      const results = await Promise.all(savePromises);
+      const failedResult = results.find(r => !r.ok);
+      if (failedResult) {
+        let msg = 'One or more ratings failed to save';
+        try { const err = await failedResult.json(); msg = err.error || msg; } catch {}
+        throw new Error(msg);
+      }
+
+      window.notify?.('Member ratings saved successfully', 'success');
+      await Promise.all([
+        fetchGoals(),
+        refreshProofReviewTasks(goalId),
+      ]);
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to save member ratings', 'error');
+    } finally {
+      setInlineMemberRatingsSavingGoalId(null);
+    }
+  };
+
   // Keep proof review panel synced in real time while it is open.
   useEffect(() => {
     if (!proofReviewOpenGoal) return;
@@ -1883,16 +1997,73 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           </div>
                         )}
                         {goalProofApproved ? (
-                          <div className="flex flex-wrap gap-2">
-                            <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
-                            {allSubmittedGoalProofsApproved && (
-                              <button
-                                onClick={() => openMemberRatingsModal(Number(proofReviewGoal.id))}
-                                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-                              >
-                                Rate Members
-                              </button>
-                            )}
+                          <div className="space-y-2">
+                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
+                            {allSubmittedGoalProofsApproved && (() => {
+                              const goalId = Number(proofReviewGoal.id);
+                              const leaderName = String((proofReviewGoal as any)?.delegation || (proofReviewGoal as any)?.leader_name || (proofReviewGoal as any)?.employee_name || 'Leader').trim() || 'Leader';
+                              const goalRatings = inlineMemberRatingsByGoal[goalId] || buildInitialRatingsForGoal(goalId);
+                              const ratingsLocked = Number(proofReviewGoal.proof_review_rating || 0) >= 1 && Number(proofReviewGoal.proof_review_rating || 0) <= 5 && goalSubmittedTasks.every((row: any) => Number(row.proof_review_rating || 0) >= 1 && Number(row.proof_review_rating || 0) <= 5);
+                              const isSaving = inlineMemberRatingsSavingGoalId === goalId;
+                              return (
+                                <div className="rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/80 dark:bg-blue-900/20 p-3 space-y-3">
+                                  <div className="space-y-1">
+                                    <p className="text-sm font-black uppercase tracking-wide text-blue-700 dark:text-blue-300">Member Ratings</p>
+                                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                                      {ratingsLocked ? 'Ratings are already saved and locked.' : 'Rate each approved member and the team leader, then save once.'}
+                                    </p>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 gap-2">
+                                    <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 p-2.5 flex items-center justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-base font-extrabold text-slate-800 dark:text-slate-100" title={leaderName}>{leaderName}</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">Team Leader</p>
+                                      </div>
+                                      <select
+                                        value={Number(goalRatings.leader || 0) > 0 ? Number(goalRatings.leader) : ''}
+                                        onChange={(e) => setInlineMemberRating(goalId, 'leader', Number(e.target.value || 0))}
+                                        disabled={isSaving || ratingsLocked}
+                                        className="w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-base font-bold disabled:opacity-60"
+                                      >
+                                        <option value="">Rate</option>
+                                        {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                                      </select>
+                                    </div>
+
+                                    {goalSubmittedTasks.map((row: any) => (
+                                      <div key={`inline-member-rating-${row.id}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 flex items-center justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <p className="truncate text-base font-bold text-slate-800 dark:text-slate-100">{row.member_name || `Member #${row.member_employee_id}`}</p>
+                                          <p className="truncate text-xs text-slate-500 dark:text-slate-400">{row.title || 'Assigned task'}</p>
+                                        </div>
+                                        <select
+                                          value={Number(goalRatings[`task-${row.id}`] || 0) > 0 ? Number(goalRatings[`task-${row.id}`]) : ''}
+                                          onChange={(e) => setInlineMemberRating(goalId, `task-${row.id}`, Number(e.target.value || 0))}
+                                          disabled={isSaving || ratingsLocked}
+                                          className="w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-base font-bold disabled:opacity-60"
+                                        >
+                                          <option value="">Rate</option>
+                                          {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                                        </select>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div className="flex justify-end">
+                                    {!ratingsLocked && (
+                                      <button
+                                        onClick={() => void saveInlineMemberRatings(goalId)}
+                                        disabled={isSaving}
+                                        className="px-4 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                                      >
+                                        {isSaving ? 'Saving ratings...' : 'Save Member Ratings'}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         ) : (
                           <div className="flex flex-wrap gap-2">
@@ -3699,16 +3870,73 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         </div>
                       )}
                       {goalProofApproved ? (
-                        <div className="flex flex-wrap gap-2">
-                          <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
-                          {allSubmittedGoalProofsApproved && (
-                            <button
-                              onClick={() => openMemberRatingsModal(Number(proofReviewGoal.id))}
-                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-                            >
-                              Rate Members
-                            </button>
-                          )}
+                        <div className="space-y-2">
+                          <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
+                          {allSubmittedGoalProofsApproved && (() => {
+                            const goalId = Number(proofReviewGoal.id);
+                            const leaderName = String((proofReviewGoal as any)?.delegation || (proofReviewGoal as any)?.leader_name || (proofReviewGoal as any)?.employee_name || 'Leader').trim() || 'Leader';
+                            const goalRatings = inlineMemberRatingsByGoal[goalId] || buildInitialRatingsForGoal(goalId);
+                            const ratingsLocked = Number(proofReviewGoal.proof_review_rating || 0) >= 1 && Number(proofReviewGoal.proof_review_rating || 0) <= 5 && goalSubmittedTasks.every((row: any) => Number(row.proof_review_rating || 0) >= 1 && Number(row.proof_review_rating || 0) <= 5);
+                            const isSaving = inlineMemberRatingsSavingGoalId === goalId;
+                            return (
+                              <div className="rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/80 dark:bg-blue-900/20 p-3 space-y-3">
+                                <div className="space-y-1">
+                                  <p className="text-sm font-black uppercase tracking-wide text-blue-700 dark:text-blue-300">Member Ratings</p>
+                                  <p className="text-sm text-slate-700 dark:text-slate-300">
+                                    {ratingsLocked ? 'Ratings are already saved and locked.' : 'Rate each approved member and the team leader, then save once.'}
+                                  </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-2">
+                                  <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 p-2.5 flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-base font-extrabold text-slate-800 dark:text-slate-100" title={leaderName}>{leaderName}</p>
+                                      <p className="text-xs text-slate-500 dark:text-slate-400">Team Leader</p>
+                                    </div>
+                                    <select
+                                      value={Number(goalRatings.leader || 0) > 0 ? Number(goalRatings.leader) : ''}
+                                      onChange={(e) => setInlineMemberRating(goalId, 'leader', Number(e.target.value || 0))}
+                                      disabled={isSaving || ratingsLocked}
+                                      className="w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-base font-bold disabled:opacity-60"
+                                    >
+                                      <option value="">Rate</option>
+                                      {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                                    </select>
+                                  </div>
+
+                                  {goalSubmittedTasks.map((row: any) => (
+                                    <div key={`inline-member-rating-${row.id}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 flex items-center justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-base font-bold text-slate-800 dark:text-slate-100">{row.member_name || `Member #${row.member_employee_id}`}</p>
+                                        <p className="truncate text-xs text-slate-500 dark:text-slate-400">{row.title || 'Assigned task'}</p>
+                                      </div>
+                                      <select
+                                        value={Number(goalRatings[`task-${row.id}`] || 0) > 0 ? Number(goalRatings[`task-${row.id}`]) : ''}
+                                        onChange={(e) => setInlineMemberRating(goalId, `task-${row.id}`, Number(e.target.value || 0))}
+                                        disabled={isSaving || ratingsLocked}
+                                        className="w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-base font-bold disabled:opacity-60"
+                                      >
+                                        <option value="">Rate</option>
+                                        {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                                      </select>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <div className="flex justify-end">
+                                  {!ratingsLocked && (
+                                    <button
+                                      onClick={() => void saveInlineMemberRatings(goalId)}
+                                      disabled={isSaving}
+                                      className="px-4 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                                    >
+                                      {isSaving ? 'Saving ratings...' : 'Save Member Ratings'}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       ) : (
                         <div className="flex flex-wrap gap-2">
