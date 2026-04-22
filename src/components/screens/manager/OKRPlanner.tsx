@@ -1998,7 +1998,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         )}
                         {goalProofApproved ? (
                           <div className="space-y-2">
-                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
+                            <p className="text-base font-extrabold text-emerald-700 dark:text-emerald-300">Final proof approved. This decision is now locked.</p>
                             {allSubmittedGoalProofsApproved && (() => {
                               const goalId = Number(proofReviewGoal.id);
                               const leaderName = String((proofReviewGoal as any)?.delegation || (proofReviewGoal as any)?.leader_name || (proofReviewGoal as any)?.employee_name || 'Leader').trim() || 'Leader';
@@ -2006,60 +2006,72 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               const ratingsLocked = Number(proofReviewGoal.proof_review_rating || 0) >= 1 && Number(proofReviewGoal.proof_review_rating || 0) <= 5 && goalSubmittedTasks.every((row: any) => Number(row.proof_review_rating || 0) >= 1 && Number(row.proof_review_rating || 0) <= 5);
                               const isSaving = inlineMemberRatingsSavingGoalId === goalId;
                               return (
-                                <div className="rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/80 dark:bg-blue-900/20 p-3 space-y-3">
-                                  <div className="space-y-1">
-                                    <p className="text-sm font-black uppercase tracking-wide text-blue-700 dark:text-blue-300">Member Ratings</p>
-                                    <p className="text-sm text-slate-700 dark:text-slate-300">
-                                      {ratingsLocked ? 'Ratings are already saved and locked.' : 'Rate each approved member and the team leader, then save once.'}
-                                    </p>
-                                  </div>
-
-                                  <div className="grid grid-cols-1 gap-2">
-                                    <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 p-2.5 flex items-center justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <p className="truncate text-base font-extrabold text-slate-800 dark:text-slate-100" title={leaderName}>{leaderName}</p>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">Team Leader</p>
+                                <div className="rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/80 dark:bg-blue-900/20 p-3">
+                                  <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-3 items-start">
+                                    <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-white/80 dark:bg-slate-900/50 p-3 space-y-2">
+                                      <p className="text-base font-black text-blue-700 dark:text-blue-300">Team Performance Ratings</p>
+                                      <p className="text-sm text-slate-700 dark:text-slate-300">
+                                        {ratingsLocked ? 'All ratings are already submitted and locked.' : 'Rate the team leader and each approved member using a scale of 1 to 5, then save once.'}
+                                      </p>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
+                                          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">People to Rate</p>
+                                          <p className="text-base font-black text-slate-800 dark:text-slate-100">{goalSubmittedTasks.length + 1}</p>
+                                        </div>
+                                        <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
+                                          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Rating Scale</p>
+                                          <p className="text-base font-black text-slate-800 dark:text-slate-100">1 to 5</p>
+                                        </div>
                                       </div>
-                                      <select
-                                        value={Number(goalRatings.leader || 0) > 0 ? Number(goalRatings.leader) : ''}
-                                        onChange={(e) => setInlineMemberRating(goalId, 'leader', Number(e.target.value || 0))}
-                                        disabled={isSaving || ratingsLocked}
-                                        className="w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-base font-bold disabled:opacity-60"
-                                      >
-                                        <option value="">Rate</option>
-                                        {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
-                                      </select>
                                     </div>
 
-                                    {goalSubmittedTasks.map((row: any) => (
-                                      <div key={`inline-member-rating-${row.id}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 flex items-center justify-between gap-3">
+                                    <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-white/90 dark:bg-slate-900 p-2.5 space-y-2">
+                                      <p className="text-sm font-black uppercase tracking-wide text-blue-700 dark:text-blue-300">Member Ratings</p>
+
+                                      <div className="rounded-md border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-900/20 px-2.5 py-2 flex items-center justify-between gap-2">
                                         <div className="min-w-0">
-                                          <p className="truncate text-base font-bold text-slate-800 dark:text-slate-100">{row.member_name || `Member #${row.member_employee_id}`}</p>
-                                          <p className="truncate text-xs text-slate-500 dark:text-slate-400">{row.title || 'Assigned task'}</p>
+                                          <p className="truncate text-base font-extrabold text-slate-800 dark:text-slate-100" title={leaderName}>{leaderName}</p>
+                                          <p className="text-xs text-slate-500 dark:text-slate-400">Team Leader</p>
                                         </div>
                                         <select
-                                          value={Number(goalRatings[`task-${row.id}`] || 0) > 0 ? Number(goalRatings[`task-${row.id}`]) : ''}
-                                          onChange={(e) => setInlineMemberRating(goalId, `task-${row.id}`, Number(e.target.value || 0))}
+                                          value={Number(goalRatings.leader || 0) > 0 ? Number(goalRatings.leader) : ''}
+                                          onChange={(e) => setInlineMemberRating(goalId, 'leader', Number(e.target.value || 0))}
                                           disabled={isSaving || ratingsLocked}
-                                          className="w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-base font-bold disabled:opacity-60"
+                                          className="w-24 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-base font-bold disabled:opacity-60"
                                         >
                                           <option value="">Rate</option>
                                           {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
                                         </select>
                                       </div>
-                                    ))}
-                                  </div>
 
-                                  <div className="flex justify-end">
-                                    {!ratingsLocked && (
-                                      <button
-                                        onClick={() => void saveInlineMemberRatings(goalId)}
-                                        disabled={isSaving}
-                                        className="px-4 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                                      >
-                                        {isSaving ? 'Saving ratings...' : 'Save Member Ratings'}
-                                      </button>
-                                    )}
+                                      {goalSubmittedTasks.map((row: any) => (
+                                        <div key={`inline-member-rating-${row.id}`} className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2 flex items-center justify-between gap-2">
+                                          <div className="min-w-0">
+                                            <p className="truncate text-base font-bold text-slate-800 dark:text-slate-100">{row.member_name || `Member #${row.member_employee_id}`}</p>
+                                            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{row.title || 'Assigned task'}</p>
+                                          </div>
+                                          <select
+                                            value={Number(goalRatings[`task-${row.id}`] || 0) > 0 ? Number(goalRatings[`task-${row.id}`]) : ''}
+                                            onChange={(e) => setInlineMemberRating(goalId, `task-${row.id}`, Number(e.target.value || 0))}
+                                            disabled={isSaving || ratingsLocked}
+                                            className="w-24 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-base font-bold disabled:opacity-60"
+                                          >
+                                            <option value="">Rate</option>
+                                            {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                                          </select>
+                                        </div>
+                                      ))}
+
+                                      {!ratingsLocked && (
+                                        <button
+                                          onClick={() => void saveInlineMemberRatings(goalId)}
+                                          disabled={isSaving}
+                                          className="w-full px-3 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                                        >
+                                          {isSaving ? 'Saving ratings...' : 'Save Ratings'}
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               );
@@ -3871,7 +3883,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       )}
                       {goalProofApproved ? (
                         <div className="space-y-2">
-                          <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
+                          <p className="text-base font-extrabold text-emerald-700 dark:text-emerald-300">Final proof approved. This decision is now locked.</p>
                           {allSubmittedGoalProofsApproved && (() => {
                             const goalId = Number(proofReviewGoal.id);
                             const leaderName = String((proofReviewGoal as any)?.delegation || (proofReviewGoal as any)?.leader_name || (proofReviewGoal as any)?.employee_name || 'Leader').trim() || 'Leader';
@@ -3879,60 +3891,72 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             const ratingsLocked = Number(proofReviewGoal.proof_review_rating || 0) >= 1 && Number(proofReviewGoal.proof_review_rating || 0) <= 5 && goalSubmittedTasks.every((row: any) => Number(row.proof_review_rating || 0) >= 1 && Number(row.proof_review_rating || 0) <= 5);
                             const isSaving = inlineMemberRatingsSavingGoalId === goalId;
                             return (
-                              <div className="rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/80 dark:bg-blue-900/20 p-3 space-y-3">
-                                <div className="space-y-1">
-                                  <p className="text-sm font-black uppercase tracking-wide text-blue-700 dark:text-blue-300">Member Ratings</p>
-                                  <p className="text-sm text-slate-700 dark:text-slate-300">
-                                    {ratingsLocked ? 'Ratings are already saved and locked.' : 'Rate each approved member and the team leader, then save once.'}
-                                  </p>
-                                </div>
-
-                                <div className="grid grid-cols-1 gap-2">
-                                  <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 p-2.5 flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <p className="truncate text-base font-extrabold text-slate-800 dark:text-slate-100" title={leaderName}>{leaderName}</p>
-                                      <p className="text-xs text-slate-500 dark:text-slate-400">Team Leader</p>
+                              <div className="rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/80 dark:bg-blue-900/20 p-3">
+                                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-3 items-start">
+                                  <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-white/80 dark:bg-slate-900/50 p-3 space-y-2">
+                                    <p className="text-base font-black text-blue-700 dark:text-blue-300">Team Performance Ratings</p>
+                                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                                      {ratingsLocked ? 'All ratings are already submitted and locked.' : 'Rate the team leader and each approved member using a scale of 1 to 5, then save once.'}
+                                    </p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
+                                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">People to Rate</p>
+                                        <p className="text-base font-black text-slate-800 dark:text-slate-100">{goalSubmittedTasks.length + 1}</p>
+                                      </div>
+                                      <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
+                                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Rating Scale</p>
+                                        <p className="text-base font-black text-slate-800 dark:text-slate-100">1 to 5</p>
+                                      </div>
                                     </div>
-                                    <select
-                                      value={Number(goalRatings.leader || 0) > 0 ? Number(goalRatings.leader) : ''}
-                                      onChange={(e) => setInlineMemberRating(goalId, 'leader', Number(e.target.value || 0))}
-                                      disabled={isSaving || ratingsLocked}
-                                      className="w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-base font-bold disabled:opacity-60"
-                                    >
-                                      <option value="">Rate</option>
-                                      {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
-                                    </select>
                                   </div>
 
-                                  {goalSubmittedTasks.map((row: any) => (
-                                    <div key={`inline-member-rating-${row.id}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 flex items-center justify-between gap-3">
+                                  <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-white/90 dark:bg-slate-900 p-2.5 space-y-2">
+                                    <p className="text-sm font-black uppercase tracking-wide text-blue-700 dark:text-blue-300">Member Ratings</p>
+
+                                    <div className="rounded-md border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-900/20 px-2.5 py-2 flex items-center justify-between gap-2">
                                       <div className="min-w-0">
-                                        <p className="truncate text-base font-bold text-slate-800 dark:text-slate-100">{row.member_name || `Member #${row.member_employee_id}`}</p>
-                                        <p className="truncate text-xs text-slate-500 dark:text-slate-400">{row.title || 'Assigned task'}</p>
+                                        <p className="truncate text-base font-extrabold text-slate-800 dark:text-slate-100" title={leaderName}>{leaderName}</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">Team Leader</p>
                                       </div>
                                       <select
-                                        value={Number(goalRatings[`task-${row.id}`] || 0) > 0 ? Number(goalRatings[`task-${row.id}`]) : ''}
-                                        onChange={(e) => setInlineMemberRating(goalId, `task-${row.id}`, Number(e.target.value || 0))}
+                                        value={Number(goalRatings.leader || 0) > 0 ? Number(goalRatings.leader) : ''}
+                                        onChange={(e) => setInlineMemberRating(goalId, 'leader', Number(e.target.value || 0))}
                                         disabled={isSaving || ratingsLocked}
-                                        className="w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-base font-bold disabled:opacity-60"
+                                        className="w-24 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-base font-bold disabled:opacity-60"
                                       >
                                         <option value="">Rate</option>
                                         {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
                                       </select>
                                     </div>
-                                  ))}
-                                </div>
 
-                                <div className="flex justify-end">
-                                  {!ratingsLocked && (
-                                    <button
-                                      onClick={() => void saveInlineMemberRatings(goalId)}
-                                      disabled={isSaving}
-                                      className="px-4 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                                    >
-                                      {isSaving ? 'Saving ratings...' : 'Save Member Ratings'}
-                                    </button>
-                                  )}
+                                    {goalSubmittedTasks.map((row: any) => (
+                                      <div key={`inline-member-rating-${row.id}`} className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2 flex items-center justify-between gap-2">
+                                        <div className="min-w-0">
+                                          <p className="truncate text-base font-bold text-slate-800 dark:text-slate-100">{row.member_name || `Member #${row.member_employee_id}`}</p>
+                                          <p className="truncate text-xs text-slate-500 dark:text-slate-400">{row.title || 'Assigned task'}</p>
+                                        </div>
+                                        <select
+                                          value={Number(goalRatings[`task-${row.id}`] || 0) > 0 ? Number(goalRatings[`task-${row.id}`]) : ''}
+                                          onChange={(e) => setInlineMemberRating(goalId, `task-${row.id}`, Number(e.target.value || 0))}
+                                          disabled={isSaving || ratingsLocked}
+                                          className="w-24 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-base font-bold disabled:opacity-60"
+                                        >
+                                          <option value="">Rate</option>
+                                          {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                                        </select>
+                                      </div>
+                                    ))}
+
+                                    {!ratingsLocked && (
+                                      <button
+                                        onClick={() => void saveInlineMemberRatings(goalId)}
+                                        disabled={isSaving}
+                                        className="w-full px-3 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                                      >
+                                        {isSaving ? 'Saving ratings...' : 'Save Ratings'}
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             );
