@@ -227,30 +227,6 @@ async function recomputeGoalProgress(goalId: number) {
   }
 
   return nextProgress;
-        } else if (normalizeUserRole(role) === 'Manager' && b.proof_review_rating !== undefined) {
-          const currentGoalProofStatus = String(existing?.proof_review_status || 'Not Submitted').trim() || 'Not Submitted';
-          if (currentGoalProofStatus !== 'Approved') {
-            return res.status(409).json({ error: 'Manager rating can only be updated after final proof approval' });
-          }
-
-          const normalizedRating = normalizeProofReviewRating(b.proof_review_rating);
-          if (normalizedRating === null) {
-            return res.status(400).json({ error: 'Manager rating (1-5) is required' });
-          }
-
-          if (b.proof_review_note !== undefined) {
-            sets.push('proof_review_note = ?');
-            vals.push(String(b.proof_review_note || '').trim() || null);
-          }
-
-          sets.push('proof_reviewed_by = ?');
-          vals.push(Number(actor?.id || 0) || null);
-          sets.push('proof_reviewed_role = ?');
-          vals.push(normalizeUserRole(role) || String(role || '') || null);
-          sets.push('proof_reviewed_at = ?');
-          vals.push(new Date().toISOString());
-          sets.push('proof_review_rating = ?');
-          vals.push(normalizedRating);
 }
 
 function usernameBaseFromInput(input: string) {
