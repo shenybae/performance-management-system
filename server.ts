@@ -13,9 +13,16 @@ import { createLinkedAccounts } from './scripts/add_linked_accounts';
 
 dotenv.config();
 
-// Enforce PostgreSQL usage only. Require DB env vars and exit if missing.
-if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_NAME) {
-  console.error('PostgreSQL configuration missing. Please set DB_HOST, DB_USER, DB_PASSWORD, DB_NAME in your .env');
+const dbConnectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PGURL;
+const dbHost = process.env.DB_HOST || process.env.POSTGRES_HOST || process.env.PGHOST;
+const dbPort = parseInt(process.env.DB_PORT || process.env.POSTGRES_PORT || process.env.PGPORT || '5432', 10);
+const dbUser = process.env.DB_USER || process.env.POSTGRES_USER || process.env.PGUSER;
+const dbPassword = process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || process.env.PGPASSWORD;
+const dbName = process.env.DB_NAME || process.env.POSTGRES_DB || process.env.PGDATABASE;
+
+// Enforce PostgreSQL usage only. Accept common env var names used by deployment providers.
+if (!dbConnectionString && (!dbHost || !dbUser || !dbName)) {
+  console.error('PostgreSQL configuration missing. Set DATABASE_URL or DB_HOST/DB_USER/DB_PASSWORD/DB_NAME (POSTGRES_* and PG* are also supported).');
   process.exit(1);
 }
 
@@ -24,16 +31,23 @@ let pgPool: pg.Pool | null = null;
 let sqliteDb: any = null; // kept declared for compatibility with legacy code paths (unused)
 
 try {
-  pgPool = new pg.Pool({
-    host: process.env.DB_HOST,
-    port: parseInt(process.env.DB_PORT || '5432'),
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
-  });
+  pgPool = dbConnectionString
+    ? new pg.Pool({
+        connectionString: dbConnectionString,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      })
+    : new pg.Pool({
+        host: dbHost,
+        port: Number.isFinite(dbPort) ? dbPort : 5432,
+        user: dbUser,
+        password: dbPassword,
+        database: dbName,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      });
   console.log("PostgreSQL Pool created. Attempting connection...");
 } catch (err) {
   console.error("Failed to create PostgreSQL pool:", err);
@@ -2058,7 +2072,7 @@ async function startServer() {
       let shouldAudit = false;
       if (explicitAction) shouldAudit = true;
       else if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-        const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+        const actorCtx = await getActorOrgContext(Number(user.id || 0));
         const candidate = resource ? resource.toString() : null;
         if (candidate && auditInterestTables.includes(candidate)) shouldAudit = true;
       }

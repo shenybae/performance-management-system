@@ -4,18 +4,27 @@ import pg from 'pg';
 
 dotenv.config();
 
-if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_NAME) {
-  console.error('Missing PostgreSQL configuration. Set DB_HOST, DB_USER, DB_PASSWORD, DB_NAME in .env.');
+const dbConnectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PGURL;
+const dbHost = process.env.DB_HOST || process.env.POSTGRES_HOST || process.env.PGHOST;
+const dbPort = parseInt(process.env.DB_PORT || process.env.POSTGRES_PORT || process.env.PGPORT || '5432', 10);
+const dbUser = process.env.DB_USER || process.env.POSTGRES_USER || process.env.PGUSER;
+const dbPassword = process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || process.env.PGPASSWORD;
+const dbName = process.env.DB_NAME || process.env.POSTGRES_DB || process.env.PGDATABASE;
+
+if (!dbConnectionString && (!dbHost || !dbUser || !dbName)) {
+  console.error('Missing PostgreSQL configuration. Set DATABASE_URL or DB_HOST/DB_USER/DB_PASSWORD/DB_NAME (POSTGRES_* and PG* are also supported).');
   process.exit(1);
 }
 
-const pgPool = new pg.Pool({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || '5432'),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-});
+const pgPool = dbConnectionString
+  ? new pg.Pool({ connectionString: dbConnectionString })
+  : new pg.Pool({
+      host: dbHost,
+      port: Number.isFinite(dbPort) ? dbPort : 5432,
+      user: dbUser,
+      password: dbPassword,
+      database: dbName,
+    });
 
 async function rawQuery(sql: string, params: any[] = []) {
   let count = 0;
