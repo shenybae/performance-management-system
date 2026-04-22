@@ -227,6 +227,7 @@ async function recomputeGoalProgress(goalId: number) {
   }
 
   return nextProgress;
+}
 
 function usernameBaseFromInput(input: string) {
   const normalized = (input || '')
