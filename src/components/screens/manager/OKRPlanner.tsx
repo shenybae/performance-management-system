@@ -1800,7 +1800,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             )}
                           </div>
                         )}
-                        {allSubmittedGoalProofsApproved && (
+                        {goalProofApproved && (
                           <div className="flex flex-wrap items-center gap-2">
                             <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
                             <select
@@ -1812,19 +1812,17 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               <option value="">Rate 1-5</option>
                               {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
                             </select>
-                            {goalProofApproved ? (
-                              <button
-                                onClick={() => void saveGoalReviewRating(Number(proofReviewGoal.id))}
-                                disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
-                                className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-60"
-                              >
-                                Save Rating
-                              </button>
-                            ) : null}
+                            <button
+                              onClick={() => void saveGoalReviewRating(Number(proofReviewGoal.id))}
+                              disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                              className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-60"
+                            >
+                              Save Rating
+                            </button>
                           </div>
                         )}
-                        {!allSubmittedGoalProofsApproved && (
-                          <p className="text-[10px] text-amber-600">Manager rating unlocks after all submitted delegated proofs are approved by manager.</p>
+                        {!goalProofApproved && (
+                          <p className="text-[10px] text-amber-600">Manager rating unlocks after this final proof is approved.</p>
                         )}
                         {goalProofApproved ? (
                           <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
@@ -1974,7 +1972,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                   )}
                                 </div>
                               )}
-                              {allSubmittedProofsApproved && managerApproved ? (
+                              {managerApproved ? (
                                 <div className="flex flex-wrap items-center gap-2">
                                   <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
                                   <select
