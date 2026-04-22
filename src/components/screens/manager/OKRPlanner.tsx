@@ -1007,13 +1007,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
     const note = String(options?.note ?? proofReviewNotes[goalId] ?? '').trim();
     const attachment = options?.attachment ?? proofReviewAttachments[goalId];
-    const selectedRating = Number(proofReviewRatings[goalId] || 0);
-    const existingRating = Number(proofReviewGoal?.proof_review_rating || 0);
-    const rating = Math.max(1, Math.min(5, Number(selectedRating || existingRating || 0)));
-    if (status === 'Approved' && !rating) {
-      window.notify?.('Please select a manager rating (1-5) before approving final proof', 'error');
-      return;
-    }
     setProofReviewSubmittingTaskId(goalId);
     try {
       const res = await fetch(`/api/goals/${goalId}`, {
@@ -1026,8 +1019,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             proof_review_file_data: attachment.file_data,
             proof_review_file_name: attachment.file_name,
             proof_review_file_type: attachment.file_type,
-          } : {}),
-          ...(status === 'Approved' ? { proof_review_rating: rating } : {})
+          } : {})
         })
       });
       if (!res.ok) {
@@ -1103,7 +1095,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     const note = String(options?.note ?? proofReviewNotes[taskId] ?? '').trim();
     const attachment = options?.attachment ?? proofReviewAttachments[taskId];
     const task = (proofReviewTasksByGoal[goalId] || []).find((item: any) => Number(item?.id) === Number(taskId));
-    const rating = Math.max(1, Math.min(5, Number(task?.proof_review_rating || proofReviewRatings[taskId] || 5)));
     const isCurrentManager = userRole === 'manager';
     setProofReviewSubmittingTaskId(taskId);
     try {
@@ -1113,7 +1104,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         body: JSON.stringify({
           proof_review_status: status,
           proof_review_note: note,
-          proof_review_rating: rating,
           ...(attachment && status !== 'Approved' ? {
             proof_review_file_data: attachment.file_data,
             proof_review_file_name: attachment.file_name,
@@ -1131,17 +1121,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
               ...task,
               proof_review_status: status,
               proof_review_note: note,
-              proof_review_rating: rating,
               status: isCurrentManager ? 'Completed' : 'In Progress',
               progress: isCurrentManager ? 100 : Math.max(Number(task?.progress || 0), 75)
             };
           }
           if (status === 'Needs Revision') {
             const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));
-            return { ...task, proof_review_status: status, proof_review_note: note, proof_review_rating: rating, status: 'In Progress', progress: currentProgress >= 75 ? 75 : Math.max(currentProgress, 50) };
+            return { ...task, proof_review_status: status, proof_review_note: note, status: 'In Progress', progress: currentProgress >= 75 ? 75 : Math.max(currentProgress, 50) };
           }
           const currentProgress = Math.max(0, Math.min(100, Number(task?.progress || 0)));
-          return { ...task, proof_review_status: status, proof_review_note: note, proof_review_rating: rating, status: 'Blocked', progress: Math.min(currentProgress, 50) };
+          return { ...task, proof_review_status: status, proof_review_note: note, status: 'Blocked', progress: Math.min(currentProgress, 50) };
         })
       }));
       window.notify?.(`Proof ${status.toLowerCase()}`, 'success');

@@ -3391,10 +3391,6 @@ async function startServer() {
         const currentGoalProofStatus = String(existing?.proof_review_status || 'Not Submitted').trim() || 'Not Submitted';
         const isReviewed = reviewedStatus === 'Approved' || reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected';
 
-        if (role === 'Manager' && reviewedStatus === 'Approved' && normalizedRating === null) {
-          return res.status(400).json({ error: 'Manager rating (1-5) is required when approving final proof' });
-        }
-
         if (currentGoalProofStatus === 'Approved') {
           return res.status(409).json({ error: 'Final proof decision already finalized as Approved' });
         }
