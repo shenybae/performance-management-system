@@ -2007,13 +2007,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               const isSaving = inlineMemberRatingsSavingGoalId === goalId;
                               return (
                                 <div className="rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/80 dark:bg-blue-900/20 p-3">
-                                  <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-3 items-start">
-                                    <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-white/80 dark:bg-slate-900/50 p-3 space-y-2">
+                                  <div className="flex flex-col lg:flex-row gap-3 items-start">
+                                    <div className="flex-1 rounded-lg border border-blue-100 dark:border-blue-900/30 bg-white/80 dark:bg-slate-900/50 p-3 space-y-2">
                                       <p className="text-base font-black text-blue-700 dark:text-blue-300">Team Performance Ratings</p>
                                       <p className="text-sm text-slate-700 dark:text-slate-300">
                                         {ratingsLocked ? 'All ratings are already submitted and locked.' : 'Rate the team leader and each approved member using a scale of 1 to 5, then save once.'}
                                       </p>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      <div className="grid grid-cols-2 gap-2">
                                         <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
                                           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">People to Rate</p>
                                           <p className="text-base font-black text-slate-800 dark:text-slate-100">{goalSubmittedTasks.length + 1}</p>
@@ -2025,7 +2025,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                       </div>
                                     </div>
 
-                                    <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-white/90 dark:bg-slate-900 p-2.5 space-y-2">
+                                    <div className="w-full lg:w-80 rounded-lg border border-blue-100 dark:border-blue-900/30 bg-white/90 dark:bg-slate-900 p-2.5 space-y-2 shrink-0">
                                       <p className="text-sm font-black uppercase tracking-wide text-blue-700 dark:text-blue-300">Member Ratings</p>
 
                                       <div className="rounded-md border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-900/20 px-2.5 py-2 flex items-center justify-between gap-2">
@@ -3892,13 +3892,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             const isSaving = inlineMemberRatingsSavingGoalId === goalId;
                             return (
                               <div className="rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/80 dark:bg-blue-900/20 p-3">
-                                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-3 items-start">
-                                  <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-white/80 dark:bg-slate-900/50 p-3 space-y-2">
+                                <div className="flex flex-col lg:flex-row gap-3 items-start">
+                                  <div className="flex-1 rounded-lg border border-blue-100 dark:border-blue-900/30 bg-white/80 dark:bg-slate-900/50 p-3 space-y-2">
                                     <p className="text-base font-black text-blue-700 dark:text-blue-300">Team Performance Ratings</p>
                                     <p className="text-sm text-slate-700 dark:text-slate-300">
                                       {ratingsLocked ? 'All ratings are already submitted and locked.' : 'Rate the team leader and each approved member using a scale of 1 to 5, then save once.'}
                                     </p>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-2 gap-2">
                                       <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
                                         <p className="text-xs font-bold uppercase tracking-wide text-slate-500">People to Rate</p>
                                         <p className="text-base font-black text-slate-800 dark:text-slate-100">{goalSubmittedTasks.length + 1}</p>
@@ -3910,7 +3910,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                     </div>
                                   </div>
 
-                                  <div className="rounded-lg border border-blue-100 dark:border-blue-900/30 bg-white/90 dark:bg-slate-900 p-2.5 space-y-2">
+                                  <div className="w-full lg:w-80 rounded-lg border border-blue-100 dark:border-blue-900/30 bg-white/90 dark:bg-slate-900 p-2.5 space-y-2 shrink-0">
                                     <p className="text-sm font-black uppercase tracking-wide text-blue-700 dark:text-blue-300">Member Ratings</p>
 
                                     <div className="rounded-md border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-900/20 px-2.5 py-2 flex items-center justify-between gap-2">
