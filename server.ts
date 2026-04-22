@@ -3460,9 +3460,13 @@ async function startServer() {
         }
 
         if (reviewedStatus === 'Approved') {
-          if (normalizedStatus === undefined && String(existing?.status || '').toLowerCase() === 'completed') {
+          if (normalizedStatus === undefined) {
             sets.push('status = ?');
-            vals.push('In Progress');
+            vals.push('Completed');
+          }
+          if (normalizedProgress === undefined) {
+            sets.push('progress = ?');
+            vals.push(100);
           }
         } else if (reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected') {
           if (normalizedStatus === undefined && String(existing?.status || '').toLowerCase() === 'completed') {
