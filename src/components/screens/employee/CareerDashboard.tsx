@@ -1242,6 +1242,37 @@ export const CareerDashboard = () => {
     [leaderGoals, taskBoardOpenGoalId]
   );
 
+  const goalLeaderIdByGoalId = useMemo(() => {
+    const map = new Map<number, number>();
+    const push = (goal: any) => {
+      const goalId = Number(goal?.id || 0);
+      const leaderId = Number(goal?.leader_id || 0);
+      if (goalId > 0 && leaderId > 0) map.set(goalId, leaderId);
+    };
+    (Array.isArray(goals) ? goals : []).forEach(push);
+    (Array.isArray(leaderGoals) ? leaderGoals : []).forEach(push);
+    return map;
+  }, [goals, leaderGoals]);
+
+  const resolveRevisionRequesterLabel = (entry: any, opts?: { isGoalFinal?: boolean }) => {
+    const roleRaw = String(entry?.proof_reviewed_role || entry?.proof_reviewer_role || entry?.reviewer_role || '').trim().toLowerCase();
+    if (roleRaw === 'manager' || roleRaw === 'hr' || roleRaw === 'admin') return 'your manager';
+    if (roleRaw.includes('team')) return 'your team leader';
+    if (roleRaw === 'employee') return 'your team leader';
+
+    const reviewerId = Number(entry?.proof_reviewed_by || 0);
+    const goalId = Number(entry?.goal_id || entry?.id || 0);
+    const leaderIdFromEntry = Number(entry?.leader_id || 0);
+    const leaderId = leaderIdFromEntry > 0 ? leaderIdFromEntry : Number(goalLeaderIdByGoalId.get(goalId) || 0);
+    if (reviewerId > 0 && leaderId > 0) {
+      return reviewerId === leaderId ? 'your team leader' : 'your manager';
+    }
+
+    if (opts?.isGoalFinal) return 'your manager';
+    if (Number(entry?.proof_review_rating || 0) > 0) return 'your manager';
+    return 'your team leader';
+  };
+
   // Self assessment scores over time
   const assessmentTrend = selfAssessments
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
@@ -2032,6 +2063,7 @@ export const CareerDashboard = () => {
                   const canEditFinalProof = goalProofStatus === 'Not Submitted' || goalProofStatus === 'Needs Revision';
                   const taskBoardProgress = Math.max(0, Math.min(100, Number(selectedTaskBoardGoal?.progress || 0)));
                   const taskBoardStatus = String(selectedTaskBoardGoal?.status || 'Not Started');
+                  const goalRevisionRequesterLabel = resolveRevisionRequesterLabel(selectedTaskBoardGoal, { isGoalFinal: true });
                   const submittedGoalProofFiles = parseGoalProofFiles(selectedTaskBoardGoal);
                   const goalProofHistory = parseProofRevisionHistory(selectedTaskBoardGoal?.proof_revision_history);
                   const goalCurrentRevisionNumber = goalProofHistory.length + 1;
@@ -2125,8 +2157,8 @@ export const CareerDashboard = () => {
                           {selectedTaskBoardGoal.proof_review_note && (
                             <p className="text-[10px] text-slate-500 italic">
                               {String(selectedTaskBoardGoal?.proof_review_status || '') === 'Needs Revision'
-                                ? `Requested revision from ${String(selectedTaskBoardGoal?.proof_reviewed_role || '').toLowerCase().includes('team') ? 'your team leader' : 'your manager'}`
-                                : `${String(selectedTaskBoardGoal?.proof_reviewed_role || '').toLowerCase().includes('team') ? 'Team leader note' : 'Manager note'}`
+                                ? `Requested revision from ${goalRevisionRequesterLabel}`
+                                : `${goalRevisionRequesterLabel === 'your team leader' ? 'Team leader note' : 'Manager note'}`
                               }: {selectedTaskBoardGoal.proof_review_note}
                             </p>
                           )}
@@ -2273,8 +2305,7 @@ export const CareerDashboard = () => {
                     const taskProofHistory = parseProofRevisionHistory(t?.proof_revision_history);
                     const taskCurrentRevisionNumber = taskProofHistory.length + 1;
                     const taskCurrentRevisionLabel = taskProofHistory.length > 0 ? `${ordinalLabel(taskCurrentRevisionNumber)} revision` : 'Initial submission';
-                    const reviewerRole = String((t as any)?.proof_reviewed_role || (t as any)?.reviewer_role || '').trim().toLowerCase();
-                    const reviewerLabel = reviewerRole.includes('team') ? 'your team leader' : reviewerRole.includes('manager') ? 'your manager' : 'your team leader or manager';
+                    const reviewerLabel = resolveRevisionRequesterLabel(t);
                     const reviewAttachment = String((t as any)?.proof_review_file_data || '').trim()
                       ? {
                           proof_file_data: String((t as any)?.proof_review_file_data || '').trim(),
@@ -2504,8 +2535,7 @@ export const CareerDashboard = () => {
           const proofApproved = reviewStatus === 'Approved';
           const proofPending = reviewStatus === 'Pending Review';
           const proofRejected = reviewStatus === 'Rejected';
-          const reviewActorRole = String((t as any)?.proof_reviewed_role || (t as any)?.reviewer_role || '').trim().toLowerCase();
-          const reviewActorLabel = reviewActorRole.includes('team') ? 'your team leader' : reviewActorRole.includes('manager') ? 'your manager' : 'your team leader or manager';
+          const reviewActorLabel = resolveRevisionRequesterLabel(t);
           const reviewAttachment = String((t as any)?.proof_review_file_data || '').trim()
             ? {
                 proof_file_data: String((t as any)?.proof_review_file_data || '').trim(),
