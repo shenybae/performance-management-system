@@ -4949,11 +4949,15 @@ async function startServer() {
         sets.push('proof_reviewed_at = ?');
         vals.push(isReviewed ? new Date().toISOString() : null);
         sets.push('proof_review_rating = ?');
-        vals.push(effectiveRating);
+        vals.push(reviewedStatus === 'Approved' ? null : effectiveRating);
       } else if (managerEditingRatingOnly) {
         const normalizedRating = normalizeProofReviewRating(b.proof_review_rating);
         if (normalizedRating === null) {
           return res.status(400).json({ error: 'Manager rating (1-5) is required' });
+        }
+
+        if (Number(task.proof_review_rating || 0) >= 1 && Number(task.proof_review_rating || 0) <= 5) {
+          return res.status(409).json({ error: 'Member rating is already locked' });
         }
 
         if (b.proof_review_note !== undefined) {
