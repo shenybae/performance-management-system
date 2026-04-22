@@ -2185,6 +2185,9 @@ export const CareerDashboard = () => {
                     const teamLeaderReviewLocked = isTeamLeaderActor && Number((t as any).tl_review_locked || 0) === 1;
                     const proofDecisionFinalized = proofReviewStatus === 'Approved' || teamLeaderReviewLocked;
                     const proofFiles = parseTaskProofFiles(t);
+                    const taskProofHistory = parseProofRevisionHistory(t?.proof_revision_history);
+                    const taskCurrentRevisionNumber = taskProofHistory.length + 1;
+                    const taskCurrentRevisionLabel = taskProofHistory.length > 0 ? `${ordinalLabel(taskCurrentRevisionNumber)} revision` : 'Initial submission';
                     const hasProof = proofFiles.length > 0;
                     const reviewNoteValue = taskReviewNotes[t.id] ?? String(t.proof_review_note || '');
                     const briefFiles = parseTaskBriefFiles(t);
