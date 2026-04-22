@@ -990,8 +990,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     });
 
     const isGoalAlreadyApproved = String(proofReviewGoal?.proof_review_status || '').trim() === 'Approved';
+    const goalReviewedRole = String((proofReviewGoal as any)?.proof_reviewer_role || (proofReviewGoal as any)?.proof_reviewed_role || '').trim().toLowerCase();
     const hasLockedGoalRating = Number(proofReviewGoal?.proof_review_rating || 0) > 0;
-    if (isGoalAlreadyApproved && hasLockedGoalRating) {
+    if (isGoalAlreadyApproved && goalReviewedRole === 'manager' && hasLockedGoalRating) {
       window.notify?.('Final goal proof rating is already locked', 'error');
       return;
     }
@@ -1080,7 +1081,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     const tasks = proofReviewTasksByGoal[goalId] || [];
     const submittedTasks = tasks.filter((t: any) => {
       const files = parseTaskProofFiles(t);
-      return files.length > 0 && t.proof_review_status === 'Approved' && t.proof_reviewed_role === 'manager';
+      const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
+      return files.length > 0 && t.proof_review_status === 'Approved' && reviewRole === 'manager';
     });
 
     const initialRatings: Record<string, number> = {};
@@ -1092,7 +1094,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     });
 
     // Add rating for goal leader (final goal proof)
-    if (goal.proof_review_status === 'Approved' && goal.proof_reviewed_role === 'manager') {
+    const goalReviewRole = String((goal as any).proof_reviewer_role || (goal as any).proof_reviewed_role || '').trim().toLowerCase();
+    if (goal.proof_review_status === 'Approved' && goalReviewRole === 'manager') {
       initialRatings['leader'] = Number(goal.proof_review_rating || 0);
     }
 
@@ -3741,7 +3744,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         onChange={(e) => setProofReviewNotes(prev => ({ ...prev, [proofReviewGoal.id]: e.target.value }))}
                         className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
                         placeholder="Final proof review note (optional)"
-                          disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || goalRatingLocked}
+                        disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
                       />
                       {!goalProofApproved && (
                         <div className="flex flex-wrap items-center gap-2">
@@ -3774,34 +3777,18 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           )}
                         </div>
                       )}
-                        {allSubmittedGoalProofsApproved && (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
-                          <select
-                            value={String((proofReviewRatings[proofReviewGoal.id] ?? Number(proofReviewGoal.proof_review_rating || 0)) || '')}
-                            onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [proofReviewGoal.id]: Number(e.target.value || 0) }))}
-                            disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
-                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
-                          >
-                            <option value="">Rate 1-5</option>
-                            {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
-                          </select>
-                            {goalProofApproved ? (
-                              <button
-                                onClick={() => void saveGoalReviewRating(Number(proofReviewGoal.id))}
-                                disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
-                                className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-60"
-                              >
-                                Save Rating
-                              </button>
-                            ) : null}
-                        </div>
-                      )}
-                        {!allSubmittedGoalProofsApproved && (
-                        <p className="text-[10px] text-amber-600">Manager rating unlocks after all submitted delegated proofs are approved by manager.</p>
-                      )}
                       {goalProofApproved ? (
-                        <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
+                        <div className="flex flex-wrap gap-2">
+                          <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Final proof already approved. Decision is locked.</p>
+                          {allSubmittedGoalProofsApproved && (
+                            <button
+                              onClick={() => openMemberRatingsModal(Number(proofReviewGoal.id))}
+                              className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                            >
+                              Rate Members
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <div className="flex flex-wrap gap-2">
                           <button
@@ -3851,7 +3838,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 const managerReviewVisible = reviewStatus === 'Approved' || Number((t as any).tl_review_locked || 0) === 1;
                 const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
                 const managerApproved = reviewStatus === 'Approved' && reviewRole === 'manager';
-                const managerRatingLocked = managerApproved && Number(t.proof_review_rating || 0) > 0;
                 const effectiveProgress = reviewStatus === 'Approved'
                   ? (reviewRole === 'manager' ? 100 : Math.min(Math.max(0, Math.min(100, Number(t.progress || 0))), 75))
                   : Math.max(0, Math.min(100, Number(t.progress || 0)));
@@ -3947,30 +3933,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                   <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[220px]">Attached: {proofReviewAttachments[t.id]?.file_name}</span>
                                 )}
                               </div>
-                            )}
-                            {allSubmittedProofsApproved && managerApproved ? (
-                              <div className="flex flex-wrap items-center gap-2">
-                                <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
-                                <select
-                                  value={String((proofReviewRatings[t.id] ?? Number(t.proof_review_rating || 0)) || '')}
-                                  onChange={(e) => setProofReviewRatings((prev) => ({ ...prev, [t.id]: Number(e.target.value || 0) }))}
-                                  disabled={proofReviewSubmittingTaskId === t.id}
-                                  className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px]"
-                                >
-                                  <option value="">Rate 1-5</option>
-                                  {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
-                                </select>
-                                <button
-                                  onClick={() => void saveTaskReviewRating(Number(t.id), Number(proofReviewOpenGoal))}
-                                  disabled={proofReviewSubmittingTaskId === t.id}
-                                  className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-60"
-                                >
-                                  Save Rating
-                                </button>
-                              </div>
-                            ) : null}
-                            {managerRatingLocked && (
-                              <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Math.max(1, Math.min(5, Number(t.proof_review_rating || proofReviewRatings[t.id] || 5)))}/5</span></p>
                             )}
                             {managerApproved ? (
                               <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Member proof already approved. Review action is locked.</p>

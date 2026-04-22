@@ -3235,11 +3235,13 @@ async function startServer() {
       }
 
       const b = req.body || {};
+      const existingGoalReviewerRole = String((existing as any)?.proof_reviewed_role || '').trim().toLowerCase();
 
       const isFinalReviewMutation = b.proof_review_status !== undefined || b.proof_review_note !== undefined || b.proof_review_rating !== undefined;
       if (
         normalizeUserRole(role) === 'Manager'
         && String(existing?.proof_review_status || '').trim() === 'Approved'
+        && existingGoalReviewerRole === 'manager'
         && b.proof_review_status !== undefined
         && isFinalReviewMutation
       ) {
@@ -3389,9 +3391,10 @@ async function startServer() {
         const hasExistingGoalProof = String(existing?.proof_image || '').trim().length > 0;
         const hasIncomingGoalProof = typeof b.proof_image === 'string' && String(b.proof_image || '').trim().length > 0;
         const currentGoalProofStatus = String(existing?.proof_review_status || 'Not Submitted').trim() || 'Not Submitted';
+        const currentGoalProofReviewerRole = String((existing as any)?.proof_reviewed_role || '').trim().toLowerCase();
         const isReviewed = reviewedStatus === 'Approved' || reviewedStatus === 'Needs Revision' || reviewedStatus === 'Rejected';
 
-        if (currentGoalProofStatus === 'Approved') {
+        if (currentGoalProofStatus === 'Approved' && currentGoalProofReviewerRole === 'manager') {
           return res.status(409).json({ error: 'Final proof decision already finalized as Approved' });
         }
 
