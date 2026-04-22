@@ -110,6 +110,12 @@ type GoalProofFile = {
   proof_file_type: string;
 };
 
+type ReviewAttachment = {
+  file_data: string;
+  file_name: string;
+  file_type: string;
+};
+
 type ProofRevisionEntry = {
   revision_number?: number;
   revision_label?: string;
@@ -274,6 +280,22 @@ export const CareerDashboard = () => {
   const [taskDrafts, setTaskDrafts] = useState<Record<number, any>>({});
   const [taskBriefDrafts, setTaskBriefDrafts] = useState<Record<number, TaskBriefFile[]>>({});
   const [taskReviewNotes, setTaskReviewNotes] = useState<Record<number, string>>({});
+  const [taskReviewAttachments, setTaskReviewAttachments] = useState<Record<number, ReviewAttachment | null>>({});
+  const [needsRevisionModal, setNeedsRevisionModal] = useState<{
+    open: boolean;
+    taskId: number | null;
+    taskTitle: string;
+    note: string;
+    attachment: ReviewAttachment | null;
+    submitting: boolean;
+  }>({
+    open: false,
+    taskId: null,
+    taskTitle: '',
+    note: '',
+    attachment: null,
+    submitting: false,
+  });
   const [proofViewerTaskId, setProofViewerTaskId] = useState<number | null>(null);
   const [taskBriefViewer, setTaskBriefViewer] = useState<{ src: string; fileName?: string; mimeType?: string } | null>(null);
   const [delegatedTaskOpenId, setDelegatedTaskOpenId] = useState<number | null>(null);
@@ -923,6 +945,63 @@ export const CareerDashboard = () => {
       fetchData();
     } catch (e: any) {
       window.notify?.(e?.message || 'Failed to update task', 'error');
+    }
+  };
+
+  const openNeedsRevisionModal = (task: any, currentNote?: string) => {
+    const taskId = Number(task?.id || 0);
+    if (!taskId) return;
+    const existingAttachment = taskReviewAttachments[taskId]
+      || (String(task?.proof_review_file_data || '').trim()
+        ? {
+            file_data: String(task?.proof_review_file_data || '').trim(),
+            file_name: String(task?.proof_review_file_name || '').trim() || 'Revision attachment',
+            file_type: String(task?.proof_review_file_type || '').trim() || 'application/octet-stream',
+          }
+        : null);
+
+    setNeedsRevisionModal({
+      open: true,
+      taskId,
+      taskTitle: String(task?.title || '').trim() || `Task #${taskId}`,
+      note: String(currentNote ?? taskReviewNotes[taskId] ?? task?.proof_review_note ?? '').trim(),
+      attachment: existingAttachment,
+      submitting: false,
+    });
+  };
+
+  const closeNeedsRevisionModal = () => {
+    setNeedsRevisionModal((prev) => ({ ...prev, open: false, submitting: false }));
+  };
+
+  const submitNeedsRevisionModal = async () => {
+    const taskId = Number(needsRevisionModal.taskId || 0);
+    const note = String(needsRevisionModal.note || '').trim();
+    if (!taskId) return;
+    if (!note) {
+      window.notify?.('Please add revision instructions before sending', 'error');
+      return;
+    }
+
+    setNeedsRevisionModal((prev) => ({ ...prev, submitting: true }));
+    const attachment = needsRevisionModal.attachment;
+    try {
+      setTaskReviewNotes((prev) => ({ ...prev, [taskId]: note }));
+      setTaskReviewAttachments((prev) => ({ ...prev, [taskId]: attachment || null }));
+      await handleUpdateLeaderTask(
+        taskId,
+        {
+          proof_review_status: 'Needs Revision',
+          proof_review_note: note,
+          proof_review_file_data: attachment?.file_data || null,
+          proof_review_file_name: attachment?.file_name || null,
+          proof_review_file_type: attachment?.file_type || null,
+        },
+        'Revision requested'
+      );
+      closeNeedsRevisionModal();
+    } finally {
+      setNeedsRevisionModal((prev) => ({ ...prev, submitting: false }));
     }
   };
 
@@ -2301,7 +2380,7 @@ export const CareerDashboard = () => {
                                       Approve
                                     </button>
                                     <button
-                                      onClick={() => handleUpdateLeaderTask(Number(t.id), { proof_review_status: 'Needs Revision', proof_review_note: reviewNoteValue }, 'Revision requested', 'Request revision for this submitted proof?')}
+                                      onClick={() => openNeedsRevisionModal(t, reviewNoteValue)}
                                       className="px-2.5 py-1.5 rounded-lg bg-amber-500 text-white text-[11px] font-bold"
                                     >
                                       Needs Revision
@@ -2757,6 +2836,81 @@ export const CareerDashboard = () => {
         })() : (
           <p className="text-sm text-slate-500">No task brief file available.</p>
         )}
+      </Modal>
+
+      <Modal
+        open={needsRevisionModal.open}
+        title={needsRevisionModal.taskTitle ? `Needs Revision: ${needsRevisionModal.taskTitle}` : 'Needs Revision'}
+        onClose={closeNeedsRevisionModal}
+        maxWidthClassName="max-w-xl"
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500">Specify what needs to be revised before the employee re-submits proof.</p>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">
+              Revision Instructions <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              rows={4}
+              value={needsRevisionModal.note}
+              onChange={(event) => setNeedsRevisionModal((prev) => ({ ...prev, note: event.target.value }))}
+              disabled={needsRevisionModal.submitting}
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-sm"
+              placeholder="Example: Add date-stamped evidence and include signed confirmation."
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">
+              Attachment (optional)
+            </label>
+            <input
+              type="file"
+              disabled={needsRevisionModal.submitting}
+              onChange={async (event) => {
+                const file = event.target.files?.[0] || null;
+                if (!file) {
+                  setNeedsRevisionModal((prev) => ({ ...prev, attachment: null }));
+                  return;
+                }
+                try {
+                  const fileData = await readFileAsDataUrl(file);
+                  setNeedsRevisionModal((prev) => ({
+                    ...prev,
+                    attachment: {
+                      file_data: fileData,
+                      file_name: file.name,
+                      file_type: file.type || 'application/octet-stream',
+                    },
+                  }));
+                } catch {
+                  window.notify?.('Failed to read review attachment', 'error');
+                }
+              }}
+              className="text-[11px] text-slate-600 dark:text-slate-300"
+            />
+            {needsRevisionModal.attachment?.file_name && (
+              <p className="mt-1 text-[10px] text-slate-500">Attached: {needsRevisionModal.attachment.file_name}</p>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={closeNeedsRevisionModal}
+              disabled={needsRevisionModal.submitting}
+              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void submitNeedsRevisionModal()}
+              disabled={needsRevisionModal.submitting}
+              className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 disabled:opacity-60"
+            >
+              {needsRevisionModal.submitting ? 'Sending...' : 'Send Revision Request'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </motion.div>
   );
