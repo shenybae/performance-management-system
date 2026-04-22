@@ -116,6 +116,39 @@ function normalizeGoalStatusFromProgress(currentStatus: any, progressValue: any)
   return 'Not Started';
 }
 
+function parseJsonArray(value: any) {
+  const raw = String(value || '').trim();
+  if (!raw || !raw.startsWith('[')) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeProofFilesPayload(value: any) {
+  return parseJsonArray(value)
+    .map((item: any) => ({
+      proof_file_data: String(item?.proof_file_data || item?.data || '').trim(),
+      proof_file_name: String(item?.proof_file_name || item?.name || '').trim(),
+      proof_file_type: String(item?.proof_file_type || item?.type || '').trim() || 'application/octet-stream',
+    }))
+    .filter((item: any) => !!item.proof_file_data);
+}
+
+function ordinalLabel(value: number) {
+  const n = Math.max(1, Math.trunc(Number(value) || 0));
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+}
+
 function normalizeProofReviewRating(value: any): number | null {
   if (value === undefined || value === null || String(value).trim() === '') return null;
   const n = Number(value);
@@ -161,7 +194,7 @@ async function recomputeGoalProgress(goalId: number) {
      GROUP BY g.id, g.status, g.proof_review_status, g.proof_review_rating, g.proof_reviewed_by, ug.role, g.proof_image`,
     [goalId]
   );
-  const row = Array.isArray(rows) ? rows[0] : rows;
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
   const totalTasks = Number(row?.total_tasks || 0);
   const approvedTasks = Number(row?.approved_tasks || 0);
   const leaderProofApproved =
@@ -194,6 +227,30 @@ async function recomputeGoalProgress(goalId: number) {
   }
 
   return nextProgress;
+        } else if (normalizeUserRole(role) === 'Manager' && b.proof_review_rating !== undefined) {
+          const currentGoalProofStatus = String(existing?.proof_review_status || 'Not Submitted').trim() || 'Not Submitted';
+          if (currentGoalProofStatus !== 'Approved') {
+            return res.status(409).json({ error: 'Manager rating can only be updated after final proof approval' });
+          }
+
+          const normalizedRating = normalizeProofReviewRating(b.proof_review_rating);
+          if (normalizedRating === null) {
+            return res.status(400).json({ error: 'Manager rating (1-5) is required' });
+          }
+
+          if (b.proof_review_note !== undefined) {
+            sets.push('proof_review_note = ?');
+            vals.push(String(b.proof_review_note || '').trim() || null);
+          }
+
+          sets.push('proof_reviewed_by = ?');
+          vals.push(Number(actor?.id || 0) || null);
+          sets.push('proof_reviewed_role = ?');
+          vals.push(normalizeUserRole(role) || String(role || '') || null);
+          sets.push('proof_reviewed_at = ?');
+          vals.push(new Date().toISOString());
+          sets.push('proof_review_rating = ?');
+          vals.push(normalizedRating);
 }
 
 function usernameBaseFromInput(input: string) {
@@ -468,10 +525,14 @@ async function initDb() {
       proof_submitted_at TEXT,
       proof_review_status TEXT DEFAULT 'Not Submitted',
       proof_review_note TEXT,
+      proof_review_file_data TEXT,
+      proof_review_file_name TEXT,
+      proof_review_file_type TEXT,
       proof_review_rating INTEGER,
       proof_reviewed_by INTEGER,
       proof_reviewed_role TEXT,
       proof_reviewed_at TEXT,
+      proof_revision_history TEXT DEFAULT '[]',
       FOREIGN KEY(employee_id) REFERENCES employees(id)
     )`,
     `CREATE TABLE IF NOT EXISTS goal_assignees (
@@ -506,10 +567,14 @@ async function initDb() {
       proof_submitted_at TEXT,
       proof_review_status TEXT DEFAULT 'Not Submitted',
       proof_review_note TEXT,
+      proof_review_file_data TEXT,
+      proof_review_file_name TEXT,
+      proof_review_file_type TEXT,
       proof_review_rating INTEGER,
       proof_reviewed_by INTEGER,
       proof_reviewed_role TEXT,
       proof_reviewed_at TEXT,
+      proof_revision_history TEXT DEFAULT '[]',
       created_by INTEGER,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1075,10 +1140,14 @@ async function initDb() {
       'ALTER TABLE goals ADD COLUMN proof_submitted_at TEXT',
       'ALTER TABLE goals ADD COLUMN proof_review_status TEXT DEFAULT \'Not Submitted\'',
       'ALTER TABLE goals ADD COLUMN proof_review_note TEXT',
+      'ALTER TABLE goals ADD COLUMN proof_review_file_data TEXT',
+      'ALTER TABLE goals ADD COLUMN proof_review_file_name TEXT',
+      'ALTER TABLE goals ADD COLUMN proof_review_file_type TEXT',
       'ALTER TABLE goals ADD COLUMN proof_review_rating INTEGER',
       'ALTER TABLE goals ADD COLUMN proof_reviewed_by INTEGER',
       'ALTER TABLE goals ADD COLUMN proof_reviewed_role TEXT',
       'ALTER TABLE goals ADD COLUMN proof_reviewed_at TEXT',
+      'ALTER TABLE goals ADD COLUMN proof_revision_history TEXT DEFAULT \'[]\'',
       'ALTER TABLE goal_assignees ADD COLUMN assigned_by INTEGER',
       'ALTER TABLE goal_assignees ADD COLUMN assigned_by_role TEXT',
       'ALTER TABLE goal_assignees ADD COLUMN assigned_at TEXT',
@@ -1108,10 +1177,14 @@ async function initDb() {
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_submitted_at TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_status TEXT DEFAULT \'Not Submitted\'',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_note TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_file_data TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_file_name TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_file_type TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_review_rating INTEGER',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_by INTEGER',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_role TEXT',
       'ALTER TABLE goal_member_tasks ADD COLUMN proof_reviewed_at TEXT',
+      'ALTER TABLE goal_member_tasks ADD COLUMN proof_revision_history TEXT DEFAULT \'[]\'',
       'ALTER TABLE goal_member_tasks ADD COLUMN tl_review_locked INTEGER DEFAULT 0',
       'ALTER TABLE goal_member_tasks ADD COLUMN created_by INTEGER',
       'ALTER TABLE goal_member_tasks ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
@@ -3191,10 +3264,10 @@ async function startServer() {
       if (
         normalizeUserRole(role) === 'Manager'
         && String(existing?.proof_review_status || '').trim() === 'Approved'
-        && Number(existing?.proof_review_rating || 0) >= 1
+        && b.proof_review_status !== undefined
         && isFinalReviewMutation
       ) {
-        return res.status(409).json({ error: 'Final goal proof rating is locked after manager completion' });
+        return res.status(409).json({ error: 'Final goal proof decision is locked after manager completion' });
       }
 
       if (isGoalLeaderUser && !isPrivilegedRole(role) && role !== 'Manager') {
@@ -3240,9 +3313,28 @@ async function startServer() {
         const proofFileType = submittedProofFiles.length > 0
           ? String(submittedProofFiles[0]?.proof_file_type || 'application/octet-stream').trim() || 'application/octet-stream'
           : (b.proof_file_type !== undefined ? String(b.proof_file_type || '').trim() || 'application/octet-stream' : null);
-
         const leaderSets: string[] = [];
         const leaderVals: any[] = [];
+
+        const currentProofFiles = normalizeProofFilesPayload(existing.proof_image);
+        const proofRevisionHistory = parseJsonArray((existing as any).proof_revision_history);
+        if (currentProofFiles.length > 0 && String(existing?.proof_review_status || '').trim() !== 'Not Submitted') {
+          const revisionNumber = proofRevisionHistory.length + 1;
+          proofRevisionHistory.push({
+            revision_number: revisionNumber,
+            revision_label: `${ordinalLabel(revisionNumber)} revision`,
+            proof_review_status: String(existing?.proof_review_status || '').trim() || 'Not Submitted',
+            proof_review_note: String(existing?.proof_review_note || '').trim() || null,
+            proof_review_file_data: String((existing as any).proof_review_file_data || '').trim() || null,
+            proof_review_file_name: String((existing as any).proof_review_file_name || '').trim() || null,
+            proof_review_file_type: String((existing as any).proof_review_file_type || '').trim() || null,
+            proof_submitted_at: existing.proof_submitted_at || null,
+            archived_at: new Date().toISOString(),
+            proof_files: currentProofFiles,
+          });
+          leaderSets.push('proof_revision_history = ?');
+          leaderVals.push(JSON.stringify(proofRevisionHistory));
+        }
 
         if (b.proof_note !== undefined) {
           leaderSets.push('proof_note = ?');
@@ -3371,6 +3463,24 @@ async function startServer() {
         sets.push('proof_review_rating = ?');
         vals.push(reviewedStatus === 'Approved' ? normalizedRating : null);
 
+        if (b.proof_review_note !== undefined) {
+          sets.push('proof_review_note = ?');
+          vals.push(String(b.proof_review_note || '').trim() || null);
+        }
+
+        if (b.proof_review_file_data !== undefined) {
+          sets.push('proof_review_file_data = ?');
+          vals.push(String(b.proof_review_file_data || '').trim() || null);
+        }
+        if (b.proof_review_file_name !== undefined) {
+          sets.push('proof_review_file_name = ?');
+          vals.push(String(b.proof_review_file_name || '').trim() || null);
+        }
+        if (b.proof_review_file_type !== undefined) {
+          sets.push('proof_review_file_type = ?');
+          vals.push(String(b.proof_review_file_type || '').trim() || null);
+        }
+
         if (reviewedStatus === 'Approved') {
           if (normalizedStatus === undefined && String(existing?.status || '').toLowerCase() === 'completed') {
             sets.push('status = ?');
@@ -3389,6 +3499,30 @@ async function startServer() {
             }
           }
         }
+      } else if (normalizeUserRole(role) === 'Manager' && b.proof_review_rating !== undefined) {
+        const currentGoalProofStatus = String(existing?.proof_review_status || 'Not Submitted').trim() || 'Not Submitted';
+        if (currentGoalProofStatus !== 'Approved') {
+          return res.status(409).json({ error: 'Manager rating can only be updated after final proof approval' });
+        }
+
+        const normalizedRating = normalizeProofReviewRating(b.proof_review_rating);
+        if (normalizedRating === null) {
+          return res.status(400).json({ error: 'Manager rating (1-5) is required' });
+        }
+
+        if (b.proof_review_note !== undefined) {
+          sets.push('proof_review_note = ?');
+          vals.push(String(b.proof_review_note || '').trim() || null);
+        }
+
+        sets.push('proof_reviewed_by = ?');
+        vals.push(Number(actor?.id || 0) || null);
+        sets.push('proof_reviewed_role = ?');
+        vals.push(normalizeUserRole(role) || String(role || '') || null);
+        sets.push('proof_reviewed_at = ?');
+        vals.push(new Date().toISOString());
+        sets.push('proof_review_rating = ?');
+        vals.push(normalizedRating);
       }
 
       if (sets.length === 0) return res.status(400).json({ error: "No fields to update" });
@@ -4635,7 +4769,7 @@ async function startServer() {
         }
       }
       const leaderUpdatable = ['title', 'description', 'due_date', 'priority', 'status', 'progress'];
-      const managerReviewUpdatable = ['proof_review_note', 'proof_review_rating'];
+      const managerReviewUpdatable = ['proof_review_note', 'proof_review_rating', 'proof_review_file_data', 'proof_review_file_name', 'proof_review_file_type'];
       // Proof file columns are handled in the assigneeSubmittedProof block below.
       // Keeping them out of this generic updater avoids duplicate SET assignments
       // (e.g., proof_image/proof_file_name/proof_file_type), which Postgres rejects.
@@ -4702,6 +4836,25 @@ async function startServer() {
       if (assigneeSubmittedProof) {
         const hasProofImage = submittedProofFiles.length > 0 || (typeof b.proof_image === 'string' && b.proof_image.trim().length > 0);
         const nextProgress = Math.max(0, Math.min(100, Math.max(Number(task.progress || 0), hasProofImage ? TASK_PROGRESS_SUBMITTED : 0)));
+        const currentProofFiles = normalizeProofFilesPayload(task.proof_image);
+        const proofRevisionHistory = parseJsonArray(task.proof_revision_history);
+        if (currentProofFiles.length > 0 && currentProofReviewStatus !== 'Not Submitted') {
+          const revisionNumber = proofRevisionHistory.length + 1;
+          proofRevisionHistory.push({
+            revision_number: revisionNumber,
+            revision_label: `${ordinalLabel(revisionNumber)} revision`,
+            proof_review_status: currentProofReviewStatus,
+            proof_review_note: String(task.proof_review_note || '').trim() || null,
+            proof_review_file_data: String(task.proof_review_file_data || '').trim() || null,
+            proof_review_file_name: String(task.proof_review_file_name || '').trim() || null,
+            proof_review_file_type: String(task.proof_review_file_type || '').trim() || null,
+            proof_submitted_at: task.proof_submitted_at || null,
+            archived_at: new Date().toISOString(),
+            proof_files: currentProofFiles,
+          });
+          sets.push('proof_revision_history = ?');
+          vals.push(JSON.stringify(proofRevisionHistory));
+        }
         sets.push('proof_submitted_at = ?');
         vals.push(hasProofImage ? new Date().toISOString() : null);
         sets.push('proof_review_status = ?');
@@ -4733,13 +4886,8 @@ async function startServer() {
       const reviewerSetStatus = !(role === 'Employee' && !isGoalLeader) && b.proof_review_status !== undefined;
       const managerEditingRatingOnly = normalizeUserRole(role) === 'Manager' && b.proof_review_status === undefined && b.proof_review_rating !== undefined;
       const existingTaskReviewerRole = String(task.proof_reviewed_role || '').trim().toLowerCase();
-      if (
-        managerEditingRatingOnly
-        && String(task.proof_review_status || '').trim() === 'Approved'
-        && existingTaskReviewerRole === 'manager'
-        && normalizeProofReviewRating(task.proof_review_rating) !== null
-      ) {
-        return res.status(409).json({ error: 'Manager rating is already locked for this approved proof' });
+      if (managerEditingRatingOnly && String(task.proof_review_status || '').trim() !== 'Approved') {
+        return res.status(409).json({ error: 'Manager rating can only be updated after this proof is approved' });
       }
       if (reviewerSetStatus && isGoalLeader && !(isPrivilegedRole(role) || role === 'Manager') && Number(task.tl_review_locked || 0) === 1) {
         return res.status(403).json({ error: 'Team leader review is locked for this proof. Only manager review actions are allowed.' });
@@ -4755,7 +4903,6 @@ async function startServer() {
         const effectiveRating = normalizedRating ?? existingRating ?? ((role === 'Manager' && isReviewed) ? 5 : null);
         const hasExistingProof = String(task.proof_image || '').trim().length > 0;
 
-        // Persist the explicit review state from the reviewer action.
         sets.push('proof_review_status = ?');
         vals.push(reviewedStatus || 'Not Submitted');
 
@@ -4764,23 +4911,36 @@ async function startServer() {
           vals.push(b.proof_review_note);
         }
 
+        if (b.proof_review_file_data !== undefined) {
+          sets.push('proof_review_file_data = ?');
+          vals.push(String(b.proof_review_file_data || '').trim() || null);
+        }
+        if (b.proof_review_file_name !== undefined) {
+          sets.push('proof_review_file_name = ?');
+          vals.push(String(b.proof_review_file_name || '').trim() || null);
+        }
+        if (b.proof_review_file_type !== undefined) {
+          sets.push('proof_review_file_type = ?');
+          vals.push(String(b.proof_review_file_type || '').trim() || null);
+        }
+
         if (reviewedStatus === 'Approved' && !hasExistingProof) {
           return res.status(400).json({ error: 'Member proof file is required before approval' });
         }
 
         if (reviewedStatus === 'Approved') {
-            const isManagerApproval = normalizeUserRole(role) === 'Manager';
-            const nextProgress = isManagerApproval
-              ? TASK_PROGRESS_REVIEW_APPROVED
-              : Math.max(Number(task.progress || 0), 75);
-            sets.push('status = ?');
-            vals.push(isManagerApproval ? 'Completed' : 'In Progress');
-            sets.push('progress = ?');
-            vals.push(nextProgress);
-            if (!isManagerApproval && isGoalLeader && !isPrivilegedRole(role)) {
-              sets.push('tl_review_locked = ?');
-              vals.push(1);
-            }
+          const isManagerApproval = normalizeUserRole(role) === 'Manager';
+          const nextProgress = isManagerApproval
+            ? TASK_PROGRESS_REVIEW_APPROVED
+            : Math.max(Number(task.progress || 0), 75);
+          sets.push('status = ?');
+          vals.push(isManagerApproval ? 'Completed' : 'In Progress');
+          sets.push('progress = ?');
+          vals.push(nextProgress);
+          if (!isManagerApproval && isGoalLeader && !isPrivilegedRole(role)) {
+            sets.push('tl_review_locked = ?');
+            vals.push(1);
+          }
         } else if (reviewedStatus === 'Needs Revision') {
           const currentProgress = Math.max(0, Math.min(100, Number(task.progress || 0)));
           sets.push('status = ?');
@@ -4803,6 +4963,25 @@ async function startServer() {
         vals.push(isReviewed ? new Date().toISOString() : null);
         sets.push('proof_review_rating = ?');
         vals.push(effectiveRating);
+      } else if (managerEditingRatingOnly) {
+        const normalizedRating = normalizeProofReviewRating(b.proof_review_rating);
+        if (normalizedRating === null) {
+          return res.status(400).json({ error: 'Manager rating (1-5) is required' });
+        }
+
+        if (b.proof_review_note !== undefined) {
+          sets.push('proof_review_note = ?');
+          vals.push(b.proof_review_note);
+        }
+
+        sets.push('proof_reviewed_by = ?');
+        vals.push(Number(actor?.id || 0) || null);
+        sets.push('proof_reviewed_role = ?');
+        vals.push(normalizeUserRole(role) || String(role || '') || null);
+        sets.push('proof_reviewed_at = ?');
+        vals.push(new Date().toISOString());
+        sets.push('proof_review_rating = ?');
+        vals.push(normalizedRating);
       }
       if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
 

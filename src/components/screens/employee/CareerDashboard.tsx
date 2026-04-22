@@ -110,6 +110,18 @@ type GoalProofFile = {
   proof_file_type: string;
 };
 
+type ProofRevisionEntry = {
+  revision_number?: number;
+  revision_label?: string;
+  proof_review_status?: string;
+  proof_review_note?: string;
+  proof_review_file_data?: string;
+  proof_review_file_name?: string;
+  proof_review_file_type?: string;
+  proof_files?: TaskProofFile[] | GoalProofFile[];
+  archived_at?: string;
+};
+
 const parseTaskBriefFiles = (task: any): TaskBriefFile[] => {
   const rawData = String(task?.brief_file_data || '').trim();
   const fallbackName = String(task?.brief_file_name || 'Task brief').trim();
@@ -192,6 +204,46 @@ const parseGoalProofFiles = (goal: any): GoalProofFile[] => {
     proof_file_name: fallbackName,
     proof_file_type: fallbackType,
   }];
+};
+
+const parseProofRevisionHistory = (value: any): ProofRevisionEntry[] => {
+  const rawData = String(value || '').trim();
+  if (!rawData || !rawData.startsWith('[')) return [];
+  try {
+    const parsed = JSON.parse(rawData);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item: any, index: number) => ({
+      revision_number: Number(item?.revision_number || index + 1),
+      revision_label: String(item?.revision_label || '').trim(),
+      proof_review_status: String(item?.proof_review_status || '').trim(),
+      proof_review_note: String(item?.proof_review_note || '').trim(),
+      proof_review_file_data: String(item?.proof_review_file_data || '').trim(),
+      proof_review_file_name: String(item?.proof_review_file_name || '').trim(),
+      proof_review_file_type: String(item?.proof_review_file_type || '').trim(),
+      proof_files: Array.isArray(item?.proof_files)
+        ? item.proof_files.map((file: any) => ({
+            proof_file_data: String(file?.proof_file_data || file?.data || '').trim(),
+            proof_file_name: String(file?.proof_file_name || file?.name || '').trim(),
+            proof_file_type: String(file?.proof_file_type || file?.type || 'application/octet-stream').trim(),
+          })).filter((file: any) => !!file.proof_file_data)
+        : [],
+      archived_at: String(item?.archived_at || '').trim(),
+    }));
+  } catch {
+    return [];
+  }
+};
+
+const ordinalLabel = (value: number) => {
+  const n = Math.max(1, Math.trunc(Number(value) || 0));
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
 };
 
 const readFileAsDataUrl = (file: File): Promise<string> =>
@@ -1902,6 +1954,9 @@ export const CareerDashboard = () => {
                   const taskBoardProgress = Math.max(0, Math.min(100, Number(selectedTaskBoardGoal?.progress || 0)));
                   const taskBoardStatus = String(selectedTaskBoardGoal?.status || 'Not Started');
                   const submittedGoalProofFiles = parseGoalProofFiles(selectedTaskBoardGoal);
+                  const goalProofHistory = parseProofRevisionHistory(selectedTaskBoardGoal?.proof_revision_history);
+                  const goalCurrentRevisionNumber = goalProofHistory.length + 1;
+                  const goalCurrentRevisionLabel = goalProofHistory.length > 0 ? `${ordinalLabel(goalCurrentRevisionNumber)} revision` : 'Initial submission';
                   const goalDraft = goalProofDrafts[goalId] || { files: [], note: '' };
                   const isGoalProofSubmitting = goalProofSubmittingId === goalId;
                   return (
@@ -1920,6 +1975,28 @@ export const CareerDashboard = () => {
                               style={{ width: `${taskBoardProgress}%` }}
                             />
                           </div>
+
+                        {goalProofHistory.length > 0 && (
+                          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-5 space-y-2">
+                            <p className="text-xs font-black uppercase tracking-wider text-slate-500">Closed Proof Revisions</p>
+                            {goalProofHistory.map((entry, entryIndex) => (
+                              <div key={`goal-proof-history-${entryIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-2.5 space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{entry.revision_label || `${ordinalLabel(Number(entry.revision_number || entryIndex + 1))} revision`}</p>
+                                  <span className="text-[10px] font-bold uppercase text-slate-500">{entry.proof_review_status || 'Closed'}</span>
+                                </div>
+                                <div className="space-y-2">
+                                  {(entry.proof_files || []).map((file: any, fileIndex: number) => (
+                                    <div key={`goal-proof-history-${entryIndex}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
+                                      <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Revision file ${fileIndex + 1}`}</p>
+                                      <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                           <span className="text-sm font-black text-slate-700 dark:text-slate-200 min-w-[48px] text-right">{taskBoardProgress}%</span>
                         </div>
                       </div>
@@ -1941,11 +2018,14 @@ export const CareerDashboard = () => {
 
                       {submittedGoalProofFiles.length > 0 ? (
                         <div className="space-y-2 mb-3">
-                          <p className="text-[10px] font-bold uppercase text-slate-500">Submitted Final Proof</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[10px] font-bold uppercase text-slate-500">Submitted Final Proof</p>
+                            <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">{goalProofHistory.length > 0 ? 'Revised file' : 'Current file'}</span>
+                          </div>
                           {submittedGoalProofFiles.map((file, fileIndex) => (
                             <div key={`goal-proof-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
                               <div className="mb-1 flex items-center justify-between gap-2">
-                                <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Final proof ${fileIndex + 1}`}</p>
+                                <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{`${goalCurrentRevisionLabel} - ${file.proof_file_name || `Final proof ${fileIndex + 1}`}`}</p>
                                 <button
                                   type="button"
                                   onClick={() => setTaskBriefViewer({ src: file.proof_file_data, fileName: file.proof_file_name, mimeType: file.proof_file_type })}
@@ -1966,9 +2046,34 @@ export const CareerDashboard = () => {
                           {selectedTaskBoardGoal.proof_review_note && (
                             <p className="text-[10px] text-slate-500 italic">Manager note: {selectedTaskBoardGoal.proof_review_note}</p>
                           )}
+                          {Number(selectedTaskBoardGoal.proof_review_rating || 0) > 0 && (
+                            <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Number(selectedTaskBoardGoal.proof_review_rating || 0)}/5</span></p>
+                          )}
                         </div>
                       ) : (
                         <p className="text-[11px] text-slate-500 mb-3">No final proof submitted yet. Upload files and add notes below.</p>
+                      )}
+
+                      {goalProofHistory.length > 0 && (
+                        <div className="mb-3 space-y-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Closed Revisions</p>
+                          {goalProofHistory.map((entry, entryIndex) => (
+                            <div key={`goal-proof-history-${entryIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-2">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{entry.revision_label || `${ordinalLabel(Number(entry.revision_number || entryIndex + 1))} revision`}</p>
+                                <span className="text-[10px] font-bold uppercase text-slate-500">Closed</span>
+                              </div>
+                              <div className="space-y-2">
+                                {(entry.proof_files || []).map((file: any, fileIndex: number) => (
+                                  <div key={`goal-proof-history-${entryIndex}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
+                                    <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Revision file ${fileIndex + 1}`}</p>
+                                    <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       )}
 
                       {!canEditFinalProof && (
@@ -2139,7 +2244,7 @@ export const CareerDashboard = () => {
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2">
                                   <p className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">
-                                    {proofFiles.length} proof file{proofFiles.length > 1 ? 's' : ''} submitted
+                                    {`${taskCurrentRevisionLabel} • ${proofFiles.length} proof file${proofFiles.length > 1 ? 's' : ''} submitted`}
                                   </p>
                                   <button
                                     onClick={() => setProofViewerTaskId(Number(t.id))}
@@ -2161,6 +2266,9 @@ export const CareerDashboard = () => {
                                   <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Member Note</p>
                                   <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{String(t.proof_note || '').trim()}</p>
                                 </div>
+                              )}
+                              {Number(t.proof_review_rating || 0) > 0 && (
+                                <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Number(t.proof_review_rating || 0)}/5</span></p>
                               )}
                               <textarea
                                 rows={2}
@@ -2263,6 +2371,9 @@ export const CareerDashboard = () => {
           const t = delegatedTaskOpen;
           const draft = proofDrafts[t.id] || { proof_files: parseTaskProofFiles(t), proof_note: t.proof_note || '' };
           const sentProofFiles = parseTaskProofFiles(t);
+          const taskProofHistory = parseProofRevisionHistory(t.proof_revision_history);
+          const taskCurrentRevisionNumber = taskProofHistory.length + 1;
+          const taskCurrentRevisionLabel = taskProofHistory.length > 0 ? `${ordinalLabel(taskCurrentRevisionNumber)} revision` : 'Initial submission';
           const extensionDraft = taskExtensionDrafts[t.id] || { requested_due_date: '', reason: '' };
           const reviewStatus = t.proof_review_status || 'Not Submitted';
           const proofLocked = reviewStatus !== 'Not Submitted' && reviewStatus !== 'Needs Revision';

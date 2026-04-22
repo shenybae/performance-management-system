@@ -35,6 +35,18 @@ type GoalProofFile = {
   proof_file_type: string;
 };
 
+type ProofRevisionEntry = {
+  revision_number?: number;
+  revision_label?: string;
+  proof_review_status?: string;
+  proof_review_note?: string;
+  proof_review_file_data?: string;
+  proof_review_file_name?: string;
+  proof_review_file_type?: string;
+  proof_files?: GoalProofFile[];
+  archived_at?: string;
+};
+
 const parseTaskProofFiles = (task: any): TaskProofFile[] => {
   const rawData = String(task?.proof_image || '').trim();
   const fallbackName = String(task?.proof_file_name || 'Submitted proof').trim();
@@ -91,6 +103,53 @@ const parseGoalProofFiles = (goal: any): GoalProofFile[] => {
   }];
 };
 
+const parseProofRevisionHistory = (value: any): ProofRevisionEntry[] => {
+  const rawData = String(value || '').trim();
+  if (!rawData || !rawData.startsWith('[')) return [];
+  try {
+    const parsed = JSON.parse(rawData);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item: any, index: number) => ({
+      revision_number: Number(item?.revision_number || index + 1),
+      revision_label: String(item?.revision_label || '').trim(),
+      proof_review_status: String(item?.proof_review_status || '').trim(),
+      proof_review_note: String(item?.proof_review_note || '').trim(),
+      proof_review_file_data: String(item?.proof_review_file_data || '').trim(),
+      proof_review_file_name: String(item?.proof_review_file_name || '').trim(),
+      proof_review_file_type: String(item?.proof_review_file_type || '').trim(),
+      proof_files: Array.isArray(item?.proof_files)
+        ? item.proof_files.map((file: any) => ({
+            proof_file_data: String(file?.proof_file_data || file?.data || '').trim(),
+            proof_file_name: String(file?.proof_file_name || file?.name || '').trim(),
+            proof_file_type: String(file?.proof_file_type || file?.type || 'application/octet-stream').trim(),
+          })).filter((file: any) => !!file.proof_file_data)
+        : [],
+      archived_at: String(item?.archived_at || '').trim(),
+    }));
+  } catch {
+    return [];
+  }
+};
+
+const ordinalLabel = (value: number) => {
+  const n = Math.max(1, Math.trunc(Number(value) || 0));
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+};
+
+const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = (event) => resolve(String(event.target?.result || ''));
+  reader.onerror = () => reject(new Error('Failed to read review attachment'));
+  reader.readAsDataURL(file);
+});
+
 interface OKRPlannerProps {
   employees: Employee[];
 }
@@ -131,6 +190,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [proofUploadNotes, setProofUploadNotes] = useState<Record<number, string>>({});
   const [proofReviewNotes, setProofReviewNotes] = useState<Record<number, string>>({});
   const [proofReviewRatings, setProofReviewRatings] = useState<Record<number, number>>({});
+  const [proofReviewAttachments, setProofReviewAttachments] = useState<Record<number, { file_data: string; file_name: string; file_type: string } | null>>({});
   const [proofReviewSubmittingTaskId, setProofReviewSubmittingTaskId] = useState<number | null>(null);
   const [proofFileViewer, setProofFileViewer] = useState<{ src: string; fileName?: string; mimeType?: string } | null>(null);
   const [lastRealtimeSyncAt, setLastRealtimeSyncAt] = useState<number>(Date.now());
@@ -888,6 +948,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     if (!(await appConfirm(`Are you sure you want to ${actionText} the final proof?`, { title: 'Confirm Final Proof Decision', confirmText: 'Confirm', icon: 'warning' }))) return;
 
     const note = String(proofReviewNotes[goalId] || '').trim();
+    const attachment = proofReviewAttachments[goalId];
     const selectedRating = Number(proofReviewRatings[goalId] || 0);
     const existingRating = Number(proofReviewGoal?.proof_review_rating || 0);
     const rating = Math.max(1, Math.min(5, Number(selectedRating || existingRating || 0)));
@@ -903,6 +964,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         body: JSON.stringify({
           proof_review_status: status,
           proof_review_note: note,
+          ...(attachment && status !== 'Approved' ? {
+            proof_review_file_data: attachment.file_data,
+            proof_review_file_name: attachment.file_name,
+            proof_review_file_type: attachment.file_type,
+          } : {}),
           ...(status === 'Approved' ? { proof_review_rating: rating } : {})
         })
       });
@@ -923,6 +989,39 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     }
   };
 
+  const saveGoalReviewRating = async (goalId: number) => {
+    const currentGoal = goals.find((goal: any) => Number(goal?.id) === Number(goalId));
+    const note = String(proofReviewNotes[goalId] || '').trim();
+    const rating = Math.max(1, Math.min(5, Number(proofReviewRatings[goalId] || Number(currentGoal?.proof_review_rating || 0) || 0)));
+    if (!rating) {
+      window.notify?.('Please select a manager rating (1-5)', 'error');
+      return;
+    }
+
+    setProofReviewSubmittingTaskId(goalId);
+    try {
+      const res = await fetch(`/api/goals/${goalId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ proof_review_note: note, proof_review_rating: rating })
+      });
+      if (!res.ok) {
+        let msg = 'Failed to save final proof rating';
+        try {
+          const err = await res.json();
+          if (err?.error) msg = String(err.error);
+        } catch {}
+        throw new Error(msg);
+      }
+      window.notify?.('Final proof rating saved', 'success');
+      await Promise.all([fetchGoals(), refreshProofReviewTasks(goalId)]);
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to save final proof rating', 'error');
+    } finally {
+      setProofReviewSubmittingTaskId(null);
+    }
+  };
+
   // Keep proof review panel synced in real time while it is open.
   useEffect(() => {
     if (!proofReviewOpenGoal) return;
@@ -937,6 +1036,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     if (!(await appConfirm(`Are you sure you want to ${actionText} this proof?`, { title: 'Confirm Proof Decision', confirmText: 'Confirm', icon: 'warning' }))) return;
 
     const note = String(proofReviewNotes[taskId] || '').trim();
+    const attachment = proofReviewAttachments[taskId];
     const task = (proofReviewTasksByGoal[goalId] || []).find((item: any) => Number(item?.id) === Number(taskId));
     const rating = Math.max(1, Math.min(5, Number(task?.proof_review_rating || proofReviewRatings[taskId] || 5)));
     const isCurrentManager = userRole === 'manager';
@@ -945,7 +1045,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       const res = await fetch(`/api/member-tasks/${taskId}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ proof_review_status: status, proof_review_note: note, proof_review_rating: rating })
+        body: JSON.stringify({
+          proof_review_status: status,
+          proof_review_note: note,
+          proof_review_rating: rating,
+          ...(attachment && status !== 'Approved' ? {
+            proof_review_file_data: attachment.file_data,
+            proof_review_file_name: attachment.file_name,
+            proof_review_file_type: attachment.file_type,
+          } : {}),
+        })
       });
       if (!res.ok) throw new Error('Failed');
       setProofReviewTasksByGoal(prev => ({
@@ -971,6 +1080,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         })
       }));
       window.notify?.(`Proof ${status.toLowerCase()}`, 'success');
+      setProofReviewAttachments((prev) => ({ ...prev, [taskId]: null }));
       await refreshProofReviewTasks(goalId);
     } catch (e: any) {
       window.notify?.(e?.message || 'Failed to review proof', 'error');
@@ -1565,7 +1675,38 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           placeholder="Final proof review note (optional)"
                           disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || goalRatingLocked}
                         />
-                        {!goalRatingLocked && allSubmittedGoalProofsApproved && (
+                        {!goalProofApproved && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input
+                              type="file"
+                              onChange={async (event) => {
+                                const file = event.target.files?.[0] || null;
+                                if (!file) {
+                                  setProofReviewAttachments((prev) => ({ ...prev, [proofReviewGoal.id]: null }));
+                                  return;
+                                }
+                                try {
+                                  const fileData = await readFileAsDataUrl(file);
+                                  setProofReviewAttachments((prev) => ({
+                                    ...prev,
+                                    [proofReviewGoal.id]: {
+                                      file_data: fileData,
+                                      file_name: file.name,
+                                      file_type: file.type || 'application/octet-stream',
+                                    },
+                                  }));
+                                } catch {
+                                  window.notify?.('Failed to read review attachment', 'error');
+                                }
+                              }}
+                              className="text-[10px] text-slate-500 dark:text-slate-400"
+                            />
+                            {proofReviewAttachments[proofReviewGoal.id]?.file_name && (
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[220px]">Attached: {proofReviewAttachments[proofReviewGoal.id]?.file_name}</span>
+                            )}
+                          </div>
+                        )}
+                        {allSubmittedGoalProofsApproved && (
                           <div className="flex flex-wrap items-center gap-2">
                             <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
                             <select
@@ -1577,9 +1718,18 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               <option value="">Rate 1-5</option>
                               {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
                             </select>
+                            {goalProofApproved ? (
+                              <button
+                                onClick={() => void saveGoalReviewRating(Number(proofReviewGoal.id))}
+                                disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                                className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-60"
+                              >
+                                Save Rating
+                              </button>
+                            ) : null}
                           </div>
                         )}
-                        {!goalRatingLocked && !allSubmittedGoalProofsApproved && (
+                        {!allSubmittedGoalProofsApproved && (
                           <p className="text-[10px] text-amber-600">Manager rating unlocks after all submitted delegated proofs are approved by manager.</p>
                         )}
                         {goalProofApproved ? (
@@ -1643,6 +1793,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     ? (reviewRole === 'manager' ? 'Approved by Team Leader and Manager' : (reviewedByLeader || reviewRole === 'team_leader' ? 'Approved by Team Leader' : 'Approved'))
                     : reviewStatus;
                   const proofFiles = parseTaskProofFiles(t);
+                  const taskProofHistory = parseProofRevisionHistory((t as any).proof_revision_history);
+                  const taskCurrentRevisionLabel = taskProofHistory.length > 0 ? `${ordinalLabel(taskProofHistory.length + 1)} revision` : 'Initial submission';
                   const hasProof = proofFiles.length > 0;
                   return (
                     <div key={t.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
@@ -1682,10 +1834,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         <>
                           {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
                           {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
-                          {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
+                          {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">{reviewStatus === 'Needs Revision' ? 'Requested revision from manager' : 'Feedback'}: {t.proof_review_note}</p>}
 
                           {hasProof && (
                             <div className="space-y-2">
+                              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-2 py-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                                Current round: <span className="text-emerald-700 dark:text-emerald-300">{taskCurrentRevisionLabel}</span>
+                              </div>
                               <textarea
                                 rows={2}
                                 value={proofReviewNotes[t.id] ?? String(t.proof_review_note || '')}
@@ -1694,7 +1849,38 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                 placeholder="Member proof review note (optional)"
                                 disabled={proofReviewSubmittingTaskId === t.id || managerApproved}
                               />
-                              {allSubmittedProofsApproved && managerApproved && !managerRatingLocked ? (
+                              {!managerApproved && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <input
+                                    type="file"
+                                    onChange={async (event) => {
+                                      const file = event.target.files?.[0] || null;
+                                      if (!file) {
+                                        setProofReviewAttachments((prev) => ({ ...prev, [t.id]: null }));
+                                        return;
+                                      }
+                                      try {
+                                        const fileData = await readFileAsDataUrl(file);
+                                        setProofReviewAttachments((prev) => ({
+                                          ...prev,
+                                          [t.id]: {
+                                            file_data: fileData,
+                                            file_name: file.name,
+                                            file_type: file.type || 'application/octet-stream',
+                                          },
+                                        }));
+                                      } catch {
+                                        window.notify?.('Failed to read review attachment', 'error');
+                                      }
+                                    }}
+                                    className="text-[10px] text-slate-500 dark:text-slate-400"
+                                  />
+                                  {proofReviewAttachments[t.id]?.file_name && (
+                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[220px]">Attached: {proofReviewAttachments[t.id]?.file_name}</span>
+                                  )}
+                                </div>
+                              )}
+                              {allSubmittedProofsApproved && managerApproved ? (
                                 <div className="flex flex-wrap items-center gap-2">
                                   <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
                                   <select
@@ -1714,10 +1900,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                     Save Rating
                                   </button>
                                 </div>
-                              ) : (
-                                managerApproved && Number(t.proof_review_rating || proofReviewRatings[t.id] || 0) > 0
-                                  ? <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Math.max(1, Math.min(5, Number(t.proof_review_rating || proofReviewRatings[t.id] || 5)))}/5</span></p>
-                                  : null
+                              ) : null}
+                              {managerRatingLocked && (
+                                <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Math.max(1, Math.min(5, Number(t.proof_review_rating || proofReviewRatings[t.id] || 5)))}/5</span></p>
                               )}
                               {managerApproved ? (
                                 <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Member proof already approved. Review action is locked.</p>
@@ -1752,6 +1937,25 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       )}
                     </div>
                   );
+                              {taskProofHistory.length > 0 && (
+                                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 space-y-2">
+                                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Closed submission rounds</p>
+                                  {taskProofHistory.map((entry, entryIndex) => (
+                                    <div key={`task-proof-history-${t.id}-${entryIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-2 space-y-2">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{entry.revision_label || `${ordinalLabel(Number(entry.revision_number || entryIndex + 1))} revision`}</p>
+                                        <span className="text-[10px] font-bold uppercase text-slate-500">Closed</span>
+                                      </div>
+                                      {(entry.proof_files || []).map((file: any, fileIndex: number) => (
+                                        <div key={`task-proof-history-${t.id}-${entryIndex}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
+                                          <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Revision file ${fileIndex + 1}`}</p>
+                                          <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                   });
                 })()
               ))}
@@ -3237,6 +3441,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
             {proofReviewGoal && (() => {
               const goalProofFiles = parseGoalProofFiles(proofReviewGoal);
+              const goalProofHistory = parseProofRevisionHistory((proofReviewGoal as any).proof_revision_history);
+              const goalCurrentRevisionLabel = goalProofHistory.length > 0 ? `${ordinalLabel(goalProofHistory.length + 1)} revision` : 'Initial submission';
               const goalProofStatus = String(proofReviewGoal.proof_review_status || 'Not Submitted');
               const goalProofApproved = goalProofStatus === 'Approved';
               const hasGoalProof = goalProofFiles.length > 0;
@@ -3264,6 +3470,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     <p className="text-[11px] text-slate-500">No final proof has been submitted yet.</p>
                   ) : (
                     <div className="space-y-2">
+                      <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 p-2 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                        Current round: <span className="text-emerald-700 dark:text-emerald-300">{goalCurrentRevisionLabel}</span>
+                      </div>
                       {goalProofFiles.map((file, fileIndex) => (
                         <div key={`${proofReviewGoal.id}-goal-proof-${fileIndex}`} className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 p-2">
                           <div className="mb-1 flex items-center justify-between gap-2">
@@ -3279,12 +3488,35 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
                         </div>
                       ))}
+                      {goalProofHistory.length > 0 && (
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-2 space-y-2">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Closed submission rounds</p>
+                          {goalProofHistory.map((entry, entryIndex) => (
+                            <div key={`goal-proof-history-${entryIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{entry.revision_label || `${ordinalLabel(Number(entry.revision_number || entryIndex + 1))} revision`}</p>
+                                <span className="text-[10px] font-bold uppercase text-slate-500">Closed</span>
+                              </div>
+                              {(entry.proof_files || []).map((file: any, fileIndex: number) => (
+                                <div key={`goal-proof-history-${entryIndex}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-2">
+                                  <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Revision file ${fileIndex + 1}`}</p>
+                                  <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {proofReviewGoal.proof_note && <p className="text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {proofReviewGoal.proof_note}</p>}
                   {proofReviewGoal.proof_submitted_at && <p className="text-[10px] text-slate-500">Submitted: {new Date(proofReviewGoal.proof_submitted_at).toLocaleDateString()}</p>}
-                  {proofReviewGoal.proof_review_note && <p className="text-[10px] text-slate-500 italic">Latest manager note: {proofReviewGoal.proof_review_note}</p>}
+                  {proofReviewGoal.proof_review_note && (
+                    <p className="text-[10px] text-slate-500 italic">
+                      {goalProofStatus === 'Needs Revision' ? 'Requested revision from manager' : 'Latest manager note'}: {proofReviewGoal.proof_review_note}
+                    </p>
+                  )}
                   {goalProofApproved && Number(proofReviewGoal.proof_review_rating || 0) > 0 && (
                     <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Number(proofReviewGoal.proof_review_rating || 0)}/5</span></p>
                   )}
@@ -3299,7 +3531,38 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         placeholder="Final proof review note (optional)"
                           disabled={proofReviewSubmittingTaskId === proofReviewGoal.id || goalRatingLocked}
                       />
-                      {!goalRatingLocked && allSubmittedGoalProofsApproved && (
+                      {!goalProofApproved && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="file"
+                            onChange={async (event) => {
+                              const file = event.target.files?.[0] || null;
+                              if (!file) {
+                                setProofReviewAttachments((prev) => ({ ...prev, [proofReviewGoal.id]: null }));
+                                return;
+                              }
+                              try {
+                                const fileData = await readFileAsDataUrl(file);
+                                setProofReviewAttachments((prev) => ({
+                                  ...prev,
+                                  [proofReviewGoal.id]: {
+                                    file_data: fileData,
+                                    file_name: file.name,
+                                    file_type: file.type || 'application/octet-stream',
+                                  },
+                                }));
+                              } catch {
+                                window.notify?.('Failed to read review attachment', 'error');
+                              }
+                            }}
+                            className="text-[10px] text-slate-500 dark:text-slate-400"
+                          />
+                          {proofReviewAttachments[proofReviewGoal.id]?.file_name && (
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[220px]">Attached: {proofReviewAttachments[proofReviewGoal.id]?.file_name}</span>
+                          )}
+                        </div>
+                      )}
+                        {allSubmittedGoalProofsApproved && (
                         <div className="flex flex-wrap items-center gap-2">
                           <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
                           <select
@@ -3311,9 +3574,18 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             <option value="">Rate 1-5</option>
                             {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
                           </select>
+                            {goalProofApproved ? (
+                              <button
+                                onClick={() => void saveGoalReviewRating(Number(proofReviewGoal.id))}
+                                disabled={proofReviewSubmittingTaskId === proofReviewGoal.id}
+                                className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-60"
+                              >
+                                Save Rating
+                              </button>
+                            ) : null}
                         </div>
                       )}
-                      {!goalRatingLocked && !allSubmittedGoalProofsApproved && (
+                        {!allSubmittedGoalProofsApproved && (
                         <p className="text-[10px] text-amber-600">Manager rating unlocks after all submitted delegated proofs are approved by manager.</p>
                       )}
                       {goalProofApproved ? (
@@ -3373,6 +3645,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   : Math.max(0, Math.min(100, Number(t.progress || 0)));
                 const effectiveStatus = t.status || 'Not Started';
                 const proofFiles = parseTaskProofFiles(t);
+                const taskProofHistory = parseProofRevisionHistory((t as any).proof_revision_history);
+                const taskCurrentRevisionLabel = taskProofHistory.length > 0 ? `${ordinalLabel(taskProofHistory.length + 1)} revision` : 'Initial submission';
                 const hasProof = proofFiles.length > 0;
                 const goalLeaderId = Number((proofReviewGoal as any)?.leader_id || 0);
                 const reviewedByLeader = goalLeaderId > 0 && Number((t as any).proof_reviewed_by || 0) === goalLeaderId;
@@ -3416,10 +3690,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
                         {t.proof_note && <p className="mb-1 text-[10px] text-slate-600 dark:text-slate-300"><span className="font-bold">Note:</span> {t.proof_note}</p>}
                         {t.proof_submitted_at && <p className="mb-1 text-[10px] text-slate-500">Submitted: {new Date(t.proof_submitted_at).toLocaleDateString()}</p>}
-                        {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">Feedback: {t.proof_review_note}</p>}
+                        {t.proof_review_note && <p className="mb-2 text-[10px] text-slate-500 italic">{reviewStatus === 'Needs Revision' ? 'Requested revision from manager' : 'Feedback'}: {t.proof_review_note}</p>}
 
                         {hasProof && (
                           <div className="space-y-2">
+                            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-2 py-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                              Current round: <span className="text-emerald-700 dark:text-emerald-300">{taskCurrentRevisionLabel}</span>
+                            </div>
                             <textarea
                               rows={2}
                               value={proofReviewNotes[t.id] ?? String(t.proof_review_note || '')}
@@ -3428,7 +3705,38 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               placeholder="Member proof review note (optional)"
                               disabled={proofReviewSubmittingTaskId === t.id || managerApproved}
                             />
-                            {allSubmittedProofsApproved && managerApproved && !managerRatingLocked ? (
+                            {!managerApproved && (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <input
+                                  type="file"
+                                  onChange={async (event) => {
+                                    const file = event.target.files?.[0] || null;
+                                    if (!file) {
+                                      setProofReviewAttachments((prev) => ({ ...prev, [t.id]: null }));
+                                      return;
+                                    }
+                                    try {
+                                      const fileData = await readFileAsDataUrl(file);
+                                      setProofReviewAttachments((prev) => ({
+                                        ...prev,
+                                        [t.id]: {
+                                          file_data: fileData,
+                                          file_name: file.name,
+                                          file_type: file.type || 'application/octet-stream',
+                                        },
+                                      }));
+                                    } catch {
+                                      window.notify?.('Failed to read review attachment', 'error');
+                                    }
+                                  }}
+                                  className="text-[10px] text-slate-500 dark:text-slate-400"
+                                />
+                                {proofReviewAttachments[t.id]?.file_name && (
+                                  <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[220px]">Attached: {proofReviewAttachments[t.id]?.file_name}</span>
+                                )}
+                              </div>
+                            )}
+                            {allSubmittedProofsApproved && managerApproved ? (
                               <div className="flex flex-wrap items-center gap-2">
                                 <label className="text-[10px] font-bold uppercase text-slate-500">Manager Rating</label>
                                 <select
@@ -3448,10 +3756,9 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                   Save Rating
                                 </button>
                               </div>
-                            ) : (
-                              managerApproved && Number(t.proof_review_rating || proofReviewRatings[t.id] || 0) > 0
-                                ? <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Math.max(1, Math.min(5, Number(t.proof_review_rating || proofReviewRatings[t.id] || 5)))}/5</span></p>
-                                : null
+                            ) : null}
+                            {managerRatingLocked && (
+                              <p className="text-[10px] text-slate-500">Manager rating: <span className="font-bold">{Math.max(1, Math.min(5, Number(t.proof_review_rating || proofReviewRatings[t.id] || 5)))}/5</span></p>
                             )}
                             {managerApproved ? (
                               <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Member proof already approved. Review action is locked.</p>
@@ -3486,6 +3793,25 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     )}
                   </div>
                 );
+                            {taskProofHistory.length > 0 && (
+                              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 space-y-2">
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Closed submission rounds</p>
+                                {taskProofHistory.map((entry, entryIndex) => (
+                                  <div key={`task-proof-history-${t.id}-${entryIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-2 space-y-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{entry.revision_label || `${ordinalLabel(Number(entry.revision_number || entryIndex + 1))} revision`}</p>
+                                      <span className="text-[10px] font-bold uppercase text-slate-500">Closed</span>
+                                    </div>
+                                    {(entry.proof_files || []).map((file: any, fileIndex: number) => (
+                                      <div key={`task-proof-history-${t.id}-${entryIndex}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
+                                        <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Revision file ${fileIndex + 1}`}</p>
+                                        <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                                      </div>
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                 });
               })()
             ))}

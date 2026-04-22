@@ -72,6 +72,18 @@ type GoalProofFile = {
   proof_file_type: string;
 };
 
+type ProofRevisionEntry = {
+  revision_number?: number;
+  revision_label?: string;
+  proof_review_status?: string;
+  proof_review_note?: string;
+  proof_review_file_data?: string;
+  proof_review_file_name?: string;
+  proof_review_file_type?: string;
+  proof_files?: GoalProofFile[];
+  archived_at?: string;
+};
+
 const parseGoalProofFiles = (goal: any): GoalProofFile[] => {
   const rawData = String(goal?.proof_image || '').trim();
   const fallbackName = String(goal?.proof_file_name || 'Final proof').trim();
@@ -100,6 +112,46 @@ const parseGoalProofFiles = (goal: any): GoalProofFile[] => {
   }];
 };
 
+const parseProofRevisionHistory = (value: any): ProofRevisionEntry[] => {
+  const rawData = String(value || '').trim();
+  if (!rawData || !rawData.startsWith('[')) return [];
+  try {
+    const parsed = JSON.parse(rawData);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item: any, index: number) => ({
+      revision_number: Number(item?.revision_number || index + 1),
+      revision_label: String(item?.revision_label || '').trim(),
+      proof_review_status: String(item?.proof_review_status || '').trim(),
+      proof_review_note: String(item?.proof_review_note || '').trim(),
+      proof_review_file_data: String(item?.proof_review_file_data || '').trim(),
+      proof_review_file_name: String(item?.proof_review_file_name || '').trim(),
+      proof_review_file_type: String(item?.proof_review_file_type || '').trim(),
+      proof_files: Array.isArray(item?.proof_files)
+        ? item.proof_files.map((file: any) => ({
+            proof_file_data: String(file?.proof_file_data || file?.data || '').trim(),
+            proof_file_name: String(file?.proof_file_name || file?.name || '').trim(),
+            proof_file_type: String(file?.proof_file_type || file?.type || 'application/octet-stream').trim(),
+          })).filter((file: any) => !!file.proof_file_data)
+        : [],
+      archived_at: String(item?.archived_at || '').trim(),
+    }));
+  } catch {
+    return [];
+  }
+};
+
+const ordinalLabel = (value: number) => {
+  const n = Math.max(1, Math.trunc(Number(value) || 0));
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+};
+
 export const TeamLeaderDashboard = () => {
   const [leaderGoals, setLeaderGoals] = useState<Goal[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -114,6 +166,8 @@ export const TeamLeaderDashboard = () => {
   const [extensionDecisionId, setExtensionDecisionId] = useState<number | null>(null);
   const [goalProofDrafts, setGoalProofDrafts] = useState<Record<number, { files: GoalProofFile[]; note: string }>>({});
   const [goalProofSubmittingId, setGoalProofSubmittingId] = useState<number | null>(null);
+  const [proofReviewNotes, setProofReviewNotes] = useState<Record<number, string>>({});
+  const [proofReviewAttachments, setProofReviewAttachments] = useState<Record<number, { file_data: string; file_name: string; file_type: string } | null>>({});
 
   const [subtaskForm, setSubtaskForm] = useState({
     title: '',
@@ -242,16 +296,47 @@ export const TeamLeaderDashboard = () => {
     }
   };
 
+  const handleProofReviewAttachmentChange = async (taskId: number, file: File | null) => {
+    if (!file) {
+      setProofReviewAttachments((prev) => ({ ...prev, [taskId]: null }));
+      return;
+    }
+    try {
+      const fileData = await readFileAsDataUrl(file);
+      setProofReviewAttachments((prev) => ({
+        ...prev,
+        [taskId]: {
+          file_data: fileData,
+          file_name: file.name,
+          file_type: file.type || 'application/octet-stream',
+        },
+      }));
+    } catch {
+      window.notify?.('Failed to read review attachment', 'error');
+    }
+  };
+
   const reviewTaskProof = async (taskId: number, status: 'Approved' | 'Needs Revision' | 'Rejected') => {
-    const note = status === 'Approved' ? '' : prompt('Add review note (optional):') || '';
+    const note = String(proofReviewNotes[taskId] || '').trim();
+    const attachment = proofReviewAttachments[taskId];
     try {
       const res = await fetch(`/api/member-tasks/${taskId}`, {
         method: 'PUT',
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proof_review_status: status, proof_review_note: note })
+        body: JSON.stringify({
+          proof_review_status: status,
+          proof_review_note: note,
+          ...(attachment && status !== 'Approved' ? {
+            proof_review_file_data: attachment.file_data,
+            proof_review_file_name: attachment.file_name,
+            proof_review_file_type: attachment.file_type,
+          } : {}),
+        })
       });
       if (!res.ok) throw new Error('Failed to update review');
       window.notify?.(`Proof ${status.toLowerCase()}`, 'success');
+      setProofReviewNotes((prev) => ({ ...prev, [taskId]: '' }));
+      setProofReviewAttachments((prev) => ({ ...prev, [taskId]: null }));
       fetchLeaderGoals();
     } catch (error) {
       window.notify?.('Failed to update proof review', 'error');
@@ -1060,6 +1145,8 @@ export const TeamLeaderDashboard = () => {
                               <div className="space-y-2">
                                 {goal.member_tasks.map((task: any) => {
                                   const reviewStatus = task.proof_review_status || 'Not Submitted';
+                                  const taskProofHistory = parseProofRevisionHistory((task as any).proof_revision_history);
+                                  const taskCurrentRevisionLabel = taskProofHistory.length > 0 ? `${ordinalLabel(taskProofHistory.length + 1)} revision` : 'Initial submission';
                                   return (
                                     <div key={task.id} className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
                                       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1090,14 +1177,57 @@ export const TeamLeaderDashboard = () => {
                                       )}
 
                                       {task.proof_review_note && (
-                                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Review note: {task.proof_review_note}</p>
+                                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">{reviewStatus === 'Needs Revision' ? 'Requested revision from leader' : 'Review note'}: {task.proof_review_note}</p>
                                       )}
 
                                       {task.proof_image && (
-                                        <div className="mt-2 flex flex-wrap gap-2">
+                                        <div className="mt-2 space-y-2">
+                                          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-2 py-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                                            Current round: <span className="text-emerald-700 dark:text-emerald-300">{taskCurrentRevisionLabel}</span>
+                                          </div>
+                                          <textarea
+                                            rows={2}
+                                            value={proofReviewNotes[task.id] || ''}
+                                            onChange={(event) => setProofReviewNotes((prev) => ({ ...prev, [task.id]: event.target.value }))}
+                                            className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-[11px]"
+                                            placeholder="Revision note or review feedback (optional)"
+                                          />
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <input
+                                              type="file"
+                                              onChange={(event) => void handleProofReviewAttachmentChange(task.id, event.target.files?.[0] || null)}
+                                              className="text-[10px] text-slate-500 dark:text-slate-400"
+                                            />
+                                            {proofReviewAttachments[task.id]?.file_name && (
+                                              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[220px]">
+                                                Attached: {proofReviewAttachments[task.id]?.file_name}
+                                              </span>
+                                            )}
+                                          </div>
+                                          {taskProofHistory.length > 0 && (
+                                            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 space-y-2">
+                                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Closed submission rounds</p>
+                                              {taskProofHistory.map((entry, entryIndex) => (
+                                                <div key={`leader-task-proof-history-${task.id}-${entryIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-2 space-y-2">
+                                                  <div className="flex items-center justify-between gap-2">
+                                                    <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{entry.revision_label || `${ordinalLabel(Number(entry.revision_number || entryIndex + 1))} revision`}</p>
+                                                    <span className="text-[10px] font-bold uppercase text-slate-500">Closed</span>
+                                                  </div>
+                                                  {(entry.proof_files || []).map((file: any, fileIndex: number) => (
+                                                    <div key={`leader-task-proof-history-${task.id}-${entryIndex}-${fileIndex}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2">
+                                                      <p className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">{file.proof_file_name || `Revision file ${fileIndex + 1}`}</p>
+                                                      <ProofAttachment src={file.proof_file_data} fileName={file.proof_file_name} mimeType={file.proof_file_type} compact />
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                          <div className="flex flex-wrap gap-2">
                                           <button onClick={() => reviewTaskProof(task.id, 'Approved')} className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Approve</button>
                                           <button onClick={() => reviewTaskProof(task.id, 'Needs Revision')} className="text-[10px] font-bold px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Needs Revision</button>
                                           <button onClick={() => reviewTaskProof(task.id, 'Rejected')} className="text-[10px] font-bold px-2 py-1 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">Reject</button>
+                                          </div>
                                         </div>
                                       )}
                                     </div>
