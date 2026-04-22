@@ -3131,6 +3131,108 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   {scopePieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', fontSize: 12 }} />
+
+              <Modal
+                open={memberRatingsModal.open}
+                title="Member Ratings"
+                onClose={() => setMemberRatingsModal({ open: false, goalId: null, ratings: {}, submitting: false })}
+                maxWidthClassName="max-w-2xl"
+                bodyClassName="space-y-4"
+              >
+                {memberRatingsModal.goalId && (() => {
+                  const goal = goals.find(g => Number(g.id) === Number(memberRatingsModal.goalId));
+                  const tasks = proofReviewTasksByGoal[memberRatingsModal.goalId] || [];
+                  const submittedTasks = tasks.filter((t: any) => {
+                    const files = parseTaskProofFiles(t);
+                    const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
+                    return files.length > 0 && t.proof_review_status === 'Approved' && reviewRole === 'manager';
+                  });
+                  const goalReviewRole = String((goal as any)?.proof_reviewer_role || (goal as any)?.proof_reviewed_role || '').trim().toLowerCase();
+                  const leaderName = String((goal as any)?.delegation || (goal as any)?.leader_name || (goal as any)?.employee_name || 'Leader').trim() || 'Leader';
+                  const ratingsLocked = !!goal && goal.proof_review_status === 'Approved' && goalReviewRole === 'manager' && Number(goal.proof_review_rating || 0) >= 1 && Number(goal.proof_review_rating || 0) <= 5 && submittedTasks.every((t: any) => Number(t.proof_review_rating || 0) >= 1 && Number(t.proof_review_rating || 0) <= 5);
+
+                  return (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-sky-200 dark:border-sky-900/40 bg-sky-50/80 dark:bg-sky-900/15 p-4">
+                        <p className="text-xs font-black uppercase tracking-wider text-sky-700 dark:text-sky-300">Member Rating Summary</p>
+                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                          {ratingsLocked ? 'Ratings are saved and locked.' : 'All proofs have been approved. Save ratings for the leader and each approved member.'}
+                        </p>
+                      </div>
+
+                      <div className="space-y-3">
+                        {goal && goal.proof_review_status === 'Approved' && goalReviewRole === 'manager' && (
+                          <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/70 dark:bg-emerald-900/15 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{leaderName}</p>
+                                <p className="text-[10px] text-slate-500">Final goal proof</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Leader</span>
+                                <select
+                                  value={memberRatingsModal.ratings['leader'] || ''}
+                                  onChange={(e) => setMemberRatingsModal(prev => ({
+                                    ...prev,
+                                    ratings: { ...prev.ratings, leader: Number(e.target.value || 0) }
+                                  }))}
+                                  disabled={memberRatingsModal.submitting || ratingsLocked}
+                                  className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm font-bold disabled:opacity-60"
+                                >
+                                  <option value="">Rate 1-5</option>
+                                  {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {submittedTasks.map((t: any) => (
+                          <div key={`task-rating-${t.id}`} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{t.member_name || `Member #${t.member_employee_id}`}</p>
+                                <p className="text-[10px] text-slate-500">{t.title || 'Assigned task'}</p>
+                              </div>
+                              <select
+                                value={memberRatingsModal.ratings[`task-${t.id}`] || ''}
+                                onChange={(e) => setMemberRatingsModal(prev => ({
+                                  ...prev,
+                                  ratings: { ...prev.ratings, [`task-${t.id}`]: Number(e.target.value || 0) }
+                                }))}
+                                disabled={memberRatingsModal.submitting || ratingsLocked}
+                                className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm font-bold disabled:opacity-60"
+                              >
+                                <option value="">Rate 1-5</option>
+                                {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
+                              </select>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2">
+                        <button
+                          onClick={() => setMemberRatingsModal({ open: false, goalId: null, ratings: {}, submitting: false })}
+                          disabled={memberRatingsModal.submitting}
+                          className="px-4 py-2 rounded-lg text-sm font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
+                        >
+                          {ratingsLocked ? 'Close' : 'Cancel'}
+                        </button>
+                        {!ratingsLocked && (
+                          <button
+                            onClick={() => void saveMemberRatings()}
+                            disabled={memberRatingsModal.submitting}
+                            className="px-4 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                          >
+                            {memberRatingsModal.submitting ? 'Saving...' : 'Save All Ratings'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </Modal>
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -3923,92 +4025,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         ) : (
           <p className="text-sm text-slate-500">No file selected.</p>
         )}
-      </Modal>
-
-      <Modal
-        open={memberRatingsModal.open}
-        title="Rate Team Members"
-        onClose={() => setMemberRatingsModal({ open: false, goalId: null, ratings: {}, submitting: false })}
-        maxWidthClassName="max-w-2xl"
-        bodyClassName="space-y-4"
-      >
-        {memberRatingsModal.goalId && (() => {
-          const goal = goals.find(g => Number(g.id) === Number(memberRatingsModal.goalId));
-          const tasks = proofReviewTasksByGoal[memberRatingsModal.goalId] || [];
-          const submittedTasks = tasks.filter((t: any) => {
-            const files = parseTaskProofFiles(t);
-            const reviewRole = String((t as any).reviewer_role || (t as any).proof_reviewed_role || '').trim().toLowerCase();
-            return files.length > 0 && t.proof_review_status === 'Approved' && reviewRole === 'manager';
-          });
-          const goalReviewRole = String((goal as any)?.proof_reviewer_role || (goal as any)?.proof_reviewed_role || '').trim().toLowerCase();
-
-          return (
-            <div className="space-y-3">
-              <p className="text-sm text-slate-600 dark:text-slate-300">All proofs have been approved. Now rate each member on their performance (1-5 scale).</p>
-
-              <div className="space-y-3">
-                {goal && goal.proof_review_status === 'Approved' && goalReviewRole === 'manager' && (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
-                    <div>
-                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Goal Leader</p>
-                      <p className="text-[10px] text-slate-500">Final goal proof</p>
-                    </div>
-                    <select
-                      value={memberRatingsModal.ratings['leader'] || ''}
-                      onChange={(e) => setMemberRatingsModal(prev => ({
-                        ...prev,
-                        ratings: { ...prev.ratings, leader: Number(e.target.value || 0) }
-                      }))}
-                      disabled={memberRatingsModal.submitting}
-                      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm font-bold"
-                    >
-                      <option value="">Rate 1-5</option>
-                      {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
-                    </select>
-                  </div>
-                )}
-
-                {submittedTasks.map((t: any) => (
-                  <div key={`task-rating-second-${t.id}`} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
-                    <div>
-                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{t.member_name || `Member #${t.member_employee_id}`}</p>
-                      <p className="text-[10px] text-slate-500">{t.title || 'Assigned task'}</p>
-                    </div>
-                    <select
-                      value={memberRatingsModal.ratings[`task-${t.id}`] || ''}
-                      onChange={(e) => setMemberRatingsModal(prev => ({
-                        ...prev,
-                        ratings: { ...prev.ratings, [`task-${t.id}`]: Number(e.target.value || 0) }
-                      }))}
-                      disabled={memberRatingsModal.submitting}
-                      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm font-bold"
-                    >
-                      <option value="">Rate 1-5</option>
-                      {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r}/5</option>))}
-                    </select>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3">
-                <button
-                  onClick={() => setMemberRatingsModal({ open: false, goalId: null, ratings: {}, submitting: false })}
-                  disabled={memberRatingsModal.submitting}
-                  className="px-4 py-2 rounded-lg text-sm font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => void saveMemberRatings()}
-                  disabled={memberRatingsModal.submitting}
-                  className="px-4 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {memberRatingsModal.submitting ? 'Saving...' : 'Save All Ratings'}
-                </button>
-              </div>
-            </div>
-          );
-        })()}
       </Modal>
 
       <Modal
