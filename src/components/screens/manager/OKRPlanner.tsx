@@ -1860,14 +1860,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             return (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 text-xs">
-                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Goal Level</span><span className="text-slate-700 dark:text-slate-200">{g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual'}</span></div>
-                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Department</span><span className="text-slate-700 dark:text-slate-200">{g.department || '\u2014'}</span></div>
-                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team</span><span className="text-slate-700 dark:text-slate-200">{g.team_name || '\u2014'}</span></div>
-                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Employee</span><div className="min-w-0"><span className="text-slate-700 dark:text-slate-200 truncate max-w-[220px]" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div></div>
-                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Quarter</span><span className="text-slate-700 dark:text-slate-200">{g.quarter || '\u2014'}</span></div>
-                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Frequency</span><span className="text-slate-700 dark:text-slate-200">{g.frequency || 'One-time'}</span></div>
-                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team Leader</span><span className="text-slate-700 dark:text-slate-200">{g.leader_name || '\u2014'}</span></div>
-                  <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Target Date</span><span className={`${overdue ? 'text-red-600 font-bold' : 'text-slate-700 dark:text-slate-200'}`}>{g.target_date || '\u2014'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-xs">Goal Level</span><span className="text-slate-700 dark:text-slate-200">{g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-xs">Department</span><span className="text-slate-700 dark:text-slate-200">{g.department || '\u2014'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-xs">Team</span><span className="text-slate-700 dark:text-slate-200">{g.team_name || '\u2014'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-xs">Employee</span><div className="min-w-0"><span className="text-slate-700 dark:text-slate-200 truncate max-w-[220px]" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-xs">Quarter</span><span className="text-slate-700 dark:text-slate-200">{g.quarter || '\u2014'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-xs">Frequency</span><span className="text-slate-700 dark:text-slate-200">{g.frequency || 'One-time'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-xs">Team Leader</span><span className="text-slate-700 dark:text-slate-200">{g.leader_name || '\u2014'}</span></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-xs">Target Date</span><span className={`${overdue ? 'text-red-600 font-bold' : 'text-slate-700 dark:text-slate-200'}`}>{g.target_date || '\u2014'}</span></div>
                 </div>
 
                 <div className="flex items-center justify-end">
@@ -1891,8 +1891,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           bodyClassName="space-y-3"
         >
           {proofReviewOpenGoal && (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 px-3 py-2">
+            <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-4 lg:items-start">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 lg:col-span-2">
                 <p className="text-xs font-bold text-blue-700 dark:text-blue-300">Live sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - proofRealtimeSyncAt) / 1000))}s ago</p>
                 <div className="flex items-center gap-2">
                   <button onClick={() => void refreshProofReviewTasks(proofReviewOpenGoal)} className="text-[11px] font-bold px-2.5 py-1.5 rounded bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30">Refresh proofs</button>
@@ -1997,90 +1997,10 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           </div>
                         )}
                         {goalProofApproved ? (
-                          <div className="space-y-4">
+                          <div className="space-y-3">
                             <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/80 dark:bg-emerald-900/20 px-4 py-3">
-                              <p className="text-base font-extrabold text-emerald-700 dark:text-emerald-300">✓ Final proof approved. This decision is now locked.</p>
+                              <p className="text-base font-extrabold text-emerald-700 dark:text-emerald-300">Final proof approved. This decision is now locked.</p>
                             </div>
-                            {allSubmittedGoalProofsApproved && (() => {
-                              const goalId = Number(proofReviewGoal.id);
-                              const leaderName = String((proofReviewGoal as any)?.delegation || (proofReviewGoal as any)?.leader_name || (proofReviewGoal as any)?.employee_name || 'Leader').trim() || 'Leader';
-                              const goalRatings = inlineMemberRatingsByGoal[goalId] || buildInitialRatingsForGoal(goalId);
-                              const ratingsLocked = Number(proofReviewGoal.proof_review_rating || 0) >= 1 && Number(proofReviewGoal.proof_review_rating || 0) <= 5 && goalSubmittedTasks.every((row: any) => Number(row.proof_review_rating || 0) >= 1 && Number(row.proof_review_rating || 0) <= 5);
-                              const isSaving = inlineMemberRatingsSavingGoalId === goalId;
-                              return (
-                                <div className="rounded-xl border-2 border-blue-400 dark:border-blue-700 bg-blue-50/95 dark:bg-blue-950/40 p-6 space-y-5">
-                                  <div className="space-y-2">
-                                    <p className="text-2xl font-black text-blue-900 dark:text-blue-100">📋 Rate Team Members</p>
-                                    <p className="text-base text-slate-700 dark:text-slate-300 leading-relaxed">
-                                      {ratingsLocked ? '✓ All ratings have been submitted and are locked.' : `Please evaluate the team leader and ${goalSubmittedTasks.length} team member(s). Use a scale of 1-5 where 5 is excellent.`}
-                                    </p>
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-4 rounded-xl bg-white dark:bg-slate-900 p-4">
-                                    <div className="text-center pb-4 border-b border-slate-200 dark:border-slate-700">
-                                      <p className="text-xs font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-2">People to Rate</p>
-                                      <p className="text-4xl font-black text-blue-700 dark:text-blue-300">{goalSubmittedTasks.length + 1}</p>
-                                    </div>
-                                    <div className="text-center pb-4 border-b border-slate-200 dark:border-slate-700">
-                                      <p className="text-xs font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-2">Rating Scale</p>
-                                      <p className="text-4xl font-black text-blue-700 dark:text-blue-300">1-5</p>
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-3">
-                                    <p className="text-sm font-bold uppercase tracking-widest text-blue-800 dark:text-blue-200 px-1">Member Ratings</p>
-                                    
-                                    <div className="rounded-lg border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50/80 dark:bg-emerald-950/40 p-4 space-y-3">
-                                      <div className="flex items-center justify-between gap-4">
-                                        <div className="flex-1">
-                                          <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{leaderName}</p>
-                                          <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">👤 Team Leader</p>
-                                        </div>
-                                        <select
-                                          value={Number(goalRatings.leader || 0) > 0 ? Number(goalRatings.leader) : ''}
-                                          onChange={(e) => setInlineMemberRating(goalId, 'leader', Number(e.target.value || 0))}
-                                          disabled={isSaving || ratingsLocked}
-                                          className="px-4 py-2.5 rounded-lg border-2 border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 text-base font-bold text-slate-900 dark:text-slate-100 disabled:opacity-60 cursor-pointer hover:border-emerald-400 transition-colors"
-                                        >
-                                          <option value="">— Select —</option>
-                                          {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r} / 5</option>))}
-                                        </select>
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-3 border-t-2 border-slate-200 dark:border-slate-700 pt-3">
-                                      {goalSubmittedTasks.map((row: any) => (
-                                        <div key={`inline-member-rating-${row.id}`} className="rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 p-4 flex items-center justify-between gap-4 hover:border-blue-400 dark:hover:border-blue-600 transition-colors">
-                                          <div className="flex-1">
-                                            <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{row.member_name || `Member #${row.member_employee_id}`}</p>
-                                            <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">{row.title || 'Assigned task'}</p>
-                                          </div>
-                                          <select
-                                            value={Number(goalRatings[`task-${row.id}`] || 0) > 0 ? Number(goalRatings[`task-${row.id}`]) : ''}
-                                            onChange={(e) => setInlineMemberRating(goalId, `task-${row.id}`, Number(e.target.value || 0))}
-                                            disabled={isSaving || ratingsLocked}
-                                            className="px-4 py-2.5 rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-base font-bold text-slate-900 dark:text-slate-100 disabled:opacity-60 cursor-pointer hover:border-blue-400 transition-colors"
-                                          >
-                                            <option value="">— Select —</option>
-                                            {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r} / 5</option>))}
-                                          </select>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-
-                                  {!ratingsLocked && (
-                                    <button
-                                      onClick={() => void saveInlineMemberRatings(goalId)}
-                                      disabled={isSaving}
-                                      className="w-full px-6 py-3.5 rounded-lg text-lg font-bold bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
-                                    >
-                                      {isSaving ? '⏳ Saving ratings...' : '✓ Save All Ratings'}
-                                    </button>
-                                  )}
-                                </div>
-                              );
-                            })()}
                           </div>
                         ) : (
                           <div className="flex flex-wrap gap-2">
@@ -2110,6 +2030,93 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       </div>
                     )}
                   </div>
+                );
+              })()}
+
+              {proofReviewGoal && (() => {
+                const goalProofStatus = String(proofReviewGoal.proof_review_status || 'Not Submitted');
+                const goalProofApproved = goalProofStatus === 'Approved';
+                const goalTaskRows = proofReviewTasksByGoal[Number(proofReviewGoal.id)] || [];
+                const goalSubmittedTasks = goalTaskRows.filter((row: any) => parseTaskProofFiles(row).length > 0);
+                const allSubmittedGoalProofsApproved = goalSubmittedTasks.length === 0 || goalSubmittedTasks.every((row: any) => {
+                  const reviewStatus = String(row?.proof_review_status || '').trim();
+                  const reviewRole = String(row?.reviewer_role || row?.proof_reviewed_role || '').trim().toLowerCase();
+                  return reviewStatus === 'Approved' && reviewRole === 'manager';
+                });
+                if (!goalProofApproved || !allSubmittedGoalProofsApproved) return null;
+                const goalId = Number(proofReviewGoal.id);
+                const leaderName = String((proofReviewGoal as any)?.delegation || (proofReviewGoal as any)?.leader_name || (proofReviewGoal as any)?.employee_name || 'Leader').trim() || 'Leader';
+                const goalRatings = inlineMemberRatingsByGoal[goalId] || buildInitialRatingsForGoal(goalId);
+                const ratingsLocked = Number(proofReviewGoal.proof_review_rating || 0) >= 1 && Number(proofReviewGoal.proof_review_rating || 0) <= 5 && goalSubmittedTasks.every((row: any) => Number(row.proof_review_rating || 0) >= 1 && Number(row.proof_review_rating || 0) <= 5);
+                const isSaving = inlineMemberRatingsSavingGoalId === goalId;
+
+                return (
+                  <aside className="rounded-xl border-2 border-blue-300 dark:border-blue-800/70 bg-blue-50/95 dark:bg-blue-900/30 p-4 space-y-4 lg:col-start-2 lg:row-span-2 lg:sticky lg:top-2">
+                    <div className="flex items-start gap-2 border-b border-blue-200 dark:border-blue-800/60 pb-3">
+                      <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-200 text-xs font-bold">R</span>
+                      <div>
+                        <p className="text-lg font-black text-blue-900 dark:text-blue-100">Rate Team Members</p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">Set ratings for the leader and every approved member.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">People</p>
+                        <p className="text-2xl font-black text-slate-900 dark:text-slate-100">{goalSubmittedTasks.length + 1}</p>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Scale</p>
+                        <p className="text-2xl font-black text-slate-900 dark:text-slate-100">1-5</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/70 dark:bg-emerald-900/20 p-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{leaderName}</p>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">Team Leader</p>
+                        </div>
+                        <select
+                          value={Number(goalRatings.leader || 0) > 0 ? Number(goalRatings.leader) : ''}
+                          onChange={(e) => setInlineMemberRating(goalId, 'leader', Number(e.target.value || 0))}
+                          disabled={isSaving || ratingsLocked}
+                          className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold disabled:opacity-60"
+                        >
+                          <option value="">Select</option>
+                          {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r} / 5</option>))}
+                        </select>
+                      </div>
+
+                      {goalSubmittedTasks.map((row: any) => (
+                        <div key={`inline-member-rating-${row.id}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{row.member_name || `Member #${row.member_employee_id}`}</p>
+                            <p className="text-xs text-slate-600 dark:text-slate-400">{row.title || 'Assigned task'}</p>
+                          </div>
+                          <select
+                            value={Number(goalRatings[`task-${row.id}`] || 0) > 0 ? Number(goalRatings[`task-${row.id}`]) : ''}
+                            onChange={(e) => setInlineMemberRating(goalId, `task-${row.id}`, Number(e.target.value || 0))}
+                            disabled={isSaving || ratingsLocked}
+                            className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold disabled:opacity-60"
+                          >
+                            <option value="">Select</option>
+                            {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r} / 5</option>))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+
+                    {!ratingsLocked && (
+                      <button
+                        onClick={() => void saveInlineMemberRatings(goalId)}
+                        disabled={isSaving}
+                        className="w-full px-4 py-2.5 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                      >
+                        {isSaving ? 'Saving ratings...' : 'Save All Ratings'}
+                      </button>
+                    )}
+                  </aside>
                 );
               })()}
 
@@ -3748,8 +3755,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         bodyClassName="space-y-3"
       >
         {proofReviewOpenGoal && (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 px-3 py-2">
+          <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-4 lg:items-start">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 lg:col-span-2">
               <p className="text-xs font-bold text-blue-700 dark:text-blue-300">
                 Live sync every 5s • Last sync {Math.max(0, Math.floor((Date.now() - proofRealtimeSyncAt) / 1000))}s ago
               </p>
@@ -3887,90 +3894,10 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         </div>
                       )}
                       {goalProofApproved ? (
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                           <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/80 dark:bg-emerald-900/20 px-4 py-3">
-                            <p className="text-base font-extrabold text-emerald-700 dark:text-emerald-300">✓ Final proof approved. This decision is now locked.</p>
+                            <p className="text-base font-extrabold text-emerald-700 dark:text-emerald-300">Final proof approved. This decision is now locked.</p>
                           </div>
-                          {allSubmittedGoalProofsApproved && (() => {
-                            const goalId = Number(proofReviewGoal.id);
-                            const leaderName = String((proofReviewGoal as any)?.delegation || (proofReviewGoal as any)?.leader_name || (proofReviewGoal as any)?.employee_name || 'Leader').trim() || 'Leader';
-                            const goalRatings = inlineMemberRatingsByGoal[goalId] || buildInitialRatingsForGoal(goalId);
-                            const ratingsLocked = Number(proofReviewGoal.proof_review_rating || 0) >= 1 && Number(proofReviewGoal.proof_review_rating || 0) <= 5 && goalSubmittedTasks.every((row: any) => Number(row.proof_review_rating || 0) >= 1 && Number(row.proof_review_rating || 0) <= 5);
-                            const isSaving = inlineMemberRatingsSavingGoalId === goalId;
-                            return (
-                              <div className="rounded-xl border-2 border-blue-400 dark:border-blue-700 bg-blue-50/95 dark:bg-blue-950/40 p-6 space-y-5">
-                                <div className="space-y-2">
-                                  <p className="text-2xl font-black text-blue-900 dark:text-blue-100">📋 Rate Team Members</p>
-                                  <p className="text-base text-slate-700 dark:text-slate-300 leading-relaxed">
-                                    {ratingsLocked ? '✓ All ratings have been submitted and are locked.' : `Please evaluate the team leader and ${goalSubmittedTasks.length} team member(s). Use a scale of 1-5 where 5 is excellent.`}
-                                  </p>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4 rounded-xl bg-white dark:bg-slate-900 p-4">
-                                  <div className="text-center pb-4 border-b border-slate-200 dark:border-slate-700">
-                                    <p className="text-xs font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-2">People to Rate</p>
-                                    <p className="text-4xl font-black text-blue-700 dark:text-blue-300">{goalSubmittedTasks.length + 1}</p>
-                                  </div>
-                                  <div className="text-center pb-4 border-b border-slate-200 dark:border-slate-700">
-                                    <p className="text-xs font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-2">Rating Scale</p>
-                                    <p className="text-4xl font-black text-blue-700 dark:text-blue-300">1-5</p>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                  <p className="text-sm font-bold uppercase tracking-widest text-blue-800 dark:text-blue-200 px-1">Member Ratings</p>
-                                  
-                                  <div className="rounded-lg border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50/80 dark:bg-emerald-950/40 p-4 space-y-3">
-                                    <div className="flex items-center justify-between gap-4">
-                                      <div className="flex-1">
-                                        <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{leaderName}</p>
-                                        <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">👤 Team Leader</p>
-                                      </div>
-                                      <select
-                                        value={Number(goalRatings.leader || 0) > 0 ? Number(goalRatings.leader) : ''}
-                                        onChange={(e) => setInlineMemberRating(goalId, 'leader', Number(e.target.value || 0))}
-                                        disabled={isSaving || ratingsLocked}
-                                        className="px-4 py-2.5 rounded-lg border-2 border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 text-base font-bold text-slate-900 dark:text-slate-100 disabled:opacity-60 cursor-pointer hover:border-emerald-400 transition-colors"
-                                      >
-                                        <option value="">— Select —</option>
-                                        {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r} / 5</option>))}
-                                      </select>
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-3 border-t-2 border-slate-200 dark:border-slate-700 pt-3">
-                                    {goalSubmittedTasks.map((row: any) => (
-                                      <div key={`inline-member-rating-${row.id}`} className="rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 p-4 flex items-center justify-between gap-4 hover:border-blue-400 dark:hover:border-blue-600 transition-colors">
-                                        <div className="flex-1">
-                                          <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{row.member_name || `Member #${row.member_employee_id}`}</p>
-                                          <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">{row.title || 'Assigned task'}</p>
-                                        </div>
-                                        <select
-                                          value={Number(goalRatings[`task-${row.id}`] || 0) > 0 ? Number(goalRatings[`task-${row.id}`]) : ''}
-                                          onChange={(e) => setInlineMemberRating(goalId, `task-${row.id}`, Number(e.target.value || 0))}
-                                          disabled={isSaving || ratingsLocked}
-                                          className="px-4 py-2.5 rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-base font-bold text-slate-900 dark:text-slate-100 disabled:opacity-60 cursor-pointer hover:border-blue-400 transition-colors"
-                                        >
-                                          <option value="">— Select —</option>
-                                          {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r} / 5</option>))}
-                                        </select>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                {!ratingsLocked && (
-                                  <button
-                                    onClick={() => void saveInlineMemberRatings(goalId)}
-                                    disabled={isSaving}
-                                    className="w-full px-6 py-3.5 rounded-lg text-lg font-bold bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
-                                  >
-                                    {isSaving ? '⏳ Saving ratings...' : '✓ Save All Ratings'}
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })()}
                         </div>
                       ) : (
                         <div className="flex flex-wrap gap-2">
@@ -4000,6 +3927,93 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     </div>
                   )}
                 </div>
+              );
+            })()}
+
+            {proofReviewGoal && (() => {
+              const goalProofStatus = String(proofReviewGoal.proof_review_status || 'Not Submitted');
+              const goalProofApproved = goalProofStatus === 'Approved';
+              const goalTaskRows = proofReviewTasksByGoal[Number(proofReviewGoal.id)] || [];
+              const goalSubmittedTasks = goalTaskRows.filter((row: any) => parseTaskProofFiles(row).length > 0);
+              const allSubmittedGoalProofsApproved = goalSubmittedTasks.length === 0 || goalSubmittedTasks.every((row: any) => {
+                const reviewStatus = String(row?.proof_review_status || '').trim();
+                const reviewRole = String(row?.reviewer_role || row?.proof_reviewed_role || '').trim().toLowerCase();
+                return reviewStatus === 'Approved' && reviewRole === 'manager';
+              });
+              if (!goalProofApproved || !allSubmittedGoalProofsApproved) return null;
+              const goalId = Number(proofReviewGoal.id);
+              const leaderName = String((proofReviewGoal as any)?.delegation || (proofReviewGoal as any)?.leader_name || (proofReviewGoal as any)?.employee_name || 'Leader').trim() || 'Leader';
+              const goalRatings = inlineMemberRatingsByGoal[goalId] || buildInitialRatingsForGoal(goalId);
+              const ratingsLocked = Number(proofReviewGoal.proof_review_rating || 0) >= 1 && Number(proofReviewGoal.proof_review_rating || 0) <= 5 && goalSubmittedTasks.every((row: any) => Number(row.proof_review_rating || 0) >= 1 && Number(row.proof_review_rating || 0) <= 5);
+              const isSaving = inlineMemberRatingsSavingGoalId === goalId;
+
+              return (
+                <aside className="rounded-xl border-2 border-blue-300 dark:border-blue-800/70 bg-blue-50/95 dark:bg-blue-900/30 p-4 space-y-4 lg:col-start-2 lg:row-span-2 lg:sticky lg:top-2">
+                  <div className="flex items-start gap-2 border-b border-blue-200 dark:border-blue-800/60 pb-3">
+                    <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-200 text-xs font-bold">R</span>
+                    <div>
+                      <p className="text-lg font-black text-blue-900 dark:text-blue-100">Rate Team Members</p>
+                      <p className="text-sm text-slate-700 dark:text-slate-300">Set ratings for the leader and every approved member.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">People</p>
+                      <p className="text-2xl font-black text-slate-900 dark:text-slate-100">{goalSubmittedTasks.length + 1}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Scale</p>
+                      <p className="text-2xl font-black text-slate-900 dark:text-slate-100">1-5</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/70 dark:bg-emerald-900/20 p-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{leaderName}</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">Team Leader</p>
+                      </div>
+                      <select
+                        value={Number(goalRatings.leader || 0) > 0 ? Number(goalRatings.leader) : ''}
+                        onChange={(e) => setInlineMemberRating(goalId, 'leader', Number(e.target.value || 0))}
+                        disabled={isSaving || ratingsLocked}
+                        className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold disabled:opacity-60"
+                      >
+                        <option value="">Select</option>
+                        {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r} / 5</option>))}
+                      </select>
+                    </div>
+
+                    {goalSubmittedTasks.map((row: any) => (
+                      <div key={`inline-member-rating-${row.id}`} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{row.member_name || `Member #${row.member_employee_id}`}</p>
+                          <p className="text-xs text-slate-600 dark:text-slate-400">{row.title || 'Assigned task'}</p>
+                        </div>
+                        <select
+                          value={Number(goalRatings[`task-${row.id}`] || 0) > 0 ? Number(goalRatings[`task-${row.id}`]) : ''}
+                          onChange={(e) => setInlineMemberRating(goalId, `task-${row.id}`, Number(e.target.value || 0))}
+                          disabled={isSaving || ratingsLocked}
+                          className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold disabled:opacity-60"
+                        >
+                          <option value="">Select</option>
+                          {[1, 2, 3, 4, 5].map((r) => (<option key={r} value={r}>{r} / 5</option>))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+
+                  {!ratingsLocked && (
+                    <button
+                      onClick={() => void saveInlineMemberRatings(goalId)}
+                      disabled={isSaving}
+                      className="w-full px-4 py-2.5 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                    >
+                      {isSaving ? 'Saving ratings...' : 'Save All Ratings'}
+                    </button>
+                  )}
+                </aside>
               );
             })()}
 
