@@ -3373,7 +3373,7 @@ async function startServer() {
       const effectiveStatus = normalizeGoalStatusFromProgress(normalizedStatus ?? existing.status, normalizedProgress ?? existing.progress);
       const sets: string[] = [];
       const vals: any[] = [];
-      for (const k of ['statement', 'metric', 'target_date', 'title', 'status', 'progress', 'scope', 'department', 'team_name', 'delegation', 'priority', 'quarter', 'frequency', 'leader_id', 'proof_image', 'proof_file_name', 'proof_file_type', 'proof_note', 'proof_submitted_at', 'proof_review_status', 'proof_review_note']) {
+      for (const k of ['statement', 'metric', 'target_date', 'title', 'status', 'progress', 'scope', 'department', 'team_name', 'delegation', 'priority', 'quarter', 'frequency', 'leader_id', 'proof_image', 'proof_file_name', 'proof_file_type', 'proof_note', 'proof_submitted_at']) {
         if (k === 'progress') {
           if (normalizedProgress !== undefined) { sets.push('progress = ?'); vals.push(normalizedProgress); }
           continue;
@@ -3428,6 +3428,9 @@ async function startServer() {
             return res.status(409).json({ error: 'Final goal proof can be approved only after all submitted member proofs are approved by manager' });
           }
         }
+
+        sets.push('proof_review_status = ?');
+        vals.push(reviewedStatus || 'Not Submitted');
 
         sets.push('proof_reviewed_by = ?');
         vals.push(Number(actor?.id || 0) || null);
