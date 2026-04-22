@@ -2274,7 +2274,7 @@ export const CareerDashboard = () => {
                     const taskCurrentRevisionNumber = taskProofHistory.length + 1;
                     const taskCurrentRevisionLabel = taskProofHistory.length > 0 ? `${ordinalLabel(taskCurrentRevisionNumber)} revision` : 'Initial submission';
                     const reviewerRole = String((t as any)?.proof_reviewed_role || (t as any)?.reviewer_role || '').trim().toLowerCase();
-                    const reviewerLabel = reviewerRole.includes('team') ? 'your team leader' : reviewerRole.includes('manager') ? 'your manager' : 'reviewer';
+                    const reviewerLabel = reviewerRole.includes('team') ? 'your team leader' : reviewerRole.includes('manager') ? 'your manager' : 'your team leader or manager';
                     const reviewAttachment = String((t as any)?.proof_review_file_data || '').trim()
                       ? {
                           proof_file_data: String((t as any)?.proof_review_file_data || '').trim(),
@@ -2505,7 +2505,7 @@ export const CareerDashboard = () => {
           const proofPending = reviewStatus === 'Pending Review';
           const proofRejected = reviewStatus === 'Rejected';
           const reviewActorRole = String((t as any)?.proof_reviewed_role || (t as any)?.reviewer_role || '').trim().toLowerCase();
-          const reviewActorLabel = reviewActorRole.includes('team') ? 'your team leader' : reviewActorRole.includes('manager') ? 'your manager' : 'reviewer';
+          const reviewActorLabel = reviewActorRole.includes('team') ? 'your team leader' : reviewActorRole.includes('manager') ? 'your manager' : 'your team leader or manager';
           const reviewAttachment = String((t as any)?.proof_review_file_data || '').trim()
             ? {
                 proof_file_data: String((t as any)?.proof_review_file_data || '').trim(),
