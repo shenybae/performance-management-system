@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { ShieldAlert, Plus, X, Download, Search, FileText, Eye, Archive, Lock } from 'lucide-react';
+import { Plus, X, Download, Search, Lock } from 'lucide-react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
@@ -216,15 +216,6 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
     } catch { window.notify?.('Failed to save disciplinary action', 'error'); }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!(await appConfirm('Archive this record?', { title: 'Archive Record', confirmText: 'Archive', icon: 'archive' }))) return;
-    try {
-      await fetch(`/api/discipline_records/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-      window.notify?.('Record archived', 'success');
-      fetchRecords();
-    } catch { window.notify?.('Failed to archive', 'error'); }
-  };
-
   const toggleViolation = (v: string) => {
     setForm(prev => ({ ...prev, violation_type: prev.violation_type.includes(v) ? prev.violation_type.filter(x => x !== v) : [...prev.violation_type, v] }));
   };
@@ -255,79 +246,6 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
   const mostCommonViolation = pieData.sort((a, b) => b.value - a.value)[0]?.name || '—';
   const mostWarnedEmployee = topEmployees[0]?.name || '—';
   const finalWarnings = records.filter(r => r.warning_level === 'Final').length;
-
-  const [expandedRecord, setExpandedRecord] = useState<number | null>(null);
-  const [search, setSearch] = useState('');
-
-  const filteredRecords = records.filter(r => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      (r.employee_name || '').toLowerCase().includes(q) ||
-      (r.violation_type || '').toLowerCase().includes(q) ||
-      (r.warning_level || '').toLowerCase().includes(q) ||
-      (r.dept || '').toLowerCase().includes(q) ||
-      (r.supervisor || '').toLowerCase().includes(q) ||
-      (r.action_taken || '').toLowerCase().includes(q)
-    );
-  });
-
-  const exportPersonPdf = async (record: any) => {
-    if (!(await appConfirm('Export this disciplinary report as PDF?', { title: 'Export Disciplinary PDF', confirmText: 'Export', icon: 'export' }))) return;
-    const empName = record.employee_name || `Employee #${record.employee_id}`;
-    const personRecords = records.filter(r => r.employee_id === record.employee_id);
-    const w = window.open('', '_blank');
-    if (!w) { (window as any).notify?.('Please allow popups to export PDF', 'error'); return; }
-    const sigBlock = (src: string | null, label: string, date: string | null, printedName?: string) => sigBlockHtml(src, label, date, printedName, 0);
-    const rows = personRecords.map((r: any) => `
-      <div style="border:1px solid #ddd;border-radius:8px;padding:20px;margin-bottom:20px;page-break-inside:avoid;">
-        <table style="width:100%;font-size:13px;border-collapse:collapse;">
-          <tr><td style="padding:4px 8px;font-weight:bold;width:180px;color:#555;">Date of Warning</td><td style="padding:4px 8px;">${r.date_of_warning || '—'}</td><td style="padding:4px 8px;font-weight:bold;width:180px;color:#555;">Warning Level</td><td style="padding:4px 8px;"><span style="background:${r.warning_level === 'Final' ? '#fecaca' : r.warning_level === '3rd' ? '#fed7aa' : r.warning_level === '2nd' ? '#fef3c7' : '#ccfbf1'};color:${r.warning_level === 'Final' ? '#b91c1c' : r.warning_level === '3rd' ? '#c2410c' : r.warning_level === '2nd' ? '#b45309' : '#0f766e'};padding:2px 10px;border-radius:12px;font-weight:bold;font-size:11px;text-transform:uppercase;">${r.warning_level}</span></td></tr>
-          <tr><td style="padding:4px 8px;font-weight:bold;color:#555;">Violation Type</td><td style="padding:4px 8px;">${r.violation_type || '—'}</td><td style="padding:4px 8px;font-weight:bold;color:#555;">Violation Date</td><td style="padding:4px 8px;">${r.violation_date || '—'}</td></tr>
-          <tr><td style="padding:4px 8px;font-weight:bold;color:#555;">Time</td><td style="padding:4px 8px;">${r.violation_time || '—'}</td><td style="padding:4px 8px;font-weight:bold;color:#555;">Place</td><td style="padding:4px 8px;">${r.violation_place || '—'}</td></tr>
-          <tr><td style="padding:4px 8px;font-weight:bold;color:#555;">Supervisor</td><td style="padding:4px 8px;">${r.supervisor || '—'}</td><td style="padding:4px 8px;font-weight:bold;color:#555;">Approved By</td><td style="padding:4px 8px;">${r.approved_by_name || '—'}${r.approved_by_title ? ', ' + r.approved_by_title : ''}</td></tr>
-        </table>
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee;">
-          <p style="font-weight:bold;color:#555;font-size:12px;text-transform:uppercase;margin-bottom:4px;">Employer Statement</p>
-          <p style="font-size:13px;color:#333;white-space:pre-wrap;">${r.employer_statement || '—'}</p>
-        </div>
-        <div style="margin-top:8px;">
-          <p style="font-weight:bold;color:#555;font-size:12px;text-transform:uppercase;margin-bottom:4px;">Employee Statement</p>
-          <p style="font-size:13px;color:#333;white-space:pre-wrap;">${r.employee_statement || '—'}</p>
-        </div>
-        <div style="margin-top:8px;">
-          <p style="font-weight:bold;color:#555;font-size:12px;text-transform:uppercase;margin-bottom:4px;">Action Taken</p>
-          <p style="font-size:13px;color:#333;white-space:pre-wrap;">${r.action_taken || '—'}</p>
-        </div>
-        ${(r.prev_first_date || r.prev_second_date || r.prev_third_date) ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee;"><p style="font-weight:bold;color:#555;font-size:12px;text-transform:uppercase;margin-bottom:4px;">Previous Warnings</p><div style="display:flex;gap:12px;font-size:12px;">${r.prev_first_date ? '<div style="border:1px solid #ddd;padding:6px 10px;border-radius:6px;"><strong>1st</strong> — ' + r.prev_first_date + ' (' + (r.prev_first_type || '—') + ')</div>' : ''}${r.prev_second_date ? '<div style="border:1px solid #ddd;padding:6px 10px;border-radius:6px;"><strong>2nd</strong> — ' + r.prev_second_date + ' (' + (r.prev_second_type || '—') + ')</div>' : ''}${r.prev_third_date ? '<div style="border:1px solid #ddd;padding:6px 10px;border-radius:6px;"><strong>3rd</strong> — ' + r.prev_third_date + ' (' + (r.prev_third_type || '—') + ')</div>' : ''}</div></div>` : ''}
-        <div style="margin-top:16px;padding-top:16px;border-top:1px solid #eee;">
-          <p style="font-size:11px;color:#666;font-style:italic;margin:0 0 12px;">"I have read this warning decision. My signature does not necessarily indicate agreement."</p>
-          <div style="display:flex;gap:8px;overflow:hidden;">
-            ${sigBlock(r.employee_signature, 'Employee Signature', r.employee_signature_date, r.employee_name || '')}
-            ${sigBlock(r.preparer_signature, 'Preparer Signature', r.preparer_signature_date, r.approved_by_name || '')}
-            ${sigBlock(r.supervisor_signature, 'Supervisor Signature', r.supervisor_signature_date, r.supervisor || '')}
-          </div>
-        </div>
-      </div>
-    `).join('');
-    w.document.write(`<!DOCTYPE html><html><head><title>Disciplinary Report — ${empName}</title><style>@media print{body{margin:0;padding:20px;}}</style></head><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:900px;margin:0 auto;padding:30px;color:#1e293b;">
-      <div style="text-align:center;margin-bottom:24px;border-bottom:2px solid #0d9488;padding-bottom:16px;">
-        <h1 style="margin:0;font-size:22px;color:#0d9488;">Disciplinary Action Report</h1>
-        <p style="margin:4px 0 0;font-size:14px;color:#64748b;">${empName} — ${personRecords.length} record(s)</p>
-      </div>
-      <div style="display:flex;gap:16px;margin-bottom:20px;font-size:13px;">
-        <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;"><strong>Department:</strong> ${personRecords[0]?.dept || '—'}</div>
-        <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;"><strong>Position:</strong> ${(employees.find(e => e.id === record.employee_id) || {} as any).position || '—'}</div>
-      </div>
-      ${rows}
-      <div style="text-align:center;margin-top:30px;font-size:11px;color:#94a3b8;">Generated on ${new Date().toLocaleDateString()} — Performance Management System</div>
-    </body></html>`);
-    w.document.close();
-    setTimeout(() => {
-      w.print();
-      try { fetch('/api/activity', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ action: 'export_pdf', description: `Disciplinary PDF — ${empName}`, entity: 'discipline_record', entity_id: record.employee_id || null, meta: { source: 'DisciplinaryLog', rows: personRecords.length } }) }).catch(() => {}); } catch {};
-    }, 400);
-  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -584,168 +502,6 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
           </div>
         </>
       )}
-
-      {/* Full Records Table */}
-      <Card>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">All Disciplinary Records</h3>
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-            <input
-              type="text"
-              placeholder="Search records..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/50 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            />
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1400px] text-sm">
-            <thead>
-              <tr className="border-b dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                <th className="text-left py-2 pr-4">Employee</th>
-                <th className="text-left py-2 pr-4">Dept</th>
-                <th className="text-left py-2 pr-4">Warning</th>
-                <th className="text-left py-2 pr-4">Violation Type</th>
-                <th className="text-left py-2 pr-4">Violation Date</th>
-                <th className="text-left py-2 pr-4">Place</th>
-                <th className="text-left py-2 pr-4">Supervisor</th>
-                <th className="text-left py-2 pr-4">Approved By</th>
-                <th className="text-left py-2 pr-4">Action Taken</th>
-                <th className="text-left py-2 pr-4">Signatures</th>
-                <th className="text-left py-2 pr-4">Acknowledged</th>
-                <th className="text-right py-2 pr-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRecords.map((d: any) => (
-                  <>
-                    <tr
-                      key={d.id}
-                      className="border-b dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
-                      onClick={() => setExpandedRecord(expandedRecord === d.id ? null : d.id)}
-                    >
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <ShieldAlert size={14} className="text-red-400 shrink-0" />
-                          <span
-                            className="font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[180px]"
-                            title={d.employee_name || `#${d.employee_id}`}
-                          >
-                            {d.employee_name || `#${d.employee_id}`}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <div className="max-w-[70px] truncate text-slate-500 dark:text-slate-400" title={d.dept || undefined}>{d.dept || '—'}</div>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-bold ${
-                          d.warning_level === 'Final' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
-                          d.warning_level === '3rd'   ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' :
-                          d.warning_level === '2nd'   ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' :
-                                                        'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400'
-                        }`}>{d.warning_level}</span>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <div className="max-w-[130px] truncate text-slate-600 dark:text-slate-300" title={d.violation_type || undefined}>{d.violation_type || '—'}</div>
-                      </td>
-                      <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{d.violation_date || '—'}</td>
-                      <td className="py-3 pr-4">
-                        <div className="max-w-[90px] truncate text-slate-500 dark:text-slate-400" title={d.violation_place || undefined}>{d.violation_place || '—'}</div>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <div className="max-w-[110px] truncate text-slate-500 dark:text-slate-400" title={d.supervisor || undefined}>{d.supervisor || '—'}</div>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <div className="max-w-[130px] truncate text-slate-500 dark:text-slate-400" title={d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : undefined}>{d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : '—'}</div>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <div className="max-w-[130px] truncate text-slate-600 dark:text-slate-300" title={d.action_taken || undefined}>{d.action_taken || '—'}</div>
-                      </td>
-                      <td className="py-3 pr-4 min-w-[130px]">
-                        <div className="flex flex-row gap-1 min-w-[120px]">
-                          {d.employee_signature && <img src={d.employee_signature} alt="emp" className="h-6 w-10 object-contain rounded border border-slate-200 dark:border-slate-700" title="Employee Signature" />}
-                          {d.preparer_signature && <img src={d.preparer_signature} alt="prep" className="h-6 w-10 object-contain rounded border border-slate-200 dark:border-slate-700" title="Preparer Signature" />}
-                          {d.supervisor_signature && <img src={d.supervisor_signature} alt="sup" className="h-6 w-10 object-contain rounded border border-slate-200 dark:border-slate-700" title="Supervisor Signature" />}
-                          {!d.employee_signature && !d.preparer_signature && !d.supervisor_signature && <span className="text-slate-400 text-xs">—</span>}
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4 whitespace-nowrap min-w-[140px]">
-                        {(() => {
-                          const signedCount = [d.employee_signature, d.preparer_signature, d.supervisor_signature].filter(Boolean).length;
-                          if (signedCount === 3) return <span className="inline-flex items-center justify-center min-w-[128px] text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-700 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Acknowledged</span>;
-                          if (signedCount > 0) return <span className="inline-flex items-center justify-center min-w-[128px] text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Partially Signed</span>;
-                          return <span className="inline-flex items-center justify-center min-w-[128px] text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">Pending</span>;
-                        })()}
-                      </td>
-                      <td className="py-3 text-right whitespace-nowrap min-w-[110px]">
-                        <div className="flex justify-end gap-1.5">
-                          <button onClick={e => { e.stopPropagation(); setExpandedRecord(expandedRecord === d.id ? null : d.id); }} className="text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 p-1" title="View Record"><Eye size={14} /></button>
-                          <button onClick={e => { e.stopPropagation(); exportPersonPdf(d); }} className="text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 p-1" title="Export PDF Report"><FileText size={14} /></button>
-                          <button onClick={e => { e.stopPropagation(); handleDelete(d.id); }} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive Record"><Archive size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                    {expandedRecord === d.id && (
-                      <tr key={`${d.id}-expanded`} className="bg-slate-50 dark:bg-slate-800/40">
-                        <td colSpan={12} className="px-4 py-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-                            <div className="space-y-2">
-                              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Employer Statement</p>
-                              <p className="text-slate-700 dark:text-slate-200 italic">{d.employer_statement || '—'}</p>
-                              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-3">Employee Statement</p>
-                              <p className="text-slate-700 dark:text-slate-200 italic">{d.employee_statement || '—'}</p>
-                              {(d.prev_first_date || d.prev_second_date || d.prev_third_date) && (
-                                <>
-                                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-3">Previous Warnings</p>
-                                  <div className="grid grid-cols-3 gap-2 text-xs text-slate-600 dark:text-slate-300">
-                                    {[['1st', d.prev_first_date, d.prev_first_type], ['2nd', d.prev_second_date, d.prev_second_type], ['3rd', d.prev_third_date, d.prev_third_type]]
-                                      .filter(([, date]) => date)
-                                      .map(([label, date, type]) => (
-                                        <div key={label as string} className="p-2 border border-slate-200 dark:border-slate-700 rounded-lg">
-                                          <span className="font-bold">{label} Warning</span><br />{date}<br /><span className="text-slate-400">{type || '—'}</span>
-                                        </div>
-                                      ))}
-                                  </div>
-                                </>
-                              )}
-                              {d.copy_distribution && (
-                                <>
-                                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-3">Copy Distribution</p>
-                                  <p className="text-slate-600 dark:text-slate-300">{d.copy_distribution}</p>
-                                </>
-                              )}
-                            </div>
-                            <div className="space-y-3">
-                              {[['Employee Signature', d.employee_signature, d.employee_signature_date], ['Preparer Signature', d.preparer_signature, d.preparer_signature_date], ["Supervisor's Signature", d.supervisor_signature, d.supervisor_signature_date]].map(([label, sig, date]) => (
-                                <div key={label as string}>
-                                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-                                  {sig ? (
-                                    <div className="flex items-end gap-3">
-                                      <img src={sig as string} alt={label as string} className="max-h-12 rounded border border-slate-200 dark:border-slate-700 bg-white" />
-                                      {date && <span className="text-xs text-slate-500 dark:text-slate-400">{date as string}</span>}
-                                    </div>
-                                  ) : <span className="text-xs text-slate-400">Not signed</span>}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                ))}
-              {filteredRecords.length === 0 && (
-                <tr>
-                  <td colSpan={12} className="py-10 text-center text-slate-400">{search ? 'No records match your search.' : 'No disciplinary records found.'}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
     </motion.div>
   );
 };
