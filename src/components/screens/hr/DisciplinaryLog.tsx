@@ -246,6 +246,20 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
   const mostCommonViolation = pieData.sort((a, b) => b.value - a.value)[0]?.name || '—';
   const mostWarnedEmployee = topEmployees[0]?.name || '—';
   const finalWarnings = records.filter(r => r.warning_level === 'Final').length;
+  const [search, setSearch] = useState('');
+
+  const filteredRecords = useMemo(() => {
+    if (!search.trim()) return records;
+    const q = search.toLowerCase();
+    return records.filter((r: any) => (
+      (r.employee_name || '').toLowerCase().includes(q) ||
+      (r.violation_type || '').toLowerCase().includes(q) ||
+      (r.warning_level || '').toLowerCase().includes(q) ||
+      (r.dept || '').toLowerCase().includes(q) ||
+      (r.supervisor || '').toLowerCase().includes(q) ||
+      (r.action_taken || '').toLowerCase().includes(q)
+    ));
+  }, [records, search]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -501,6 +515,72 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
             </Card>
           </div>
         </>
+      )}
+
+      {!showForm && (
+        <Card>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">All Disciplinary Records</h3>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <input
+                type="text"
+                placeholder="Search records..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/50 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-sm">
+              <thead>
+                <tr className="border-b dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="text-left py-2 pr-4">Employee</th>
+                  <th className="text-left py-2 pr-4">Dept</th>
+                  <th className="text-left py-2 pr-4">Warning</th>
+                  <th className="text-left py-2 pr-4">Violation Type</th>
+                  <th className="text-left py-2 pr-4">Violation Date</th>
+                  <th className="text-left py-2 pr-4">Place</th>
+                  <th className="text-left py-2 pr-4">Supervisor</th>
+                  <th className="text-left py-2 pr-4">Approved By</th>
+                  <th className="text-left py-2 pr-4">Action Taken</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRecords.map((d: any) => (
+                  <tr key={d.id} className="border-b dark:border-slate-800">
+                    <td className="py-3 pr-4 font-semibold text-slate-800 dark:text-slate-100">{d.employee_name || `#${d.employee_id}`}</td>
+                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.dept || '—'}</td>
+                    <td className="py-3 pr-4">
+                      <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-bold ${
+                        d.warning_level === 'Final' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
+                        d.warning_level === '3rd' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' :
+                        d.warning_level === '2nd' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' :
+                        'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400'
+                      }`}
+                      >
+                        {d.warning_level || '—'}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-300">{d.violation_type || '—'}</td>
+                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.violation_date || '—'}</td>
+                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.violation_place || '—'}</td>
+                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.supervisor || '—'}</td>
+                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : '—'}</td>
+                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-300">{d.action_taken || '—'}</td>
+                  </tr>
+                ))}
+                {filteredRecords.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="py-10 text-center text-slate-400">{search ? 'No records match your search.' : 'No disciplinary records found.'}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </motion.div>
   );
