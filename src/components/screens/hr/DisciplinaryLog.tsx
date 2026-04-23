@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { ShieldAlert, Plus, X, Download, Search, FileText, Eye, Archive } from 'lucide-react';
+import { ShieldAlert, Plus, X, Download, Search, FileText, Eye, Archive, Lock } from 'lucide-react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
@@ -68,18 +68,22 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
     return byName?.name || '';
   };
 
-  const supervisorOptions = useMemo(
-    () => scopedEmployees.filter((e) => String(e.id) !== String(form.employee_id || '')),
-    [scopedEmployees, form.employee_id]
-  );
+  const derivedSupervisorName = useMemo(() => {
+    const employeeDept = String(selectedEmployee?.dept || managerDept || '').trim();
+    const deptSupervisor = findDepartmentSupervisorName(employeeDept);
+    if (deptSupervisor) return deptSupervisor;
 
-  const supervisorNameOptions = useMemo(() => {
-    const names = supervisorOptions.map((e) => e.name).filter(Boolean);
-    if (currentManagerName && !names.some((n) => n.toLowerCase() === currentManagerName.toLowerCase())) {
-      names.unshift(currentManagerName);
+    const employeeManager = String((selectedEmployee as any)?.manager || '').trim();
+    if (employeeManager) return employeeManager;
+
+    const managerId = Number((selectedEmployee as any)?.manager_id || 0);
+    if (managerId > 0) {
+      const managerPerson = scopedEmployees.find((e) => e.id === managerId) || employees.find((e) => e.id === managerId);
+      if (managerPerson?.name) return managerPerson.name;
     }
-    return names.map((name) => ({ value: name, label: name }));
-  }, [supervisorOptions, currentManagerName]);
+
+    return currentManagerName || '';
+  }, [selectedEmployee, managerDept, scopedEmployees, employees, currentManagerName]);
 
   const trimText = (value: string) => value.trim();
 
@@ -87,11 +91,9 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
 
   useEffect(() => {
     if (!showForm) return;
-    if (!isManager) return;
-    const defaultSupervisor = findDepartmentSupervisorName(managerDept) || currentManagerName;
-    if (!defaultSupervisor) return;
-    setForm((prev) => (prev.supervisor ? prev : { ...prev, supervisor: defaultSupervisor }));
-  }, [showForm, isManager, managerDept, currentManagerName, scopedEmployees]);
+    if (!derivedSupervisorName) return;
+    setForm((prev) => (prev.supervisor === derivedSupervisorName ? prev : { ...prev, supervisor: derivedSupervisorName }));
+  }, [showForm, derivedSupervisorName]);
 
   const fetchRecords = async () => {
     try {
@@ -354,16 +356,7 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
                     options={scopedEmployees.map(e => ({ value: String(e.id), label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                     value={form.employee_id}
                     onChange={v => {
-                      const emp = scopedEmployees.find(e => String(e.id) === String(v));
-                      const fallbackSupervisor = String(currentUser?.full_name || currentUser?.username || '').trim();
-                      const deptSupervisor = findDepartmentSupervisorName(String(emp?.dept || managerDept || ''));
-                      let supervisorName = deptSupervisor || fallbackSupervisor;
-                      if (!supervisorName && emp?.manager) supervisorName = String(emp.manager);
-                      else if (!supervisorName && (emp as any)?.manager_id) {
-                        const mgr = scopedEmployees.find(e => e.id === (emp as any).manager_id) || employees.find(e => e.id === (emp as any).manager_id);
-                        if (mgr?.name) supervisorName = mgr.name;
-                      }
-                      setForm({ ...form, employee_id: String(v), supervisor: supervisorName });
+                      setForm((prev) => ({ ...prev, employee_id: String(v) }));
                     }}
                     placeholder="Select Employee..."
                     dropdownVariant="pills-horizontal"
@@ -379,13 +372,17 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Supervisor</label>
-                  <SearchableSelect
-                    options={supervisorNameOptions}
-                    value={form.supervisor}
-                    onChange={(name: any) => setForm({ ...form, supervisor: String(name || '') })}
-                    placeholder="Select supervisor..."
-                    dropdownVariant="pills-horizontal"
-                  />
+                  <div className="relative">
+                    <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={form.supervisor || derivedSupervisorName || 'No supervisor mapped for this department'}
+                      readOnly
+                      disabled
+                      className="w-full pl-9 pr-3 p-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-300"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Automatically assigned from employee department.</p>
                 </div>
               </div>
 
