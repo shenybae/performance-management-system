@@ -2,7 +2,7 @@ const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 
 const db = new Database('talentflow_demo.db');
-const row = db.prepare('SELECT * FROM users WHERE email = ?').get('hr_admin@example.com');
+const row = db.prepare('SELECT * FROM users WHERE email = ?').get('hr_admin@maptech.com');
 console.log('user row:', row);
 if (!row) {
   console.error('User not found');

@@ -7,6 +7,13 @@ import { Modal } from '../../common/Modal';
 import { Eye, EyeOff, AlertCircle, CheckCircle, Archive } from 'lucide-react';
 import { appConfirm } from '../../../utils/appDialog';
 
+const ACCOUNT_EMAIL_DOMAIN = 'maptech.com';
+
+const isAllowedAccountEmail = (email: string) => {
+  const normalized = (email || '').toString().trim().toLowerCase();
+  return normalized.endsWith(`@${ACCOUNT_EMAIL_DOMAIN}`);
+};
+
 const pwStrength = (pw: string) => {
   if (!pw) return null;
   let score = 0;
@@ -160,6 +167,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     const errs: Record<string, string> = {};
     if (!email) errs.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'Enter a valid email address';
+    else if (!isAllowedAccountEmail(email)) errs.email = `Email must use @${ACCOUNT_EMAIL_DOMAIN}`;
     if (fullName && fullName.length > 120) errs.full_name = 'Full name must be 120 characters or less';
     if (!createPassword) errs.password = 'Password is required';
     else if (createPassword.length < 8) errs.password = 'Minimum 8 characters';
@@ -234,9 +242,18 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
       const headers: any = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const normalizedRole = normalizeRoleValue(modalRole || editingUser.role || '');
+      const normalizedModalEmail = modalEmail.trim().toLowerCase();
+      if (normalizedModalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedModalEmail)) {
+        (window as any).notify('Enter a valid email address', 'error');
+        return;
+      }
+      if (normalizedModalEmail && !isAllowedAccountEmail(normalizedModalEmail)) {
+        (window as any).notify(`Email must use @${ACCOUNT_EMAIL_DOMAIN}`, 'error');
+        return;
+      }
       const body: any = {
         full_name: modalName.trim() || null,
-        email: modalEmail.trim() || null,
+        email: normalizedModalEmail || null,
       };
       if (normalizedRole) body.role = normalizedRole;
       const canEditMeta = normalizedRole === 'HR' || normalizedRole === 'Manager';
@@ -268,7 +285,8 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</label>
-              <input name="email" type="email" className={`w-full mt-1 p-2 bg-white dark:bg-black border ${createErrors.email ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} placeholder="e.g. jane@company.com" maxLength={254} autoComplete="email" required />
+              <input name="email" type="email" className={`w-full mt-1 p-2 bg-white dark:bg-black border ${createErrors.email ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} placeholder="e.g. jane@maptech.com" maxLength={254} autoComplete="email" required />
+              <p className="mt-1 text-[11px] text-slate-400">Only @maptech.com emails are allowed.</p>
               {createErrors.email && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{createErrors.email}</p>}
             </div>
             <div>

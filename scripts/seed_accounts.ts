@@ -136,7 +136,7 @@ async function seed() {
 
     const hrAccount = {
       username: `hr.${slug}`,
-      email: `hr.${slug}@example.com`,
+      email: `hr.${slug}@maptech.com`,
       password: `Hr.${slug.replace(/\./g, '')}@123`,
       role: 'HR' as const,
       full_name: hrName,
@@ -147,7 +147,7 @@ async function seed() {
 
     const supervisorAccount = {
       username: `supervisor.${slug}`,
-      email: `supervisor.${slug}@example.com`,
+      email: `supervisor.${slug}@maptech.com`,
       password: `Sup.${slug.replace(/\./g, '')}@123`,
       role: 'Employee' as const,
       full_name: supervisorName,

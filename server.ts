@@ -259,6 +259,13 @@ function escapeRegExp(value: string) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const ALLOWED_ACCOUNT_EMAIL_DOMAIN = 'maptech.com';
+
+function isAllowedAccountEmailDomain(email: string) {
+  const normalized = String(email || '').trim().toLowerCase();
+  return normalized.endsWith(`@${ALLOWED_ACCOUNT_EMAIL_DOMAIN}`);
+}
+
 function parseDisplayNameFromEmail(value: any) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return '';
@@ -1629,10 +1636,10 @@ async function initDb() {
       if (janeId) await query("UPDATE employees SET manager_id = 0 WHERE id = ?", [janeId]);
 
       // Create user accounts linked to employees (demo passwords)
-      await query("INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, 'Employee', ?)", ['employee_john', 'john.doe@example.com', hash('demo_employee_pass'), johnId]);
-      await query("INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, 'Employee', ?)", ['employee_jane', 'jane.smith@example.com', hash('demo_employee_pass'), janeId]);
-      await query("INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, 'Manager', NULL)", ['manager_bob', 'manager.bob@example.com', hash('demo_manager_pass')]);
-      await query("INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, 'HR', NULL)", ['hr_admin', 'hr_admin@example.com', hash('demo_hr_pass')]);
+      await query("INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, 'Employee', ?)", ['employee_john', 'john.doe@maptech.com', hash('demo_employee_pass'), johnId]);
+      await query("INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, 'Employee', ?)", ['employee_jane', 'jane.smith@maptech.com', hash('demo_employee_pass'), janeId]);
+      await query("INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, 'Manager', NULL)", ['manager_bob', 'manager.bob@maptech.com', hash('demo_manager_pass')]);
+      await query("INSERT INTO users (username, email, password, role, employee_id) VALUES (?, ?, ?, 'HR', NULL)", ['hr_admin', 'hr_admin@maptech.com', hash('demo_hr_pass')]);
 
       // Ensure demo accounts have human-friendly full_name values
       await query("UPDATE users SET full_name = ? WHERE username = ?", ['John Doe', 'employee_john']);
@@ -1663,10 +1670,10 @@ async function initDb() {
       }
 
       console.log("Demo accounts created:");
-      console.log("  john.doe@example.com / demo_employee_pass  â†’ Employee (John Doe)");
-      console.log("  jane.smith@example.com / demo_employee_pass  â†’ Employee (Jane Smith)");
-      console.log("  manager.bob@example.com / demo_manager_pass  â†’ Manager");
-      console.log("  hr_admin@example.com / demo_hr_pass  â†’ HR");
+      console.log("  john.doe@maptech.com / demo_employee_pass  â†’ Employee (John Doe)");
+      console.log("  jane.smith@maptech.com / demo_employee_pass  â†’ Employee (Jane Smith)");
+      console.log("  manager.bob@maptech.com / demo_manager_pass  â†’ Manager");
+      console.log("  hr_admin@maptech.com / demo_hr_pass  â†’ HR");
     }
 
     // Ensure demo accounts always have full_name set (handles databases created before full_name migration)
@@ -1800,7 +1807,7 @@ async function initDb() {
         await ensureDepartment(dept);
 
         const managerUsername = `manager_${deptSlug}`;
-        const managerEmail = `manager.${deptSlug}@example.com`;
+        const managerEmail = `manager.${deptSlug}@maptech.com`;
         const managerFullName = `${deptLabel} Manager`;
         const managerId = await ensureUserAccount({
           username: managerUsername,
@@ -1814,7 +1821,7 @@ async function initDb() {
         });
 
         const hrUsername = `hr_${deptSlug}`;
-        const hrEmail = `hr.${deptSlug}@example.com`;
+        const hrEmail = `hr.${deptSlug}@maptech.com`;
         const hrFullName = `${deptLabel} HR`;
         await ensureUserAccount({
           username: hrUsername,
@@ -1834,7 +1841,7 @@ async function initDb() {
 
         await ensureUserAccount({
           username: `employee_${deptSlug}_a`,
-          email: `employee.${deptSlug}.a@example.com`,
+          email: `employee.${deptSlug}.a@maptech.com`,
           password: 'demo_employee_pass',
           role: 'Employee',
           fullName: empAName,
@@ -1844,7 +1851,7 @@ async function initDb() {
         });
         await ensureUserAccount({
           username: `employee_${deptSlug}_b`,
-          email: `employee.${deptSlug}.b@example.com`,
+          email: `employee.${deptSlug}.b@maptech.com`,
           password: 'demo_employee_pass',
           role: 'Employee',
           fullName: empBName,
@@ -1855,7 +1862,7 @@ async function initDb() {
       }
 
       // Transfer department ownership to the new manager accounts and stop using legacy manager_bob.
-      const legacyMgrRows = await query("SELECT id FROM users WHERE username = 'manager_bob' OR LOWER(email) = LOWER('manager.bob@example.com') LIMIT 1") as any[];
+      const legacyMgrRows = await query("SELECT id FROM users WHERE username = 'manager_bob' OR LOWER(email) = LOWER('manager.bob@maptech.com') LIMIT 1") as any[];
       const legacyManagerId = Number(legacyMgrRows?.[0]?.id || 0);
 
       for (const dept of DEPARTMENT_SEED_LIST) {
@@ -1864,7 +1871,7 @@ async function initDb() {
 
         const managerRows = await query(
           "SELECT id FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?) LIMIT 1",
-          [`manager_${deptSlug}`, `manager.${deptSlug}@example.com`]
+          [`manager_${deptSlug}`, `manager.${deptSlug}@maptech.com`]
         ) as any[];
         const managerUserId = Number(managerRows?.[0]?.id || 0);
         if (!managerUserId) continue;
@@ -1887,7 +1894,7 @@ async function initDb() {
 
         // Ensure supervisor account is linked to the supervisor employee record and scoped to the department.
         const supervisorUsername = `supervisor_${deptSlug}`;
-        const supervisorEmail = `supervisor.${deptSlug}@example.com`;
+        const supervisorEmail = `supervisor.${deptSlug}@maptech.com`;
         const supervisorRows = await query(
           "SELECT id FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?) OR LOWER(TRIM(COALESCE(full_name, ''))) = LOWER(TRIM(?)) LIMIT 1",
           [supervisorUsername, supervisorEmail, supervisorName]
@@ -2422,6 +2429,7 @@ async function startServer() {
       const normalizedDept = typeof dept === 'string' ? dept.trim() : '';
       const requestedUsername = typeof username === 'string' ? username.trim() : '';
       if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return res.status(400).json({ error: 'Invalid email format' });
+      if (normalizedEmail && !isAllowedAccountEmailDomain(normalizedEmail)) return res.status(400).json({ error: `Email must use @${ALLOWED_ACCOUNT_EMAIL_DOMAIN}` });
       if (typeof password !== 'string' || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
       if (!/[A-Z]/.test(password)) return res.status(400).json({ error: 'Password must contain an uppercase letter' });
       if (!/[0-9]/.test(password)) return res.status(400).json({ error: 'Password must contain a number' });
@@ -2544,6 +2552,9 @@ async function startServer() {
         const normalizedEmail = String(email || '').trim().toLowerCase();
         if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
           return res.status(400).json({ error: 'Invalid email format' });
+        }
+        if (normalizedEmail && !isAllowedAccountEmailDomain(normalizedEmail)) {
+          return res.status(400).json({ error: `Email must use @${ALLOWED_ACCOUNT_EMAIL_DOMAIN}` });
         }
         sets.push('email = ?');
         vals.push(normalizedEmail || null);
@@ -2687,7 +2698,17 @@ async function startServer() {
       if (employee_name !== undefined) { sets.push('name = ?'); vals.push(employee_name || null); }
       if (position !== undefined) { sets.push('position = ?'); vals.push(position || null); }
       if (dept !== undefined) { sets.push('dept = ?'); vals.push(dept || null); }
-      if (email !== undefined) { sets.push('email = ?'); vals.push(email || null); }
+      if (email !== undefined) {
+        const normalizedEmail = String(email || '').trim().toLowerCase();
+        if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+          return res.status(400).json({ error: 'Invalid email format' });
+        }
+        if (normalizedEmail && !isAllowedAccountEmailDomain(normalizedEmail)) {
+          return res.status(400).json({ error: `Email must use @${ALLOWED_ACCOUNT_EMAIL_DOMAIN}` });
+        }
+        sets.push('email = ?');
+        vals.push(normalizedEmail || null);
+      }
       if (phone !== undefined) { sets.push('phone = ?'); vals.push(phone || null); }
       if (address !== undefined) { sets.push('address = ?'); vals.push(address || null); }
       if (sets.length > 0) {

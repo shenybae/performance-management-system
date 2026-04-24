@@ -1,7 +1,7 @@
 (async () => {
   try {
     const base = 'http://localhost:3000';
-    const creds = { email: 'john.doe@example.com', password: 'demo_employee_pass' };
+    const creds = { email: 'john.doe@maptech.com', password: 'demo_employee_pass' };
 
     async function doLogin() {
       const res = await fetch(`${base}/api/login`, {

@@ -54,11 +54,11 @@ async function main() {
 }
 
 const seedAccounts = [
-  { username: 'hr_admin', email: 'hr_admin@example.com', password: 'demo_hr_pass', role: 'HR' },
-  { username: 'manager_bob', email: 'manager.bob@example.com', password: 'demo_manager_pass', role: 'Manager' },
+  { username: 'hr_admin', email: 'hr_admin@maptech.com', password: 'demo_hr_pass', role: 'HR' },
+  { username: 'manager_bob', email: 'manager.bob@maptech.com', password: 'demo_manager_pass', role: 'Manager' },
   {
     username: 'employee_john',
-    email: 'john.doe@example.com',
+    email: 'john.doe@maptech.com',
     password: 'demo_employee_pass',
     role: 'Employee',
     employee_profile: {

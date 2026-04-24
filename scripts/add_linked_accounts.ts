@@ -124,7 +124,7 @@ export async function createLinkedAccounts() {
     const hrPassword = `Hr.${slug.replace(/\./g, '')}@123`;
     const hrId = await ensureUser({
       username: `hr.lead.${slug}`,
-      email: `hr.lead.${slug}@example.com`,
+      email: `hr.lead.${slug}@maptech.com`,
       password: hrPassword,
       role: 'HR',
       full_name: hrName,
@@ -134,7 +134,7 @@ export async function createLinkedAccounts() {
       linked_user_id: null,
     });
     generated.push({
-      email: `hr.lead.${slug}@example.com`,
+      email: `hr.lead.${slug}@maptech.com`,
       password: hrPassword,
       role: 'HR',
       dept,
@@ -147,7 +147,7 @@ export async function createLinkedAccounts() {
     const managerPassword = `Mgr.${slug.replace(/\./g, '')}@123`;
     const managerId = await ensureUser({
       username: `manager.${slug}`,
-      email: `manager.${slug}@example.com`,
+      email: `manager.${slug}@maptech.com`,
       password: managerPassword,
       role: 'Manager',
       full_name: managerName,
@@ -157,7 +157,7 @@ export async function createLinkedAccounts() {
       linked_user_id: hrId, // Manager linked to HR user
     });
     generated.push({
-      email: `manager.${slug}@example.com`,
+      email: `manager.${slug}@maptech.com`,
       password: managerPassword,
       role: 'Manager',
       dept,
@@ -171,7 +171,7 @@ export async function createLinkedAccounts() {
     const supervisorPassword = `Sup.${slug.replace(/\./g, '')}@123`;
     const supervisorId = await ensureUser({
       username: `supervisor.${slug}`,
-      email: `supervisor.${slug}@example.com`,
+      email: `supervisor.${slug}@maptech.com`,
       password: supervisorPassword,
       role: 'Employee', // Supervisors are typically Employees with supervisor flag
       full_name: supervisorName,
@@ -181,7 +181,7 @@ export async function createLinkedAccounts() {
       linked_user_id: managerId, // Supervisor linked to Manager user
     });
     generated.push({
-      email: `supervisor.${slug}@example.com`,
+      email: `supervisor.${slug}@maptech.com`,
       password: supervisorPassword,
       role: 'Employee (Supervisor)',
       dept,
@@ -195,7 +195,7 @@ export async function createLinkedAccounts() {
     const employeePassword = `Emp.${slug.replace(/\./g, '')}@123`;
     await ensureUser({
       username: `employee.${slug}`,
-      email: `employee.${slug}@example.com`,
+      email: `employee.${slug}@maptech.com`,
       password: employeePassword,
       role: 'Employee',
       full_name: employeeName,
@@ -205,7 +205,7 @@ export async function createLinkedAccounts() {
       linked_user_id: supervisorId, // Employee linked to Supervisor
     });
     generated.push({
-      email: `employee.${slug}@example.com`,
+      email: `employee.${slug}@maptech.com`,
       password: employeePassword,
       role: 'Employee',
       dept,

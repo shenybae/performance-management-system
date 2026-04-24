@@ -4,9 +4,9 @@ const bcrypt = require('bcryptjs');
 const db = new Database('talentflow_demo.db');
 
 const updates = [
-  { email: 'hr_admin@example.com', password: 'demo_hr_pass' },
-  { email: 'manager.bob@example.com', password: 'demo_manager_pass' },
-  { email: 'john.doe@example.com', password: 'demo_employee_pass' },
+  { email: 'hr_admin@maptech.com', password: 'demo_hr_pass' },
+  { email: 'manager.bob@maptech.com', password: 'demo_manager_pass' },
+  { email: 'john.doe@maptech.com', password: 'demo_employee_pass' },
 ];
 
 for (const u of updates) {
