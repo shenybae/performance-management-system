@@ -1767,8 +1767,8 @@ async function initDb() {
         const existingId = Number(rows?.[0]?.id || 0);
         if (existingId) {
           await query(
-            "UPDATE users SET username = ?, email = ?, password = ?, role = ?, employee_id = ?, full_name = ?, dept = ?, position = ?, deleted_at = NULL WHERE id = ?",
-            [args.username, args.email, hash(args.password), args.role, args.employeeId, args.fullName, args.dept, args.position, existingId]
+            "UPDATE users SET username = ?, email = ?, role = ?, employee_id = ?, full_name = ?, dept = ?, position = ?, deleted_at = NULL WHERE id = ?",
+            [args.username, args.email, args.role, args.employeeId, args.fullName, args.dept, args.position, existingId]
           );
           return existingId;
         }
@@ -1902,8 +1902,8 @@ async function initDb() {
         const supervisorUserId = Number(supervisorRows?.[0]?.id || 0);
         if (supervisorUserId) {
           await query(
-            "UPDATE users SET username = ?, email = ?, password = ?, role = 'Employee', dept = ?, position = 'Supervisor', employee_id = ?, full_name = ?, deleted_at = NULL WHERE id = ?",
-            [supervisorUsername, supervisorEmail, hash('demo_supervisor_pass'), dept, supervisorEmpId || null, supervisorName, supervisorUserId]
+            "UPDATE users SET username = ?, email = ?, role = 'Employee', dept = ?, position = 'Supervisor', employee_id = ?, full_name = ?, deleted_at = NULL WHERE id = ?",
+            [supervisorUsername, supervisorEmail, dept, supervisorEmpId || null, supervisorName, supervisorUserId]
           );
         } else {
           await ensureUserAccount({
