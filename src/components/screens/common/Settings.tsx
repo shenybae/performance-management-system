@@ -29,6 +29,23 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
   const [photoOffsetX, setPhotoOffsetX] = useState(0);
   const [photoOffsetY, setPhotoOffsetY] = useState(0);
 
+  const refreshAccountInfo = async () => {
+    try {
+      const token = localStorage.getItem('talentflow_token');
+      const res = await fetch('/api/account-info', { headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      if (res.ok) {
+        const data = await res.json();
+        setAccountInfo({
+          email: data.email || data.username || user.email || user.username || '', phone: data.phone || '', address: data.address || '',
+          employee_name: data.name || data.employee_name || user.employee_name || '',
+          position: data.position || user.position || '', dept: data.dept || user.dept || '',
+          hire_date: data.hire_date || '', status: data.status || '', role: data.role || user.role || '',
+          username: data.username || user.username || ''
+        });
+      }
+    } catch {}
+  };
+
   // Account info state
   const [accountInfo, setAccountInfo] = useState({
     email: '', phone: '', address: '',
@@ -41,23 +58,12 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
   const canEditAccountInfo = normalizedRole === 'hr' || normalizedRole === 'hr admin' || normalizedRole === 'hr_admin';
 
   useEffect(() => {
-    const fetchAccountInfo = async () => {
-      try {
-        const token = localStorage.getItem('talentflow_token');
-        const res = await fetch('/api/account-info', { headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-        if (res.ok) {
-          const data = await res.json();
-          setAccountInfo({
-            email: data.email || data.username || user.email || user.username || '', phone: data.phone || '', address: data.address || '',
-            employee_name: data.name || data.employee_name || user.employee_name || '',
-            position: data.position || user.position || '', dept: data.dept || user.dept || '',
-            hire_date: data.hire_date || '', status: data.status || '', role: data.role || user.role || '',
-            username: data.username || user.username || ''
-          });
-        }
-      } catch {}
+    refreshAccountInfo();
+    const handleProfileUpdated = () => {
+      refreshAccountInfo();
     };
-    fetchAccountInfo();
+    window.addEventListener('talentflow-profile-updated', handleProfileUpdated as EventListener);
+    return () => window.removeEventListener('talentflow-profile-updated', handleProfileUpdated as EventListener);
   }, []);
 
   const saveAccountInfo = async () => {

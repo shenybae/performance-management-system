@@ -239,6 +239,12 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
       (window as any).notify('You can only edit users in your department', 'error');
       return;
     }
+    const confirmed = await appConfirm('Are you sure you want to save these changes?', {
+      title: 'Confirm Save Changes',
+      confirmText: 'Save Changes',
+      icon: 'warning',
+    });
+    if (!confirmed) return;
     try {
       const token = localStorage.getItem('talentflow_token');
       const headers: any = { 'Content-Type': 'application/json' };
@@ -264,7 +270,26 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
       body.position = canEditMeta ? (modalPosition.trim() || null) : null;
       body.dept = canEditMeta ? (modalDept.trim() || null) : null;
       const res = await fetch(`/api/users/${editingUser.id}`, { method: 'PUT', headers, body: JSON.stringify(body) });
-      if (res.ok) { (window as any).notify('User updated', 'success'); setModalOpen(false); setEditingUser(null); onRefresh(); } else { const err = await res.json(); (window as any).notify(err.error || 'Failed', 'error'); }
+      if (res.ok) {
+        const currentUserId = Number(currentUser?.id || 0);
+        if (currentUserId && Number(editingUser.id) === currentUserId) {
+          const cached = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
+          cached.email = normalizedModalEmail || cached.email;
+          cached.full_name = modalName.trim() || cached.full_name;
+          cached.employee_name = modalName.trim() || cached.employee_name;
+          cached.position = body.position || cached.position;
+          cached.dept = body.dept || cached.dept;
+          cached.phone = modalPhone.trim() || cached.phone;
+          cached.address = modalAddress.trim() || cached.address;
+          localStorage.setItem('talentflow_user', JSON.stringify(cached));
+          localStorage.setItem('user', JSON.stringify(cached));
+          window.dispatchEvent(new CustomEvent('talentflow-profile-updated'));
+        }
+        (window as any).notify('User updated', 'success');
+        setModalOpen(false);
+        setEditingUser(null);
+        onRefresh();
+      } else { const err = await res.json(); (window as any).notify(err.error || 'Failed', 'error'); }
     } catch (err) { (window as any).notify('Server error', 'error'); }
   };
 
