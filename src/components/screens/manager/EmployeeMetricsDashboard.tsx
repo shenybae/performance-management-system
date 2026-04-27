@@ -141,6 +141,104 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
     ].filter((item) => item.value > 0);
   }, [employeePerformance]);
 
+  const employeePerformanceSignals = useMemo(() => {
+    return [...employeePerformance]
+      .map((employee) => {
+        const goalsTotal = Number(employee.goals_total || 0);
+        const goalsCompleted = Number(employee.goals_completed || 0);
+        const goalsAtRisk = Number(employee.goals_at_risk || 0);
+        const goalsOverdue = Number(employee.goals_overdue || 0);
+        const avgProgress = Number(employee.goals_avg_progress || 0);
+        const completionRate = Number(employee.goals_completion_rate || 0);
+        const pipCount = Number(employee.pip_count || 0);
+        const idpCount = Number(employee.idp_count || 0);
+        const recoveryOpen = Number(employee.recovery_tasks_open || 0);
+        const recoveryCompleted = Number(employee.recovery_tasks_completed || 0);
+        const proofsApproved = Number(employee.proofs_approved || 0);
+        const proofsRejected = Number(employee.proofs_rejected || 0);
+        const proofsNeedsRevision = Number(employee.proofs_needs_revision || 0);
+        const proofRatingAvg = Number(employee.proof_rating_avg || 0);
+        const memberProofRatingAvg = Number(employee.member_proof_rating_avg || 0);
+        const leaderProofRatingAvg = Number(employee.leader_proof_rating_avg || 0);
+        const selfAssessments = Number(employee.self_assessments_count || 0);
+        const appraisalsCount = Number(employee.appraisals_count || 0);
+        const appraisalsAvg = Number(employee.appraisals_avg_overall || 0);
+        const disciplinaryCount = Number(employee.disciplinary_count || 0);
+        const feedback360 = Number(employee.feedback_360_count || 0);
+        const delegatedGoals = Number(employee.delegated_goal_count || 0);
+        const teamGoals = Number(employee.team_goal_count || 0);
+        const departmentGoals = Number(employee.department_goal_count || 0);
+        const teamImprovementPlans = Number(employee.team_improvement_plans || 0);
+        const teamDevelopmentPlans = Number(employee.team_development_plans || 0);
+        const departmentImprovementPlans = Number(employee.department_improvement_plans || 0);
+        const departmentDevelopmentPlans = Number(employee.department_development_plans || 0);
+
+        const positiveScore = (
+          (goalsCompleted * 6) +
+          (avgProgress * 1.5) +
+          (completionRate * 1.5) +
+          (recoveryCompleted * 3) +
+          (proofsApproved * 2) +
+          (proofRatingAvg * 4) +
+          (memberProofRatingAvg * 1.5) +
+          (leaderProofRatingAvg * 1.5) +
+          (selfAssessments * 2) +
+          (appraisalsCount * 2) +
+          (appraisalsAvg * 4) +
+          (feedback360 * 2) +
+          (delegatedGoals * 1.5) +
+          (teamGoals * 1) +
+          (departmentGoals * 1) +
+          (teamImprovementPlans * 1) +
+          (teamDevelopmentPlans * 1) +
+          (departmentImprovementPlans * 1) +
+          (departmentDevelopmentPlans * 1)
+        );
+
+        const negativeScore = (
+          (goalsAtRisk * 5) +
+          (goalsOverdue * 8) +
+          (pipCount * 12) +
+          (idpCount * 4) +
+          (recoveryOpen * 4) +
+          (proofsRejected * 3) +
+          (proofsNeedsRevision * 4) +
+          (disciplinaryCount * 10) +
+          (Math.max(0, 70 - completionRate) * 0.5) +
+          (Math.max(0, 65 - avgProgress) * 0.5) +
+          (proofRatingAvg > 0 ? Math.max(0, 3.5 - proofRatingAvg) * 4 : 2) +
+          (appraisalsAvg > 0 ? Math.max(0, 3.5 - appraisalsAvg) * 5 : 3) +
+          (selfAssessments === 0 ? 3 : 0) +
+          (appraisalsCount === 0 ? 4 : 0) +
+          (goalsTotal === 0 ? 4 : 0)
+        );
+
+        const rawScore = 50 + positiveScore - negativeScore;
+        const performanceScore = Math.max(0, Math.min(100, Number(rawScore.toFixed(1))));
+
+        return {
+          employee,
+          goalsAtRisk,
+          goalsOverdue,
+          avgProgress,
+          completionRate,
+          performanceScore,
+          severity: 100 - performanceScore,
+        };
+      })
+      .sort((a, b) => b.performanceScore - a.performanceScore || a.goalsOverdue - b.goalsOverdue || a.goalsAtRisk - b.goalsAtRisk || b.avgProgress - a.avgProgress);
+  }, [employeePerformance]);
+
+  const underperformingEmployees = useMemo(() => {
+    const list = employeePerformanceSignals.filter((row) => row.performanceScore < 50 || row.goalsOverdue > 0 || row.goalsAtRisk > 0);
+    return list.sort((a, b) => a.performanceScore - b.performanceScore || b.goalsOverdue - a.goalsOverdue || b.goalsAtRisk - a.goalsAtRisk || a.avgProgress - b.avgProgress);
+  }, [employeePerformanceSignals]);
+
+  const performingEmployees = useMemo(() => {
+    const list = employeePerformanceSignals.filter((row) => row.performanceScore >= 70);
+    return list.sort((a, b) => b.performanceScore - a.performanceScore || a.goalsOverdue - b.goalsOverdue || a.goalsAtRisk - b.goalsAtRisk || b.avgProgress - a.avgProgress);
+  }, [employeePerformanceSignals]);
+
   const createPIPFromMetrics = async (employee: EmployeePerformanceSnapshot) => {
     const employeeId = Number(employee?.employee_id || 0);
     if (!employeeId) {
@@ -340,6 +438,92 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
         </Card>
 
         <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card>
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider text-red-500">Underperforming Employees</p>
+                  <p className="text-xs text-slate-500">Composite score from goals, forms, feedback, discipline, and plans.</p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-red-50 dark:bg-red-900/25 text-red-600 dark:text-red-300">
+                  <AlertTriangle size={12} /> {underperformingEmployees.length} employee{underperformingEmployees.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              {underperformingEmployees.length === 0 ? (
+                <p className="text-xs text-slate-400">No underperforming employees found for the current metrics.</p>
+              ) : (
+                <div className="max-h-[330px] overflow-y-auto pr-1 space-y-2">
+                  {underperformingEmployees.map(({ employee, goalsAtRisk, goalsOverdue, avgProgress, performanceScore }) => (
+                    <button
+                      key={`employee-metrics-underperf-${employee.employee_id}`}
+                      onClick={() => setSelectedPerformanceEmployeeId(employee.employee_id)}
+                      className={`w-full inline-flex flex-col items-start gap-1 px-3 py-2 rounded-xl border text-left transition-colors ${Number(selectedPerformanceEmployeeId) === Number(employee.employee_id) ? 'border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-900/20' : 'border-red-200 dark:border-red-900/40 bg-white dark:bg-slate-900 hover:bg-red-50/60 dark:hover:bg-red-900/20'}`}
+                    >
+                      <div className="flex items-center justify-between gap-2 w-full">
+                        <span className="font-bold text-xs text-slate-700 dark:text-slate-200 truncate max-w-[180px]" title={employee.employee_name}>{employee.employee_name}</span>
+                        <span className="text-[10px] font-black text-red-600 dark:text-red-300">{performanceScore.toFixed(0)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                        <span>{employee.position || 'N/A'}</span>
+                        <span>•</span>
+                        <span>{employee.dept || 'N/A'}</span>
+                        <span>•</span>
+                        <span>{avgProgress}% avg</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-slate-500">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 text-amber-700 dark:text-amber-300">{goalsAtRisk} at risk</span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 dark:bg-rose-900/20 px-2 py-0.5 text-rose-700 dark:text-rose-300">{goalsOverdue} overdue</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <Card>
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider text-emerald-500">Performing Employees</p>
+                  <p className="text-xs text-slate-500">Employees with strong signals across the same composite score.</p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/25 text-emerald-600 dark:text-emerald-300">
+                  <CheckCircle2 size={12} /> {performingEmployees.length} employee{performingEmployees.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              {performingEmployees.length === 0 ? (
+                <p className="text-xs text-slate-400">No performing employees found for the current metrics.</p>
+              ) : (
+                <div className="max-h-[330px] overflow-y-auto pr-1 space-y-2">
+                  {performingEmployees.map(({ employee, goalsAtRisk, goalsOverdue, avgProgress, performanceScore }) => (
+                    <button
+                      key={`employee-metrics-performing-${employee.employee_id}`}
+                      onClick={() => setSelectedPerformanceEmployeeId(employee.employee_id)}
+                      className={`w-full inline-flex flex-col items-start gap-1 px-3 py-2 rounded-xl border text-left transition-colors ${Number(selectedPerformanceEmployeeId) === Number(employee.employee_id) ? 'border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-900/20' : 'border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 hover:bg-emerald-50/60 dark:hover:bg-emerald-900/20'}`}
+                    >
+                      <div className="flex items-center justify-between gap-2 w-full">
+                        <span className="font-bold text-xs text-slate-700 dark:text-slate-200 truncate max-w-[180px]" title={employee.employee_name}>{employee.employee_name}</span>
+                        <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-300">{performanceScore.toFixed(0)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                        <span>{employee.position || 'N/A'}</span>
+                        <span>•</span>
+                        <span>{employee.dept || 'N/A'}</span>
+                        <span>•</span>
+                        <span>{avgProgress}% avg</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-slate-500">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 text-emerald-700 dark:text-emerald-300">{employee.goals_completed} completed</span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 dark:bg-sky-900/20 px-2 py-0.5 text-sky-700 dark:text-sky-300">{Math.max(0, Number(employee.goals_completion_rate || 0)).toFixed(0)}% completion</span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 dark:bg-slate-800 px-2 py-0.5 text-slate-600 dark:text-slate-300">{goalsAtRisk} at risk</span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 dark:bg-slate-800 px-2 py-0.5 text-slate-600 dark:text-slate-300">{goalsOverdue} overdue</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
               <p className="text-xs font-black uppercase tracking-wider text-slate-500 mb-3 inline-flex items-center gap-1.5">

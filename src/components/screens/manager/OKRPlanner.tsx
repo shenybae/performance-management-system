@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Plus, X, Download, Search, AlertTriangle, Target, Users, User, Building2, TrendingDown, TrendingUp, FileText, Check, ArrowLeft, Clock, Filter, MessageSquare, DollarSign, Eye, Archive, MoreHorizontal } from 'lucide-react';
+import { Plus, X, Download, Search, AlertTriangle, Target, Users, User, Building2, TrendingDown, TrendingUp, FileText, Check, ArrowLeft, Clock, Filter, MessageSquare, DollarSign, Eye, Archive } from 'lucide-react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { Modal } from '../../common/Modal';
@@ -1771,6 +1771,8 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       return true;
     });
 
+    const underperformingEmployeesList = underperfAggregations.employees.filter((row: any) => Number(row.under || 0) > 0);
+
     const filteredActiveGoals = goals.filter((g: any) => {
       if (g.status === 'Completed' || g.status === 'Cancelled') return false;
       if (underperfScopeFilter !== 'all' && normalizeGoalScope(g) !== underperfScopeFilter) return false;
@@ -2780,7 +2782,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[112px]">Due</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[88px]">Overdue</th>
                         <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[128px]">Issue</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 text-center w-[390px]">Quick Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2828,19 +2829,10 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                   {stalled && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600">STALLED</span>}
                                 </div>
                               </td>
-                              <td className="py-2.5 px-3 text-center align-top">
-                                <button
-                                  title="Open quick actions"
-                                  onClick={() => setUnderperfActionsGoalId(g.id)}
-                                  className="h-8 px-3 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors inline-flex items-center gap-1.5"
-                                >
-                                  <MoreHorizontal size={12} /> Actions
-                                </button>
-                              </td>
                             </tr>
                             {recoveryTaskOpenGoal === g.id && (
                               <tr className="bg-amber-50/60 dark:bg-amber-900/10 border-b border-amber-100 dark:border-amber-900/40">
-                                <td colSpan={11} className="px-3 py-3">
+                                <td colSpan={10} className="px-3 py-3">
                                   <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5 items-end">
                                     <div>
                                       <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Assignee</label>
