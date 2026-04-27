@@ -283,8 +283,8 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
           cached.address = modalAddress.trim() || cached.address;
           localStorage.setItem('talentflow_user', JSON.stringify(cached));
           localStorage.setItem('user', JSON.stringify(cached));
-          window.dispatchEvent(new CustomEvent('talentflow-profile-updated'));
         }
+        window.dispatchEvent(new CustomEvent('talentflow-profile-updated', { detail: { userId: Number(editingUser.id) } }));
         (window as any).notify('User updated', 'success');
         setModalOpen(false);
         setEditingUser(null);
