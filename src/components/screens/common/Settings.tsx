@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Card } from '../../common/Card';
 import Modal from '../../common/Modal';
-import { Camera, Trash2, Upload, Save, Mail, Phone, MapPin, Briefcase, Building2, Calendar, Shield, Edit3, X } from 'lucide-react';
+import { Camera, Trash2, Upload, Save, Mail, Phone, MapPin, Briefcase, Building2, Calendar, Shield, Edit3, X, Eye, EyeOff, AlertTriangle, LockKeyhole } from 'lucide-react';
 
 interface SettingsProps {
   onPasswordChanged?: () => void;
@@ -14,6 +14,9 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
   const [current, setCurrent] = useState('');
   const [newPass, setNewPass] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isPasswordConfirmOpen, setIsPasswordConfirmOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
   const [profilePic, setProfilePic] = useState<string | null>(user.profile_picture || null);
@@ -110,7 +113,21 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
     setSavingInfo(false);
   };
 
-  const handleChange = async (e: React.FormEvent) => {
+  const submitPasswordChange = async () => {
+    const currentPassword = current.trim();
+    const nextPassword = newPass.trim();
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('talentflow_token');
+      const res = await fetch('/api/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ currentPassword, newPassword: nextPassword }) });
+      const data = await res.json();
+      if (res.ok) { (window as any).notify('Password changed', 'success'); setCurrent(''); setNewPass(''); setShowCurrentPassword(false); setShowNewPassword(false); if (onPasswordChanged) onPasswordChanged(); }
+      else (window as any).notify(data.error || 'Failed to change password', 'error');
+    } catch (err) { (window as any).notify('Connection error', 'error'); }
+    setLoading(false);
+  };
+
+  const handleChange = (e: React.FormEvent) => {
     e.preventDefault();
     const currentPassword = current.trim();
     const nextPassword = newPass.trim();
@@ -126,15 +143,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
       (window as any).notify('New password must be different from current password', 'error');
       return;
     }
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('talentflow_token');
-      const res = await fetch('/api/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ currentPassword, newPassword: nextPassword }) });
-      const data = await res.json();
-      if (res.ok) { (window as any).notify('Password changed', 'success'); setCurrent(''); setNewPass(''); if (onPasswordChanged) onPasswordChanged(); }
-      else (window as any).notify(data.error || 'Failed to change password', 'error');
-    } catch (err) { (window as any).notify('Connection error', 'error'); }
-    setLoading(false);
+    setIsPasswordConfirmOpen(true);
   };
 
   const handleProfileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -454,8 +463,28 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
           <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-1">Change Password</h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Use a strong password with at least 8 characters.</p>
           <form onSubmit={handleChange} className="space-y-3">
-            <input type="password" placeholder="Current password" value={current} onChange={e => setCurrent(e.target.value)} className="w-full p-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" minLength={6} maxLength={128} autoComplete="current-password" required />
-            <input type="password" placeholder="New password" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full p-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" minLength={8} maxLength={128} autoComplete="new-password" required />
+            <div className="relative">
+              <input type={showCurrentPassword ? 'text' : 'password'} placeholder="Current password" value={current} onChange={e => setCurrent(e.target.value)} className="w-full p-2.5 pr-11 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" minLength={6} maxLength={128} autoComplete="current-password" required />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword((prev) => !prev)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+              >
+                {showCurrentPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+            <div className="relative">
+              <input type={showNewPassword ? 'text' : 'password'} placeholder="New password" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full p-2.5 pr-11 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" minLength={8} maxLength={128} autoComplete="new-password" required />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword((prev) => !prev)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+              >
+                {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
             <button type="submit" className="px-4 py-2.5 bg-teal-deep text-white rounded-xl text-sm font-bold hover:bg-teal-green transition-colors" disabled={loading}>{loading ? 'Saving...' : 'Change Password'}</button>
           </form>
         </Card>
@@ -470,6 +499,58 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
           </div>
         </Card>
       </div>
+
+        <Modal
+          open={isPasswordConfirmOpen}
+          title="Confirm Password Change"
+          onClose={() => { if (!loading) setIsPasswordConfirmOpen(false); }}
+          maxWidthClassName="max-w-lg"
+        >
+          <div className="space-y-4">
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 flex items-start gap-3">
+              <div className="mt-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 p-2 text-amber-700 dark:text-amber-300">
+                <AlertTriangle size={16} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Are you sure you want to change your password?</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">You’ll need to use the new password the next time you sign in.</p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <LockKeyhole size={14} /> Password preview
+              </div>
+              <div className="grid grid-cols-1 gap-2 text-sm">
+                <div className="rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2">
+                  <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Current Password</p>
+                  <p className="font-mono text-slate-700 dark:text-slate-200 break-all">{showCurrentPassword ? current : '••••••••'}</p>
+                </div>
+                <div className="rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2">
+                  <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">New Password</p>
+                  <p className="font-mono text-slate-700 dark:text-slate-200 break-all">{showNewPassword ? newPass : '••••••••'}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsPasswordConfirmOpen(false)}
+                disabled={loading}
+                className="px-4 py-2.5 rounded-xl text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { setIsPasswordConfirmOpen(false); void submitPasswordChange(); }}
+                disabled={loading}
+                className="px-4 py-2.5 rounded-xl text-sm font-bold bg-teal-deep text-white hover:bg-teal-green transition-colors disabled:opacity-60"
+              >
+                {loading ? 'Saving...' : 'Yes, change it'}
+              </button>
+            </div>
+          </div>
+        </Modal>
 
         <Modal
           open={isAdjustPhotoModalOpen}
