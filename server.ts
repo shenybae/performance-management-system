@@ -266,6 +266,16 @@ function isAllowedAccountEmailDomain(email: string) {
   return normalized.endsWith(`@${ALLOWED_ACCOUNT_EMAIL_DOMAIN}`);
 }
 
+function getPasswordPolicyError(password: any): string | null {
+  if (typeof password !== 'string') return 'Password must be a valid string';
+  if (password.length < 8) return 'Password must be at least 8 characters';
+  if (password.length > 128) return 'Password must be 128 characters or less';
+  if (!/[A-Z]/.test(password)) return 'Password must contain an uppercase letter';
+  if (!/[0-9]/.test(password)) return 'Password must contain a number';
+  if (!/[^A-Za-z0-9]/.test(password)) return 'Password must contain a special character';
+  return null;
+}
+
 function parseDisplayNameFromEmail(value: any) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return '';
@@ -2390,6 +2400,8 @@ async function startServer() {
       try { payload = await verifyTokenWithVersion(parts[1]); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
       const { currentPassword, newPassword } = req.body;
       if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Missing passwords' });
+      const passwordPolicyError = getPasswordPolicyError(newPassword);
+      if (passwordPolicyError) return res.status(400).json({ error: passwordPolicyError });
       const rows = await query('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [payload.id]) as any;
       const user = rows[0];
       if (!user) return res.status(404).json({ error: 'User not found' });
@@ -2430,10 +2442,8 @@ async function startServer() {
       const requestedUsername = typeof username === 'string' ? username.trim() : '';
       if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return res.status(400).json({ error: 'Invalid email format' });
       if (normalizedEmail && !isAllowedAccountEmailDomain(normalizedEmail)) return res.status(400).json({ error: `Email must use @${ALLOWED_ACCOUNT_EMAIL_DOMAIN}` });
-      if (typeof password !== 'string' || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
-      if (!/[A-Z]/.test(password)) return res.status(400).json({ error: 'Password must contain an uppercase letter' });
-      if (!/[0-9]/.test(password)) return res.status(400).json({ error: 'Password must contain a number' });
-      if (!/[^A-Za-z0-9]/.test(password)) return res.status(400).json({ error: 'Password must contain a special character' });
+      const passwordPolicyError = getPasswordPolicyError(password);
+      if (passwordPolicyError) return res.status(400).json({ error: passwordPolicyError });
       const normalizedRole = normalizeUserRole(role);
       if (!normalizedRole) return res.status(400).json({ error: 'Invalid or missing role' });
 

@@ -139,6 +139,18 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
       (window as any).notify('New password must be 8 to 128 characters', 'error');
       return;
     }
+    if (!/[A-Z]/.test(nextPassword)) {
+      (window as any).notify('New password must contain an uppercase letter', 'error');
+      return;
+    }
+    if (!/[0-9]/.test(nextPassword)) {
+      (window as any).notify('New password must contain a number', 'error');
+      return;
+    }
+    if (!/[^A-Za-z0-9]/.test(nextPassword)) {
+      (window as any).notify('New password must contain a special character', 'error');
+      return;
+    }
     if (currentPassword === nextPassword) {
       (window as any).notify('New password must be different from current password', 'error');
       return;
@@ -461,7 +473,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
         {/* Change Password */}
         <Card>
           <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-1">Change Password</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Use a strong password with at least 8 characters.</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Use 8-128 chars with at least 1 uppercase letter, 1 number, and 1 special character.</p>
           <form onSubmit={handleChange} className="space-y-3">
             <div className="relative">
               <input type={showCurrentPassword ? 'text' : 'password'} placeholder="Current password" value={current} onChange={e => setCurrent(e.target.value)} className="w-full p-2.5 pr-11 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/40" minLength={6} maxLength={128} autoComplete="current-password" required />
