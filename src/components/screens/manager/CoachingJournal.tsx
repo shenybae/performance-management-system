@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'motion/react';
 import {
-  TrendingUp, MessageSquare, Plus, X, Download, Send, ArrowLeft, Search, Archive,
+  TrendingUp, MessageSquare, Plus, X, Send, ArrowLeft, Search, Archive,
   AlertTriangle, BookOpen, GraduationCap, Target, Clock, Brain, Lightbulb, BarChart3,
   Check, CheckCheck, Reply, Wifi, WifiOff, ThumbsUp as ThumbsUpIcon, ThumbsDown, CheckCircle2, AlertCircle
 } from 'lucide-react';
@@ -10,7 +10,7 @@ import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { ChoicePills } from '../../common/ChoicePills';
-import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { getAuthHeaders } from '../../../utils/csv';
 import { appConfirm } from '../../../utils/appDialog';
 import { io, Socket } from 'socket.io-client';
 
@@ -904,7 +904,6 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="Monitoring & Coaching Journal" subtitle="Daily observations, feedback loop, chat & e-learning" />
         <div className="flex gap-2">
-          <button onClick={() => exportToCSV(logs, 'coaching_logs')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
           <button onClick={() => setView('addEntry')} className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors"><Plus size={16} /> Add Entry</button>
         </div>
       </div>
