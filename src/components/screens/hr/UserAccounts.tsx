@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Modal } from '../../common/Modal';
-import { SearchableSelect } from '../../common/SearchableSelect';
-import { Eye, EyeOff, AlertCircle, CheckCircle, Archive, Search, X } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, CheckCircle, Archive } from 'lucide-react';
 import { appConfirm } from '../../../utils/appDialog';
 
 const ACCOUNT_EMAIL_DOMAIN = 'maptech.com';
@@ -28,21 +27,6 @@ const pwStrength = (pw: string) => {
   if (score === 3) return { label: 'Good', color: 'bg-blue-500', width: '75%', text: 'text-blue-500' };
   return { label: 'Strong', color: 'bg-emerald-500', width: '100%', text: 'text-emerald-500' };
 };
-
-const DEPARTMENT_OPTIONS = [
-  'Accounting/Financing',
-  'Administration',
-  'Engineering',
-  'Executives',
-  'Finance',
-  'HR',
-  'IT',
-  'Marketing',
-  'Operations',
-  'Sales Admin',
-  'Pre-Technical',
-  'Post-Technical',
-].map((d) => ({ value: d, label: d }));
 
 interface UserAccountsProps {
   employees: Employee[];
@@ -93,7 +77,6 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [modalDept, setModalDept] = useState('');
   const [modalPhone, setModalPhone] = useState('');
   const [modalAddress, setModalAddress] = useState('');
-  const [departmentQuery, setDepartmentQuery] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [accountSearchSelection, setAccountSearchSelection] = useState<Array<string | number>>([]);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -198,12 +181,6 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
 
   const activePageData = paginate(activeUsers, activePage);
   const archivedPageData = paginate(archivedUsers, archivedPage);
-
-  const filteredDepartmentOptions = useMemo(() => {
-    const q = departmentQuery.trim().toLowerCase();
-    if (!q) return DEPARTMENT_OPTIONS;
-    return DEPARTMENT_OPTIONS.filter((opt) => opt.label.toLowerCase().includes(q));
-  }, [departmentQuery]);
 
   useEffect(() => {
     setActivePage(1);
@@ -348,7 +325,6 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     setModalDept((u.dept || u.employee_dept || '').toString());
     setModalPhone((u.employee_phone || u.phone || '').toString());
     setModalAddress((u.employee_address || u.address || '').toString());
-    setDepartmentQuery('');
     setModalOpen(true);
   };
 
@@ -788,58 +764,13 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Department</label>
-                {modalMode === 'view' ? (
-                  <div className="mt-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-black px-3 py-2 text-sm text-slate-900 dark:text-white">
-                    {modalDept || '—'}
-                  </div>
-                ) : (
-                  <div className="mt-1 space-y-2">
-                    <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-black px-3 py-2">
-                      <Search size={14} className="text-slate-400 shrink-0" />
-                      <input
-                        value={departmentQuery}
-                        onChange={e => setDepartmentQuery(e.target.value)}
-                        placeholder="Search departments..."
-                        className="flex-1 bg-transparent text-sm text-slate-900 dark:text-white outline-none placeholder-slate-400"
-                      />
-                      {departmentQuery && (
-                        <button type="button" onClick={() => setDepartmentQuery('')} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                          <X size={12} />
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2 max-h-44 overflow-y-auto pr-1">
-                      <button
-                        type="button"
-                        onClick={() => setModalDept('')}
-                        className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
-                          !modalDept
-                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/25 dark:text-blue-300'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        Select department...
-                      </button>
-                      {filteredDepartmentOptions.map((opt) => {
-                        const selected = modalDept === opt.value;
-                        return (
-                          <button
-                            key={opt.value}
-                            type="button"
-                            onClick={() => setModalDept(opt.value)}
-                            className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
-                              selected
-                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/25 dark:text-blue-300'
-                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                <input
+                  value={modalDept}
+                  readOnly
+                  disabled
+                  className="w-full mt-1 p-2 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 disabled:opacity-100 disabled:cursor-not-allowed"
+                  placeholder="Department is locked"
+                />
               </div>
             </>
           )}
