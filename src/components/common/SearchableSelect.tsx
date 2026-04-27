@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Search, X } from 'lucide-react';
+import Modal from './Modal';
 
 interface Option {
   value: string | number;
@@ -19,7 +20,9 @@ interface SearchableSelectProps {
   pill?: boolean;
   searchable?: boolean;
   multiSelect?: boolean;
-  dropdownVariant?: 'list' | 'pills-horizontal';
+  dropdownVariant?: 'list' | 'pills-horizontal' | 'modal';
+  modalTitle?: string;
+  modalDescription?: string;
 }
 
 const getInitials = (label: string) => {
@@ -43,6 +46,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   searchable = true,
   multiSelect = false,
   dropdownVariant = 'list',
+  modalTitle,
+  modalDescription,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -56,6 +61,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     const reserved = searchable ? 156 : 108;
     return Math.max(96, popupMax - reserved);
   }, [portalStyle.maxHeight, searchable]);
+  const isModalVariant = dropdownVariant === 'modal';
+  const titleText = modalTitle || placeholder || 'Select option';
 
   const selectedOption = useMemo(() => {
     if (multiSelect && Array.isArray(value)) {
@@ -280,7 +287,86 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
         <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && portalEl && createPortal(
+      {isModalVariant && (
+        <Modal
+          open={isOpen}
+          title={titleText}
+          onClose={() => { setIsOpen(false); setSearch(''); }}
+          maxWidthClassName="max-w-4xl"
+          bodyClassName="p-0"
+        >
+          <div className="p-5 space-y-4">
+            {modalDescription && <p className="text-xs text-slate-500 dark:text-slate-400">{modalDescription}</p>}
+            {searchable && (
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                <Search size={14} className="text-slate-400 shrink-0" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search..."
+                  className="flex-1 bg-transparent text-sm text-slate-800 dark:text-slate-100 outline-none placeholder-slate-400"
+                />
+                {search && (
+                  <button type="button" onClick={() => setSearch('')} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Options</div>
+              <div className="max-h-[58vh] overflow-y-auto pr-1 custom-scrollbar">
+                <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                  {allowEmpty && (
+                    <button
+                      type="button"
+                      onClick={() => { onChange(''); setIsOpen(false); setSearch(''); }}
+                      className={`inline-flex min-h-10 w-full items-center rounded-xl border px-3 py-2 text-left text-sm transition-colors ${!value ? 'border-teal-500 bg-teal-50 text-teal-700 dark:border-teal-400 dark:bg-teal-900/20 dark:text-teal-300 font-bold' : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700'}`}
+                    >
+                      {emptyLabel}
+                    </button>
+                  )}
+                  {filtered.map((opt) => {
+                    const selected = isSelected(opt.value);
+                    return (
+                      <button
+                        key={String(opt.value)}
+                        type="button"
+                        onClick={() => toggleMultiValue(opt.value)}
+                        className={`inline-flex min-h-10 w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition-colors ${selected ? 'border-teal-500 bg-teal-50 text-teal-700 dark:border-teal-400 dark:bg-teal-900/20 dark:text-teal-300 font-bold' : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700'}`}
+                      >
+                        <span className={`h-3 w-3 rounded-full border ${selected ? 'border-teal-500 bg-teal-500 dark:border-teal-400 dark:bg-teal-400' : 'border-slate-300 dark:border-slate-600'}`}>
+                          {selected ? <span className="block h-full w-full text-center text-[8px] leading-[10px] text-white">✓</span> : null}
+                        </span>
+                        <span className="flex items-center gap-2 min-w-0 w-full">
+                          {hasAvatarInOptions && (
+                            opt.avatarUrl ? (
+                              <img src={opt.avatarUrl} alt={opt.label} className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-slate-700" />
+                            ) : (
+                              <span className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold flex items-center justify-center border border-slate-200 dark:border-slate-700">
+                                {getInitials(opt.label)}
+                              </span>
+                            )
+                          )}
+                          <span className="truncate">{opt.label}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {filtered.length === 0 && !allowEmpty && (
+                    <div className="px-3 py-4 text-center text-xs text-slate-400 italic col-span-full">No matches found</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {!isModalVariant && isOpen && portalEl && createPortal(
         <div
           style={{ left: portalStyle.left, top: portalStyle.top, bottom: portalStyle.bottom, width: portalStyle.width, maxHeight: portalStyle.maxHeight, position: 'fixed' }}
           className="z-[9999] flex flex-col bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden pointer-events-auto"

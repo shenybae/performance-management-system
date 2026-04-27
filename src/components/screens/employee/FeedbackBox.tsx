@@ -353,7 +353,9 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
                     value={fbForm.target_employee_name}
                     onChange={v => setFbForm({ ...fbForm, target_employee_name: String(v) })}
                     placeholder="Select Person..."
-                    dropdownVariant="pills-horizontal"
+                    dropdownVariant="modal"
+                    modalTitle="Select Person"
+                    modalDescription="Choose the employee this feedback is about."
                   />
                 ) : (
                   <input type="text" value={fbForm.target_employee_name} onChange={e => setFbForm({ ...fbForm, target_employee_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required />

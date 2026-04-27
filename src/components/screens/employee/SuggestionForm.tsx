@@ -907,6 +907,9 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
                 allowEmpty
                 emptyLabel="All Employees"
                 className="flex-1"
+                dropdownVariant="modal"
+                modalTitle="Filter by Employee"
+                modalDescription="Use this dialog to narrow suggestions to one employee."
               />
             </div>
           </Card>
