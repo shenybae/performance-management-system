@@ -4,6 +4,7 @@ import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Modal } from '../../common/Modal';
+import { SearchableSelect } from '../../common/SearchableSelect';
 import { Eye, EyeOff, AlertCircle, CheckCircle, Archive } from 'lucide-react';
 import { appConfirm } from '../../../utils/appDialog';
 
@@ -27,6 +28,21 @@ const pwStrength = (pw: string) => {
   if (score === 3) return { label: 'Good', color: 'bg-blue-500', width: '75%', text: 'text-blue-500' };
   return { label: 'Strong', color: 'bg-emerald-500', width: '100%', text: 'text-emerald-500' };
 };
+
+const DEPARTMENT_OPTIONS = [
+  'Accounting/Financing',
+  'Administration',
+  'Engineering',
+  'Executives',
+  'Finance',
+  'HR',
+  'IT',
+  'Marketing',
+  'Operations',
+  'Sales Admin',
+  'Pre-Technical',
+  'Post-Technical',
+].map((d) => ({ value: d, label: d }));
 
 interface UserAccountsProps {
   employees: Employee[];
@@ -727,7 +743,17 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Department</label>
-                <input value={modalDept} disabled={modalMode === 'view'} onChange={e => setModalDept(e.target.value)} className="w-full mt-1 p-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50 disabled:opacity-70 disabled:cursor-not-allowed" placeholder="e.g. Human Resources" />
+                <SearchableSelect
+                  options={DEPARTMENT_OPTIONS}
+                  value={modalDept}
+                  onChange={(v) => setModalDept(String(v))}
+                  placeholder="Select department..."
+                  allowEmpty
+                  emptyLabel="Select department..."
+                  searchable
+                  dropdownVariant="pills-horizontal"
+                  className="w-full mt-1"
+                />
               </div>
             </>
           )}

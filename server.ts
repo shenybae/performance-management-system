@@ -688,6 +688,8 @@ async function initDb() {
       employee_id INTEGER,
       profile_picture TEXT,
       full_name TEXT,
+      phone TEXT,
+      address TEXT,
       position TEXT,
       dept TEXT,
       created_by INTEGER,
@@ -1300,6 +1302,32 @@ async function initDb() {
       'ALTER TABLE employees ADD COLUMN address TEXT',
     ];
     for (const sql of employeeProfileMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
+    const userProfileMigrations = [
+      'ALTER TABLE users ADD COLUMN phone TEXT',
+      'ALTER TABLE users ADD COLUMN address TEXT',
+    ];
+    for (const sql of userProfileMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
+    const userProfileMigrations = [
+      'ALTER TABLE users ADD COLUMN phone TEXT',
+      'ALTER TABLE users ADD COLUMN address TEXT',
+    ];
+    for (const sql of userProfileMigrations) {
       try {
         if (usePostgres && pgPool) {
           const c = await pgPool.connect();
@@ -2669,7 +2697,7 @@ async function startServer() {
     try {
       const userId = (req as any).user?.id;
       const employeeId = (req as any).user?.employee_id;
-      const userRows = await query('SELECT id, username, email, role, employee_id, profile_picture, full_name, position, dept FROM users WHERE id = ?', [userId]) as any;
+      const userRows = await query('SELECT id, username, email, role, employee_id, profile_picture, full_name, phone, address, position, dept FROM users WHERE id = ?', [userId]) as any;
       const u = userRows[0];
       if (!u) return res.status(404).json({ error: 'User not found' });
       const usernameAsEmail = (typeof u.username === 'string' && /@/.test(u.username)) ? u.username : null;
@@ -2683,6 +2711,8 @@ async function startServer() {
           ...u,
           email: u.email || usernameAsEmail || null,
           name: u.full_name || u.username || null,
+          phone: u.phone || null,
+          address: u.address || null,
           position: u.position || null,
           dept: u.dept || null
         });
@@ -2691,6 +2721,8 @@ async function startServer() {
         ...u,
         ...emp,
         email: emp.email || u.email || usernameAsEmail || null,
+        phone: emp.phone || u.phone || null,
+        address: emp.address || u.address || null,
         position: emp.position || u.position || null,
         dept: emp.dept || u.dept || null,
         name: emp.name || u.full_name || u.username || null,
@@ -2715,7 +2747,16 @@ async function startServer() {
         if (nameToSet !== undefined) {
           await query('UPDATE users SET full_name = ? WHERE id = ?', [nameToSet || null, userId]);
         }
-        const userRows = await query('SELECT id, username, email, role, full_name, profile_picture, position, dept FROM users WHERE id = ?', [userId]) as any;
+        const userUpdates: string[] = [];
+        const userVals: any[] = [];
+        if (email !== undefined) { userUpdates.push('email = ?'); userVals.push(String(email || '').trim().toLowerCase() || null); }
+        if (phone !== undefined) { userUpdates.push('phone = ?'); userVals.push(phone || null); }
+        if (address !== undefined) { userUpdates.push('address = ?'); userVals.push(address || null); }
+        if (userUpdates.length > 0) {
+          userVals.push(userId);
+          await query(`UPDATE users SET ${userUpdates.join(', ')} WHERE id = ?`, userVals);
+        }
+        const userRows = await query('SELECT id, username, email, role, full_name, phone, address, profile_picture, position, dept FROM users WHERE id = ?', [userId]) as any;
         return res.json({ success: true, ...(userRows[0] || {}) });
       }
 
@@ -2741,6 +2782,16 @@ async function startServer() {
       if (sets.length > 0) {
         vals.push(employeeId);
         await query(`UPDATE employees SET ${sets.join(', ')} WHERE id = ?`, vals);
+        try {
+          const userSets: string[] = [];
+          const userVals: any[] = [];
+          if (phone !== undefined) { userSets.push('phone = ?'); userVals.push(phone || null); }
+          if (address !== undefined) { userSets.push('address = ?'); userVals.push(address || null); }
+          if (userSets.length > 0) {
+            userVals.push(userId);
+            await query(`UPDATE users SET ${userSets.join(', ')} WHERE id = ?`, userVals);
+          }
+        } catch (e) { /* ignore */ }
       }
       // If employee name was updated, mirror it to the linked user.full_name
       if (employee_name !== undefined) {
