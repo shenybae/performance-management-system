@@ -1323,19 +1323,6 @@ async function initDb() {
       } catch {}
     }
 
-    const userProfileMigrations = [
-      'ALTER TABLE users ADD COLUMN phone TEXT',
-      'ALTER TABLE users ADD COLUMN address TEXT',
-    ];
-    for (const sql of userProfileMigrations) {
-      try {
-        if (usePostgres && pgPool) {
-          const c = await pgPool.connect();
-          try { await c.query(sql); } catch {} finally { c.release(); }
-        } else { sqliteDb.exec(sql); }
-      } catch {}
-    }
-
     // Property accountability migrations (expand table with full form fields)
     const propertyMigrations = [
       'ALTER TABLE property_accountability ADD COLUMN employee_name TEXT',
