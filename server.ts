@@ -2544,7 +2544,7 @@ async function startServer() {
         }
       }
 
-      const { password, role, full_name, position, dept, email } = req.body;
+      const { password, role, full_name, position, dept, email, phone, address } = req.body;
       // Capture previous state for audit
       let before: any = null;
       try {
@@ -2618,6 +2618,23 @@ async function startServer() {
         vals.push(null);
         sets.push('dept = ?');
         vals.push(null);
+      }
+
+      if ((phone !== undefined || address !== undefined) && before?.employee_id) {
+        const employeeSets: string[] = [];
+        const employeeVals: any[] = [];
+        if (phone !== undefined) {
+          employeeSets.push('phone = ?');
+          employeeVals.push(String(phone || '').trim() || null);
+        }
+        if (address !== undefined) {
+          employeeSets.push('address = ?');
+          employeeVals.push(String(address || '').trim() || null);
+        }
+        if (employeeSets.length > 0) {
+          employeeVals.push(before.employee_id);
+          await query(`UPDATE employees SET ${employeeSets.join(', ')} WHERE id = ?`, employeeVals);
+        }
       }
 
       if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
@@ -3174,7 +3191,7 @@ async function startServer() {
           }
         } catch (e) { /* ignore backfill errors */ }
 
-        const q = `SELECT u.*, e.name AS employee_name, e.position AS employee_position, e.dept AS employee_dept, lu.full_name AS linked_user_full_name, lu.role AS linked_user_role,
+          const q = `SELECT u.*, e.name AS employee_name, e.position AS employee_position, e.dept AS employee_dept, e.phone AS employee_phone, e.address AS employee_address, e.hire_date AS employee_hire_date, e.status AS employee_status, lu.full_name AS linked_user_full_name, lu.role AS linked_user_role,
               cu.full_name AS creator_full_name, cu.email AS creator_email, cu.username AS creator_username
                    FROM users u
                    LEFT JOIN employees e ON u.employee_id = e.id

@@ -75,6 +75,8 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [modalRole, setModalRole] = useState('');
   const [modalPosition, setModalPosition] = useState('');
   const [modalDept, setModalDept] = useState('');
+  const [modalPhone, setModalPhone] = useState('');
+  const [modalAddress, setModalAddress] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [activePage, setActivePage] = useState(1);
@@ -254,6 +256,8 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
       const body: any = {
         full_name: modalName.trim() || null,
         email: normalizedModalEmail || null,
+        phone: modalPhone.trim() || null,
+        address: modalAddress.trim() || null,
       };
       if (normalizedRole) body.role = normalizedRole;
       const canEditMeta = normalizedRole === 'HR' || normalizedRole === 'Manager';
@@ -272,6 +276,8 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     setModalRole(normalizeRoleValue(u.role || ''));
     setModalPosition((u.position || u.employee_position || '').toString());
     setModalDept((u.dept || u.employee_dept || '').toString());
+    setModalPhone((u.employee_phone || u.phone || '').toString());
+    setModalAddress((u.employee_address || u.address || '').toString());
     setModalOpen(true);
   };
 
@@ -701,8 +707,16 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
             </>
           )}
           <div>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Phone</label>
+            <input value={modalPhone} disabled={modalMode === 'view'} onChange={e => setModalPhone(e.target.value)} className="w-full mt-1 p-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50 disabled:opacity-70 disabled:cursor-not-allowed" placeholder="e.g. +1 555 123 4567" />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Address</label>
+            <input value={modalAddress} disabled={modalMode === 'view'} onChange={e => setModalAddress(e.target.value)} className="w-full mt-1 p-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50 disabled:opacity-70 disabled:cursor-not-allowed" placeholder="e.g. Office or home address" />
+          </div>
+          <div>
             <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Matched User</label>
-            <p className="mt-1 text-xs text-slate-400">Automatic by full name only. Manual employee selection is disabled.</p>
+            <p className="mt-1 text-xs text-slate-400">Automatic by full name only. Manual employee selection is disabled. Phone/address are editable for linked employee profiles.</p>
           </div>
           <div className="flex justify-end gap-2">
             <button onClick={() => setModalOpen(false)} className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800">{modalMode === 'view' ? 'Close' : 'Cancel'}</button>
