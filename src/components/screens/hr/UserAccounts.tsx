@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Modal } from '../../common/Modal';
+import { SearchableSelect } from '../../common/SearchableSelect';
 import { Eye, EyeOff, AlertCircle, CheckCircle, Archive, Search, X } from 'lucide-react';
 import { appConfirm } from '../../../utils/appDialog';
 
@@ -94,6 +95,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [modalAddress, setModalAddress] = useState('');
   const [departmentQuery, setDepartmentQuery] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [accountSearchSelection, setAccountSearchSelection] = useState<Array<string | number>>([]);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [activePage, setActivePage] = useState(1);
   const [archivedPage, setArchivedPage] = useState(1);
@@ -150,8 +152,24 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   };
 
   const allUsers = users || [];
-  const activeUsers = allUsers.filter((u: any) => !u.deleted_at);
-  const archivedUsers = allUsers.filter((u: any) => !!u.deleted_at);
+  const selectedAccountIds = useMemo(() => new Set((accountSearchSelection || []).map(String)), [accountSearchSelection]);
+  const accountOptions = useMemo(() => {
+    return [...allUsers]
+      .map((u: any) => {
+        const primary = (u?.full_name || u?.employee_name || u?.email || u?.username || '').toString().trim();
+        const secondary = (u?.email || u?.username || '').toString().trim();
+        return {
+          value: String(u.id),
+          label: secondary && secondary !== primary ? `${primary} • ${secondary}` : primary,
+        };
+      })
+      .filter((opt) => opt.label)
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [allUsers]);
+
+  const matchesAccountSelection = (u: any) => selectedAccountIds.size === 0 || selectedAccountIds.has(String(u.id));
+  const activeUsers = allUsers.filter((u: any) => !u.deleted_at && matchesAccountSelection(u));
+  const archivedUsers = allUsers.filter((u: any) => !!u.deleted_at && matchesAccountSelection(u));
   const byLatestCreated = [...allUsers].sort((a: any, b: any) => {
     const aTime = Date.parse(a?.created_at || '');
     const bTime = Date.parse(b?.created_at || '');
@@ -186,6 +204,11 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     if (!q) return DEPARTMENT_OPTIONS;
     return DEPARTMENT_OPTIONS.filter((opt) => opt.label.toLowerCase().includes(q));
   }, [departmentQuery]);
+
+  useEffect(() => {
+    setActivePage(1);
+    setArchivedPage(1);
+  }, [accountSearchSelection]);
 
   const validateCreateForm = (email: string, fullName: string, role: string, position: string, dept: string): Record<string, string> => {
     const errs: Record<string, string> = {};
@@ -507,6 +530,21 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
 
         <Card>
           <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-2 tracking-widest">Existing Accounts</h3>
+          <div className="mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300 mb-1">Search Accounts</p>
+            <SearchableSelect
+              options={accountOptions}
+              value={accountSearchSelection}
+              onChange={(v) => setAccountSearchSelection(Array.isArray(v) ? v : (v ? [v] : []))}
+              placeholder="Search users/accounts..."
+              searchable
+              multiSelect
+              allowEmpty
+              emptyLabel="All accounts"
+              dropdownVariant="pills-horizontal"
+              className="w-full"
+            />
+          </div>
           <div className="flex justify-between items-center mb-3 gap-3">
             <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">
               <span>Rows</span>
