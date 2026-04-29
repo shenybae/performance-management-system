@@ -41,7 +41,13 @@ export const SuggestionForm = ({ employees = [] }: SuggestionFormProps) => {
     desired_benefit: '', total_financial_benefit: '',
     planning_step_1: '', planning_step_2: '', planning_step_3: '', estimated_time: '',
   };
-  const [form, setForm] = useState(emptyForm);
+  // Initialize form with current user values for non-management users
+  const [form, setForm] = useState(() => ({
+    ...emptyForm,
+    employee_name: isManagement ? '' : employeeNameFromUser,
+    position: isManagement ? '' : employeePositionFromUser,
+    dept: isManagement ? '' : employeeDeptFromUser,
+  }));
 
   useEffect(() => {
     if (view !== 'newForm' || isManagement) return;
