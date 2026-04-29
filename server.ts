@@ -390,6 +390,29 @@ async function ensureEmployeeIdByFullName(fullName: string): Promise<number | nu
   return null;
 }
 
+async function resolveUserIdByFullName(fullName: string): Promise<number | null> {
+  const candidate = String(fullName || '').trim();
+  if (!candidate) return null;
+
+  // Try direct match on users.full_name
+  const uRows: any = await query(
+    `SELECT id FROM users WHERE REGEXP_REPLACE(LOWER(TRIM(COALESCE(full_name, ''))), '\\s+', ' ', 'g') = REGEXP_REPLACE(LOWER(TRIM(?)), '\\s+', ' ', 'g') LIMIT 1`,
+    [candidate]
+  );
+  const uMatch = Array.isArray(uRows) ? uRows[0] : uRows;
+  if (uMatch?.id) return Number(uMatch.id);
+
+  // Fallback: try to resolve an employee by name and find a linked user
+  const empId = await resolveEmployeeIdByFullName(candidate);
+  if (empId) {
+    const ux: any = await query('SELECT id FROM users WHERE employee_id = ? LIMIT 1', [empId]);
+    const um = Array.isArray(ux) ? ux[0] : ux;
+    if (um?.id) return Number(um.id);
+  }
+
+  return null;
+}
+
 // Simple audit recorder: stores who did what and snapshots of before/after plus metadata
 async function recordAudit(user: any, action: string, tableName: string, rowId: any = null, before: any = null, after: any = null, meta: any = null) {
   try {
@@ -1591,6 +1614,7 @@ async function initDb() {
       'ALTER TABLE property_accountability ADD COLUMN hr_owner_user_id INTEGER',
       'ALTER TABLE exit_interviews ADD COLUMN hr_owner_user_id INTEGER',
       'ALTER TABLE suggestions ADD COLUMN hr_owner_user_id INTEGER',
+      'ALTER TABLE suggestions ADD COLUMN supervisor_user_id INTEGER',
     ];
     for (const sql of hrOwnershipMigrations) {
       try {
@@ -6302,7 +6326,22 @@ async function startServer() {
         const allowed = await canActorAccessEmployeeByDept(actorDept, normalizeEmployeeId(empId));
         if (!allowed) return res.status(403).json({ error: 'Managers can only create suggestions for employees in their own department' });
       }
-      await query(`INSERT INTO suggestions (employee_id, employee_name, position, dept, date, concern, labor_needed, materials_needed, equipment_needed, capital_needed, estimated_cost, desired_benefit, estimated_financial_benefit, planning_steps, estimated_time, title, other_resource_needed, planning_step_1, planning_step_2, planning_step_3, total_financial_benefit, employee_signature, employee_signature_date, supervisor_name, supervisor_title, date_received, follow_up_date, suggestion_merit, benefit_to_company, cost_to_company, cost_efficient_explanation, suggestion_priority, action_to_be_taken, suggested_reward, supervisor_signature, supervisor_signature_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      // resolve supervisor user id (if supervisor name provided) and dept HR owner
+      let supervisorUserId: number | null = null;
+      if (b.supervisor_name) {
+        try { supervisorUserId = await resolveUserIdByFullName(String(b.supervisor_name || '')); } catch (e) { supervisorUserId = null; }
+      }
+      let hrOwnerUserId: number | null = null;
+      try {
+        if (empId) {
+          const empRows: any = await query('SELECT dept FROM employees WHERE id = ? LIMIT 1', [empId]);
+          const empRow = Array.isArray(empRows) ? empRows[0] : empRows;
+          hrOwnerUserId = await resolveDeptHrOwnerUserId(empRow?.dept || b.dept || null);
+        } else {
+          hrOwnerUserId = await resolveDeptHrOwnerUserId(b.dept || null);
+        }
+      } catch (e) { hrOwnerUserId = null; }
+      await query(`INSERT INTO suggestions (employee_id, employee_name, position, dept, date, concern, labor_needed, materials_needed, equipment_needed, capital_needed, estimated_cost, desired_benefit, estimated_financial_benefit, planning_steps, estimated_time, title, other_resource_needed, planning_step_1, planning_step_2, planning_step_3, total_financial_benefit, employee_signature, employee_signature_date, supervisor_name, supervisor_title, date_received, follow_up_date, suggestion_merit, benefit_to_company, cost_to_company, cost_efficient_explanation, suggestion_priority, action_to_be_taken, suggested_reward, supervisor_signature, supervisor_signature_date, supervisor_user_id, hr_owner_user_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [empId, b.employee_name || null, b.position || null, b.dept || null, b.date || null, b.concern || null,
          b.labor_needed || null, b.materials_needed || null, b.equipment_needed || null, b.capital_needed || null,
          b.estimated_cost || null, b.desired_benefit || null, b.estimated_financial_benefit || b.estimated_benefit || null,
@@ -6313,7 +6352,7 @@ async function startServer() {
          b.suggestion_merit || null, b.benefit_to_company || null, b.cost_to_company || null,
          b.cost_efficient_explanation || null, b.suggestion_priority || null, b.action_to_be_taken || null,
          b.suggested_reward || null, b.supervisor_signature || null, b.supervisor_signature_date || null,
-         b.status || 'Under Review']);
+         supervisorUserId || null, hrOwnerUserId || null, b.status || 'Under Review']);
       // If employee submitted, notify Manager role
       if (userRole === 'Employee') {
         await createNotification({ role: 'Manager', type: 'info', message: `New employee suggestion submitted: ${b.title || b.concern || 'Untitled'}`, source: 'suggestion' });
@@ -6427,17 +6466,22 @@ async function startServer() {
         q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
         additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
         hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, recommendation } = req.body;
+      // resolve HR reviewer user id and dept HR owner
+      let hrReviewerUserId: number | null = null;
+      try { hrReviewerUserId = await resolveUserIdByFullName(String(hr_reviewer_name || '')); } catch (e) { hrReviewerUserId = null; }
+      let hrOwnerUserId: number | null = null;
+      try { hrOwnerUserId = await resolveDeptHrOwnerUserId(dept_fit || null); } catch (e) { hrOwnerUserId = null; }
       await query(`INSERT INTO applicants (name, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
         interview_impression, dept_fit, previous_qualifications,
         q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
         additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
-        hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, recommendation)
-        VALUES (${Array(31).fill('?').join(', ')})`,
+        hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, hr_reviewer_user_id, hr_owner_user_id, recommendation)
+        VALUES (${Array(33).fill('?').join(', ')})`,
         [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
         interview_impression, dept_fit, previous_qualifications,
         q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
         additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
-        hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, recommendation]);
+        hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, hrReviewerUserId || null, hrOwnerUserId || null, recommendation]);
 
       try { await recordAudit((req as any).user || null, 'create', 'applicants', null, null, req.body); } catch (e) {}
       res.json({ success: true });
@@ -6661,13 +6705,17 @@ async function startServer() {
     try {
       const b = req.body;
       const hrOwnerUserId = await resolveDeptHrOwnerUserId(b.department || null);
-      await query(`INSERT INTO exit_interviews (offboarding_id, employee_name, department, supervisor, reasons, liked_most, liked_least, interview_date, ssn, hire_date, termination_date, starting_position, ending_position, salary, pay_benefits_opinion, satisfaction_ratings, would_recommend, improvement_suggestions, additional_comments, employee_sig, interviewer_name, interviewer_sig, interviewer_date, dismissal_details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      let supervisorUserId: number | null = null;
+      try { supervisorUserId = await resolveUserIdByFullName(String(b.supervisor || '')); } catch (e) { supervisorUserId = null; }
+
+      await query(`INSERT INTO exit_interviews (offboarding_id, employee_name, department, supervisor, reasons, liked_most, liked_least, interview_date, ssn, hire_date, termination_date, starting_position, ending_position, salary, pay_benefits_opinion, satisfaction_ratings, would_recommend, improvement_suggestions, additional_comments, employee_sig, interviewer_name, interviewer_sig, interviewer_date, dismissal_details, supervisor_user_id, hr_owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [b.offboarding_id || null, b.employee_name, b.department, b.supervisor, b.reasons, b.liked_most, b.liked_least, b.interview_date,
          b.ssn || null, b.hire_date || null, b.termination_date || null, b.starting_position || null, b.ending_position || null,
          b.salary || null, b.pay_benefits_opinion || null,
          typeof b.satisfaction_ratings === 'object' ? JSON.stringify(b.satisfaction_ratings) : (b.satisfaction_ratings || null),
          b.would_recommend || null, b.improvement_suggestions || null, b.additional_comments || null,
-         b.employee_sig || null, b.interviewer_name || null, b.interviewer_sig || null, b.interviewer_date || null, b.dismissal_details || null]);
+         b.employee_sig || null, b.interviewer_name || null, b.interviewer_sig || null, b.interviewer_date || null, b.dismissal_details || null,
+         supervisorUserId || null, hrOwnerUserId || null]);
       try { await recordAudit((req as any).user || null, 'create', 'exit_interviews', null, null, b); } catch (e) {}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
@@ -7665,8 +7713,18 @@ async function startServer() {
   app.post("/api/onboarding", authenticateToken, async (req, res) => {
     try {
       const { employee_id, employee_name, applicant_id, checklist, hr_signature, employee_signature, notes, status } = req.body;
-      await query("INSERT INTO onboarding (employee_id, employee_name, applicant_id, checklist, hr_signature, employee_signature, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        [employee_id, employee_name, applicant_id, checklist, hr_signature, employee_signature, notes, status || 'Pending']);
+      // resolve department HR owner for onboarding record when possible
+      let hrOwnerUserId: number | null = null;
+      try {
+        if (employee_id) {
+          const er: any = await query('SELECT dept FROM employees WHERE id = ? LIMIT 1', [employee_id]);
+          const erow = Array.isArray(er) ? er[0] : er;
+          hrOwnerUserId = await resolveDeptHrOwnerUserId(erow?.dept || null);
+        }
+      } catch (e) { hrOwnerUserId = null; }
+
+      await query("INSERT INTO onboarding (employee_id, employee_name, applicant_id, checklist, hr_signature, employee_signature, notes, hr_owner_user_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [employee_id, employee_name, applicant_id, checklist, hr_signature, employee_signature, notes, hrOwnerUserId || null, status || 'Pending']);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
