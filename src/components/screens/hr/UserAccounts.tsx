@@ -390,7 +390,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
       <div className="space-y-6">
         {activeAccountScreen === 'create' && (
           <div className="grid grid-cols-1 gap-6">
-            <div className="mx-auto w-full max-w-none min-h-[78vh] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-6 sm:p-8 lg:p-10 flex flex-col">
+            <div className="mx-auto w-full max-w-[210mm] min-h-[297mm] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-6 sm:p-8 lg:p-10 flex flex-col">
               <div className="mb-6 shrink-0">
                 <h3 className="text-sm font-bold uppercase text-slate-500 dark:text-slate-300 tracking-widest">Create New Account</h3>
               </div>
