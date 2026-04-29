@@ -493,6 +493,11 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
   const recentLogs = coachingLogs.slice(-5).reverse();
   const metricCardClass = 'h-full rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm shadow-slate-200/40 dark:shadow-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-teal-200 dark:hover:border-teal-700 !p-2.5 sm:!p-3 bg-white/95 dark:bg-slate-900/80';
   const actionCardClass = 'h-full rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm shadow-slate-200/40 dark:shadow-none transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-teal-200 dark:hover:border-teal-700 bg-white/90 dark:bg-slate-900/80 !p-2.5 sm:!p-3';
+  const navigationItems = [
+    { key: 'chat', label: 'Coaching Chat', icon: MessageSquare, accent: 'teal' },
+    { key: 'courses', label: 'E-Learning', icon: GraduationCap, accent: 'purple' },
+    { key: 'journal', label: 'Journal', icon: ClipboardList, accent: 'amber' },
+  ] as const;
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -534,48 +539,39 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
         </Card>
       </div>
 
-      {/* Quick Action Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
-        <button onClick={() => setView('chat')} className="group text-left h-full">
-          <Card className={actionCardClass}>
-            <div className="flex h-full items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0 ring-1 ring-teal-200/60 dark:ring-teal-800/40 group-hover:scale-105 transition-transform">
-                <MessageSquare size={20} className="text-teal-600" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-black text-slate-800 dark:text-slate-100">Coaching Chat</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Direct discussion with your manager</p>
-              </div>
-            </div>
-          </Card>
-        </button>
-        <button onClick={() => setView('courses')} className="group text-left h-full">
-          <Card className={actionCardClass}>
-            <div className="flex h-full items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0 ring-1 ring-purple-200/60 dark:ring-purple-800/40 group-hover:scale-105 transition-transform">
-                <GraduationCap size={20} className="text-purple-600" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-black text-slate-800 dark:text-slate-100">E-Learning Courses</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">{activeRecs.length} pending recommendations</p>
-              </div>
-            </div>
-          </Card>
-        </button>
-        <button onClick={() => setView('journal')} className="group text-left h-full">
-          <Card className={actionCardClass}>
-            <div className="flex h-full items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0 ring-1 ring-amber-200/60 dark:ring-amber-800/40 group-hover:scale-105 transition-transform">
-                <ClipboardList size={20} className="text-amber-600" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-black text-slate-800 dark:text-slate-100">Coaching Journal</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">{coachingLogs.length} total entries</p>
-              </div>
-            </div>
-          </Card>
-        </button>
-      </div>
+      {/* Top Navigator */}
+      <Card className="!p-2.5 sm:!p-3 mb-3 bg-slate-50/90 dark:bg-slate-900/70 border border-slate-200/70 dark:border-slate-800/70">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          {navigationItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = view === item.key;
+            const accentClasses = {
+              teal: isActive ? 'bg-teal-deep text-white ring-2 ring-teal-200 dark:ring-teal-800' : 'bg-teal-50 text-teal-600 ring-1 ring-teal-100 dark:bg-teal-900/20 dark:text-teal-300 dark:ring-teal-900/40',
+              purple: isActive ? 'bg-purple-600 text-white ring-2 ring-purple-200 dark:ring-purple-800' : 'bg-purple-50 text-purple-600 ring-1 ring-purple-100 dark:bg-purple-900/20 dark:text-purple-300 dark:ring-purple-900/40',
+              amber: isActive ? 'bg-amber-500 text-white ring-2 ring-amber-200 dark:ring-amber-800' : 'bg-amber-50 text-amber-600 ring-1 ring-amber-100 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-900/40',
+            }[item.accent];
+            return (
+              <button
+                key={item.key}
+                onClick={() => setView(item.key)}
+                className={`group flex items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:-translate-y-0.5 ${isActive ? 'shadow-sm' : 'hover:bg-white/80 dark:hover:bg-slate-800/70'}`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${accentClasses}`}>
+                  <Icon size={17} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-black text-slate-800 dark:text-slate-100 leading-none">{item.label}</p>
+                  <p className="text-[10px] text-slate-400 mt-1 leading-none">
+                    {item.key === 'chat' && 'Direct discussion with your manager'}
+                    {item.key === 'courses' && `${activeRecs.length} pending recommendations`}
+                    {item.key === 'journal' && `${coachingLogs.length} total entries`}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
 
       {/* Mode Selection and Visualizations */}
       <div className="grid grid-cols-1 gap-2 mb-3">
