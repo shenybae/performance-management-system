@@ -83,6 +83,8 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     try { const res = await fetch('/api/requisitions', { headers: getAuthHeaders() }); const data = await res.json(); setRequisitions(Array.isArray(data) ? data : []); } catch { setRequisitions([]); }
   };
 
+  const trimText = (value: any, maxLen: number) => String(value || '').trim().slice(0, maxLen);
+
   useEffect(() => {
     const merged = [
       ...(Array.isArray(users) ? users : []).map((user: any) => ({
@@ -114,8 +116,6 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       .filter((option: any) => sameDept(option.dept, dept))
       .sort((a: any, b: any) => a.label.localeCompare(b.label));
   }, [reqForm.department, supervisorOptions]);
-
-  const trimText = (value: any, maxLen: number) => String(value || '').trim().slice(0, maxLen);
 
   const sanitizeRequisitionForm = () => ({
     ...reqForm,
