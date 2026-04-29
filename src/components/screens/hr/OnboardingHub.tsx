@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
@@ -11,10 +11,14 @@ import { appConfirm } from '../../../utils/appDialog';
 
 interface OnboardingHubProps {
   employees: Employee[];
+  users: any[];
   onRefresh: () => void;
 }
 
-export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
+const normalize = (value?: string | null) => (value || '').toString().trim().toLowerCase();
+const sameDept = (a?: string | null, b?: string | null) => normalize(a) === normalize(b) && normalize(a) !== '';
+
+export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProps) => {
   const [hiredApplicants, setHiredApplicants] = useState<any[]>([]);
   const [onboardingRecords, setOnboardingRecords] = useState<any[]>([]);
   const [showManualForm, setShowManualForm] = useState(false);
@@ -47,6 +51,20 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
   const todayISO = new Date().toISOString().split('T')[0];
 
   const trimText = (value: string) => value.trim();
+
+  const departmentManagerOptions = useMemo(() => {
+    const dept = trimText(form.dept);
+    if (!dept) return [];
+    return (Array.isArray(users) ? users : [])
+      .filter((user: any) => sameDept(user?.dept, dept))
+      .filter((user: any) => ['hr', 'manager'].includes(normalize(user?.role)) || normalize(user?.position).includes('supervisor'))
+      .map((user: any) => ({
+        value: String(user.id),
+        label: `${user.full_name || user.employee_name || user.username || user.email || 'User'}${user.position ? ` — ${user.position}` : ''}`,
+        avatarUrl: user.profile_picture || null,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [form.dept, users]);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -387,10 +405,14 @@ export const OnboardingHub = ({ employees, onRefresh }: OnboardingHubProps) => {
                     <input type="text" value={form.ssn} onChange={e => setForm({ ...form, ssn: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={64} required /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Reporting Manager</label>
                     <SearchableSelect
-                      options={employees.map(e => ({ value: String(e.id), label: `${e.name} — ${e.position}`, avatarUrl: (e as any).profile_picture || null }))}
+                      options={departmentManagerOptions}
                       value={form.manager_id}
                       onChange={v => setForm({ ...form, manager_id: String(v) })}
-                      placeholder="Select Manager..."
+                      placeholder={form.dept ? 'Select manager / HR / supervisor...' : 'Select department first'}
+                      allowEmpty
+                      emptyLabel="No reporting link"
+                      searchable
+                      dropdownVariant="pills-horizontal"
                     /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Emergency Contact Name</label>
                     <input type="text" value={form.emergency_contact} onChange={e => setForm({ ...form, emergency_contact: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required /></div>

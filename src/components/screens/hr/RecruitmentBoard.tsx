@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
@@ -9,8 +9,17 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { sigBlockHtml } from '../../../utils/print';
 import { appConfirm } from '../../../utils/appDialog';
+import { Employee } from '../../../types';
 
-export const RecruitmentBoard = () => {
+interface RecruitmentBoardProps {
+  employees?: Employee[];
+  users?: any[];
+}
+
+const normalize = (value?: string | null) => (value || '').toString().trim().toLowerCase();
+const sameDept = (a?: string | null, b?: string | null) => normalize(a) === normalize(b) && normalize(a) !== '';
+
+export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoardProps) => {
   const [activeForm, setActiveForm] = useState<'none' | 'requisition' | 'appraisal'>('none');
   const [editingApplicantId, setEditingApplicantId] = useState<number | null>(null);
   const [applicants, setApplicants] = useState<any[]>([]);
@@ -56,7 +65,7 @@ export const RecruitmentBoard = () => {
   const [appForm, setAppForm] = useState(emptyAppForm);
   const todayISO = new Date().toISOString().split('T')[0];
 
-  useEffect(() => { fetchApplicants(); fetchRequisitions(); fetchSupervisors(); }, []);
+  useEffect(() => { fetchApplicants(); fetchRequisitions(); }, []);
 
   useEffect(() => {
     if (!approvalOpenId) return;
@@ -74,25 +83,37 @@ export const RecruitmentBoard = () => {
     try { const res = await fetch('/api/requisitions', { headers: getAuthHeaders() }); const data = await res.json(); setRequisitions(Array.isArray(data) ? data : []); } catch { setRequisitions([]); }
   };
 
-  const fetchSupervisors = async () => {
-    try {
-      const res = await fetch('/api/employees', { headers: getAuthHeaders() });
-      const data = await res.json();
-      const rows = Array.isArray(data) ? data : [];
-      const supervisors = rows.filter((e: any) => String(e?.position || '').toLowerCase().includes('supervisor'));
-      const source = supervisors.length > 0 ? supervisors : rows;
-      const mapped = source
-        .filter((e: any) => String(e?.name || '').trim().length > 0)
-        .map((e: any) => ({
-          value: String(e.name),
-          label: String(e.name),
-          avatarUrl: e?.profile_picture || null,
-        }));
-      setSupervisorOptions(mapped);
-    } catch {
-      setSupervisorOptions([]);
-    }
-  };
+  useEffect(() => {
+    const merged = [
+      ...(Array.isArray(users) ? users : []).map((user: any) => ({
+        value: String(user.name || user.full_name || user.username || user.email || '').trim(),
+        label: `${user.name || user.full_name || user.username || user.email || 'User'}${user.position ? ` — ${user.position}` : ''}`,
+        avatarUrl: user.profile_picture || null,
+        dept: user.dept || '',
+        role: user.role || '',
+        position: user.position || '',
+      })),
+      ...(Array.isArray(employees) ? employees : []).map((employee: any) => ({
+        value: String(employee.name || employee.full_name || '').trim(),
+        label: `${employee.name || employee.full_name || 'Employee'}${employee.position ? ` — ${employee.position}` : ''}`,
+        avatarUrl: employee.profile_picture || null,
+        dept: employee.dept || '',
+        role: employee.role || '',
+        position: employee.position || '',
+      })),
+    ].filter((option: any) => option.value && (normalize(option.role) === 'hr' || normalize(option.role) === 'manager' || normalize(option.position).includes('supervisor')));
+
+    const deduped = merged.filter((option: any, index: number, array: any[]) => array.findIndex((candidate: any) => candidate.value === option.value) === index);
+    setSupervisorOptions(deduped);
+  }, [employees, users]);
+
+  const departmentSupervisorOptions = useMemo(() => {
+    const dept = trimText(reqForm.department, 100);
+    if (!dept) return [];
+    return supervisorOptions
+      .filter((option: any) => sameDept(option.dept, dept))
+      .sort((a: any, b: any) => a.label.localeCompare(b.label));
+  }, [reqForm.department, supervisorOptions]);
 
   const trimText = (value: any, maxLen: number) => String(value || '').trim().slice(0, maxLen);
 
@@ -623,7 +644,7 @@ export const RecruitmentBoard = () => {
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Supervisor</label>
                   <SearchableSelect
-                    options={supervisorOptions}
+                      options={departmentSupervisorOptions}
                     value={reqForm.supervisor}
                     onChange={v => setReqForm({ ...reqForm, supervisor: String(v) })}
                     placeholder="Select supervisor..."

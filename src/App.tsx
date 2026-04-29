@@ -595,9 +595,9 @@ export default function App() {
               // HR Screens (The Architect)
               case 'A1': return <EmployeeDirectory employees={employees} onSelectEmployee={(id) => { fetchEmployeeDetails(id); goToScreen('A2', { employee_id: id }); }} onCreateEmployee={fetchEmployees} />;
               case 'A2': return <EmployeeJacket employee={selectedEmployee} onBack={() => { goToScreen('A1'); fetchEmployees(); }} />;
-              case 'A3': return <RecruitmentBoard />;
-              case 'A7': return <OnboardingHub employees={employees} onRefresh={fetchEmployees} />;
-              case 'A4': return <OffboardingHub employees={employees} />;
+              case 'A3': return <RecruitmentBoard employees={employees} users={users} />;
+              case 'A7': return <OnboardingHub employees={employees} users={users} onRefresh={fetchEmployees} />;
+              case 'A4': return <OffboardingHub employees={employees} users={users} />;
               case 'A5': return <UserAccounts employees={employees} users={users} onRefresh={fetchUsers} />;
               case 'A14': return <LinkedPeople employees={employees} users={users} onRefresh={fetchEmployees} />;
               case 'A9': return <AuditLogs />;

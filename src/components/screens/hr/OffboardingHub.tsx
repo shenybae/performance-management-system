@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
@@ -25,9 +25,13 @@ const labelCls = "block text-xs font-bold text-slate-500 dark:text-slate-400 upp
 
 interface OffboardingHubProps {
   employees?: Employee[];
+  users?: any[];
 }
 
-export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
+const normalize = (value?: string | null) => (value || '').toString().trim().toLowerCase();
+const sameDept = (a?: string | null, b?: string | null) => normalize(a) === normalize(b) && normalize(a) !== '';
+
+export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubProps) => {
   const [activeForm, setActiveForm] = useState<'none' | 'property' | 'exit' | 'offboard'>('none');
   const [offboardingData, setOffboardingData] = useState<any[]>([]);
   const [exitInterviews, setExitInterviews] = useState<any[]>([]);
@@ -60,6 +64,20 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
     employee_sig: '', interviewer_name: '', interviewer_sig: '', interviewer_date: ''
   });
   const todayISO = new Date().toISOString().split('T')[0];
+  const departmentSupervisorOptions = useMemo(() => {
+    const dept = String(exitForm.department || '').trim();
+    if (!dept) return [];
+    return (Array.isArray(users) ? users : [])
+      .filter((user: any) => sameDept(user?.dept, dept))
+      .filter((user: any) => ['hr', 'manager'].includes(normalize(user?.role)) || normalize(user?.position).includes('supervisor'))
+      .map((user: any) => ({
+        value: user.name || user.full_name || user.username || user.email || '',
+        label: `${user.name || user.full_name || user.username || user.email || 'User'}${user.position ? ` — ${user.position}` : ''}`,
+        avatarUrl: user.profile_picture || null,
+      }))
+      .filter((option: any) => option.value)
+      .sort((a: any, b: any) => a.label.localeCompare(b.label));
+  }, [exitForm.department, users]);
 
   const trimText = (value: string) => value.trim();
 
@@ -614,7 +632,7 @@ export const OffboardingHub = ({ employees = [] }: OffboardingHubProps) => {
                 </div>
                 <div className="grid grid-cols-2 gap-4 mt-3">
                   <div><label className={labelCls}>Department</label><SearchableSelect options={['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => ({ value: d, label: d }))} value={exitForm.department} onChange={v => setExitForm({ ...exitForm, department: String(v) })} placeholder="Select department..." allowEmpty emptyLabel="Select department..." searchable dropdownVariant="pills-horizontal" className="w-full" /></div>
-                  <div><label className={labelCls}>Supervisor</label><SearchableSelect options={employees.map(e => ({ value: e.id, label: e.name, avatarUrl: (e as any).profile_picture || null }))} value={employees.find(e => e.name === exitForm.supervisor)?.id || ''} onChange={(id: any) => setExitForm({ ...exitForm, supervisor: employees.find(e => e.id === id)?.name || '' })} placeholder="Select supervisor..." dropdownVariant="pills-horizontal" /></div>
+                  <div><label className={labelCls}>Supervisor</label><SearchableSelect options={departmentSupervisorOptions} value={exitForm.supervisor} onChange={(value: any) => setExitForm({ ...exitForm, supervisor: String(value) })} placeholder={exitForm.department ? 'Select HR / manager / supervisor...' : 'Select department first'} allowEmpty emptyLabel="No supervisor" searchable dropdownVariant="pills-horizontal" /></div>
                 </div>
                 <div className="grid grid-cols-4 gap-4 mt-3">
                   <div><label className={labelCls}>Hire Date</label><input type="date" value={exitForm.hire_date} onChange={e => setExitForm({ ...exitForm, hire_date: e.target.value })} max={todayISO} className={inputCls} required /></div>

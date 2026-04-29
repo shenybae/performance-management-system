@@ -2095,6 +2095,23 @@ async function startServer() {
     return arr.length > 0;
   }
 
+  async function resolveDeptHrOwnerUserId(dept: any) {
+    const deptNorm = normalizeDept(dept);
+    if (!deptNorm) return null;
+    const rows: any = await query(
+      `SELECT id
+       FROM users
+       WHERE LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?))
+         AND LOWER(TRIM(COALESCE(role, ''))) = 'hr'
+         AND deleted_at IS NULL
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [deptNorm]
+    );
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    return Number(row?.id || 0) || null;
+  }
+
   async function isLeaderOf(leaderUserId: number, memberEmployeeId: number | null) {
     if (!leaderUserId || !memberEmployeeId) return false;
     try {
@@ -3690,6 +3707,9 @@ async function startServer() {
       const isPerformanceEval = formType.includes('performance');
       const supervisorUserId = Number(actor.id || 0) || null;
       const reviewerUserId = Number(actor.id || 0) || null;
+      const employeeRows: any = await query('SELECT dept FROM employees WHERE id = ? LIMIT 1', [employeeId]);
+      const employeeRow = Array.isArray(employeeRows) ? employeeRows[0] : employeeRows;
+      const hrOwnerUserId = await resolveDeptHrOwnerUserId(employeeRow?.dept || b.employee_department || actorCtx.dept);
       const requiredSignatures = isPerformanceEval
         ? ['supervisor_signature', 'reviewer_signature', 'employee_signature', 'hr_signature']
         : ['supervisor_signature', 'employee_signature'];
@@ -3705,9 +3725,9 @@ async function startServer() {
           hr_signature, hr_signature_date, overall_rating, recommendation, reviewer_agree, revised_rating,
           status, employee_department, employee_title, probationary_period,
           supervisor_print_name, reviewer_print_name, hr_print_name, employee_print_name,
-          supervisor_user_id, reviewer_user_id,
+          supervisor_user_id, reviewer_user_id, hr_owner_user_id,
           job_knowledge_comment, work_quality_comment, attendance_comment, productivity_comment, communication_comment, dependability_comment)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [employeeId, b.job_knowledge, b.productivity, b.attendance, b.overall, b.promotability_status, b.sign_off_date,
           b.form_type || null, b.eval_type || null, b.eval_period_from || null, b.eval_period_to || null,
           b.work_quality || null, b.communication || null, b.dependability || null,
@@ -3721,7 +3741,7 @@ async function startServer() {
           b.overall_rating || null, b.recommendation || null, b.reviewer_agree || null, b.revised_rating || null,
           b.status || null, b.employee_department || null, b.employee_title || null, b.probationary_period || null,
           b.supervisor_print_name || null, b.reviewer_print_name || null, b.hr_print_name || null, b.employee_print_name || null,
-          supervisorUserId, reviewerUserId,
+          supervisorUserId, reviewerUserId, hrOwnerUserId,
           b.job_knowledge_comment || null, b.work_quality_comment || null, b.attendance_comment || null, b.productivity_comment || null, b.communication_comment || null, b.dependability_comment || null]);
 
       const eUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employeeId]);
@@ -6128,6 +6148,15 @@ async function startServer() {
         } catch (e) { /* ignore resolution errors and allow null */ }
       }
 
+      let hrOwnerUserId: number | null = null;
+      if (employee_id) {
+        try {
+          const empRows: any = await query('SELECT dept FROM employees WHERE id = ? LIMIT 1', [employee_id]);
+          const empRow = Array.isArray(empRows) ? empRows[0] : empRows;
+          hrOwnerUserId = await resolveDeptHrOwnerUserId(empRow?.dept || position_dept || null);
+        } catch {}
+      }
+
       // Accept both bulk `items` JSON or per-item `brand`/`serial_no`/`uom_qty`.
       const brand = req.body.brand || null;
       const serial_no = req.body.serial_no || null;
@@ -6135,12 +6164,14 @@ async function startServer() {
 
       await query(`INSERT INTO property_accountability
         (employee_id, employee_name, position_dept, date_prepared, items, brand, serial_no, uom_qty,
+         hr_owner_user_id,
          turnover_by_name, turnover_by_date, turnover_by_sig,
          noted_by_name, noted_by_date, noted_by_sig,
          received_by_name, received_by_date, received_by_sig,
          audited_by_name, audited_by_date, audited_by_sig)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [employee_id, employee_name, position_dept, date_prepared, items, brand, serial_no, uom_qty,
+         hrOwnerUserId,
          turnover_by_name, turnover_by_date, turnover_by_sig,
          noted_by_name, noted_by_date, noted_by_sig,
          received_by_name, received_by_date, received_by_sig,
@@ -6490,6 +6521,7 @@ async function startServer() {
         president_approval, president_approval_date, president_approval_sig,
         comments,
       } = req.body;
+      const hrOwnerUserId = await resolveDeptHrOwnerUserId(department);
       await query(
         `INSERT INTO requisitions (
           job_title, department, supervisor, hiring_contact,
@@ -6502,8 +6534,9 @@ async function startServer() {
           cabinet_approval, cabinet_approval_date, cabinet_approval_sig,
           vp_approval, vp_approval_date, vp_approval_sig,
           president_approval, president_approval_date, president_approval_sig,
+          hr_owner_user_id,
           comments
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           job_title, department, supervisor, hiring_contact,
           position_status, months_per_year, hours_per_week, start_date,
@@ -6515,6 +6548,7 @@ async function startServer() {
           cabinet_approval, cabinet_approval_date, cabinet_approval_sig,
           vp_approval, vp_approval_date, vp_approval_sig,
           president_approval, president_approval_date, president_approval_sig,
+          hrOwnerUserId,
           comments,
         ]
       );
@@ -6626,6 +6660,7 @@ async function startServer() {
   app.post("/api/exit_interviews", authenticateToken, async (req, res) => {
     try {
       const b = req.body;
+      const hrOwnerUserId = await resolveDeptHrOwnerUserId(b.department || null);
       await query(`INSERT INTO exit_interviews (offboarding_id, employee_name, department, supervisor, reasons, liked_most, liked_least, interview_date, ssn, hire_date, termination_date, starting_position, ending_position, salary, pay_benefits_opinion, satisfaction_ratings, would_recommend, improvement_suggestions, additional_comments, employee_sig, interviewer_name, interviewer_sig, interviewer_date, dismissal_details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [b.offboarding_id || null, b.employee_name, b.department, b.supervisor, b.reasons, b.liked_most, b.liked_least, b.interview_date,
          b.ssn || null, b.hire_date || null, b.termination_date || null, b.starting_position || null, b.ending_position || null,
