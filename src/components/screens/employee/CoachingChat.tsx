@@ -540,28 +540,36 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
       </div>
 
       {/* Top Navigator */}
-      <Card className="!p-2.5 sm:!p-3 mb-3 bg-slate-50/90 dark:bg-slate-900/70 border border-slate-200/70 dark:border-slate-800/70">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+      <div className="mb-3 rounded-2xl border border-slate-200/70 dark:border-slate-800/70 bg-slate-50/90 dark:bg-slate-900/70 p-1.5 shadow-sm shadow-slate-200/30 dark:shadow-none">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">
           {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = view === item.key;
-            const accentClasses = {
-              teal: isActive ? 'bg-teal-deep text-white ring-2 ring-teal-200 dark:ring-teal-800' : 'bg-teal-50 text-teal-600 ring-1 ring-teal-100 dark:bg-teal-900/20 dark:text-teal-300 dark:ring-teal-900/40',
-              purple: isActive ? 'bg-purple-600 text-white ring-2 ring-purple-200 dark:ring-purple-800' : 'bg-purple-50 text-purple-600 ring-1 ring-purple-100 dark:bg-purple-900/20 dark:text-purple-300 dark:ring-purple-900/40',
-              amber: isActive ? 'bg-amber-500 text-white ring-2 ring-amber-200 dark:ring-amber-800' : 'bg-amber-50 text-amber-600 ring-1 ring-amber-100 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-900/40',
+            const activeText = isActive ? 'text-white' : 'text-slate-800 dark:text-slate-100';
+            const activeSubtext = isActive ? 'text-white/80' : 'text-slate-400';
+            const buttonClasses = {
+              teal: isActive ? 'bg-teal-deep shadow-md shadow-teal-200/30 dark:shadow-none' : 'bg-white dark:bg-slate-950 hover:bg-teal-50 dark:hover:bg-teal-900/20',
+              purple: isActive ? 'bg-purple-600 shadow-md shadow-purple-200/30 dark:shadow-none' : 'bg-white dark:bg-slate-950 hover:bg-purple-50 dark:hover:bg-purple-900/20',
+              amber: isActive ? 'bg-amber-500 shadow-md shadow-amber-200/30 dark:shadow-none' : 'bg-white dark:bg-slate-950 hover:bg-amber-50 dark:hover:bg-amber-900/20',
+            }[item.accent];
+            const iconClasses = {
+              teal: isActive ? 'bg-white/15 text-white' : 'bg-teal-50 text-teal-600 dark:bg-teal-900/20 dark:text-teal-300',
+              purple: isActive ? 'bg-white/15 text-white' : 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300',
+              amber: isActive ? 'bg-white/15 text-white' : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-300',
             }[item.accent];
             return (
               <button
                 key={item.key}
+                type="button"
                 onClick={() => setView(item.key)}
-                className={`group flex items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:-translate-y-0.5 ${isActive ? 'shadow-sm' : 'hover:bg-white/80 dark:hover:bg-slate-800/70'}`}
+                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-150 ${buttonClasses} ${isActive ? '' : 'border border-slate-200/60 dark:border-slate-800/60'}`}
               >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${accentClasses}`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${iconClasses}`}>
                   <Icon size={17} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-black text-slate-800 dark:text-slate-100 leading-none">{item.label}</p>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-none">
+                  <p className={`text-[13px] font-black leading-none ${activeText}`}>{item.label}</p>
+                  <p className={`text-[10px] mt-1 leading-none ${activeSubtext}`}>
                     {item.key === 'chat' && 'Direct discussion with your manager'}
                     {item.key === 'courses' && `${activeRecs.length} pending recommendations`}
                     {item.key === 'journal' && `${coachingLogs.length} total entries`}
@@ -571,7 +579,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
             );
           })}
         </div>
-      </Card>
+      </div>
 
       {/* Mode Selection and Visualizations */}
       <div className="grid grid-cols-1 gap-2 mb-3">
