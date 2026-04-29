@@ -60,6 +60,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [createRole, setCreateRole] = useState('');
   const [createPosition, setCreatePosition] = useState('');
   const [createDept, setCreateDept] = useState(creatorDept);
+  const createFormRef = useRef<HTMLFormElement | null>(null);
 
   // Controlled password state for create form
   const [createPassword, setCreatePassword] = useState('');
@@ -67,7 +68,8 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [showCreatePw, setShowCreatePw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
-  const [activeAccountScreen, setActiveAccountScreen] = useState<'existing' | 'create' | 'tracker'>('existing');
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [activeAccountScreen, setActiveAccountScreen] = useState<'existing' | 'tracker'>('existing');
 
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -263,6 +265,10 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
         setCreatePassword('');
         setConfirmPassword('');
         setCreateErrors({});
+        setShowCreatePw(false);
+        setShowConfirmPw(false);
+        setCreateModalOpen(false);
+        createFormRef.current?.reset();
       } else {
         const err = await res.json();
         (window as any).notify(err.error || 'Failed to create user', 'error');
@@ -345,23 +351,37 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     setModalOpen(true);
   };
 
+  const openCreateModal = () => {
+    setCreateErrors({});
+    setCreateRole('');
+    setCreatePosition('');
+    setCreateDept(creatorDept);
+    setCreatePassword('');
+    setConfirmPassword('');
+    setShowCreatePw(false);
+    setShowConfirmPw(false);
+    setCreateModalOpen(true);
+  };
+
+  const closeCreateModal = () => {
+    setCreateModalOpen(false);
+    setCreateErrors({});
+    setCreateRole('');
+    setCreatePosition('');
+    setCreateDept(creatorDept);
+    setCreatePassword('');
+    setConfirmPassword('');
+    setShowCreatePw(false);
+    setShowConfirmPw(false);
+    createFormRef.current?.reset();
+  };
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <SectionHeader title="User Accounts Management" subtitle="Create and manage login credentials for staff" />
       <div className="sticky top-3 z-20">
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-3 py-3 shadow-sm">
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveAccountScreen('create')}
-              className={`inline-flex items-center rounded-full border px-4 py-2 text-xs font-bold transition-colors ${
-                activeAccountScreen === 'create'
-                  ? 'border-teal-green bg-teal-green/10 text-teal-deep dark:border-teal-green dark:bg-teal-green/20 dark:text-teal-green'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'
-              }`}
-            >
-              Create New Account
-            </button>
             <button
               type="button"
               onClick={() => setActiveAccountScreen('tracker')}
@@ -388,147 +408,6 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
         </div>
       </div>
       <div className="space-y-6">
-        {activeAccountScreen === 'create' && (
-          <div className="grid grid-cols-1 gap-6">
-            <div className="mx-auto w-full max-w-[210mm] min-h-[297mm] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-6 sm:p-8 lg:p-10 flex flex-col">
-              <div className="mb-6 shrink-0">
-                <h3 className="text-sm font-bold uppercase text-slate-500 dark:text-slate-300 tracking-widest">Create New Account</h3>
-              </div>
-              <form onSubmit={handleSubmit} className="flex-1 grid grid-cols-1 gap-5 lg:gap-6 lg:grid-cols-2 xl:grid-cols-3 content-between items-start">
-                <div>
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</label>
-                  <input name="email" type="email" className={`w-full mt-2 p-3 bg-white dark:bg-black border ${createErrors.email ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} placeholder="e.g. jane@maptech.com" maxLength={254} autoComplete="email" required />
-                  <p className="mt-1.5 text-xs text-slate-400">Only @maptech.com emails are allowed.</p>
-                  {createErrors.email && <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.email}</p>}
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Full name</label>
-                  <input name="full_name" type="text" className="w-full mt-2 p-3 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50" placeholder="e.g. Jane Smith" maxLength={120} />
-                  <p className="mt-1.5 text-xs text-slate-400">If this matches an existing employee name, account linking is automatic.</p>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Password</label>
-                  <div className="relative">
-                    <input
-                      type={showCreatePw ? 'text' : 'password'}
-                      value={createPassword}
-                      onChange={e => { setCreatePassword(e.target.value); if (createErrors.password) setCreateErrors(p => ({ ...p, password: '' })); }}
-                      className={`w-full mt-2 p-3 pr-10 bg-white dark:bg-black border ${createErrors.password ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
-                      placeholder="Min 8 chars, uppercase, number, special"
-                      minLength={8}
-                      maxLength={128}
-                      autoComplete="new-password"
-                      required
-                    />
-                    <button type="button" onClick={() => setShowCreatePw(!showCreatePw)} className="absolute right-3 top-1/2 -translate-y-1/2 mt-0.5 text-slate-400 p-0.5">
-                      {showCreatePw ? <EyeOff size={15} /> : <Eye size={15} />}
-                    </button>
-                  </div>
-                  {createErrors.password && <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.password}</p>}
-                  {strength && (
-                    <div className="mt-2">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                          <div className={`h-full ${strength.color} rounded-full transition-all duration-300`} style={{ width: strength.width }} />
-                        </div>
-                        <span className={`text-xs font-bold ${strength.text}`}>{strength.label}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                        <span className={createPassword.length >= 8 ? 'text-emerald-500' : 'text-slate-400'}>{createPassword.length >= 8 ? <CheckCircle size={11} className="inline mr-0.5" /> : null}8+ chars</span>
-                        <span className={/[A-Z]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[A-Z]/.test(createPassword) ? <CheckCircle size={11} className="inline mr-0.5" /> : null}Uppercase</span>
-                        <span className={/[0-9]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[0-9]/.test(createPassword) ? <CheckCircle size={11} className="inline mr-0.5" /> : null}Number</span>
-                        <span className={/[^A-Za-z0-9]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[^A-Za-z0-9]/.test(createPassword) ? <CheckCircle size={11} className="inline mr-0.5" /> : null}Special</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Confirm Password</label>
-                  <div className="relative">
-                    <input
-                      type={showConfirmPw ? 'text' : 'password'}
-                      value={confirmPassword}
-                      onChange={e => { setConfirmPassword(e.target.value); if (createErrors.confirm) setCreateErrors(p => ({ ...p, confirm: '' })); }}
-                      className={`w-full mt-2 p-3 pr-10 bg-white dark:bg-black border ${createErrors.confirm ? 'border-red-400 dark:border-red-500' : confirmPassword && confirmPassword === createPassword ? 'border-emerald-400 dark:border-emerald-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
-                      placeholder="Re-enter password"
-                      minLength={8}
-                      maxLength={128}
-                      autoComplete="new-password"
-                      required
-                    />
-                    <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-3 top-1/2 -translate-y-1/2 mt-0.5 text-slate-400 p-0.5">
-                      {showConfirmPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                    </button>
-                  </div>
-                  {createErrors.confirm && <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.confirm}</p>}
-                  {confirmPassword && confirmPassword === createPassword && <p className="mt-1.5 text-sm text-emerald-500 flex items-center gap-1"><CheckCircle size={12} />Passwords match</p>}
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</label>
-                  <select name="role" value={createRole} onChange={e => {
-                    const nextRole = e.target.value;
-                    setCreateRole(nextRole);
-                    if (createErrors.role) setCreateErrors(p => ({ ...p, role: '' }));
-                    if (nextRole !== 'Manager' && nextRole !== 'HR') {
-                      setCreatePosition('');
-                      setCreateDept(creatorDept);
-                      setCreateErrors(p => ({ ...p, position: '', dept: '' }));
-                    } else if (!createDept.trim() && creatorDept) {
-                      setCreateDept(creatorDept);
-                    }
-                  }} className={`w-full mt-2 p-3 bg-white dark:bg-black border ${createErrors.role ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} required>
-                    <option value="">Select Role...</option>
-                    <option value="Employee">Employee</option>
-                    <option value="Manager">Manager</option>
-                    <option value="HR">HR Admin</option>
-                  </select>
-                  {createErrors.role && <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.role}</p>}
-                </div>
-
-                {(createRole === 'Manager' || createRole === 'HR') && (
-                  <>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Position</label>
-                      <input
-                        type="text"
-                        value={createPosition}
-                        onChange={e => {
-                          setCreatePosition(e.target.value);
-                          if (createErrors.position) setCreateErrors(p => ({ ...p, position: '' }));
-                        }}
-                        className={`w-full mt-2 p-3 bg-white dark:bg-black border ${createErrors.position ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
-                        placeholder="e.g. HR Specialist"
-                        maxLength={100}
-                        required
-                      />
-                      {createErrors.position && <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.position}</p>}
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Department</label>
-                      <input
-                        type="text"
-                        value={createDept}
-                        readOnly
-                        className={`w-full mt-2 p-3 bg-slate-50 dark:bg-slate-900/40 border ${createErrors.dept ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-700 dark:text-slate-200`}
-                        placeholder="e.g. Human Resources"
-                        maxLength={100}
-                        required
-                      />
-                      <p className="mt-1.5 text-xs text-slate-400">Locked to your department.</p>
-                      {createErrors.dept && <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.dept}</p>}
-                    </div>
-                  </>
-                )}
-
-                <div className="col-span-full flex items-center justify-end gap-3 pt-2 lg:pt-4 mt-auto">
-                  <button type="button" onClick={() => setActiveAccountScreen('existing')} className="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-base font-semibold">Back</button>
-                  <button type="submit" className="px-5 py-2.5 rounded-xl gradient-bg text-white font-bold text-base hover:opacity-90 transition-all shadow-lg shadow-teal-green/10">Create User</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
         {activeAccountScreen === 'tracker' && (
           <Card className="min-h-[72vh]">
             <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Account Creation Tracker</h3>
@@ -571,7 +450,18 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
 
         {activeAccountScreen === 'existing' && (
         <Card className="min-h-[64vh]">
-          <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-2 tracking-widest">Existing Accounts</h3>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 tracking-widest">Existing Accounts</h3>
+            {isHR && (
+              <button
+                type="button"
+                onClick={openCreateModal}
+                className="inline-flex items-center rounded-xl bg-teal-green px-4 py-2 text-xs font-bold text-white shadow-sm hover:opacity-95"
+              >
+                Create New Account
+              </button>
+            )}
+          </div>
           <div className="mb-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300 mb-1">Search Accounts</p>
             <SearchableSelect
@@ -858,6 +748,141 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
             {modalMode === 'edit' && <button onClick={handleSaveEdit} className="px-4 py-2 rounded-lg bg-teal-deep text-white">Save</button>}
           </div>
         </div>
+      </Modal>
+
+      <Modal open={createModalOpen} title="Create New Account" onClose={closeCreateModal}>
+        <form ref={createFormRef} onSubmit={handleSubmit} className="space-y-4 max-w-3xl">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</label>
+              <input name="email" type="email" className={`w-full mt-1 p-3 bg-white dark:bg-black border ${createErrors.email ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} placeholder="e.g. jane@maptech.com" maxLength={254} autoComplete="email" required />
+              <p className="mt-1 text-[11px] text-slate-400">Only @maptech.com emails are allowed.</p>
+              {createErrors.email && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.email}</p>}
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Full name</label>
+              <input name="full_name" type="text" className="w-full mt-1 p-3 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50" placeholder="e.g. Jane Smith" maxLength={120} />
+              <p className="mt-1 text-[11px] text-slate-400">If this matches an existing employee name, account linking is automatic.</p>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Password</label>
+              <div className="relative">
+                <input
+                  type={showCreatePw ? 'text' : 'password'}
+                  value={createPassword}
+                  onChange={e => { setCreatePassword(e.target.value); if (createErrors.password) setCreateErrors(p => ({ ...p, password: '' })); }}
+                  className={`w-full mt-1 p-3 pr-10 bg-white dark:bg-black border ${createErrors.password ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
+                  placeholder="Min 8 chars, uppercase, number, special"
+                  minLength={8}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  required
+                />
+                <button type="button" onClick={() => setShowCreatePw(!showCreatePw)} className="absolute right-3 top-1/2 -translate-y-1/2 mt-0.5 text-slate-400 p-0.5">
+                  {showCreatePw ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              {createErrors.password && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.password}</p>}
+              {strength && (
+                <div className="mt-2">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div className={`h-full ${strength.color} rounded-full transition-all duration-300`} style={{ width: strength.width }} />
+                    </div>
+                    <span className={`text-xs font-bold ${strength.text}`}>{strength.label}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+                    <span className={createPassword.length >= 8 ? 'text-emerald-500' : 'text-slate-400'}>{createPassword.length >= 8 ? <CheckCircle size={11} className="inline mr-0.5" /> : null}8+ chars</span>
+                    <span className={/[A-Z]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[A-Z]/.test(createPassword) ? <CheckCircle size={11} className="inline mr-0.5" /> : null}Uppercase</span>
+                    <span className={/[0-9]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[0-9]/.test(createPassword) ? <CheckCircle size={11} className="inline mr-0.5" /> : null}Number</span>
+                    <span className={/[^A-Za-z0-9]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[^A-Za-z0-9]/.test(createPassword) ? <CheckCircle size={11} className="inline mr-0.5" /> : null}Special</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Confirm Password</label>
+              <div className="relative">
+                <input
+                  type={showConfirmPw ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={e => { setConfirmPassword(e.target.value); if (createErrors.confirm) setCreateErrors(p => ({ ...p, confirm: '' })); }}
+                  className={`w-full mt-1 p-3 pr-10 bg-white dark:bg-black border ${createErrors.confirm ? 'border-red-400 dark:border-red-500' : confirmPassword && confirmPassword === createPassword ? 'border-emerald-400 dark:border-emerald-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
+                  placeholder="Re-enter password"
+                  minLength={8}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  required
+                />
+                <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-3 top-1/2 -translate-y-1/2 mt-0.5 text-slate-400 p-0.5">
+                  {showConfirmPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              {createErrors.confirm && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.confirm}</p>}
+              {confirmPassword && confirmPassword === createPassword && <p className="mt-1 text-sm text-emerald-500 flex items-center gap-1"><CheckCircle size={12} />Passwords match</p>}
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</label>
+              <select name="role" value={createRole} onChange={e => {
+                const nextRole = e.target.value;
+                setCreateRole(nextRole);
+                if (createErrors.role) setCreateErrors(p => ({ ...p, role: '' }));
+                if (nextRole !== 'Manager' && nextRole !== 'HR') {
+                  setCreatePosition('');
+                  setCreateDept(creatorDept);
+                  setCreateErrors(p => ({ ...p, position: '', dept: '' }));
+                } else if (!createDept.trim() && creatorDept) {
+                  setCreateDept(creatorDept);
+                }
+              }} className={`w-full mt-1 p-3 bg-white dark:bg-black border ${createErrors.role ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} required>
+                <option value="">Select Role...</option>
+                <option value="Employee">Employee</option>
+                <option value="Manager">Manager</option>
+                <option value="HR">HR Admin</option>
+              </select>
+              {createErrors.role && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.role}</p>}
+            </div>
+            {(createRole === 'Manager' || createRole === 'HR') && (
+              <>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Position</label>
+                  <input
+                    type="text"
+                    value={createPosition}
+                    onChange={e => {
+                      setCreatePosition(e.target.value);
+                      if (createErrors.position) setCreateErrors(p => ({ ...p, position: '' }));
+                    }}
+                    className={`w-full mt-1 p-3 bg-white dark:bg-black border ${createErrors.position ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
+                    placeholder="e.g. HR Specialist"
+                    maxLength={100}
+                    required
+                  />
+                  {createErrors.position && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.position}</p>}
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Department</label>
+                  <input
+                    type="text"
+                    value={createDept}
+                    readOnly
+                    className={`w-full mt-1 p-3 bg-slate-50 dark:bg-slate-900/40 border ${createErrors.dept ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-700 dark:text-slate-200`}
+                    placeholder="e.g. Human Resources"
+                    maxLength={100}
+                    required
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">Locked to your department.</p>
+                  {createErrors.dept && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.dept}</p>}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onClick={closeCreateModal} className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800">Cancel</button>
+            <button type="submit" className="px-4 py-2 rounded-lg bg-teal-deep text-white font-bold">Create User</button>
+          </div>
+        </form>
       </Modal>
     </motion.div>
   );
