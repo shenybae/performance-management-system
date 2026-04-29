@@ -492,15 +492,15 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
   const courseCompletionRate = courses.length > 0 ? Math.round((completedRecs.length / recommendations.length) * 100) || 0 : 0;
   const positivePercent = coachingLogs.length > 0 ? Math.round((positiveLogs.length / coachingLogs.length) * 100) : 0;
   const recentLogs = coachingLogs.slice(-5).reverse();
-  const metricCardClass = 'h-full rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm shadow-slate-200/40 dark:shadow-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-teal-200 dark:hover:border-teal-700';
-  const actionCardClass = 'h-full rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm shadow-slate-200/40 dark:shadow-none transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-teal-200 dark:hover:border-teal-700 bg-white/90 dark:bg-slate-900/80';
+  const metricCardClass = 'h-full rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm shadow-slate-200/40 dark:shadow-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-teal-200 dark:hover:border-teal-700 !p-3 sm:!p-4';
+  const actionCardClass = 'h-full rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm shadow-slate-200/40 dark:shadow-none transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-teal-200 dark:hover:border-teal-700 bg-white/90 dark:bg-slate-900/80 !p-3 sm:!p-4';
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <SectionHeader title="Coaching & Development" subtitle="Your personalized coaching dashboard with progress tracking and development insights" />
 
       {/* Analytics Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-3 mb-4">
         <Card className={metricCardClass}>
           <div className="flex items-center gap-3 min-h-[84px]">
             <div className="w-11 h-11 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0"><MessageSquare size={20} className="text-teal-600" /></div>
@@ -547,10 +547,10 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
       </div>
 
       {/* Quick Action Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
         <button onClick={() => setView('chat')} className="group text-left h-full">
           <Card className={actionCardClass}>
-            <div className="flex h-full items-center gap-4 p-4">
+            <div className="flex h-full items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0 ring-1 ring-teal-200/60 dark:ring-teal-800/40 group-hover:scale-105 transition-transform">
                 <MessageSquare size={24} className="text-teal-600" />
               </div>
@@ -563,7 +563,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
         </button>
         <button onClick={() => setView('courses')} className="group text-left h-full">
           <Card className={actionCardClass}>
-            <div className="flex h-full items-center gap-4 p-4">
+            <div className="flex h-full items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0 ring-1 ring-purple-200/60 dark:ring-purple-800/40 group-hover:scale-105 transition-transform">
                 <GraduationCap size={24} className="text-purple-600" />
               </div>
@@ -576,7 +576,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
         </button>
         <button onClick={() => setView('journal')} className="group text-left h-full">
           <Card className={actionCardClass}>
-            <div className="flex h-full items-center gap-4 p-4">
+            <div className="flex h-full items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0 ring-1 ring-amber-200/60 dark:ring-amber-800/40 group-hover:scale-105 transition-transform">
                 <ClipboardList size={24} className="text-amber-600" />
               </div>
@@ -590,19 +590,19 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
       </div>
 
       {/* Mode Selection and Visualizations */}
-      <div className="grid grid-cols-1 gap-6 mb-6">
+      <div className="grid grid-cols-1 gap-4 mb-4">
         {/* Coaching Sentiment */}
         <Card>
-          <div className="mb-3">
-            <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-3">Coaching Journal Sentiment</h3>
+          <div className="mb-2">
+            <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Coaching Journal Sentiment</h3>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="text-center p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="text-center p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20">
               <p className="text-2xl font-black text-emerald-600">{positiveLogs.length}</p>
               <p className="text-xs font-bold text-emerald-600 mt-1">Positive</p>
               <p className="text-[10px] text-slate-400">{positivePercent}% of entries</p>
             </div>
-            <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20">
+            <div className="text-center p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20">
               <p className="text-2xl font-black text-amber-600">{constructiveLogs.length}</p>
               <p className="text-xs font-bold text-amber-600 mt-1">Constructive</p>
               <p className="text-[10px] text-slate-400">{100 - positivePercent}% of entries</p>
@@ -614,7 +614,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
       {/* Journal Summary Table */}
       {recentLogs.length > 0 && (
         <Card>
-          <div className="mb-4">
+          <div className="mb-3">
             <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Recent Coaching Observations</h3>
           </div>
           <div className="overflow-x-auto">
@@ -659,7 +659,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
       {/* Course Recommendations Table */}
       {recommendations.length > 0 && (
         <Card>
-          <div className="mb-4">
+          <div className="mb-3">
             <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">All Course Recommendations</h3>
           </div>
           <div className="overflow-x-auto">
