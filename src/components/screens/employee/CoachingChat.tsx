@@ -539,8 +539,8 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
       </div>
 
       {/* Top Navigator */}
-      <div className="mb-3 rounded-2xl border border-slate-200/70 dark:border-slate-800/70 bg-white/80 dark:bg-slate-900/70 backdrop-blur-sm p-1 shadow-sm shadow-slate-200/30 dark:shadow-none">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-1">
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/70 dark:border-slate-800/70 bg-white/80 dark:bg-slate-900/70 backdrop-blur-sm px-2 py-2 shadow-sm shadow-slate-200/30 dark:shadow-none">
+        <div className="flex w-full flex-wrap items-center gap-2">
           {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = view === item.key;
@@ -560,14 +560,13 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
                 key={item.key}
                 type="button"
                 onClick={() => setView(item.key)}
-                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-150 ${buttonClasses} ${isActive ? '' : 'border border-slate-200/60 dark:border-slate-800/60'}`}
+                className={`group inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-left transition-all duration-150 ${buttonClasses} ${isActive ? '' : 'border border-slate-200/60 dark:border-slate-800/60'}`}
               >
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${iconClasses}`}>
-                  <Icon size={17} />
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors ${iconClasses}`}>
+                  <Icon size={14} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className={`text-[13px] font-black leading-none ${activeText}`}>{item.label}</p>
-                  <div className={`mt-1 h-1 w-10 rounded-full transition-all ${isActive ? 'bg-white/90' : 'bg-transparent group-hover:bg-slate-300 dark:group-hover:bg-slate-600'}`} />
+                  <p className={`text-[12px] font-black leading-none whitespace-nowrap ${activeText}`}>{item.label}</p>
                 </div>
               </button>
             );
