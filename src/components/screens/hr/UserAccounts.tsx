@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
