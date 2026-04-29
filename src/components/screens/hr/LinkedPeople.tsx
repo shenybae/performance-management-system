@@ -60,15 +60,37 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
     [currentDept, employees]
   );
 
+  const departmentOptions = useMemo(() => {
+    return [...new Set((employees || []).map((person) => (person as any).dept).filter(Boolean).map((dept) => (dept || '').toString().trim()))].sort((a, b) => a.localeCompare(b));
+  }, [employees]);
+
+  const [selectedDept, setSelectedDept] = useState('');
+
+  useEffect(() => {
+    if (selectedDept) return;
+    if (currentDept) {
+      setSelectedDept(currentDept);
+      return;
+    }
+    if (departmentOptions[0]) setSelectedDept(departmentOptions[0]);
+  }, [currentDept, departmentOptions, selectedDept]);
+
+  const activeDept = selectedDept || currentDept;
+  const activeDeptLabel = activeDept || 'selected department';
+  const activeEmployees = useMemo(
+    () => (activeDept ? (employees || []).filter((person) => sameDept((person as any).dept, activeDept)) : []),
+    [activeDept, employees]
+  );
+
   const employeeMap = useMemo(() => {
     const map = new Map<number, Employee>();
-    scopedEmployees.forEach((person) => map.set(Number(person.id), person));
+    activeEmployees.forEach((person) => map.set(Number(person.id), person));
     return map;
-  }, [scopedEmployees]);
+  }, [activeEmployees]);
 
   const childrenByManager = useMemo(() => {
     const map = new Map<number, Employee[]>();
-    scopedEmployees.forEach((person) => {
+    activeEmployees.forEach((person) => {
       const managerId = Number((person as any).manager_id || 0);
       if (!managerId) return;
       const bucket = map.get(managerId) || [];
@@ -77,19 +99,19 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
     });
     map.forEach((bucket) => bucket.sort((a, b) => personLabel(a).localeCompare(personLabel(b))));
     return map;
-  }, [scopedEmployees]);
+  }, [activeEmployees]);
 
   const treeRoots = useMemo(
-    () => scopedEmployees.filter((person) => {
+    () => activeEmployees.filter((person) => {
       const managerId = Number((person as any).manager_id || 0);
       return !managerId || !employeeMap.has(managerId);
     }),
-    [employeeMap, scopedEmployees]
+    [employeeMap, activeEmployees]
   );
 
   const sortedEmployees = useMemo(
-    () => [...scopedEmployees].sort((a, b) => personLabel(a).localeCompare(personLabel(b))),
-    [scopedEmployees]
+    () => [...activeEmployees].sort((a, b) => personLabel(a).localeCompare(personLabel(b))),
+    [activeEmployees]
   );
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | ''>('');
@@ -185,18 +207,18 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
     if (!selectedEmployee) return;
     const targetManager = managerId ? employeeMap.get(managerId) || null : null;
     if (managerId && !targetManager) {
-      window.notify?.(`Choose someone from ${deptLabel}.`, 'error');
+      window.notify?.(`Choose someone from ${activeDeptLabel}.`, 'error');
       return;
     }
 
-    const actionText = managerId ? `Link ${personLabel(selectedEmployee)} to ${personLabel(targetManager)} in ${deptLabel}?` : `Remove the current link for ${personLabel(selectedEmployee)}?`;
+    const actionText = managerId ? `Link ${personLabel(selectedEmployee)} to ${personLabel(targetManager)} in ${activeDeptLabel}?` : `Remove the current link for ${personLabel(selectedEmployee)}?`;
     if (!(await appConfirm(actionText, { title: 'Update Link', confirmText: managerId ? 'Link' : 'Unlink', icon: 'success' }))) return;
 
     const payload = {
       name: (selectedEmployee as any).name || selectedEmployee.full_name || '',
       status: (selectedEmployee as any).status || 'Regular',
       position: (selectedEmployee as any).position || '',
-      dept: (selectedEmployee as any).dept || currentDept || '',
+      dept: (selectedEmployee as any).dept || activeDept || currentDept || '',
       manager_id: managerId,
       hire_date: (selectedEmployee as any).hire_date || '',
       salary_base: (selectedEmployee as any).salary_base || 0,
@@ -227,9 +249,9 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
 
   const selectedManager = selectedEmployee && (selectedEmployee as any).manager_id ? employeeMap.get(Number((selectedEmployee as any).manager_id)) : null;
   const directReports = selectedEmployee ? (childrenByManager.get(Number(selectedEmployee.id)) || []) : [];
-  const linkedCount = scopedEmployees.filter((person) => Number((person as any).manager_id || 0) > 0).length;
-  const managerCount = scopedEmployees.filter((person) => roleLabel(person) === 'Manager').length;
-  const supervisorCount = scopedEmployees.filter((person) => roleLabel(person) === 'Supervisor').length;
+  const linkedCount = activeEmployees.filter((person) => Number((person as any).manager_id || 0) > 0).length;
+  const managerCount = activeEmployees.filter((person) => roleLabel(person) === 'Manager').length;
+  const supervisorCount = activeEmployees.filter((person) => roleLabel(person) === 'Supervisor').length;
 
   if (!isHR) {
     return (
@@ -251,7 +273,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <SectionHeader
         title="Linked People"
-        subtitle={`Only people in ${deptLabel} are shown here. Pick a person, then choose who they report to.`}
+        subtitle="Pick a department first, then review or change the reporting links inside it."
       />
 
       {!currentDept && (
@@ -262,13 +284,36 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
         </Card>
       )}
 
-      {currentDept && (
+      <Card className="overflow-hidden">
+        <div className="flex flex-wrap gap-2">
+          {departmentOptions.map((dept) => {
+            const deptEmployees = (employees || []).filter((person) => sameDept((person as any).dept, dept));
+            const deptLinkedCount = deptEmployees.filter((person) => Number((person as any).manager_id || 0) > 0).length;
+            return (
+              <button
+                key={dept}
+                type="button"
+                onClick={() => setSelectedDept(dept)}
+                className={`rounded-full border px-4 py-2 text-xs font-bold transition-colors ${selectedDept === dept ? 'border-teal-green bg-teal-green/10 text-teal-deep dark:border-teal-green dark:bg-teal-green/20 dark:text-teal-green' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'}`}
+              >
+                {dept}
+                <span className="ml-2 text-[10px] opacity-70">{deptLinkedCount}/{deptEmployees.length}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+          These buttons switch the view to each department. People in the same department are shown as one linked group.
+        </p>
+      </Card>
+
+      {activeDept && (
         <div className="grid grid-cols-1 xl:grid-cols-[380px_minmax(0,1fr)] gap-6 items-start">
           <div className="space-y-6">
             <Card>
               <div className="flex items-center gap-2 mb-4">
                 <Users size={18} className="text-teal-green" />
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{deptLabel} Snapshot</h3>
+                <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{activeDeptLabel} Snapshot</h3>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-3">
@@ -316,7 +361,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
                     options={selectOptions.filter((opt) => Number(opt.value) !== Number(selectedEmployeeId))}
                     value={linkedToId || ''}
                     onChange={(value) => setLinkedToId(value ? Number(value) : '')}
-                    placeholder={`Choose someone in ${deptLabel}...`}
+                    placeholder={`Choose someone in ${activeDeptLabel}...`}
                     searchable
                     allowEmpty
                     emptyLabel="No link"
@@ -326,7 +371,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
                 </div>
 
                 <p className="rounded-xl bg-teal-green/10 dark:bg-teal-green/15 px-3 py-2 text-xs text-teal-deep dark:text-teal-green">
-                  This screen only shows and changes links inside {deptLabel}.
+                  This screen only shows and changes links inside {activeDeptLabel}.
                 </p>
 
                 <div className="flex flex-wrap gap-3 pt-2">
@@ -383,7 +428,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{personLabel(person)}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{roleLabel(person)} • {(person as any).dept || deptLabel}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{roleLabel(person)} • {(person as any).dept || activeDeptLabel}</p>
                       </div>
                       {index < chain.length - 1 && <ArrowRight size={14} className="text-slate-300 dark:text-slate-600 ml-auto flex-shrink-0" />}
                     </div>
@@ -396,8 +441,8 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
           <Card className="min-h-[72vh]">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
               <div>
-                <h3 className="text-lg font-black text-slate-900 dark:text-slate-100">People in {deptLabel}</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Click a person to see who they report to and who reports to them.</p>
+                <h3 className="text-lg font-black text-slate-900 dark:text-slate-100">People in {activeDeptLabel}</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Click a person to see their reporting line inside this department.</p>
               </div>
               <div className="w-full sm:w-80">
                 <input
@@ -412,7 +457,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
             <div className="space-y-4">
               {filteredRoots.length > 0 ? filteredRoots.map((person) => renderNode(person)) : (
                 <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-8 text-center text-slate-500 dark:text-slate-400">
-                  No people found in {deptLabel}.
+                  No people found in {activeDeptLabel}.
                 </div>
               )}
             </div>
@@ -425,13 +470,13 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
           <Card className="lg:col-span-1">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Selected Person</p>
             <h4 className="text-xl font-black text-slate-900 dark:text-slate-100">{personLabel(selectedEmployee)}</h4>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{(selectedEmployee as any).position || 'No position'} • {(selectedEmployee as any).dept || deptLabel}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{(selectedEmployee as any).position || 'No position'} • {(selectedEmployee as any).dept || activeDeptLabel}</p>
           </Card>
           <Card className="lg:col-span-1">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Reports To</p>
             <h4 className="text-xl font-black text-slate-900 dark:text-slate-100">{selectedManager ? personLabel(selectedManager) : 'No current manager'}</h4>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              {selectedManager ? `${roleLabel(selectedManager)} • ${(selectedManager as any).dept || deptLabel}` : 'Use the link editor to assign one.'}
+              {selectedManager ? `${roleLabel(selectedManager)} • ${(selectedManager as any).dept || activeDeptLabel}` : 'Use the link editor to assign one.'}
             </p>
           </Card>
           <Card className="lg:col-span-1">
