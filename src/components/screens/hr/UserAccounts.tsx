@@ -4,8 +4,7 @@ import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Modal } from '../../common/Modal';
-import { SearchableSelect } from '../../common/SearchableSelect';
-import { Eye, EyeOff, AlertCircle, CheckCircle, Archive } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, CheckCircle, Archive, Search, X } from 'lucide-react';
 import { appConfirm } from '../../../utils/appDialog';
 
 const ACCOUNT_EMAIL_DOMAIN = 'maptech.com';
@@ -80,6 +79,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [modalAddress, setModalAddress] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [accountSearchSelection, setAccountSearchSelection] = useState<Array<string | number>>([]);
+  const [accountSearchQuery, setAccountSearchQuery] = useState('');
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [activePage, setActivePage] = useState(1);
   const [archivedPage, setArchivedPage] = useState(1);
@@ -151,6 +151,12 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [allUsers]);
 
+  const filteredAccountOptions = useMemo(() => {
+    const q = accountSearchQuery.trim().toLowerCase();
+    if (!q) return accountOptions;
+    return accountOptions.filter((opt) => opt.label.toLowerCase().includes(q));
+  }, [accountOptions, accountSearchQuery]);
+
   const matchesAccountSelection = (u: any) => selectedAccountIds.size === 0 || selectedAccountIds.has(String(u.id));
   const activeUsers = allUsers.filter((u: any) => !u.deleted_at && matchesAccountSelection(u));
   const archivedUsers = allUsers.filter((u: any) => !!u.deleted_at && matchesAccountSelection(u));
@@ -187,6 +193,11 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     setActivePage(1);
     setArchivedPage(1);
   }, [accountSearchSelection]);
+
+  useEffect(() => {
+    setActivePage(1);
+    setArchivedPage(1);
+  }, [accountSearchQuery]);
 
   const validateCreateForm = (email: string, fullName: string, role: string, position: string, dept: string): Record<string, string> => {
     const errs: Record<string, string> = {};
@@ -509,18 +520,62 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
           <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-2 tracking-widest">Existing Accounts</h3>
           <div className="mb-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300 mb-1">Search Accounts</p>
-            <SearchableSelect
-              options={accountOptions}
-              value={accountSearchSelection}
-              onChange={(v) => setAccountSearchSelection(Array.isArray(v) ? v : (v ? [v] : []))}
-              placeholder="Search users/accounts..."
-              searchable
-              multiSelect
-              allowEmpty
-              emptyLabel="All accounts"
-              dropdownVariant="pills-horizontal"
-              className="w-full"
-            />
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-black px-3 py-2">
+              <Search size={14} className="text-slate-400 shrink-0" />
+              <input
+                value={accountSearchQuery}
+                onChange={e => setAccountSearchQuery(e.target.value)}
+                placeholder="Search users/accounts..."
+                className="flex-1 bg-transparent text-sm text-slate-900 dark:text-white outline-none placeholder-slate-400"
+              />
+              {(accountSearchQuery || accountSearchSelection.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => { setAccountSearchQuery(''); setAccountSearchSelection([]); }}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 max-h-36 overflow-y-auto pr-1">
+              <button
+                type="button"
+                onClick={() => setAccountSearchSelection([])}
+                className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
+                  accountSearchSelection.length === 0
+                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/25 dark:text-blue-300'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'
+                }`}
+              >
+                All accounts
+              </button>
+              {filteredAccountOptions.map((opt) => {
+                const selected = accountSearchSelection.map(String).includes(String(opt.value));
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setAccountSearchSelection((prev) => {
+                        const exists = prev.map(String).includes(String(opt.value));
+                        return exists ? prev.filter(v => String(v) !== String(opt.value)) : [...prev, opt.value];
+                      });
+                    }}
+                    className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
+                      selected
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/25 dark:text-blue-300'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+              {filteredAccountOptions.length === 0 && (
+                <div className="text-xs text-slate-400 italic px-1 py-2">No matching accounts</div>
+              )}
+            </div>
           </div>
           <div className="flex justify-between items-center mb-3 gap-3">
             <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">
