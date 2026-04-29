@@ -67,6 +67,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [showCreatePw, setShowCreatePw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -351,6 +352,62 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Card className="xl:col-span-2 w-full">
           <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Create New Account</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Open the modal to create a new account.</p>
+          <button
+            type="button"
+            onClick={() => setCreateModalOpen(true)}
+            className="w-full gradient-bg text-white py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-teal-green/10"
+          >
+            Create New Account
+          </button>
+        </Card>
+
+        <Card className="xl:col-span-1">
+          <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Account Creation Tracker</h3>
+          {byLatestCreated.length > 0 ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/80 dark:bg-slate-900/40">
+                <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Created Accounts</p>
+                <div className="mt-2 max-h-40 overflow-y-auto pr-1 space-y-2">
+                  {byLatestCreated.map((u: any) => (
+                    <div key={u.id} className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1.5 bg-white/70 dark:bg-black/20">
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate" title={u.full_name || u.email || u.username || '-'}>
+                        {u.full_name || u.email || u.username || '-'}
+                      </p>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate" title={accountCreatorName(u)}>
+                        By: {accountCreatorName(u)}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">At: {formatDateTime(u.created_at)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Active Accounts</p>
+                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{activeUsers.length}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Archived</p>
+                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{archivedUsers.length}</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-4 text-sm text-slate-500 dark:text-slate-400">
+              No account creation activity yet.
+            </div>
+          )}
+        </Card>
+        </div>
+
+        <Modal
+          open={createModalOpen}
+          title="Create New Account"
+          onClose={() => setCreateModalOpen(false)}
+          maxWidthClassName="max-w-3xl"
+          bodyClassName="pb-6"
+        >
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</label>
@@ -477,48 +534,12 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
               </>
             )}
 
-            <button type="submit" className="w-full gradient-bg text-white py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-teal-green/10">Create User</button>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setCreateModalOpen(false)} className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded-lg gradient-bg text-white font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-teal-green/10">Create User</button>
+            </div>
           </form>
-        </Card>
-
-        <Card className="xl:col-span-1">
-          <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Account Creation Tracker</h3>
-          {byLatestCreated.length > 0 ? (
-            <div className="space-y-3">
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/80 dark:bg-slate-900/40">
-                <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Created Accounts</p>
-                <div className="mt-2 max-h-40 overflow-y-auto pr-1 space-y-2">
-                  {byLatestCreated.map((u: any) => (
-                    <div key={u.id} className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1.5 bg-white/70 dark:bg-black/20">
-                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate" title={u.full_name || u.email || u.username || '-'}>
-                        {u.full_name || u.email || u.username || '-'}
-                      </p>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate" title={accountCreatorName(u)}>
-                        By: {accountCreatorName(u)}
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">At: {formatDateTime(u.created_at)}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Active Accounts</p>
-                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{activeUsers.length}</p>
-                </div>
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Archived</p>
-                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{archivedUsers.length}</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-4 text-sm text-slate-500 dark:text-slate-400">
-              No account creation activity yet.
-            </div>
-          )}
-        </Card>
-        </div>
+        </Modal>
 
         <Card>
           <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-2 tracking-widest">Existing Accounts</h3>
