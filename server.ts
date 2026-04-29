@@ -2635,6 +2635,15 @@ async function startServer() {
         vals.push(null);
       }
 
+      if (phone !== undefined) {
+        sets.push('phone = ?');
+        vals.push(String(phone || '').trim() || null);
+      }
+      if (address !== undefined) {
+        sets.push('address = ?');
+        vals.push(String(address || '').trim() || null);
+      }
+
       if ((phone !== undefined || address !== undefined) && before?.employee_id) {
         const employeeSets: string[] = [];
         const employeeVals: any[] = [];
