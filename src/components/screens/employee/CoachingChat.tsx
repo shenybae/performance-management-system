@@ -489,10 +489,9 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
   }
 
   /* ─── MAIN VIEW ─── */
-  const courseCompletionRate = courses.length > 0 ? Math.round((completedRecs.length / recommendations.length) * 100) || 0 : 0;
   const positivePercent = coachingLogs.length > 0 ? Math.round((positiveLogs.length / coachingLogs.length) * 100) : 0;
   const recentLogs = coachingLogs.slice(-5).reverse();
-  const metricCardClass = 'h-full rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm shadow-slate-200/40 dark:shadow-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-teal-200 dark:hover:border-teal-700 !p-3 sm:!p-4';
+  const metricCardClass = 'h-full rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm shadow-slate-200/40 dark:shadow-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-teal-200 dark:hover:border-teal-700 !p-3 sm:!p-4 bg-white/95 dark:bg-slate-900/80';
   const actionCardClass = 'h-full rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm shadow-slate-200/40 dark:shadow-none transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-teal-200 dark:hover:border-teal-700 bg-white/90 dark:bg-slate-900/80 !p-3 sm:!p-4';
 
   return (
@@ -500,46 +499,35 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
       <SectionHeader title="Coaching & Development" subtitle="Your personalized coaching dashboard with progress tracking and development insights" />
 
       {/* Analytics Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 mb-4">
         <Card className={metricCardClass}>
-          <div className="flex items-center gap-3 min-h-[84px]">
-            <div className="w-11 h-11 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0"><MessageSquare size={20} className="text-teal-600" /></div>
+          <div className="flex items-center gap-3 min-h-[76px]">
+            <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0"><MessageSquare size={18} className="text-teal-600" /></div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Chat Messages</p>
-              <p className="text-3xl font-black leading-none text-slate-800 dark:text-slate-100 mt-1">{chatMessages.length}</p>
+              <p className="text-2xl font-black leading-none text-slate-800 dark:text-slate-100 mt-1">{chatMessages.length}</p>
               <p className="text-[11px] text-slate-400 mt-1">{chatMessages.filter((m: any) => m.sender_role === 'Manager').length} from manager</p>
             </div>
           </div>
         </Card>
 
         <Card className={metricCardClass}>
-          <div className="flex items-center gap-3 min-h-[84px]">
-            <div className="w-11 h-11 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0"><GraduationCap size={20} className="text-purple-600" /></div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Course Status</p>
-              <p className="text-3xl font-black leading-none text-slate-800 dark:text-slate-100 mt-1">{completedRecs.length}/{recommendations.length}</p>
-              <p className="text-[11px] text-slate-400 mt-1">{courseCompletionRate}% complete</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className={metricCardClass}>
-          <div className="flex items-center gap-3 min-h-[84px]">
-            <div className="w-11 h-11 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0"><ThumbsUp size={20} className="text-emerald-600" /></div>
+          <div className="flex items-center gap-3 min-h-[76px]">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0"><ThumbsUp size={18} className="text-emerald-600" /></div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Positive Feedback</p>
-              <p className="text-3xl font-black leading-none text-emerald-600 mt-1">{positiveLogs.length}</p>
+              <p className="text-2xl font-black leading-none text-emerald-600 mt-1">{positiveLogs.length}</p>
               <p className="text-[11px] text-slate-400 mt-1">of {coachingLogs.length} journal entries</p>
             </div>
           </div>
         </Card>
 
         <Card className={metricCardClass}>
-          <div className="flex items-center gap-3 min-h-[84px]">
-            <div className="w-11 h-11 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0"><ClipboardList size={20} className="text-amber-600" /></div>
+          <div className="flex items-center gap-3 min-h-[76px]">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0"><ClipboardList size={18} className="text-amber-600" /></div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Journal Entries</p>
-              <p className="text-3xl font-black leading-none text-slate-800 dark:text-slate-100 mt-1">{coachingLogs.length}</p>
+              <p className="text-2xl font-black leading-none text-slate-800 dark:text-slate-100 mt-1">{coachingLogs.length}</p>
               <p className="text-[11px] text-slate-400 mt-1">{positivePercent}% positive tone</p>
             </div>
           </div>
@@ -551,12 +539,12 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
         <button onClick={() => setView('chat')} className="group text-left h-full">
           <Card className={actionCardClass}>
             <div className="flex h-full items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0 ring-1 ring-teal-200/60 dark:ring-teal-800/40 group-hover:scale-105 transition-transform">
-                <MessageSquare size={24} className="text-teal-600" />
+              <div className="w-11 h-11 rounded-2xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0 ring-1 ring-teal-200/60 dark:ring-teal-800/40 group-hover:scale-105 transition-transform">
+                <MessageSquare size={22} className="text-teal-600" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-base font-black text-slate-800 dark:text-slate-100">Coaching Chat</p>
-                <p className="text-xs text-slate-400 mt-1">Direct discussion with your manager</p>
+                <p className="text-sm font-black text-slate-800 dark:text-slate-100">Coaching Chat</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Direct discussion with your manager</p>
               </div>
             </div>
           </Card>
@@ -564,12 +552,12 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
         <button onClick={() => setView('courses')} className="group text-left h-full">
           <Card className={actionCardClass}>
             <div className="flex h-full items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0 ring-1 ring-purple-200/60 dark:ring-purple-800/40 group-hover:scale-105 transition-transform">
-                <GraduationCap size={24} className="text-purple-600" />
+              <div className="w-11 h-11 rounded-2xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0 ring-1 ring-purple-200/60 dark:ring-purple-800/40 group-hover:scale-105 transition-transform">
+                <GraduationCap size={22} className="text-purple-600" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-base font-black text-slate-800 dark:text-slate-100">E-Learning Courses</p>
-                <p className="text-xs text-slate-400 mt-1">{activeRecs.length} pending recommendations</p>
+                <p className="text-sm font-black text-slate-800 dark:text-slate-100">E-Learning Courses</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">{activeRecs.length} pending recommendations</p>
               </div>
             </div>
           </Card>
@@ -577,12 +565,12 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
         <button onClick={() => setView('journal')} className="group text-left h-full">
           <Card className={actionCardClass}>
             <div className="flex h-full items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0 ring-1 ring-amber-200/60 dark:ring-amber-800/40 group-hover:scale-105 transition-transform">
-                <ClipboardList size={24} className="text-amber-600" />
+              <div className="w-11 h-11 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0 ring-1 ring-amber-200/60 dark:ring-amber-800/40 group-hover:scale-105 transition-transform">
+                <ClipboardList size={22} className="text-amber-600" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-base font-black text-slate-800 dark:text-slate-100">Coaching Journal</p>
-                <p className="text-xs text-slate-400 mt-1">{coachingLogs.length} total entries</p>
+                <p className="text-sm font-black text-slate-800 dark:text-slate-100">Coaching Journal</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">{coachingLogs.length} total entries</p>
               </div>
             </div>
           </Card>
@@ -590,19 +578,20 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
       </div>
 
       {/* Mode Selection and Visualizations */}
-      <div className="grid grid-cols-1 gap-4 mb-4">
+      <div className="grid grid-cols-1 gap-3 mb-4">
         {/* Coaching Sentiment */}
         <Card>
-          <div className="mb-2">
-            <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Coaching Journal Sentiment</h3>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Coaching Journal Sentiment</h3>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{coachingLogs.length} entries</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div className="text-center p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20">
+            <div className="text-center p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/30">
               <p className="text-2xl font-black text-emerald-600">{positiveLogs.length}</p>
               <p className="text-xs font-bold text-emerald-600 mt-1">Positive</p>
               <p className="text-[10px] text-slate-400">{positivePercent}% of entries</p>
             </div>
-            <div className="text-center p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20">
+            <div className="text-center p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30">
               <p className="text-2xl font-black text-amber-600">{constructiveLogs.length}</p>
               <p className="text-xs font-bold text-amber-600 mt-1">Constructive</p>
               <p className="text-[10px] text-slate-400">{100 - positivePercent}% of entries</p>
