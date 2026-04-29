@@ -390,82 +390,81 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
       <div className="space-y-6">
         {activeAccountScreen === 'create' && (
           <div className="grid grid-cols-1 gap-6">
-            <div className="mx-auto w-full max-w-[210mm] min-h-[297mm] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-5 sm:p-6 lg:p-8">
+            <div className="mx-auto w-full max-w-none min-h-[78vh] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-6 sm:p-8 lg:p-10">
               <div className="mb-6">
-                <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 tracking-widest">Create New Account</h3>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">A4-sized form layout for new account creation.</p>
+                <h3 className="text-sm font-bold uppercase text-slate-500 dark:text-slate-300 tracking-widest">Create New Account</h3>
               </div>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-5 lg:gap-6 lg:grid-cols-2 xl:grid-cols-3 items-start">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</label>
-                  <input name="email" type="email" className={`w-full mt-1 p-2 bg-white dark:bg-black border ${createErrors.email ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} placeholder="e.g. jane@maptech.com" maxLength={254} autoComplete="email" required />
-                  <p className="mt-1 text-[11px] text-slate-400">Only @maptech.com emails are allowed.</p>
-                  {createErrors.email && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{createErrors.email}</p>}
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</label>
+                  <input name="email" type="email" className={`w-full mt-2 p-3 bg-white dark:bg-black border ${createErrors.email ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} placeholder="e.g. jane@maptech.com" maxLength={254} autoComplete="email" required />
+                  <p className="mt-1.5 text-xs text-slate-400">Only @maptech.com emails are allowed.</p>
+                  {createErrors.email && <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.email}</p>}
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Full name</label>
-                  <input name="full_name" type="text" className="w-full mt-1 p-2 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50" placeholder="e.g. Jane Smith" maxLength={120} />
-                  <p className="mt-1 text-[11px] text-slate-400">If this matches an existing employee name, account linking is automatic.</p>
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Full name</label>
+                  <input name="full_name" type="text" className="w-full mt-2 p-3 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50" placeholder="e.g. Jane Smith" maxLength={120} />
+                  <p className="mt-1.5 text-xs text-slate-400">If this matches an existing employee name, account linking is automatic.</p>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Password</label>
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Password</label>
                   <div className="relative">
                     <input
                       type={showCreatePw ? 'text' : 'password'}
                       value={createPassword}
                       onChange={e => { setCreatePassword(e.target.value); if (createErrors.password) setCreateErrors(p => ({ ...p, password: '' })); }}
-                      className={`w-full mt-1 p-2 pr-9 bg-white dark:bg-black border ${createErrors.password ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
+                      className={`w-full mt-2 p-3 pr-10 bg-white dark:bg-black border ${createErrors.password ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
                       placeholder="Min 8 chars, uppercase, number, special"
                       minLength={8}
                       maxLength={128}
                       autoComplete="new-password"
                       required
                     />
-                    <button type="button" onClick={() => setShowCreatePw(!showCreatePw)} className="absolute right-2 top-1/2 -translate-y-1/2 mt-0.5 text-slate-400 p-0.5">
+                    <button type="button" onClick={() => setShowCreatePw(!showCreatePw)} className="absolute right-3 top-1/2 -translate-y-1/2 mt-0.5 text-slate-400 p-0.5">
                       {showCreatePw ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   </div>
-                  {createErrors.password && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{createErrors.password}</p>}
+                  {createErrors.password && <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.password}</p>}
                   {strength && (
                     <div className="mt-2">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                           <div className={`h-full ${strength.color} rounded-full transition-all duration-300`} style={{ width: strength.width }} />
                         </div>
-                        <span className={`text-[10px] font-bold ${strength.text}`}>{strength.label}</span>
+                        <span className={`text-xs font-bold ${strength.text}`}>{strength.label}</span>
                       </div>
-                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
-                        <span className={createPassword.length >= 8 ? 'text-emerald-500' : 'text-slate-400'}>{createPassword.length >= 8 ? <CheckCircle size={10} className="inline mr-0.5" /> : null}8+ chars</span>
-                        <span className={/[A-Z]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[A-Z]/.test(createPassword) ? <CheckCircle size={10} className="inline mr-0.5" /> : null}Uppercase</span>
-                        <span className={/[0-9]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[0-9]/.test(createPassword) ? <CheckCircle size={10} className="inline mr-0.5" /> : null}Number</span>
-                        <span className={/[^A-Za-z0-9]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[^A-Za-z0-9]/.test(createPassword) ? <CheckCircle size={10} className="inline mr-0.5" /> : null}Special</span>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                        <span className={createPassword.length >= 8 ? 'text-emerald-500' : 'text-slate-400'}>{createPassword.length >= 8 ? <CheckCircle size={11} className="inline mr-0.5" /> : null}8+ chars</span>
+                        <span className={/[A-Z]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[A-Z]/.test(createPassword) ? <CheckCircle size={11} className="inline mr-0.5" /> : null}Uppercase</span>
+                        <span className={/[0-9]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[0-9]/.test(createPassword) ? <CheckCircle size={11} className="inline mr-0.5" /> : null}Number</span>
+                        <span className={/[^A-Za-z0-9]/.test(createPassword) ? 'text-emerald-500' : 'text-slate-400'}>{/[^A-Za-z0-9]/.test(createPassword) ? <CheckCircle size={11} className="inline mr-0.5" /> : null}Special</span>
                       </div>
                     </div>
                   )}
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Confirm Password</label>
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Confirm Password</label>
                   <div className="relative">
                     <input
                       type={showConfirmPw ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={e => { setConfirmPassword(e.target.value); if (createErrors.confirm) setCreateErrors(p => ({ ...p, confirm: '' })); }}
-                      className={`w-full mt-1 p-2 pr-9 bg-white dark:bg-black border ${createErrors.confirm ? 'border-red-400 dark:border-red-500' : confirmPassword && confirmPassword === createPassword ? 'border-emerald-400 dark:border-emerald-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
+                      className={`w-full mt-2 p-3 pr-10 bg-white dark:bg-black border ${createErrors.confirm ? 'border-red-400 dark:border-red-500' : confirmPassword && confirmPassword === createPassword ? 'border-emerald-400 dark:border-emerald-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
                       placeholder="Re-enter password"
                       minLength={8}
                       maxLength={128}
                       autoComplete="new-password"
                       required
                     />
-                    <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-2 top-1/2 -translate-y-1/2 mt-0.5 text-slate-400 p-0.5">
+                    <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-3 top-1/2 -translate-y-1/2 mt-0.5 text-slate-400 p-0.5">
                       {showConfirmPw ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   </div>
-                  {createErrors.confirm && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{createErrors.confirm}</p>}
-                  {confirmPassword && confirmPassword === createPassword && <p className="mt-1 text-xs text-emerald-500 flex items-center gap-1"><CheckCircle size={11} />Passwords match</p>}
+                  {createErrors.confirm && <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.confirm}</p>}
+                  {confirmPassword && confirmPassword === createPassword && <p className="mt-1.5 text-sm text-emerald-500 flex items-center gap-1"><CheckCircle size={12} />Passwords match</p>}
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</label>
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</label>
                   <select name="role" value={createRole} onChange={e => {
                     const nextRole = e.target.value;
                     setCreateRole(nextRole);
@@ -477,19 +476,19 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                     } else if (!createDept.trim() && creatorDept) {
                       setCreateDept(creatorDept);
                     }
-                  }} className={`w-full mt-1 p-2 bg-white dark:bg-black border ${createErrors.role ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} required>
+                  }} className={`w-full mt-2 p-3 bg-white dark:bg-black border ${createErrors.role ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} required>
                     <option value="">Select Role...</option>
                     <option value="Employee">Employee</option>
                     <option value="Manager">Manager</option>
                     <option value="HR">HR Admin</option>
                   </select>
-                  {createErrors.role && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{createErrors.role}</p>}
+                  {createErrors.role && <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.role}</p>}
                 </div>
 
                 {(createRole === 'Manager' || createRole === 'HR') && (
                   <>
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Position</label>
+                      <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Position</label>
                       <input
                         type="text"
                         value={createPosition}
@@ -497,33 +496,33 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                           setCreatePosition(e.target.value);
                           if (createErrors.position) setCreateErrors(p => ({ ...p, position: '' }));
                         }}
-                        className={`w-full mt-1 p-2 bg-white dark:bg-black border ${createErrors.position ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
+                        className={`w-full mt-2 p-3 bg-white dark:bg-black border ${createErrors.position ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
                         placeholder="e.g. HR Specialist"
                         maxLength={100}
                         required
                       />
-                      {createErrors.position && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{createErrors.position}</p>}
+                      {createErrors.position && <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.position}</p>}
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Department</label>
+                      <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Department</label>
                       <input
                         type="text"
                         value={createDept}
                         readOnly
-                        className={`w-full mt-1 p-2 bg-slate-50 dark:bg-slate-900/40 border ${createErrors.dept ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg text-sm text-slate-700 dark:text-slate-200`}
+                        className={`w-full mt-2 p-3 bg-slate-50 dark:bg-slate-900/40 border ${createErrors.dept ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-700 dark:text-slate-200`}
                         placeholder="e.g. Human Resources"
                         maxLength={100}
                         required
                       />
-                      <p className="mt-1 text-[11px] text-slate-400">Locked to your department.</p>
-                      {createErrors.dept && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{createErrors.dept}</p>}
+                      <p className="mt-1.5 text-xs text-slate-400">Locked to your department.</p>
+                      {createErrors.dept && <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.dept}</p>}
                     </div>
                   </>
                 )}
 
-                <div className="flex items-center justify-end gap-2 pt-2">
-                  <button type="button" onClick={() => setActiveAccountScreen('existing')} className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800">Back</button>
-                  <button type="submit" className="px-4 py-2 rounded-lg gradient-bg text-white font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-teal-green/10">Create User</button>
+                <div className="col-span-full flex items-center justify-end gap-3 pt-2 lg:pt-4">
+                  <button type="button" onClick={() => setActiveAccountScreen('existing')} className="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-base font-semibold">Back</button>
+                  <button type="submit" className="px-5 py-2.5 rounded-xl gradient-bg text-white font-bold text-base hover:opacity-90 transition-all shadow-lg shadow-teal-green/10">Create User</button>
                 </div>
               </form>
             </div>
