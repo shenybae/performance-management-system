@@ -945,62 +945,6 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 min-w-0 overflow-y-auto p-2 sm:p-3 lg:p-4 bg-transparent transition-colors duration-500 relative">
-        <motion.div
-          key={`topnav-${activeScreen}`}
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="sticky top-0 z-40 mb-4"
-        >
-          <div className="system-bg/95 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-2xl px-3 sm:px-4 py-3 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setIsSidebarOpen(v => !v)}
-                  className="lg:hidden inline-flex items-center justify-center p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
-                  aria-label="Toggle navigation"
-                >
-                  {isSidebarOpen ? <PanelLeftClose size={16} /> : <Menu size={16} />}
-                </motion.button>
-                <div className="min-w-0">
-                  <p className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100 truncate">{activeTitle}</p>
-                  <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">{roleDisplay(user.role)} workspace · {userDisplay}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                <span className="hidden md:inline-flex text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300">
-                  {roleDisplay(user.role)}
-                </span>
-                <NotificationBell onNavigate={(screen, ctx) => { goToScreen(screen); setNavContext(ctx || null); }} />
-              </div>
-            </div>
-            {topNavItems.length > 0 && (
-              <div className="mt-3 flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
-                {topNavItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = item.active ? item.active(activeScreen) : activeScreen === item.screen;
-                  return (
-                    <motion.button
-                      key={item.screen}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => goToScreen(item.screen)}
-                      className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-bold transition-colors ${
-                        isActive
-                          ? 'border-teal-green bg-teal-green/10 text-teal-deep dark:border-teal-green dark:bg-teal-green/20 dark:text-teal-green'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <Icon size={14} />
-                      <span>{item.label}</span>
-                    </motion.button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </motion.div>
-
         <AnimatePresence>
           {isOffline && (
             <motion.div

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
@@ -84,6 +84,9 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [activePage, setActivePage] = useState(1);
   const [archivedPage, setArchivedPage] = useState(1);
+  const createSectionRef = useRef<HTMLDivElement>(null);
+  const trackerSectionRef = useRef<HTMLDivElement>(null);
+  const accountsSectionRef = useRef<HTMLDivElement>(null);
 
   const displayRole = (role?: string | null) => role === 'HR' ? 'HR Admin' : (role || '');
 
@@ -183,6 +186,10 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
 
   const activePageData = paginate(activeUsers, activePage);
   const archivedPageData = paginate(archivedUsers, archivedPage);
+
+  const scrollToSection = (ref: React.RefObject<HTMLDivElement>) => {
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   useEffect(() => {
     setActivePage(1);
@@ -348,9 +355,37 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <SectionHeader title="User Accounts Management" subtitle="Create and manage login credentials for staff" />
+      <div className="sticky top-3 z-20">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-3 py-3 shadow-sm">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => scrollToSection(createSectionRef)}
+              className="inline-flex items-center rounded-full border border-teal-green bg-teal-green/10 px-4 py-2 text-xs font-bold text-teal-deep dark:text-teal-green"
+            >
+              Create New Account
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection(trackerSectionRef)}
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800"
+            >
+              Account Creation Tracker
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection(accountsSectionRef)}
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800"
+            >
+              Existing Accounts
+            </button>
+          </div>
+        </div>
+      </div>
       <div className="space-y-6">
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <Card className="xl:col-span-2 w-full">
+        <div ref={createSectionRef} className="xl:col-span-2 w-full">
+        <Card className="w-full">
           <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Create New Account</h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Open the modal to create a new account.</p>
           <button
@@ -361,8 +396,10 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
             Create New Account
           </button>
         </Card>
+        </div>
 
-        <Card className="xl:col-span-1">
+        <div ref={trackerSectionRef} className="xl:col-span-1">
+        <Card>
           <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Account Creation Tracker</h3>
           {byLatestCreated.length > 0 ? (
             <div className="space-y-3">
@@ -399,6 +436,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
             </div>
           )}
         </Card>
+        </div>
         </div>
 
         <Modal
@@ -541,6 +579,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
           </form>
         </Modal>
 
+        <div ref={accountsSectionRef}>
         <Card>
           <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-2 tracking-widest">Existing Accounts</h3>
           <div className="mb-3">
@@ -683,6 +722,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
             </div>
           </div>
         </Card>
+        </div>
 
         {showArchived && (
           <Card>
