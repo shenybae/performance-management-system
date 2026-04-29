@@ -390,11 +390,11 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
       <div className="space-y-6">
         {activeAccountScreen === 'create' && (
           <div className="grid grid-cols-1 gap-6">
-            <div className="mx-auto w-full max-w-none min-h-[78vh] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-6 sm:p-8 lg:p-10">
-              <div className="mb-6">
+            <div className="mx-auto w-full max-w-none min-h-[78vh] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-6 sm:p-8 lg:p-10 flex flex-col">
+              <div className="mb-6 shrink-0">
                 <h3 className="text-sm font-bold uppercase text-slate-500 dark:text-slate-300 tracking-widest">Create New Account</h3>
               </div>
-              <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-5 lg:gap-6 lg:grid-cols-2 xl:grid-cols-3 items-start">
+              <form onSubmit={handleSubmit} className="flex-1 grid grid-cols-1 gap-5 lg:gap-6 lg:grid-cols-2 xl:grid-cols-3 content-between items-start">
                 <div>
                   <label className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</label>
                   <input name="email" type="email" className={`w-full mt-2 p-3 bg-white dark:bg-black border ${createErrors.email ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} placeholder="e.g. jane@maptech.com" maxLength={254} autoComplete="email" required />
@@ -520,7 +520,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                   </>
                 )}
 
-                <div className="col-span-full flex items-center justify-end gap-3 pt-2 lg:pt-4">
+                <div className="col-span-full flex items-center justify-end gap-3 pt-2 lg:pt-4 mt-auto">
                   <button type="button" onClick={() => setActiveAccountScreen('existing')} className="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-base font-semibold">Back</button>
                   <button type="submit" className="px-5 py-2.5 rounded-xl gradient-bg text-white font-bold text-base hover:opacity-90 transition-all shadow-lg shadow-teal-green/10">Create User</button>
                 </div>
