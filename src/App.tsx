@@ -28,7 +28,8 @@ import {
   Wallet,
   WifiOff,
   Menu,
-  PanelLeftClose
+  PanelLeftClose,
+  GitBranch
 } from 'lucide-react';
 
 // --- Types ---
@@ -63,6 +64,7 @@ import { RecruitmentBoard } from './components/screens/hr/RecruitmentBoard';
 import { OffboardingHub } from './components/screens/hr/OffboardingHub';
 import { OnboardingHub } from './components/screens/hr/OnboardingHub';
 import { UserAccounts } from './components/screens/hr/UserAccounts';
+import { LinkedPeople } from './components/screens/hr/LinkedPeople';
 import { AuditLogs } from './components/screens/hr/AuditLogs';
 import { PayrollAnalytics } from './components/screens/hr/PayrollAnalytics';
 import { PayrollManagement } from './components/screens/hr/PayrollManagement';
@@ -258,6 +260,7 @@ export default function App() {
     A3: '/admin/recruitmentboard',
     A4: '/admin/offboarding',
     A5: '/admin/user-accounts',
+    A14: '/admin/linked-people',
     A6: '/admin/db-viewer',
     A7: '/admin/onboarding',
     A8: '/admin/feedback360',
@@ -294,6 +297,7 @@ export default function App() {
       'onboarding': 'A7',
       'offboarding': 'A4',
       'user-accounts': 'A5',
+      'linked-people': 'A14',
       'audit-logs': 'A9',
       'payroll-analytics': 'A10',
       'payroll-management': 'A11',
@@ -595,6 +599,7 @@ export default function App() {
               case 'A7': return <OnboardingHub employees={employees} onRefresh={fetchEmployees} />;
               case 'A4': return <OffboardingHub employees={employees} />;
               case 'A5': return <UserAccounts employees={employees} users={users} onRefresh={fetchUsers} />;
+              case 'A14': return <LinkedPeople employees={employees} users={users} onRefresh={fetchEmployees} />;
               case 'A9': return <AuditLogs />;
               case 'A6': return <DBViewer />;
               case 'A8': return <FeedbackBox employees={searchableEmployees} users={searchableUsers} />;
@@ -652,6 +657,7 @@ export default function App() {
     A3: 'Recruitment Board',
     A4: 'Offboarding Hub',
     A5: 'User Accounts',
+    A14: 'Linked People',
     A6: 'Database Viewer',
     A7: 'Onboarding Hub',
     A8: 'Feedback 360',
@@ -682,6 +688,7 @@ export default function App() {
     HR: [
       { screen: 'A1', label: 'Directory', icon: Users, active: (screen) => screen === 'A1' || screen === 'A2' },
       { screen: 'A5', label: 'User Accounts', icon: ShieldCheck },
+      { screen: 'A14', label: 'Linked People', icon: GitBranch },
       { screen: 'A3', label: 'Recruitment', icon: UserPlus },
       { screen: 'A7', label: 'Onboarding', icon: Briefcase },
       { screen: 'A4', label: 'Offboarding', icon: LogOut },
@@ -844,6 +851,7 @@ export default function App() {
               <SidebarItem expanded={isSidebarExpanded} icon={Users} label="Employee Directory" active={activeScreen === 'A1' || activeScreen === 'A2'} onClick={() => goToScreen('A1')} />
               <SidebarItem expanded={isSidebarExpanded} icon={LogOut} label="Offboarding Hub" active={activeScreen === 'A4'} onClick={() => goToScreen('A4')} />
               <SidebarItem expanded={isSidebarExpanded} icon={ShieldCheck} label="User Accounts" active={activeScreen === 'A5'} onClick={() => goToScreen('A5')} />
+              <SidebarItem expanded={isSidebarExpanded} icon={GitBranch} label="Linked People" active={activeScreen === 'A14'} onClick={() => goToScreen('A14')} />
               <SidebarItem expanded={isSidebarExpanded} icon={Layers} label="Departments" active={activeScreen === 'A13'} onClick={() => goToScreen('A13')} />
               <SidebarItem expanded={isSidebarExpanded} icon={ClipboardCheck} label="Audit Logs" active={activeScreen === 'A9'} onClick={() => goToScreen('A9')} />
               <SidebarItem expanded={isSidebarExpanded} icon={DollarSign} label="Payroll Analytics" active={activeScreen === 'A10'} onClick={() => goToScreen('A10')} />
