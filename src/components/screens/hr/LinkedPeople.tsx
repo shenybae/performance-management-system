@@ -82,6 +82,11 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
     [activeDept, employees]
   );
 
+  const activeDeptHrAdmins = useMemo(
+    () => (activeDept ? (Array.isArray(users) ? users : []).filter((u: any) => normalize(u?.role) === 'hr' && sameDept(u?.dept, activeDept)) : []),
+    [activeDept, users]
+  );
+
   const employeeMap = useMemo(() => {
     const map = new Map<number, Employee>();
     activeEmployees.forEach((person) => map.set(Number(person.id), person));
@@ -163,6 +168,16 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
   const selectOptions = useMemo(
     () => sortedEmployees.map((person) => ({ value: person.id, label: personLabel(person), avatarUrl: (person as any).profile_picture || null })),
     [sortedEmployees]
+  );
+
+  const activeDeptManager = useMemo(
+    () => activeEmployees.find((person) => roleLabel(person) === 'Manager') || null,
+    [activeEmployees]
+  );
+
+  const activeDeptSupervisors = useMemo(
+    () => activeEmployees.filter((person) => roleLabel(person) === 'Supervisor'),
+    [activeEmployees]
   );
 
   const renderNode = (person: Employee, depth = 0) => {
@@ -273,7 +288,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <SectionHeader
         title="Linked People"
-        subtitle="Pick a department first, then review or change the reporting links inside it."
+        subtitle="Pick a department to see the whole team, including HR, manager, supervisor, and linked employees."
       />
 
       {!currentDept && (
@@ -288,6 +303,9 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
         <div className="flex flex-wrap gap-2">
           {departmentOptions.map((dept) => {
             const deptEmployees = (employees || []).filter((person) => sameDept((person as any).dept, dept));
+            const deptHrAdmins = (users || []).filter((u: any) => normalize(u?.role) === 'hr' && sameDept(u?.dept, dept));
+            const deptManagers = deptEmployees.filter((person) => roleLabel(person) === 'Manager');
+            const deptSupervisors = deptEmployees.filter((person) => roleLabel(person) === 'Supervisor');
             const deptLinkedCount = deptEmployees.filter((person) => Number((person as any).manager_id || 0) > 0).length;
             return (
               <button
@@ -297,13 +315,13 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
                 className={`rounded-full border px-4 py-2 text-xs font-bold transition-colors ${selectedDept === dept ? 'border-teal-green bg-teal-green/10 text-teal-deep dark:border-teal-green dark:bg-teal-green/20 dark:text-teal-green' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'}`}
               >
                 {dept}
-                <span className="ml-2 text-[10px] opacity-70">{deptLinkedCount}/{deptEmployees.length}</span>
+                <span className="ml-2 text-[10px] opacity-70">M {deptManagers.length} • S {deptSupervisors.length} • HR {deptHrAdmins.length} • L {deptLinkedCount}</span>
               </button>
             );
           })}
         </div>
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-          These buttons switch the view to each department. People in the same department are shown as one linked group.
+          These buttons switch the view to each department. People in the same department are shown together as one linked group.
         </p>
       </Card>
 
@@ -327,6 +345,51 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
                 <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-3 col-span-2">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Linked Accounts</p>
                   <p className="mt-1 text-2xl font-black text-slate-900 dark:text-slate-100">{linkedCount}</p>
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <Shield size={18} className="text-teal-green" />
+                <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">People in this department</h3>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Manager</p>
+                  <div className="flex flex-wrap gap-2">
+                    {activeDeptManager ? (
+                      <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
+                        {personLabel(activeDeptManager)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">No manager assigned</span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Supervisors</p>
+                  <div className="flex flex-wrap gap-2">
+                    {activeDeptSupervisors.length > 0 ? activeDeptSupervisors.map((person) => (
+                      <span key={person.id} className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/40 dark:text-sky-200">
+                        {personLabel(person)}
+                      </span>
+                    )) : (
+                      <span className="text-xs text-slate-400">No supervisors assigned</span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">HR</p>
+                  <div className="flex flex-wrap gap-2">
+                    {activeDeptHrAdmins.length > 0 ? activeDeptHrAdmins.map((admin: any) => (
+                      <span key={admin.id} className="inline-flex items-center gap-2 rounded-full border border-fuchsia-200 bg-fuchsia-50 px-3 py-1.5 text-xs font-bold text-fuchsia-800 dark:border-fuchsia-900/40 dark:bg-fuchsia-950/40 dark:text-fuchsia-200">
+                        {personLabel(admin)}
+                      </span>
+                    )) : (
+                      <span className="text-xs text-slate-400">No HR users in this department</span>
+                    )}
+                  </div>
                 </div>
               </div>
             </Card>
@@ -371,7 +434,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
                 </div>
 
                 <p className="rounded-xl bg-teal-green/10 dark:bg-teal-green/15 px-3 py-2 text-xs text-teal-deep dark:text-teal-green">
-                  This screen only shows and changes links inside {activeDeptLabel}.
+                  This screen only shows and changes links inside {activeDeptLabel}. HR users are shown above, and only people in this department are link targets.
                 </p>
 
                 <div className="flex flex-wrap gap-3 pt-2">
