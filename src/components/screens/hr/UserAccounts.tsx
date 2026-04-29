@@ -68,6 +68,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [activeAccountScreen, setActiveAccountScreen] = useState<'existing' | 'create' | 'tracker'>('existing');
 
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -84,9 +85,6 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [activePage, setActivePage] = useState(1);
   const [archivedPage, setArchivedPage] = useState(1);
-  const createSectionRef = useRef<HTMLDivElement>(null);
-  const trackerSectionRef = useRef<HTMLDivElement>(null);
-  const accountsSectionRef = useRef<HTMLDivElement>(null);
 
   const displayRole = (role?: string | null) => role === 'HR' ? 'HR Admin' : (role || '');
 
@@ -186,10 +184,6 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
 
   const activePageData = paginate(activeUsers, activePage);
   const archivedPageData = paginate(archivedUsers, archivedPage);
-
-  const scrollToSection = (ref: React.RefObject<HTMLDivElement>) => {
-    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
 
   useEffect(() => {
     setActivePage(1);
@@ -360,21 +354,21 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => scrollToSection(createSectionRef)}
+              onClick={() => setActiveAccountScreen('create')}
               className="inline-flex items-center rounded-full border border-teal-green bg-teal-green/10 px-4 py-2 text-xs font-bold text-teal-deep dark:text-teal-green"
             >
               Create New Account
             </button>
             <button
               type="button"
-              onClick={() => scrollToSection(trackerSectionRef)}
+              onClick={() => setActiveAccountScreen('tracker')}
               className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800"
             >
               Account Creation Tracker
             </button>
             <button
               type="button"
-              onClick={() => scrollToSection(accountsSectionRef)}
+              onClick={() => setActiveAccountScreen('existing')}
               className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800"
             >
               Existing Accounts
@@ -383,61 +377,61 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
         </div>
       </div>
       <div className="space-y-6">
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div ref={createSectionRef} className="xl:col-span-2 w-full">
-        <Card className="w-full">
-          <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Create New Account</h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Open the modal to create a new account.</p>
-          <button
-            type="button"
-            onClick={() => setCreateModalOpen(true)}
-            className="w-full gradient-bg text-white py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-teal-green/10"
-          >
-            Create New Account
-          </button>
-        </Card>
-        </div>
+        {activeAccountScreen === 'create' && (
+          <div className="grid grid-cols-1 gap-6">
+            <Card>
+              <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Create New Account</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Open the modal to create a new account.</p>
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(true)}
+                className="w-full gradient-bg text-white py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-teal-green/10"
+              >
+                Create New Account
+              </button>
+            </Card>
+          </div>
+        )}
 
-        <div ref={trackerSectionRef} className="xl:col-span-1">
-        <Card>
-          <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Account Creation Tracker</h3>
-          {byLatestCreated.length > 0 ? (
-            <div className="space-y-3">
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/80 dark:bg-slate-900/40">
-                <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Created Accounts</p>
-                <div className="mt-2 max-h-40 overflow-y-auto pr-1 space-y-2">
-                  {byLatestCreated.map((u: any) => (
-                    <div key={u.id} className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1.5 bg-white/70 dark:bg-black/20">
-                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate" title={u.full_name || u.email || u.username || '-'}>
-                        {u.full_name || u.email || u.username || '-'}
-                      </p>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate" title={accountCreatorName(u)}>
-                        By: {accountCreatorName(u)}
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">At: {formatDateTime(u.created_at)}</p>
-                    </div>
-                  ))}
+        {activeAccountScreen === 'tracker' && (
+          <Card>
+            <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Account Creation Tracker</h3>
+            {byLatestCreated.length > 0 ? (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/80 dark:bg-slate-900/40">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Created Accounts</p>
+                  <div className="mt-2 max-h-40 overflow-y-auto pr-1 space-y-2">
+                    {byLatestCreated.map((u: any) => (
+                      <div key={u.id} className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1.5 bg-white/70 dark:bg-black/20">
+                        <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate" title={u.full_name || u.email || u.username || '-'}>
+                          {u.full_name || u.email || u.username || '-'}
+                        </p>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate" title={accountCreatorName(u)}>
+                          By: {accountCreatorName(u)}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">At: {formatDateTime(u.created_at)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Active Accounts</p>
+                    <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{activeUsers.length}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Archived</p>
+                    <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{archivedUsers.length}</p>
+                  </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Active Accounts</p>
-                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{activeUsers.length}</p>
-                </div>
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Archived</p>
-                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{archivedUsers.length}</p>
-                </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-4 text-sm text-slate-500 dark:text-slate-400">
+                No account creation activity yet.
               </div>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-4 text-sm text-slate-500 dark:text-slate-400">
-              No account creation activity yet.
-            </div>
-          )}
-        </Card>
-        </div>
-        </div>
+            )}
+          </Card>
+        )}
 
         <Modal
           open={createModalOpen}
@@ -579,7 +573,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
           </form>
         </Modal>
 
-        <div ref={accountsSectionRef}>
+        {activeAccountScreen === 'existing' && (
         <Card>
           <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-2 tracking-widest">Existing Accounts</h3>
           <div className="mb-3">
@@ -722,7 +716,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
             </div>
           </div>
         </Card>
-        </div>
+        )}
 
         {showArchived && (
           <Card>
