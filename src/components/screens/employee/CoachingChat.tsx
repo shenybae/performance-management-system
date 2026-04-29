@@ -492,7 +492,6 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
   const positivePercent = coachingLogs.length > 0 ? Math.round((positiveLogs.length / coachingLogs.length) * 100) : 0;
   const recentLogs = coachingLogs.slice(-5).reverse();
   const metricCardClass = 'h-full rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm shadow-slate-200/40 dark:shadow-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-teal-200 dark:hover:border-teal-700 !p-2.5 sm:!p-3 bg-white/95 dark:bg-slate-900/80';
-  const actionCardClass = 'h-full rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm shadow-slate-200/40 dark:shadow-none transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-teal-200 dark:hover:border-teal-700 bg-white/90 dark:bg-slate-900/80 !p-2.5 sm:!p-3';
   const navigationItems = [
     { key: 'chat', label: 'Coaching Chat', icon: MessageSquare, accent: 'teal' },
     { key: 'courses', label: 'E-Learning', icon: GraduationCap, accent: 'purple' },
@@ -540,17 +539,16 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
       </div>
 
       {/* Top Navigator */}
-      <div className="mb-3 rounded-2xl border border-slate-200/70 dark:border-slate-800/70 bg-slate-50/90 dark:bg-slate-900/70 p-1.5 shadow-sm shadow-slate-200/30 dark:shadow-none">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">
+      <div className="mb-3 rounded-2xl border border-slate-200/70 dark:border-slate-800/70 bg-white/80 dark:bg-slate-900/70 backdrop-blur-sm p-1 shadow-sm shadow-slate-200/30 dark:shadow-none">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-1">
           {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = view === item.key;
-            const activeText = isActive ? 'text-white' : 'text-slate-800 dark:text-slate-100';
-            const activeSubtext = isActive ? 'text-white/80' : 'text-slate-400';
+            const activeText = isActive ? 'text-white' : 'text-slate-700 dark:text-slate-100';
             const buttonClasses = {
-              teal: isActive ? 'bg-teal-deep shadow-md shadow-teal-200/30 dark:shadow-none' : 'bg-white dark:bg-slate-950 hover:bg-teal-50 dark:hover:bg-teal-900/20',
-              purple: isActive ? 'bg-purple-600 shadow-md shadow-purple-200/30 dark:shadow-none' : 'bg-white dark:bg-slate-950 hover:bg-purple-50 dark:hover:bg-purple-900/20',
-              amber: isActive ? 'bg-amber-500 shadow-md shadow-amber-200/30 dark:shadow-none' : 'bg-white dark:bg-slate-950 hover:bg-amber-50 dark:hover:bg-amber-900/20',
+              teal: isActive ? 'bg-teal-deep shadow-md shadow-teal-200/30 dark:shadow-none' : 'bg-slate-50/90 dark:bg-slate-950 hover:bg-teal-50 dark:hover:bg-teal-900/20',
+              purple: isActive ? 'bg-purple-600 shadow-md shadow-purple-200/30 dark:shadow-none' : 'bg-slate-50/90 dark:bg-slate-950 hover:bg-purple-50 dark:hover:bg-purple-900/20',
+              amber: isActive ? 'bg-amber-500 shadow-md shadow-amber-200/30 dark:shadow-none' : 'bg-slate-50/90 dark:bg-slate-950 hover:bg-amber-50 dark:hover:bg-amber-900/20',
             }[item.accent];
             const iconClasses = {
               teal: isActive ? 'bg-white/15 text-white' : 'bg-teal-50 text-teal-600 dark:bg-teal-900/20 dark:text-teal-300',
@@ -569,11 +567,7 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className={`text-[13px] font-black leading-none ${activeText}`}>{item.label}</p>
-                  <p className={`text-[10px] mt-1 leading-none ${activeSubtext}`}>
-                    {item.key === 'chat' && 'Direct discussion with your manager'}
-                    {item.key === 'courses' && `${activeRecs.length} pending recommendations`}
-                    {item.key === 'journal' && `${coachingLogs.length} total entries`}
-                  </p>
+                  <div className={`mt-1 h-1 w-10 rounded-full transition-all ${isActive ? 'bg-white/90' : 'bg-transparent group-hover:bg-slate-300 dark:group-hover:bg-slate-600'}`} />
                 </div>
               </button>
             );
