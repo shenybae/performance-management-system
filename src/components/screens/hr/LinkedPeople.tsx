@@ -50,19 +50,64 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
   const currentDept = (currentUser?.dept || '').toString().trim();
   const deptLabel = currentDept || 'your department';
 
-  const hrAdmins = useMemo(
-    () => (Array.isArray(users) ? users : []).filter((u: any) => normalize(u?.role) === 'hr'),
-    [users]
-  );
+  const employeeById = useMemo(() => {
+    const map = new Map<number, any>();
+    (employees || []).forEach((person: any) => map.set(Number(person.id), person));
+    return map;
+  }, [employees]);
 
-  const scopedEmployees = useMemo(
-    () => (currentDept ? (employees || []).filter((person) => sameDept((person as any).dept, currentDept)) : []),
-    [currentDept, employees]
+  const mergedPeople = useMemo(() => {
+    const merged = (users || [])
+      .map((user: any) => {
+        const linkedEmployee = user?.employee_id ? employeeById.get(Number(user.employee_id)) : null;
+        const dept = (user?.dept || linkedEmployee?.dept || '').toString().trim();
+        if (!dept) return null;
+        return {
+          ...linkedEmployee,
+          ...user,
+          id: Number(user.id),
+          employee_id: user.employee_id ?? linkedEmployee?.id ?? null,
+          full_name: user.full_name || linkedEmployee?.name || linkedEmployee?.full_name || user.username || user.email || '',
+          position: user.position || linkedEmployee?.position || '',
+          dept,
+          manager_id: linkedEmployee?.manager_id ? Number(linkedEmployee.manager_id) : null,
+          profile_picture: user.profile_picture || linkedEmployee?.profile_picture || null,
+        };
+      })
+      .filter(Boolean);
+
+    const seenEmployeeIds = new Set<number>();
+    merged.forEach((person: any) => {
+      if (person?.employee_id) seenEmployeeIds.add(Number(person.employee_id));
+    });
+
+    (employees || []).forEach((employee: any) => {
+      if (!employee?.dept) return;
+      if (seenEmployeeIds.has(Number(employee.id))) return;
+      merged.push({
+        ...employee,
+        id: Number(employee.id),
+        employee_id: Number(employee.id),
+        full_name: employee.name || employee.full_name || '',
+        dept: (employee.dept || '').toString().trim(),
+        position: (employee.position || '').toString().trim(),
+        manager_id: employee.manager_id ? Number(employee.manager_id) : null,
+        role: 'Employee',
+        profile_picture: employee.profile_picture || null,
+      });
+    });
+
+    return merged.filter((person: any) => sameDept(person.dept, person.dept));
+  }, [employeeById, employees, users]);
+
+  const hrAdmins = useMemo(
+    () => mergedPeople.filter((u: any) => normalize(u?.role) === 'hr'),
+    [mergedPeople]
   );
 
   const departmentOptions = useMemo(() => {
-    return [...new Set((employees || []).map((person) => (person as any).dept).filter(Boolean).map((dept) => (dept || '').toString().trim()))].sort((a, b) => a.localeCompare(b));
-  }, [employees]);
+    return [...new Set([...mergedPeople.map((person: any) => person.dept).filter(Boolean)] as string[])].sort((a, b) => a.localeCompare(b));
+  }, [mergedPeople]);
 
   const [selectedDept, setSelectedDept] = useState('');
 
@@ -78,13 +123,13 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
   const activeDept = selectedDept || currentDept;
   const activeDeptLabel = activeDept || 'selected department';
   const activeEmployees = useMemo(
-    () => (activeDept ? (employees || []).filter((person) => sameDept((person as any).dept, activeDept)) : []),
-    [activeDept, employees]
+    () => (activeDept ? mergedPeople.filter((person: any) => sameDept(person.dept, activeDept)) : []),
+    [activeDept, mergedPeople]
   );
 
   const activeDeptHrAdmins = useMemo(
-    () => (activeDept ? (Array.isArray(users) ? users : []).filter((u: any) => normalize(u?.role) === 'hr' && sameDept(u?.dept, activeDept)) : []),
-    [activeDept, users]
+    () => (activeDept ? activeEmployees.filter((u: any) => normalize(u?.role) === 'hr') : []),
+    [activeDept, activeEmployees]
   );
 
   const employeeMap = useMemo(() => {
@@ -220,6 +265,11 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
 
   const saveLink = async (managerId: number | null) => {
     if (!selectedEmployee) return;
+    const employeeTargetId = Number((selectedEmployee as any).employee_id || 0);
+    if (!employeeTargetId) {
+      window.notify?.('This account is not linked to an employee record, so its reporting line cannot be changed here.', 'error');
+      return;
+    }
     const targetManager = managerId ? employeeMap.get(managerId) || null : null;
     if (managerId && !targetManager) {
       window.notify?.(`Choose someone from ${activeDeptLabel}.`, 'error');
@@ -242,7 +292,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
 
     try {
       const token = localStorage.getItem('talentflow_token');
-      const res = await fetch(`/api/employees/${selectedEmployee.id}`, {
+      const res = await fetch(`/api/employees/${employeeTargetId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -302,8 +352,8 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
       <Card className="overflow-hidden">
         <div className="flex flex-wrap gap-2">
           {departmentOptions.map((dept) => {
-            const deptEmployees = (employees || []).filter((person) => sameDept((person as any).dept, dept));
-            const deptHrAdmins = (users || []).filter((u: any) => normalize(u?.role) === 'hr' && sameDept(u?.dept, dept));
+            const deptEmployees = mergedPeople.filter((person: any) => sameDept(person.dept, dept));
+            const deptHrAdmins = deptEmployees.filter((person: any) => normalize(person?.role) === 'hr');
             const deptManagers = deptEmployees.filter((person) => roleLabel(person) === 'Manager');
             const deptSupervisors = deptEmployees.filter((person) => roleLabel(person) === 'Supervisor');
             const deptLinkedCount = deptEmployees.filter((person) => Number((person as any).manager_id || 0) > 0).length;
