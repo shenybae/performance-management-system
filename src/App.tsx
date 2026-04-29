@@ -677,9 +677,55 @@ export default function App() {
     D2: 'Team Progress',
     S1: 'Settings',
   };
+
+  const roleScreenNavItems: Record<string, Array<{ screen: string; label: string; icon: any; active?: (screen: string) => boolean }>> = {
+    HR: [
+      { screen: 'A1', label: 'Directory', icon: Users, active: (screen) => screen === 'A1' || screen === 'A2' },
+      { screen: 'A5', label: 'User Accounts', icon: ShieldCheck },
+      { screen: 'A3', label: 'Recruitment', icon: UserPlus },
+      { screen: 'A7', label: 'Onboarding', icon: Briefcase },
+      { screen: 'A4', label: 'Offboarding', icon: LogOut },
+      { screen: 'A13', label: 'Departments', icon: Layers },
+      { screen: 'A9', label: 'Audit Logs', icon: ClipboardCheck },
+      { screen: 'A10', label: 'Payroll Analytics', icon: DollarSign },
+      { screen: 'A11', label: 'Payroll Mgmt', icon: Wallet },
+      { screen: 'A12', label: 'Promotability', icon: Award },
+      { screen: 'A6', label: 'DB Viewer', icon: TrendingUp },
+      { screen: 'S1', label: 'Settings', icon: SettingsIcon },
+    ],
+    Manager: [
+      { screen: 'B1', label: 'OKR Planner', icon: Target },
+      { screen: 'B6', label: 'Metrics', icon: LayoutDashboard },
+      { screen: 'B2', label: 'Coaching Journal', icon: MessageSquare },
+      { screen: 'B4', label: 'Evaluation', icon: ClipboardCheck },
+      { screen: 'B3', label: 'Discipline', icon: ShieldAlert },
+      { screen: 'B8', label: 'Feedback', icon: MessageSquare },
+      { screen: 'B7', label: 'Suggestions', icon: Lightbulb },
+      { screen: 'B5', label: 'Promotability', icon: Award },
+      { screen: 'C5', label: 'Signature Queue', icon: CheckCircle },
+      { screen: 'S1', label: 'Settings', icon: SettingsIcon },
+    ],
+    Employee: [
+      { screen: 'C1', label: 'Dashboard', icon: LayoutDashboard },
+      { screen: 'C2', label: 'Suggestions', icon: Lightbulb },
+      { screen: 'C3', label: 'Self-Assessment', icon: ClipboardCheck },
+      { screen: 'C4', label: 'Feedback', icon: MessageSquare },
+      { screen: 'C5', label: 'Verification', icon: CheckCircle },
+      { screen: 'C6', label: 'Growth', icon: Award },
+      { screen: 'C7', label: 'E-Learning', icon: GraduationCap },
+      { screen: 'S1', label: 'Settings', icon: SettingsIcon },
+    ],
+    Leader: [
+      { screen: 'D1', label: 'Team Goals', icon: Target },
+      { screen: 'D2', label: 'Team Progress', icon: TrendingUp },
+      { screen: 'C5', label: 'Signature Queue', icon: CheckCircle },
+      { screen: 'S1', label: 'Settings', icon: SettingsIcon },
+    ],
+  };
   const activeTitle = screenTitleMap[activeScreen] || 'Dashboard';
   const userDisplay = user.employee_name || user.full_name || user.username || user.email || 'User';
   const roleDisplay = (role?: string | null) => role === 'HR' ? 'HR Admin' : (role || '');
+  const topNavItems = roleScreenNavItems[user.role] || [];
   // Desktop: icon-only by default, expand on hover. Mobile: always expanded when open.
   const isSidebarExpanded = !isDesktopViewport || isSidebarHovered;
 
@@ -906,7 +952,7 @@ export default function App() {
           transition={{ duration: 0.25, ease: 'easeOut' }}
           className="sticky top-0 z-40 mb-4"
         >
-          <div className="system-bg/95 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-2xl px-3 sm:px-4 py-2.5 shadow-sm">
+          <div className="system-bg/95 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-2xl px-3 sm:px-4 py-3 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <motion.button
@@ -929,6 +975,29 @@ export default function App() {
                 <NotificationBell onNavigate={(screen, ctx) => { goToScreen(screen); setNavContext(ctx || null); }} />
               </div>
             </div>
+            {topNavItems.length > 0 && (
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                {topNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = item.active ? item.active(activeScreen) : activeScreen === item.screen;
+                  return (
+                    <motion.button
+                      key={item.screen}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => goToScreen(item.screen)}
+                      className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-bold transition-colors ${
+                        isActive
+                          ? 'border-teal-green bg-teal-green/10 text-teal-deep dark:border-teal-green dark:bg-teal-green/20 dark:text-teal-green'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <Icon size={14} />
+                      <span>{item.label}</span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </motion.div>
 
