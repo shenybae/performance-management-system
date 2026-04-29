@@ -4,6 +4,7 @@ import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Modal } from '../../common/Modal';
+import { SearchableSelect } from '../../common/SearchableSelect';
 import { Eye, EyeOff, AlertCircle, CheckCircle, Archive } from 'lucide-react';
 import { appConfirm } from '../../../utils/appDialog';
 
