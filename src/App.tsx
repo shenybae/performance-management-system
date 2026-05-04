@@ -967,19 +967,24 @@ export default function App() {
         </AnimatePresence>
         {/* Sticky top header */}
         <div className="sticky top-0 z-20 pt-3 pb-2">
-          <div className="mx-auto max-w-[1560px] px-1 sm:px-2 lg:px-3">
-            <div className="rounded-2xl border border-slate-200/60 dark:border-slate-700/50 bg-white/60 dark:bg-slate-900/60 backdrop-blur-2xl shadow-sm px-5 py-3">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold leading-snug text-slate-900 dark:text-slate-100">{activeTitle}</p>
-                  <p className="truncate text-[11px] text-slate-500 dark:text-slate-400 leading-tight">{roleDisplay(user.role)} workspace · {userDisplay}</p>
-                </div>
-                <div className="flex items-center gap-4 shrink-0">
-                  <span className="hidden sm:inline-block text-[11px] font-bold tracking-[0.15em] uppercase text-teal-600 dark:text-teal-400">{user.role === 'HR' ? 'HR ADMIN' : (user.role || '').toUpperCase()}</span>
-                  <NotificationBell onNavigate={(screen, context) => {
-                    goToScreen(screen, context || undefined);
-                  }} />
-                </div>
+          <div
+            className="rounded-2xl border border-slate-200/60 dark:border-slate-700/50 shadow-sm px-5 py-3 mx-1 sm:mx-2 lg:mx-3"
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.55)',
+              backdropFilter: 'blur(28px)',
+              WebkitBackdropFilter: 'blur(28px)',
+            }}
+          >
+            <div className="flex items-center justify-between gap-4 mx-auto max-w-[1560px]">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold leading-snug text-slate-900 dark:text-slate-100">{activeTitle}</p>
+                <p className="truncate text-[11px] text-slate-500 dark:text-slate-400 leading-tight">{roleDisplay(user.role)} workspace · {userDisplay}</p>
+              </div>
+              <div className="flex items-center gap-4 shrink-0">
+                <span className="hidden sm:inline-block text-[11px] font-bold tracking-[0.15em] uppercase text-teal-600 dark:text-teal-400">{user.role === 'HR' ? 'HR ADMIN' : (user.role || '').toUpperCase()}</span>
+                <NotificationBell onNavigate={(screen, context) => {
+                  goToScreen(screen, context || undefined);
+                }} />
               </div>
             </div>
           </div>
