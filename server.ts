@@ -1170,6 +1170,16 @@ async function initDb() {
       } catch {}
     }
 
+    // Legacy cleanup: remove unused table if it exists.
+    try {
+      if (usePostgres && pgPool) {
+        const c = await pgPool.connect();
+        try { await c.query('DROP TABLE IF EXISTS user_notifications'); } catch {} finally { c.release(); }
+      } else {
+        try { sqliteDb.exec('DROP TABLE IF EXISTS user_notifications'); } catch {}
+      }
+    } catch {}
+
     // Safe migrations for goals â€” add status, progress, scope, department, team, delegation, priority
     const goalMigrations = [
       'ALTER TABLE goals ADD COLUMN title TEXT',
