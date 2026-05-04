@@ -10,5 +10,8 @@
             "database": "talentflow",
             "username": "postgres"
         }
-    ]
+    ],
+    "tailwindCSS.lint.suggestCanonicalClasses": "ignore",
+    "tailwindCSS.lint.cssConflict": "ignore",
+    "tailwindCSS.validate": false
 }

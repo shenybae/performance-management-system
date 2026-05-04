@@ -155,7 +155,7 @@ export const Departments = () => {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       transition={{ duration: 0.28, delay: idx * 0.03 }}
                       whileHover={{ y: -4 }}
-                      className={`text-left p-5 rounded-2xl border cursor-pointer transition-all duration-300 overflow-hidden flex flex-col ${d.deleted_at ? 'opacity-65 bg-slate-50/60 dark:bg-slate-900/50' : 'bg-gradient-to-br from-white to-teal-50/50 dark:from-slate-900 dark:to-slate-900/90 hover:shadow-lg'} border-slate-200 dark:border-slate-700 min-h-[220px]`}
+                      className={`text-left p-5 rounded-2xl border cursor-pointer transition-all duration-300 overflow-hidden flex flex-col ${d.deleted_at ? 'opacity-65 bg-slate-50/60 dark:bg-slate-900/50' : 'bg-linear-to-br from-white to-teal-50/50 dark:from-slate-900 dark:to-slate-900/90 hover:shadow-lg'} border-slate-200 dark:border-slate-700 min-h-[220px]`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-200">

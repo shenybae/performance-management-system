@@ -378,8 +378,8 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
                 <div>
                   <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{chatEmployee.name}</span>
                   <span className="text-[10px] ml-2">{employeeOnlineIds.has(chatEmployee.id)
-                    ? <span className="text-emerald-500 flex items-center gap-1 inline-flex"><Wifi size={10} /> Online</span>
-                    : <span className="text-slate-400 flex items-center gap-1 inline-flex"><WifiOff size={10} /> Offline</span>
+                    ? <span className="text-emerald-500 inline-flex items-center gap-1"><Wifi size={10} /> Online</span>
+                    : <span className="text-slate-400 inline-flex items-center gap-1"><WifiOff size={10} /> Offline</span>
                   }</span>
                 </div>
               </div>
@@ -726,14 +726,14 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
                   <tr key={r.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900">
                     <td className="py-2 px-4 text-xs font-medium text-slate-700 dark:text-slate-200">
                       <div className="min-w-0">
-                        <span className="truncate max-w-[220px]" title={r.employee_name || `#${r.employee_id}`}>
+                        <span className="truncate max-w-55" title={r.employee_name || `#${r.employee_id}`}>
                           {r.employee_name || `#${r.employee_id}`}
                         </span>
                       </div>
                     </td>
                     <td className="py-2 px-4 text-xs text-slate-600 dark:text-slate-300">
                       <div className="min-w-0">
-                        <span className="truncate max-w-[220px]" title={r.course_title}>{r.course_title}</span>
+                        <span className="truncate max-w-55" title={r.course_title}>{r.course_title}</span>
                       </div>
                     </td>
                     <td className="py-2 px-4"><span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600">{r.weakness || '—'}</span></td>
@@ -874,7 +874,7 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
                   <tr key={r.id} className="border-b border-slate-50 dark:border-slate-800/50">
                     <td className="py-2 px-4 text-xs font-medium text-slate-700 dark:text-slate-200">
                       <div className="min-w-0">
-                        <span className="truncate max-w-[220px]" title={r.employee_name || `#${r.employee_id}`}>
+                        <span className="truncate max-w-55" title={r.employee_name || `#${r.employee_id}`}>
                           {r.employee_name || `#${r.employee_id}`}
                         </span>
                       </div>
@@ -981,7 +981,7 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
               <div className="pb-6 flex-1">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-800 dark:text-slate-100 truncate max-w-[220px]" title={l.employee_name || `Employee #${l.employee_id}`}>
+                    <span className="font-bold text-slate-800 dark:text-slate-100 truncate max-w-55" title={l.employee_name || `Employee #${l.employee_id}`}>
                       {l.employee_name || `Employee #${l.employee_id}`}
                     </span>
                     <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">{l.created_at ? new Date(l.created_at).toLocaleDateString() : ''}</span>

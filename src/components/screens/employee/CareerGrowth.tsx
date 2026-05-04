@@ -196,7 +196,7 @@ const CareerGrowth = () => {
               </div>
             </Card>
           ) : (
-            <Card className="text-center p-8 border border-dashed border-slate-300 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-white dark:from-slate-900/30 dark:to-slate-900/10">
+            <Card className="text-center p-8 border border-dashed border-slate-300 dark:border-slate-700 bg-linear-to-br from-slate-50 to-white dark:from-slate-900/30 dark:to-slate-900/10">
               <Zap size={32} className="mx-auto text-amber-500 mb-2" />
               <p className="text-sm font-black text-slate-700 dark:text-slate-300 mb-1">No Assessment Yet</p>
               <p className="text-xs text-slate-500 dark:text-slate-400">Your manager will assess your promotability readiness based on your performance, goals, and development.</p>
@@ -284,7 +284,7 @@ const CareerGrowth = () => {
                     initial={{ opacity: 0, y: -5 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.1 }}
-                    className="p-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-gradient-to-br from-slate-50 to-slate-50/50 dark:from-slate-900/50 dark:to-slate-900/30 hover:border-teal-300 dark:hover:border-teal-700 transition-colors"
+                    className="p-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-linear-to-br from-slate-50 to-slate-50/50 dark:from-slate-900/50 dark:to-slate-900/30 hover:border-teal-300 dark:hover:border-teal-700 transition-colors"
                   >
                     <div className="flex items-start gap-2">
                       <ArrowRight size={14} className="text-teal-500 mt-0.5 flex-shrink-0" />
@@ -320,7 +320,7 @@ const CareerGrowth = () => {
           )}
 
           {/* Growth Tips Card */}
-          <Card className="bg-gradient-to-br from-teal-50 to-teal-50/50 dark:from-teal-900/20 dark:to-teal-900/10 border border-teal-100 dark:border-teal-800/40">
+          <Card className="bg-linear-to-br from-teal-50 to-teal-50/50 dark:from-teal-900/20 dark:to-teal-900/10 border border-teal-100 dark:border-teal-800/40">
             <div className="mb-3">
               <h3 className="text-sm font-bold text-teal-700 dark:text-teal-300 flex items-center gap-2">
                 <Star size={14} /> Growth Tips

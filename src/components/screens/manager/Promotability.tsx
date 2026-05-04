@@ -397,7 +397,7 @@ export const Promotability = ({ employees }: Props) => {
               <input type="text" placeholder="Search employees..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
                 className={`${inp} pl-9`} />
             </div>
-            <div className="flex items-center gap-2 sm:min-w-[220px]">
+            <div className="flex items-center gap-2 sm:min-w-55">
               <Filter size={14} className="text-slate-400 shrink-0" />
               <SearchableSelect
                 options={[
@@ -558,14 +558,14 @@ export const Promotability = ({ employees }: Props) => {
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-2">
                           <span className="w-7 h-7 rounded-full bg-teal-100 dark:bg-teal-900/20 text-teal-600 flex items-center justify-center text-[10px] font-black shrink-0">{(r.employee_name || '?')[0].toUpperCase()}</span>
-                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate max-w-[140px]">{r.employee_name}</span>
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate max-w-35">{r.employee_name}</span>
                         </div>
                       </td>
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-1.5 text-xs">
-                          <span className="text-slate-500 truncate max-w-[100px]">{r.current_position || '—'}</span>
+                          <span className="text-slate-500 truncate max-w-25">{r.current_position || '—'}</span>
                           <ArrowRight size={12} className="text-slate-400 shrink-0" />
-                          <span className="font-bold text-slate-700 dark:text-slate-200 truncate max-w-[100px]">{r.recommended_position || '—'}</span>
+                          <span className="font-bold text-slate-700 dark:text-slate-200 truncate max-w-25">{r.recommended_position || '—'}</span>
                         </div>
                       </td>
                       <td className="py-3 px-3">
@@ -600,7 +600,7 @@ export const Promotability = ({ employees }: Props) => {
                             </button>
                           )}
                           {r.review_notes && r.status !== 'Proposed' && (
-                            <span className="text-[10px] text-slate-400 italic truncate max-w-[120px]" title={r.review_notes}>{r.review_notes}</span>
+                            <span className="text-[10px] text-slate-400 italic truncate max-w-30" title={r.review_notes}>{r.review_notes}</span>
                           )}
                         </div>
                       </td>

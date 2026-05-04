@@ -216,7 +216,7 @@ export const DBViewer = () => {
                 </div>
 
                 <label className="text-xs font-semibold text-slate-600">Status</label>
-                <div className="min-w-[220px]">
+                <div className="min-w-55">
                 <SearchableSelect
                   dropdownVariant="pills-horizontal"
                   options={[
@@ -233,7 +233,7 @@ export const DBViewer = () => {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search row content..."
-                  className="px-3 py-2 text-xs border rounded-lg bg-white min-w-[220px]"
+                  className="px-3 py-2 text-xs border rounded-lg bg-white min-w-55"
                 />
 
                 {archiveTable && archiveOverview?.[archiveTable] && (

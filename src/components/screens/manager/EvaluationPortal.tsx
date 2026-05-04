@@ -897,7 +897,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                       <tr key={a.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                         <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
                           <div className="min-w-0">
-                            <span className="truncate max-w-[220px]" title={a.employee_name || `#${a.employee_id}`}>{a.employee_name || `#${a.employee_id}`}</span>
+                            <span className="truncate max-w-55" title={a.employee_name || `#${a.employee_id}`}>{a.employee_name || `#${a.employee_id}`}</span>
                           </div>
                         </td>
                         <td className="py-3 text-[10px] font-bold uppercase text-slate-500">{a.form_type || a.eval_type || '—'}</td>

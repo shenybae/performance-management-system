@@ -542,7 +542,7 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
                 return (
                   <tr key={rec.id} className="border-b border-slate-50 dark:border-slate-800/50">
                     <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
-                      <div className="min-w-0"><span className="truncate max-w-[220px]" title={rec.employee_name}>{rec.employee_name}</span></div>
+                      <div className="min-w-0"><span className="truncate max-w-55" title={rec.employee_name}>{rec.employee_name}</span></div>
                     </td>
                     <td className="py-3 text-slate-500 dark:text-slate-400 text-xs">{rec.created_at?.split('T')[0] || rec.created_at}</td>
                     <td className="py-3">

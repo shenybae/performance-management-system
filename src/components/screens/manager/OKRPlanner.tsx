@@ -1865,7 +1865,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   <div><span className="font-bold text-slate-500 uppercase block text-xs">Goal Level</span><span className="text-slate-700 dark:text-slate-200">{g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual'}</span></div>
                   <div><span className="font-bold text-slate-500 uppercase block text-xs">Department</span><span className="text-slate-700 dark:text-slate-200">{g.department || '\u2014'}</span></div>
                   <div><span className="font-bold text-slate-500 uppercase block text-xs">Team</span><span className="text-slate-700 dark:text-slate-200">{g.team_name || '\u2014'}</span></div>
-                  <div><span className="font-bold text-slate-500 uppercase block text-xs">Employee</span><div className="min-w-0"><span className="text-slate-700 dark:text-slate-200 truncate max-w-[220px]" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div></div>
+                  <div><span className="font-bold text-slate-500 uppercase block text-xs">Employee</span><div className="min-w-0"><span className="text-slate-700 dark:text-slate-200 truncate max-w-55" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div></div>
                   <div><span className="font-bold text-slate-500 uppercase block text-xs">Quarter</span><span className="text-slate-700 dark:text-slate-200">{g.quarter || '\u2014'}</span></div>
                   <div><span className="font-bold text-slate-500 uppercase block text-xs">Frequency</span><span className="text-slate-700 dark:text-slate-200">{g.frequency || 'One-time'}</span></div>
                   <div><span className="font-bold text-slate-500 uppercase block text-xs">Team Leader</span><span className="text-slate-700 dark:text-slate-200">{g.leader_name || '\u2014'}</span></div>
@@ -1994,7 +1994,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               className="text-[10px] text-slate-500 dark:text-slate-400"
                             />
                             {proofReviewAttachments[proofReviewGoal.id]?.file_name && (
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[220px]">Attached: {proofReviewAttachments[proofReviewGoal.id]?.file_name}</span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-55">Attached: {proofReviewAttachments[proofReviewGoal.id]?.file_name}</span>
                             )}
                           </div>
                         )}
@@ -2233,7 +2233,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                     className="text-[10px] text-slate-500 dark:text-slate-400"
                                   />
                                   {proofReviewAttachments[t.id]?.file_name && (
-                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[220px]">Attached: {proofReviewAttachments[t.id]?.file_name}</span>
+                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-55">Attached: {proofReviewAttachments[t.id]?.file_name}</span>
                                   )}
                                 </div>
                               )}
@@ -2772,16 +2772,16 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-900/50">
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[220px]">Goal</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[92px]">Level</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Department</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[120px]">Team</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[140px]">Owner</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[94px]">Priority</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[172px]">Progress / Status</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[112px]">Due</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[88px]">Overdue</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-[128px]">Issue</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-55">Goal</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-23">Level</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-30">Department</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-30">Team</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-35">Owner</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-23.5">Priority</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-43">Progress / Status</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-28">Due</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-22">Overdue</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold uppercase text-red-500 w-32">Issue</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3521,7 +3521,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
         <div className="mt-3 flex items-center gap-2 min-w-0 overflow-hidden">
           <SearchableSelect
-            className="w-[210px] shrink-0"
+            className="w-52.5 shrink-0"
             options={[{ value: 'All', label: 'All Departments' }, ...DEPARTMENTS.map(d => ({ value: d, label: d }))]}
             value={filterDept}
             onChange={v => setFilterDept(String(v))}
@@ -3531,7 +3531,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             dropdownVariant="pills-horizontal"
           />
           <SearchableSelect
-            className="w-[190px] shrink-0"
+            className="w-47.5 shrink-0"
             options={[{ value: 'All', label: 'All Statuses' }, ...STATUSES.map(s => ({ value: s, label: s }))]}
             value={filterStatus}
             onChange={v => setFilterStatus(String(v))}
@@ -3541,7 +3541,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             dropdownVariant="pills-horizontal"
           />
           <SearchableSelect
-            className="w-[180px] shrink-0"
+            className="w-45 shrink-0"
             options={[
               { value: 'active', label: 'Active Only' },
               { value: 'include', label: 'Show Archived' },
@@ -3561,14 +3561,14 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
           <table className="w-full text-left border-collapse table-fixed">
             <thead><tr className="border-b border-slate-100 dark:border-slate-800">
               <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[320px]">Title</th>
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[170px]">Department</th>
-              {activeTab === 'Team' && <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[170px]">Team</th>}
-              {activeTab === 'Individual' && <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[170px]">Employee</th>}
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[220px]">Owner</th>
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[96px]">Priority</th>
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[170px]">Progress</th>
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[130px]">Status</th>
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right w-[120px]">Actions</th>
+              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-42.5">Department</th>
+              {activeTab === 'Team' && <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-42.5">Team</th>}
+              {activeTab === 'Individual' && <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-42.5">Employee</th>}
+              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-55">Owner</th>
+              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-24">Priority</th>
+              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-42.5">Progress</th>
+              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-32.5">Status</th>
+              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right w-30">Actions</th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 && (
@@ -3603,7 +3603,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                       <td className="py-3 px-3 text-xs text-slate-500 dark:text-slate-400 truncate" title={g.department || '\u2014'}>{g.department || '\u2014'}</td>
                       {activeTab === 'Team' && <td className="py-3 px-3 text-xs text-slate-500 dark:text-slate-400 truncate" title={g.team_name || '\u2014'}>{g.team_name || '\u2014'}</td>}
                       {activeTab === 'Individual' && <td className="py-3 px-3 text-xs text-slate-500 dark:text-slate-400">
-                        <div className="min-w-0"><span className="truncate max-w-[220px]" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div>
+                        <div className="min-w-0"><span className="truncate max-w-55" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div>
                       </td>}
                       <td className="py-3 px-3">
                         {g.delegation ? (
@@ -3688,7 +3688,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Department</span><span className="text-slate-700 dark:text-slate-200">{g.department || '\u2014'}</span></div>
                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Team</span><span className="text-slate-700 dark:text-slate-200">{g.team_name || '\u2014'}</span></div>
                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Employee</span>
-                  <div className="min-w-0"><span className="text-slate-700 dark:text-slate-200 truncate max-w-[220px]" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div>
+                  <div className="min-w-0"><span className="text-slate-700 dark:text-slate-200 truncate max-w-55" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div>
                 </div>
                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Quarter</span><span className="text-slate-700 dark:text-slate-200">{g.quarter || '\u2014'}</span></div>
                 <div><span className="font-bold text-slate-500 uppercase block text-[10px]">Frequency</span><span className="text-slate-700 dark:text-slate-200">{g.frequency || 'One-time'}</span></div>
@@ -3881,7 +3881,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             className="text-[10px] text-slate-500 dark:text-slate-400"
                           />
                           {proofReviewAttachments[proofReviewGoal.id]?.file_name && (
-                            <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[220px]">Attached: {proofReviewAttachments[proofReviewGoal.id]?.file_name}</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-55">Attached: {proofReviewAttachments[proofReviewGoal.id]?.file_name}</span>
                           )}
                         </div>
                       )}
@@ -4119,7 +4119,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                                   className="text-[10px] text-slate-500 dark:text-slate-400"
                                 />
                                 {proofReviewAttachments[t.id]?.file_name && (
-                                  <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[220px]">Attached: {proofReviewAttachments[t.id]?.file_name}</span>
+                                  <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-55">Attached: {proofReviewAttachments[t.id]?.file_name}</span>
                                 )}
                               </div>
                             )}

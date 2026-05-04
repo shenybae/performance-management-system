@@ -150,7 +150,7 @@ export const GoalScopePlanManager = () => {
                 ) : (
                   filteredImprovementPlans.map((p) => (
                     <tr key={p.id} className="border-b border-slate-100 dark:border-slate-800/50">
-                      <td className="py-2 text-xs text-slate-700 dark:text-slate-200 max-w-[220px] truncate" title={p.goal_title || p.goal_statement || 'Goal'}>
+                      <td className="py-2 text-xs text-slate-700 dark:text-slate-200 max-w-55 truncate" title={p.goal_title || p.goal_statement || 'Goal'}>
                         {p.goal_title || p.goal_statement || 'Untitled goal'}
                       </td>
                       <td className="py-2">{scopeBadge(p.goal_scope || p.linked_goal_scope || '')}</td>
@@ -192,7 +192,7 @@ export const GoalScopePlanManager = () => {
                 ) : (
                   filteredDevelopmentPlans.map((p) => (
                     <tr key={p.id} className="border-b border-slate-100 dark:border-slate-800/50">
-                      <td className="py-2 text-xs text-slate-700 dark:text-slate-200 max-w-[220px] truncate" title={p.goal_title || p.goal_statement || 'Goal'}>
+                      <td className="py-2 text-xs text-slate-700 dark:text-slate-200 max-w-55 truncate" title={p.goal_title || p.goal_statement || 'Goal'}>
                         {p.goal_title || p.goal_statement || 'Untitled goal'}
                       </td>
                       <td className="py-2">{scopeBadge(p.goal_scope || p.linked_goal_scope || '')}</td>

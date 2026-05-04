@@ -806,7 +806,7 @@ export const TeamLeaderDashboard = () => {
                 {member.profile_picture ? (
                   <img src={member.profile_picture} alt={member.name} className="w-8 h-8 rounded-full object-cover" />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                  <div className="w-8 h-8 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
                     {member.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                   </div>
                 )}
@@ -971,7 +971,7 @@ export const TeamLeaderDashboard = () => {
                               className={`h-3 rounded-full ${getProgressColor(goal.progress || 0)}`}
                             />
                           </div>
-                          <span className="text-xs font-black text-slate-600 dark:text-slate-400 min-w-[45px] text-right">
+                          <span className="text-xs font-black text-slate-600 dark:text-slate-400 min-w-11.25 text-right">
                             {goal.progress || 0}%
                           </span>
                         </div>
@@ -1033,7 +1033,7 @@ export const TeamLeaderDashboard = () => {
                               <div className="space-y-2">
                                 {goal.assignees.map((assignee) => (
                                   <div key={assignee.id} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                                    <div className="w-8 h-8 rounded-full bg-linear-to-br from-teal-500 to-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
                                       {assignee.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -1048,7 +1048,7 @@ export const TeamLeaderDashboard = () => {
                                             style={{ width: `${assignee.progress}%` }}
                                           />
                                         </div>
-                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 min-w-[32px]">
+                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 min-w-8">
                                           {assignee.progress}%
                                         </span>
                                       </div>
@@ -1261,7 +1261,7 @@ export const TeamLeaderDashboard = () => {
                                               className="text-[10px] text-slate-500 dark:text-slate-400"
                                             />
                                             {proofReviewAttachments[task.id]?.file_name && (
-                                              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[220px]">
+                                              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-55">
                                                 Attached: {proofReviewAttachments[task.id]?.file_name}
                                               </span>
                                             )}

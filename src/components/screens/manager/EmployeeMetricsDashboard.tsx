@@ -409,7 +409,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
               {employeePerformanceLoading ? (
                 <p className="text-xs text-slate-400">Loading metrics...</p>
               ) : (
-                <div className="max-h-[420px] overflow-y-auto pr-1 space-y-1.5">
+                <div className="max-h-105 overflow-y-auto pr-1 space-y-1.5">
                   {filteredPerformanceEmployees.map((item) => {
                     const active = Number(item.employee_id) === Number(selectedPerformanceEmployeeId);
                     return (
@@ -452,7 +452,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
               {underperformingEmployees.length === 0 ? (
                 <p className="text-xs text-slate-400">No underperforming employees found for the current metrics.</p>
               ) : (
-                <div className="max-h-[330px] overflow-y-auto pr-1 space-y-2">
+                <div className="max-h-82.5 overflow-y-auto pr-1 space-y-2">
                   {underperformingEmployees.map(({ employee, goalsAtRisk, goalsOverdue, avgProgress, performanceScore }) => (
                     <button
                       key={`employee-metrics-underperf-${employee.employee_id}`}
@@ -460,7 +460,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                       className={`w-full inline-flex flex-col items-start gap-1 px-3 py-2 rounded-xl border text-left transition-colors ${Number(selectedPerformanceEmployeeId) === Number(employee.employee_id) ? 'border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-900/20' : 'border-red-200 dark:border-red-900/40 bg-white dark:bg-slate-900 hover:bg-red-50/60 dark:hover:bg-red-900/20'}`}
                     >
                       <div className="flex items-center justify-between gap-2 w-full">
-                        <span className="font-bold text-xs text-slate-700 dark:text-slate-200 truncate max-w-[180px]" title={employee.employee_name}>{employee.employee_name}</span>
+                        <span className="font-bold text-xs text-slate-700 dark:text-slate-200 truncate max-w-45" title={employee.employee_name}>{employee.employee_name}</span>
                         <span className="text-[10px] font-black text-red-600 dark:text-red-300">{performanceScore.toFixed(0)}</span>
                       </div>
                       <div className="flex items-center gap-2 text-[10px] text-slate-400">
@@ -493,7 +493,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
               {performingEmployees.length === 0 ? (
                 <p className="text-xs text-slate-400">No performing employees found for the current metrics.</p>
               ) : (
-                <div className="max-h-[330px] overflow-y-auto pr-1 space-y-2">
+                <div className="max-h-82.5 overflow-y-auto pr-1 space-y-2">
                   {performingEmployees.map(({ employee, goalsAtRisk, goalsOverdue, avgProgress, performanceScore }) => (
                     <button
                       key={`employee-metrics-performing-${employee.employee_id}`}
@@ -501,7 +501,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                       className={`w-full inline-flex flex-col items-start gap-1 px-3 py-2 rounded-xl border text-left transition-colors ${Number(selectedPerformanceEmployeeId) === Number(employee.employee_id) ? 'border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-900/20' : 'border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 hover:bg-emerald-50/60 dark:hover:bg-emerald-900/20'}`}
                     >
                       <div className="flex items-center justify-between gap-2 w-full">
-                        <span className="font-bold text-xs text-slate-700 dark:text-slate-200 truncate max-w-[180px]" title={employee.employee_name}>{employee.employee_name}</span>
+                        <span className="font-bold text-xs text-slate-700 dark:text-slate-200 truncate max-w-45" title={employee.employee_name}>{employee.employee_name}</span>
                         <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-300">{performanceScore.toFixed(0)}</span>
                       </div>
                       <div className="flex items-center gap-2 text-[10px] text-slate-400">

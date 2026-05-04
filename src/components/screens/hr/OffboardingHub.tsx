@@ -1008,11 +1008,11 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                       <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-100 flex items-center gap-2">
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         <div className="min-w-0">
-                          <span className="truncate max-w-[220px]" title={rec.employee_name}>{rec.employee_name}</span>
+                          <span className="truncate max-w-55" title={rec.employee_name}>{rec.employee_name}</span>
                         </div>
                       </td>
                       <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
-                        <div className="min-w-0"><span className="truncate max-w-[220px]" title={rec.position_dept}>{rec.position_dept}</span></div>
+                        <div className="min-w-0"><span className="truncate max-w-55" title={rec.position_dept}>{rec.position_dept}</span></div>
                       </td>
                       <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{rec.date_prepared}</td>
                       <td className="py-3 px-4 text-center"><span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full text-[10px] font-bold">{items.length}</span></td>
@@ -1049,7 +1049,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                                     <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.dr_si_no}</td>
                                     <td className="py-1 px-2 border border-slate-200 dark:border-slate-700 text-right font-mono">{parseFloat(it.amount) ? `₱${parseFloat(it.amount).toLocaleString('en', { minimumFractionDigits: 2 })}` : ''}</td>
                                     <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">
-                                      <div className="min-w-0"><span className="truncate max-w-[220px]" title={it.remarks}>{it.remarks}</span></div>
+                                      <div className="min-w-0"><span className="truncate max-w-55" title={it.remarks}>{it.remarks}</span></div>
                                     </td>
                                   </tr>
                                 ))}</tbody>

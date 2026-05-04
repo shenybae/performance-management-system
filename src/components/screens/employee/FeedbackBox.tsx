@@ -308,7 +308,7 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-slate-950 dark:to-slate-900 p-4 shadow-sm mb-4">
+      <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-linear-to-br from-white to-slate-50 dark:from-slate-950 dark:to-slate-900 p-4 shadow-sm mb-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <SectionHeader title="360° Feedback" subtitle="Collaborative growth insights from peers, supervisors, and teams" />
           <div className="flex flex-wrap items-center gap-2">
@@ -461,12 +461,12 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
           <table className="w-full text-left feedback-table min-w-[760px]">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/40">
-                <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase min-w-[140px]">Employee</th>
+                <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase min-w-35">Employee</th>
                 <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase">Relationship</th>
                 <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase">Knowledge</th>
                 <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase">Quality</th>
                 <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase">Communication</th>
-                <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase min-w-[220px]">Strengths</th>
+                <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase min-w-55">Strengths</th>
                 <th className="py-2.5 px-3 text-[10px] font-bold text-slate-500 uppercase min-w-[200px]">Improvements</th>
                 <th className="py-2.5 px-3"></th>
               </tr>
@@ -474,7 +474,7 @@ export const FeedbackBox: React.FC<FeedbackBoxProps> = ({ employees = [], users 
             <tbody>
               {visibleFeedback.map(f => (
                 <tr key={f.id} className={`border-b border-slate-50 dark:border-slate-800/50 ${personFilter && normalizeName(f.target_employee_name) === normalizeName(personFilter) ? 'bg-teal-50/30' : ''}`}>
-                  <td onClick={() => applyPersonFilterFrom(f.target_employee_name)} className="py-3 px-3 font-medium text-sm text-slate-700 dark:text-slate-200 min-w-[140px] cursor-pointer hover:text-teal-deep dark:hover:text-teal-green transition-colors">{f.target_employee_name}</td>
+                  <td onClick={() => applyPersonFilterFrom(f.target_employee_name)} className="py-3 px-3 font-medium text-sm text-slate-700 dark:text-slate-200 min-w-35 cursor-pointer hover:text-teal-deep dark:hover:text-teal-green transition-colors">{f.target_employee_name}</td>
                   <td className="py-3 px-3 text-sm text-slate-500">{f.relationship}</td>
                   <td className="py-3 px-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.job_knowledge}</td>
                   <td className="py-3 px-3 text-sm font-bold text-slate-700 dark:text-slate-200">{f.work_quality}</td>

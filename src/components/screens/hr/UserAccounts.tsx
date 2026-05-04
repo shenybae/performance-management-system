@@ -518,7 +518,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                 {activePageData.rows.map(u => (
                   <tr key={u.id} className="border-b border-slate-50 dark:border-slate-800/50">
                     <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-100">
-                      <div className="min-w-0 truncate max-w-[220px]" title={u.full_name || u.employee_name || '-'}>{u.full_name || u.employee_name || '-'}</div>
+                      <div className="min-w-0 truncate max-w-55" title={u.full_name || u.employee_name || '-'}>{u.full_name || u.employee_name || '-'}</div>
                     </td>
                     <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-100">
                       <div className="min-w-0 truncate" title={u.email || u.username || '-'}>{u.email || u.username || '-'}</div>
@@ -623,7 +623,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                   {archivedPageData.rows.map(u => (
                     <tr key={u.id} className={`border-b border-slate-50 dark:border-slate-800/50 opacity-80 italic`}>
                       <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-100">
-                        <div className="min-w-0 truncate max-w-[220px]" title={u.full_name || u.employee_name || '-'}>{u.full_name || u.employee_name || '-'}</div>
+                        <div className="min-w-0 truncate max-w-55" title={u.full_name || u.employee_name || '-'}>{u.full_name || u.employee_name || '-'}</div>
                       </td>
                       <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-100">
                         <div className="min-w-0 truncate" title={u.email || u.username || '-'}>{u.email || u.username || '-'}</div>

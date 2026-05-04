@@ -268,7 +268,7 @@ export const EmployeeJacket = ({ employee, onBack }: EmployeeJacketProps) => {
                   <tr key={d.id} className="border-b border-slate-50 dark:border-slate-800/50">
                     <td className="py-2 text-slate-600 dark:text-slate-400">{(d as any).date_of_warning || '—'}</td>
                     <td className="py-2 text-slate-700 dark:text-slate-300">
-                      <div className="min-w-0"><span className="truncate max-w-[220px]" title={d.violation_type}>{d.violation_type}</span></div>
+                      <div className="min-w-0"><span className="truncate max-w-55" title={d.violation_type}>{d.violation_type}</span></div>
                     </td>
                     <td className="py-2"><span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${d.warning_level === 'Written Warning' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700' : d.warning_level === 'Final Warning' ? 'bg-red-100 dark:bg-red-900/30 text-red-700' : 'bg-slate-100 dark:bg-slate-800 text-slate-600'}`}>{d.warning_level}</span></td>
                     <td className="py-2 text-xs text-slate-500 dark:text-slate-400">

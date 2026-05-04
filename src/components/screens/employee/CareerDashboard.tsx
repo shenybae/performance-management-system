@@ -1576,7 +1576,7 @@ export const CareerDashboard = () => {
                   className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors"
                 >
                   <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
-                    <span className="truncate max-w-[220px] block" title={g.title || g.statement}>{g.title || g.statement}</span>
+                    <span className="truncate max-w-55 block" title={g.title || g.statement}>{g.title || g.statement}</span>
                   </td>
                   <td className="py-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${scopeStyleMap[g.scope || 'Individual']?.badgeBg || scopeStyleMap.Individual.badgeBg}`}>
@@ -1592,7 +1592,7 @@ export const CareerDashboard = () => {
                   </td>
                   <td className="py-3"><span className={`text-[10px] font-bold uppercase ${g.status === 'Completed' ? 'text-emerald-600' : g.status === 'In Progress' ? 'text-amber-500' : g.status === 'At Risk' ? 'text-red-500' : 'text-slate-400'}`}>{g.status || 'Not Started'}</span></td>
                   <td className="py-3">
-                    <div className="flex items-center gap-2 min-w-[120px]">
+                    <div className="flex items-center gap-2 min-w-30">
                       <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden relative">
                         <motion.div
                           initial={{ width: 0 }}
@@ -1617,7 +1617,7 @@ export const CareerDashboard = () => {
                         <span className="w-6 h-6 rounded-full bg-teal-600/15 dark:bg-teal-500/15 text-teal-700 dark:text-teal-400 flex items-center justify-center text-[9px] font-black shrink-0">
                           {g.delegation.charAt(0).toUpperCase()}
                         </span>
-                        <span className="text-xs text-slate-600 dark:text-slate-300 truncate max-w-[100px]" title={g.delegation}>
+                        <span className="text-xs text-slate-600 dark:text-slate-300 truncate max-w-25" title={g.delegation}>
                           {g.delegation}
                         </span>
                       </div>
@@ -1686,7 +1686,7 @@ export const CareerDashboard = () => {
               No delegated tasks match your search.
             </div>
           ) : (
-            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-105 overflow-y-auto pr-1">
               {visibleDelegatedTasks.map((t: any) => {
                 const reviewStatus = t.proof_review_status || 'Not Submitted';
                 const canOpenWorkspace = reviewStatus !== 'Approved';
@@ -2108,7 +2108,7 @@ export const CareerDashboard = () => {
                             ))}
                           </div>
                         )}
-                          <span className="text-sm font-black text-slate-700 dark:text-slate-200 min-w-[48px] text-right">{taskBoardProgress}%</span>
+                          <span className="text-sm font-black text-slate-700 dark:text-slate-200 min-w-12 text-right">{taskBoardProgress}%</span>
                         </div>
                       </div>
 

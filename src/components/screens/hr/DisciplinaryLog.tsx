@@ -534,7 +534,7 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-sm">
+            <table className="w-full min-w-245 text-sm">
               <thead>
                 <tr className="border-b dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   <th className="text-left py-2 pr-4">Employee</th>

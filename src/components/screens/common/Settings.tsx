@@ -579,7 +579,7 @@ export const Settings = ({ onPasswordChanged, onProfilePictureChanged, onAccount
         >
           <div className="w-full space-y-6">
             <div className="flex justify-center w-full">
-              <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg">
+              <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-linear-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg">
                 {pendingPhoto ? (
                   <img
                     src={pendingPhoto}

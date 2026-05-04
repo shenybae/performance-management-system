@@ -250,7 +250,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                           <span className="w-4 h-4 rounded-full bg-teal-200 dark:bg-teal-800 text-teal-700 dark:text-teal-200 text-[8px] font-black flex items-center justify-center">{getInitials(opt.label)}</span>
                         )
                       )}
-                      <span className="max-w-[120px] truncate">{opt.label}</span>
+                      <span className="max-w-30 truncate">{opt.label}</span>
                     </span>
                   );
                 })}
@@ -445,7 +445,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                       <span className="h-3 w-3 rounded-full border border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400">
                         <span className="block h-full w-full text-center text-[8px] leading-[10px] text-white">✓</span>
                       </span>
-                      <span className="max-w-[140px] truncate">{opt.label}</span>
+                      <span className="max-w-35 truncate">{opt.label}</span>
                     </button>
                   );
                 })}
