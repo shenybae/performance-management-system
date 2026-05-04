@@ -966,9 +966,9 @@ export default function App() {
           )}
         </AnimatePresence>
         {/* Sticky top header */}
-        <div className="sticky top-0 z-20 pt-3 pb-2 bg-white dark:bg-black">
+        <div className="sticky top-0 z-20 pt-3 pb-2">
           <div className="mx-auto max-w-[1560px] px-1 sm:px-2 lg:px-3">
-            <div className="rounded-2xl border border-slate-200/60 dark:border-slate-700/50 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-sm px-5 py-3">
+            <div className="rounded-2xl border border-slate-200/60 dark:border-slate-700/50 bg-white/60 dark:bg-slate-900/60 backdrop-blur-2xl shadow-sm px-5 py-3">
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold leading-snug text-slate-900 dark:text-slate-100">{activeTitle}</p>
