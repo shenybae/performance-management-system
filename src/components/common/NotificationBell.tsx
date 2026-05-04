@@ -13,6 +13,7 @@ const SOURCE_SCREEN_MAP: Record<string, Record<string, string>> = {
   goal_action:   { Employee: 'C1', Manager: 'B1', HR: 'A1' },
   appraisal:     { Employee: 'C5', Manager: 'B4', HR: 'B4' },
   appraisal_sign: { Employee: 'C5', Manager: 'B4', HR: 'B4' },
+  discipline_sign: { Employee: 'C5', Manager: 'C5', Leader: 'C5', HR: 'C5' },
   pip:           { Employee: 'C1', Manager: 'B6' },
   suggestion:    { Employee: 'C2', Manager: 'B7', HR: 'A1' },
 };

@@ -261,6 +261,17 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
     ));
   }, [records, search]);
 
+  const getSignatureStatus = (record: any) => {
+    const hasPreparer = !!String(record?.preparer_signature || '').trim();
+    const hasSupervisor = !!String(record?.supervisor_signature || '').trim();
+    const hasEmployee = !!String(record?.employee_signature || '').trim();
+    const progress = [hasPreparer, hasSupervisor, hasEmployee].filter(Boolean).length;
+    if (!hasPreparer) return { label: `Awaiting Preparer (${progress}/3)`, className: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300' };
+    if (!hasSupervisor) return { label: `Awaiting Supervisor (${progress}/3)`, className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' };
+    if (!hasEmployee) return { label: `Awaiting Employee Acknowledgement (${progress}/3)`, className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' };
+    return { label: `Acknowledged (${progress}/3)`, className: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' };
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <div className="flex justify-between items-end mb-4">
@@ -540,6 +551,7 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
                   <th className="text-left py-2 pr-4">Employee</th>
                   <th className="text-left py-2 pr-4">Dept</th>
                   <th className="text-left py-2 pr-4">Warning</th>
+                  <th className="text-left py-2 pr-4">Acknowledgement Status</th>
                   <th className="text-left py-2 pr-4">Violation Type</th>
                   <th className="text-left py-2 pr-4">Violation Date</th>
                   <th className="text-left py-2 pr-4">Place</th>
@@ -549,7 +561,9 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
                 </tr>
               </thead>
               <tbody>
-                {filteredRecords.map((d: any) => (
+                {filteredRecords.map((d: any) => {
+                  const sigStatus = getSignatureStatus(d);
+                  return (
                   <tr key={d.id} className="border-b dark:border-slate-800">
                     <td className="py-3 pr-4 font-semibold text-slate-800 dark:text-slate-100">{d.employee_name || `#${d.employee_id}`}</td>
                     <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.dept || '—'}</td>
@@ -564,6 +578,11 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
                         {d.warning_level || '—'}
                       </span>
                     </td>
+                    <td className="py-3 pr-4">
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${sigStatus.className}`}>
+                        {sigStatus.label}
+                      </span>
+                    </td>
                     <td className="py-3 pr-4 text-slate-600 dark:text-slate-300">{d.violation_type || '—'}</td>
                     <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.violation_date || '—'}</td>
                     <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.violation_place || '—'}</td>
@@ -571,10 +590,11 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
                     <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : '—'}</td>
                     <td className="py-3 pr-4 text-slate-600 dark:text-slate-300">{d.action_taken || '—'}</td>
                   </tr>
-                ))}
+                  );
+                })}
                 {filteredRecords.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-10 text-center text-slate-400">{search ? 'No records match your search.' : 'No disciplinary records found.'}</td>
+                    <td colSpan={10} className="py-10 text-center text-slate-400">{search ? 'No records match your search.' : 'No disciplinary records found.'}</td>
                   </tr>
                 )}
               </tbody>

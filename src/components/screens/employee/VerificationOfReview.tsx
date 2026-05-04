@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
+import { Modal } from '../../common/Modal';
 import { SignatureUpload } from '../../common/SignatureUpload';
 import { CheckCircle, FileCheck, ShieldAlert } from 'lucide-react';
 import { getAuthHeaders } from '../../../utils/csv';
@@ -27,6 +28,8 @@ export const VerificationOfReview = () => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeQueueSection, setActiveQueueSection] = useState<string>('');
   const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
+  const [disciplineReviewRecord, setDisciplineReviewRecord] = useState<any | null>(null);
+  const [disciplineReviewedKeys, setDisciplineReviewedKeys] = useState<Record<string, boolean>>({});
   const [signature, setSignature] = useState('');
   const [remarks, setRemarks] = useState('');
   const [signerPrintTitle, setSignerPrintTitle] = useState('');
@@ -1012,6 +1015,52 @@ export const VerificationOfReview = () => {
     </div>
   );
 
+  const getDisciplineSignProgress = (d: any) => {
+    const done = [d?.preparer_signature, d?.supervisor_signature, d?.employee_signature]
+      .filter((v) => !!String(v || '').trim())
+      .length;
+    return { done, total: 3 };
+  };
+
+  const renderDisciplineReview = (d: any) => {
+    const progress = getDisciplineSignProgress(d);
+    return (
+      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+        <div className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-bold bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300">
+          Signature Progress: {progress.done}/{progress.total}
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div><span className="font-bold">Employee:</span> {d.employee_name || `#${d.employee_id || '—'}`}</div>
+          <div><span className="font-bold">Warning Level:</span> {d.warning_level || '—'}</div>
+          <div><span className="font-bold">Date of Warning:</span> {d.date_of_warning || '—'}</div>
+          <div><span className="font-bold">Violation Date:</span> {d.violation_date || '—'}</div>
+          <div><span className="font-bold">Violation Time:</span> {d.violation_time || '—'}</div>
+          <div><span className="font-bold">Place:</span> {d.violation_place || '—'}</div>
+          <div className="sm:col-span-2"><span className="font-bold">Violation Type:</span> {d.violation_type || '—'}</div>
+          <div className="sm:col-span-2"><span className="font-bold">Action Taken:</span> {d.action_taken || '—'}</div>
+          <div className="sm:col-span-2"><span className="font-bold">Employer Statement:</span> {d.employer_statement || '—'}</div>
+          <div className="sm:col-span-2"><span className="font-bold">Employee Statement:</span> {d.employee_statement || '—'}</div>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-2 text-xs">
+          <div className={`px-2 py-1 rounded ${d.preparer_signature ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+            Preparer: {d.preparer_signature ? `Signed (${d.preparer_signature_date || 'date not set'})` : 'Pending'}
+          </div>
+          <div className={`px-2 py-1 rounded ${d.supervisor_signature ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+            Supervisor: {d.supervisor_signature ? `Signed (${d.supervisor_signature_date || 'date not set'})` : 'Pending'}
+          </div>
+          <div className={`px-2 py-1 rounded ${d.employee_signature ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+            Employee: {d.employee_signature ? `Signed (${d.employee_signature_date || 'date not set'})` : 'Pending'}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const openDisciplineReview = (key: string, record: any) => {
+    setDisciplineReviewRecord(record);
+    setDisciplineReviewedKeys((prev) => ({ ...prev, [key]: true }));
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <SectionHeader title="Signature Queue" subtitle={roleSubtitle} />
@@ -1076,14 +1125,31 @@ export const VerificationOfReview = () => {
             {pendingEmployeeDiscipline.length === 0 && <p className="text-sm text-slate-400">No pending disciplinary signatures.</p>}
             {pendingEmployeeDiscipline.map((d) => (
               <div key={`emp-disc-${d.id}`} className="border rounded-lg p-3 mb-2">
+                {(() => {
+                  const disciplineKey = `emp-disc-${d.id}`;
+                  const reviewed = !!disciplineReviewedKeys[disciplineKey];
+                  return (
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="font-semibold">{d.warning_level || 'Warning'} - {d.violation_type || 'Disciplinary Action'}</p>
                     <p className="text-xs text-slate-500">{d.employee_name || 'Employee'} • {d.date_of_warning || '—'}</p>
+                    <p className="text-[11px] text-teal-700 dark:text-teal-300 font-semibold mt-0.5">Progress: {getDisciplineSignProgress(d).done}/{getDisciplineSignProgress(d).total} signed</p>
                   </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-disc-${d.id}`)}>Sign</button>
+                  <div className="flex items-center gap-3">
+                    <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => openDisciplineReview(disciplineKey, d)}>Review</button>
+                    <button
+                      className="text-sm font-bold text-teal-deep disabled:text-slate-400 disabled:cursor-not-allowed"
+                      disabled={!reviewed}
+                      title={!reviewed ? 'Review the form first' : 'Sign this disciplinary record'}
+                      onClick={() => setActiveId(disciplineKey)}
+                    >
+                      Sign
+                    </button>
+                  </div>
                 </div>
-                {activeId === `emp-disc-${d.id}` && renderSignBox(() => signEmployeeDiscipline(d.id), true)}
+                {activeId === disciplineKey && renderSignBox(() => signEmployeeDiscipline(d.id), true)}
+                  );
+                })()}
               </div>
             ))}
           </Card>
@@ -1213,14 +1279,31 @@ export const VerificationOfReview = () => {
             {pendingSupervisorDiscipline.length === 0 && <p className="text-sm text-slate-400">No pending management disciplinary signatures.</p>}
             {pendingSupervisorDiscipline.map((d) => (
               <div key={d.queueKey || `sup-disc-${d.id}`} className="border rounded-lg p-3 mb-2">
+                {(() => {
+                  const disciplineKey = d.queueKey || `sup-disc-${d.id}`;
+                  const reviewed = !!disciplineReviewedKeys[disciplineKey];
+                  return (
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="font-semibold">{d.employee_name || 'Employee'} - {d.warning_level || 'Warning'}</p>
                     <p className="text-xs text-slate-500">{d.violation_type || 'Disciplinary Action'} • Stage: {d.queueStage === 'preparer' ? 'Preparer' : 'Supervisor'}</p>
+                    <p className="text-[11px] text-teal-700 dark:text-teal-300 font-semibold mt-0.5">Progress: {getDisciplineSignProgress(d).done}/{getDisciplineSignProgress(d).total} signed</p>
                   </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(d.queueKey || `sup-disc-${d.id}`)}>Sign</button>
+                  <div className="flex items-center gap-3">
+                    <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => openDisciplineReview(disciplineKey, d)}>Review</button>
+                    <button
+                      className="text-sm font-bold text-teal-deep disabled:text-slate-400 disabled:cursor-not-allowed"
+                      disabled={!reviewed}
+                      title={!reviewed ? 'Review the form first' : 'Sign this disciplinary record'}
+                      onClick={() => setActiveId(disciplineKey)}
+                    >
+                      Sign
+                    </button>
+                  </div>
                 </div>
-                {activeId === (d.queueKey || `sup-disc-${d.id}`) && renderSignBox(() => d.queueStage === 'preparer' ? signPreparerDiscipline(d.id) : signSupervisorDiscipline(d.id))}
+                {activeId === disciplineKey && renderSignBox(() => d.queueStage === 'preparer' ? signPreparerDiscipline(d.id) : signSupervisorDiscipline(d.id))}
+                  );
+                })()}
               </div>
             ))}
             <p className="mt-2 text-xs text-emerald-600">Finished: {doneSupervisorDiscipline.length}</p>
@@ -1463,6 +1546,15 @@ export const VerificationOfReview = () => {
           </div>
         </Card>
       )}
+
+      <Modal
+        open={!!disciplineReviewRecord}
+        title="Disciplinary Form Review"
+        onClose={() => setDisciplineReviewRecord(null)}
+        maxWidthClassName="max-w-3xl"
+      >
+        {disciplineReviewRecord && renderDisciplineReview(disciplineReviewRecord)}
+      </Modal>
 
       <div className="mt-4 text-xs text-slate-500">
         <span className="inline-flex items-center gap-1"><FileCheck size={12} /> Records marked as signed are treated as finished.</span>

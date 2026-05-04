@@ -6019,8 +6019,18 @@ async function startServer() {
       const supervisorName = String(supervisor || '').trim();
       if (supervisorName) {
         const supUserRows: any = await query(
-          "SELECT id FROM users WHERE LOWER(TRIM(COALESCE(full_name, ''))) = LOWER(TRIM(?)) AND LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?)) LIMIT 1",
-          [supervisorName, employeeDept]
+          `SELECT u.id
+           FROM users u
+           LEFT JOIN employees e ON e.id = u.employee_id
+           WHERE (
+             LOWER(TRIM(COALESCE(u.full_name, ''))) = LOWER(TRIM(?))
+             OR LOWER(TRIM(COALESCE(u.employee_name, ''))) = LOWER(TRIM(?))
+             OR LOWER(TRIM(COALESCE(e.name, ''))) = LOWER(TRIM(?))
+             OR LOWER(TRIM(COALESCE(u.username, ''))) = LOWER(TRIM(?))
+           )
+           AND LOWER(TRIM(COALESCE(u.dept, ''))) = LOWER(TRIM(?))
+           LIMIT 1`,
+          [supervisorName, supervisorName, supervisorName, supervisorName, employeeDept]
         );
         supervisorUserId = Number((Array.isArray(supUserRows) ? supUserRows[0] : supUserRows)?.id || 0) || null;
       }
@@ -6053,6 +6063,30 @@ async function startServer() {
           preparerUserId, supervisorUserId,
         ]
       );
+
+      try {
+        const empUserRows: any = await query('SELECT id FROM users WHERE employee_id = ? LIMIT 1', [targetEmployeeId]);
+        const empUser = Array.isArray(empUserRows) ? empUserRows[0] : empUserRows;
+        if (empUser?.id) {
+          await createNotification({
+            user_id: Number(empUser.id),
+            type: 'info',
+            message: `A disciplinary action has been filed for you and will require your acknowledgement after management signatures`,
+            source: 'discipline_sign',
+            employee_id: targetEmployeeId,
+          });
+        }
+        if (supervisorUserId) {
+          await createNotification({
+            user_id: supervisorUserId,
+            type: 'info',
+            message: `A disciplinary action is queued for your supervisor signature once preparer signing is complete`,
+            source: 'discipline_sign',
+            employee_id: targetEmployeeId,
+          });
+        }
+      } catch {}
+
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -6127,6 +6161,22 @@ async function startServer() {
         [preparer_signature, preparer_signature_date, Number(actor.id || 0) || null, id]
       );
 
+      try {
+        const recRows: any = await query('SELECT employee_id, supervisor_user_id FROM discipline_records WHERE id = ? LIMIT 1', [id]);
+        const rec2 = Array.isArray(recRows) ? recRows[0] : recRows;
+        const targetEmpId = normalizeEmployeeId(rec2?.employee_id);
+        const supUserId = Number(rec2?.supervisor_user_id || 0) || null;
+        if (supUserId) {
+          await createNotification({
+            user_id: supUserId,
+            type: 'info',
+            message: 'A disciplinary action is now ready for your supervisor signature',
+            source: 'discipline_sign',
+            employee_id: targetEmpId,
+          });
+        }
+      } catch {}
+
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -6134,10 +6184,15 @@ async function startServer() {
   app.put("/api/discipline_records/:id/supervisor-sign", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
-      if (actor.role !== 'Employee') return res.status(403).json({ error: 'Only supervisor accounts can sign this record' });
+      const actorRole = String(actor.role || '');
+      if (!['Employee', 'Manager', 'Leader', 'HR'].includes(actorRole)) {
+        return res.status(403).json({ error: 'Only assigned supervisory signers can sign this record' });
+      }
 
       const actorCtx = await getActorOrgContext(Number(actor.id || 0));
-      if (!actorCtx.isSupervisor) return res.status(403).json({ error: 'Only supervisor accounts can sign this record' });
+      if (actorRole === 'Employee' && !actorCtx.isSupervisor) {
+        return res.status(403).json({ error: 'Only supervisor employee accounts can sign this record' });
+      }
 
       const id = Number(req.params.id);
       if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Invalid record id' });
@@ -6166,6 +6221,25 @@ async function startServer() {
         "UPDATE discipline_records SET supervisor_signature = ?, supervisor_signature_date = ? WHERE id = ?",
         [supervisor_signature, supervisor_signature_date, id]
       );
+
+      try {
+        const recRows: any = await query('SELECT employee_id FROM discipline_records WHERE id = ? LIMIT 1', [id]);
+        const rec2 = Array.isArray(recRows) ? recRows[0] : recRows;
+        const targetEmpId = normalizeEmployeeId(rec2?.employee_id);
+        if (targetEmpId) {
+          const empUserRows: any = await query('SELECT id FROM users WHERE employee_id = ? LIMIT 1', [targetEmpId]);
+          const empUser = Array.isArray(empUserRows) ? empUserRows[0] : empUserRows;
+          if (empUser?.id) {
+            await createNotification({
+              user_id: Number(empUser.id),
+              type: 'info',
+              message: 'A disciplinary action is now ready for your acknowledgement signature',
+              source: 'discipline_sign',
+              employee_id: targetEmpId,
+            });
+          }
+        }
+      } catch {}
 
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
