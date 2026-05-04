@@ -1143,6 +1143,33 @@ async function initDb() {
       } catch {}
     }
 
+    // Safe migrations for notifications (per-user targeting + unread/audit fields)
+    const notificationMigrations = [
+      'ALTER TABLE notifications ADD COLUMN employee_id INTEGER',
+      'ALTER TABLE notifications ADD COLUMN read_at TIMESTAMP',
+    ];
+    for (const sql of notificationMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
+    const notificationIndexes = [
+      'CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications (user_id, created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications (user_id, read)',
+    ];
+    for (const sql of notificationIndexes) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
     // Safe migrations for goals â€” add status, progress, scope, department, team, delegation, priority
     const goalMigrations = [
       'ALTER TABLE goals ADD COLUMN title TEXT',
@@ -5675,8 +5702,6 @@ async function startServer() {
           const mgrUser = Array.isArray(mgrUsers) ? mgrUsers[0] : mgrUsers;
           if (mgrUser) {
             await createNotification({ user_id: mgrUser.id, type: 'info', message: `New chat message from ${sender_name || empRow.name}`, source: 'coaching_chat' });
-          } else {
-            await createNotification({ role: 'Manager', type: 'info', message: `New chat message from ${sender_name || empRow.name}`, source: 'coaching_chat' });
           }
         }
       } else {
@@ -6353,9 +6378,28 @@ async function startServer() {
          b.cost_efficient_explanation || null, b.suggestion_priority || null, b.action_to_be_taken || null,
          b.suggested_reward || null, b.supervisor_signature || null, b.supervisor_signature_date || null,
          supervisorUserId || null, hrOwnerUserId || null, b.status || 'Under Review']);
-      // If employee submitted, notify Manager role
+      // If employee submitted, notify assigned manager/owner only
       if (userRole === 'Employee') {
-        await createNotification({ role: 'Manager', type: 'info', message: `New employee suggestion submitted: ${b.title || b.concern || 'Untitled'}`, source: 'suggestion' });
+        let managerUserId: number | null = null;
+        try {
+          if (empId) {
+            const mRows: any = await query('SELECT manager_id FROM employees WHERE id = ? LIMIT 1', [empId]);
+            const mRow = Array.isArray(mRows) ? mRows[0] : mRows;
+            const managerEmployeeId = normalizeEmployeeId(mRow?.manager_id);
+            if (managerEmployeeId) {
+              const uRows: any = await query("SELECT id FROM users WHERE employee_id = ? AND role = 'Manager' LIMIT 1", [managerEmployeeId]);
+              const uRow = Array.isArray(uRows) ? uRows[0] : uRows;
+              managerUserId = Number(uRow?.id || 0) || null;
+            }
+          }
+        } catch (e) { managerUserId = null; }
+
+        if (managerUserId) {
+          await createNotification({ user_id: managerUserId, type: 'info', message: `New employee suggestion submitted: ${b.title || b.concern || 'Untitled'}`, source: 'suggestion' });
+        }
+        if (hrOwnerUserId) {
+          await createNotification({ user_id: hrOwnerUserId, type: 'info', message: `New employee suggestion submitted: ${b.title || b.concern || 'Untitled'}`, source: 'suggestion' });
+        }
       }
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
@@ -7381,7 +7425,13 @@ async function startServer() {
         "INSERT INTO promotion_recommendations (employee_id, recommended_by, recommended_position, current_position, current_dept, justification, status) VALUES (?, ?, ?, ?, ?, ?, 'Proposed') RETURNING id",
         [employee_id, actor.id, recommended_position || null, emp.position || null, emp.dept || null, justification || null]
       );
-      await createNotification({ role: 'HR', type: 'info', message: `New promotion recommendation submitted for review`, source: 'promotability' });
+      await createNotificationForRoleUsers({
+        role: 'HR',
+        dept: managerDept,
+        type: 'info',
+        message: `New promotion recommendation submitted for review`,
+        source: 'promotability',
+      });
       res.json({ success: true, id: result?.id || result?.insertId });
     } catch (err) { console.error(err); res.status(500).json({ error: "Database error" }); }
   });
@@ -7831,27 +7881,29 @@ async function startServer() {
       const source = opts.source || null;
       const message = opts.message;
 
+      // Strict per-user targeting: ignore requests that do not resolve to a user.
+      if (!targetUserId) return;
+
       // Prevent short-window duplicates for the same target and payload.
       const dupRows: any = await query(
         `SELECT id FROM notifications
          WHERE COALESCE(user_id, 0) = COALESCE(?, 0)
-           AND COALESCE(role, '') = COALESCE(?, '')
            AND COALESCE(type, 'info') = COALESCE(?, 'info')
            AND COALESCE(source, '') = COALESCE(?, '')
            AND message = ?
            AND created_at >= (NOW() - INTERVAL '20 seconds')
          ORDER BY created_at DESC
          LIMIT 1`,
-        [targetUserId, targetRole, type, source || '', message]
+        [targetUserId, type, source || '', message]
       );
       const dup = Array.isArray(dupRows) ? dupRows[0] : dupRows;
       if (dup && dup.id) return;
 
       const ins: any = await query(
-        `INSERT INTO notifications (user_id, role, type, message, source)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO notifications (user_id, role, type, message, source, employee_id)
+         VALUES (?, ?, ?, ?, ?, ?)
          ${usePostgres ? 'RETURNING id' : ''}`,
-        [targetUserId, targetRole, type, message, source]
+        [targetUserId, targetRole, type, message, source, opts.employee_id || null]
       );
 
       const notificationId = ins?.insertId || ins?.id || null;
@@ -7866,20 +7918,48 @@ async function startServer() {
       if (targetUserId) {
         try { io.to(`user_${targetUserId}`).emit('notification', payload); } catch {}
       }
-      if (targetRole) {
-        try { io.to(`role_${targetRole}`).emit('notification', payload); } catch {}
-      }
     } catch (err) { console.error('Failed to create notification:', err); }
+  }
+
+  async function createNotificationForRoleUsers(opts: { role: string; type?: string; message: string; source?: string; employee_id?: number | null; dept?: string | null }) {
+    try {
+      const role = String(opts.role || '').trim();
+      if (!role) return;
+      const dept = String(opts.dept || '').trim();
+      const sql = dept
+        ? `SELECT u.id
+           FROM users u
+           LEFT JOIN employees e ON e.id = u.employee_id
+           WHERE u.role = ?
+             AND LOWER(COALESCE(e.dept, u.dept, '')) = LOWER(?)`
+        : `SELECT id FROM users WHERE role = ?`;
+      const params = dept ? [role, dept] : [role];
+      const rows: any = await query(sql, params);
+      const recipients = (Array.isArray(rows) ? rows : [rows].filter(Boolean))
+        .map((r: any) => Number(r?.id || 0))
+        .filter((id: number) => id > 0);
+      for (const userId of recipients) {
+        await createNotification({
+          user_id: userId,
+          role,
+          type: opts.type,
+          message: opts.message,
+          source: opts.source,
+          employee_id: opts.employee_id || null,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to create role-targeted notifications:', err);
+    }
   }
 
   app.get("/api/notifications", authenticateToken, async (req, res) => {
     try {
       const userId = (req as any).user?.id;
-      const userRole = (req as any).user?.role;
-      // Get notifications targeted at this specific user OR at their role
+      // Strict per-user scope.
       const rows = await query(
-        "SELECT * FROM notifications WHERE (user_id = ? OR role = ? OR (user_id IS NULL AND role IS NULL)) ORDER BY created_at DESC LIMIT 100",
-        [userId, userRole]
+        "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 100",
+        [userId]
       );
       res.json(rows);
     } catch (err) { res.status(500).json({ error: "Database error" }); }
@@ -7888,8 +7968,7 @@ async function startServer() {
   app.put("/api/notifications/read", authenticateToken, async (req, res) => {
     try {
       const userId = (req as any).user?.id;
-      const userRole = (req as any).user?.role;
-      await query("UPDATE notifications SET read = 1 WHERE (user_id = ? OR role = ?)", [userId, userRole]);
+      await query("UPDATE notifications SET read = 1, read_at = CURRENT_TIMESTAMP WHERE user_id = ?", [userId]);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -7897,8 +7976,7 @@ async function startServer() {
   app.delete("/api/notifications", authenticateToken, async (req, res) => {
     try {
       const userId = (req as any).user?.id;
-      const userRole = (req as any).user?.role;
-      await query("DELETE FROM notifications WHERE (user_id = ? OR role = ?)", [userId, userRole]);
+      await query("DELETE FROM notifications WHERE user_id = ?", [userId]);
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
