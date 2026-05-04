@@ -1129,6 +1129,7 @@ export const VerificationOfReview = () => {
                   const disciplineKey = `emp-disc-${d.id}`;
                   const reviewed = !!disciplineReviewedKeys[disciplineKey];
                   return (
+                <>
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="font-semibold">{d.warning_level || 'Warning'} - {d.violation_type || 'Disciplinary Action'}</p>
@@ -1148,6 +1149,7 @@ export const VerificationOfReview = () => {
                   </div>
                 </div>
                 {activeId === disciplineKey && renderSignBox(() => signEmployeeDiscipline(d.id), true)}
+                </>
                   );
                 })()}
               </div>
@@ -1283,6 +1285,7 @@ export const VerificationOfReview = () => {
                   const disciplineKey = d.queueKey || `sup-disc-${d.id}`;
                   const reviewed = !!disciplineReviewedKeys[disciplineKey];
                   return (
+                <>
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="font-semibold">{d.employee_name || 'Employee'} - {d.warning_level || 'Warning'}</p>
@@ -1302,6 +1305,7 @@ export const VerificationOfReview = () => {
                   </div>
                 </div>
                 {activeId === disciplineKey && renderSignBox(() => d.queueStage === 'preparer' ? signPreparerDiscipline(d.id) : signSupervisorDiscipline(d.id))}
+                </>
                   );
                 })()}
               </div>
