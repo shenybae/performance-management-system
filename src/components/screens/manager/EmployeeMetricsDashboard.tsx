@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Users, Search, RefreshCcw, AlertTriangle, CheckCircle2, BarChart3, ClipboardList } from 'lucide-react';
+import { Users, Search, RefreshCcw, AlertTriangle, CheckCircle2, BarChart3, ClipboardList, HelpCircle } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
@@ -229,13 +229,33 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
       .sort((a, b) => b.performanceScore - a.performanceScore || a.goalsOverdue - b.goalsOverdue || a.goalsAtRisk - b.goalsAtRisk || b.avgProgress - a.avgProgress);
   }, [employeePerformance]);
 
+  // Minimum-signal gate: employee must have at least one meaningful data point
+  // before being classified as underperforming. Without signal → "Needs Data".
+  const hasMinimumSignal = (row: (typeof employeePerformanceSignals)[number]) => {
+    const e = row.employee;
+    const hasGoal       = Number(e.goals_total          || 0) >= 1;
+    const hasAppraisal  = Number(e.appraisals_count     || 0) >= 1;
+    const hasSelfAssess = Number(e.self_assessments_count || 0) >= 1;
+    const hasProof      = Number(e.proof_rating_avg     || 0) > 0;
+    const hasFeedback   = Number(e.feedback_360_count   || 0) >= 1;
+    return hasGoal || hasAppraisal || hasSelfAssess || hasProof || hasFeedback;
+  };
+
   const underperformingEmployees = useMemo(() => {
-    const list = employeePerformanceSignals.filter((row) => row.performanceScore < 50 || row.goalsOverdue > 0 || row.goalsAtRisk > 0);
+    const list = employeePerformanceSignals.filter(
+      (row) => hasMinimumSignal(row) && (row.performanceScore < 50 || row.goalsOverdue > 0 || row.goalsAtRisk > 0)
+    );
     return list.sort((a, b) => a.performanceScore - b.performanceScore || b.goalsOverdue - a.goalsOverdue || b.goalsAtRisk - a.goalsAtRisk || a.avgProgress - b.avgProgress);
   }, [employeePerformanceSignals]);
 
+  const needsDataEmployees = useMemo(() => {
+    return employeePerformanceSignals
+      .filter((row) => !hasMinimumSignal(row))
+      .sort((a, b) => a.employee.employee_name.localeCompare(b.employee.employee_name));
+  }, [employeePerformanceSignals]);
+
   const performingEmployees = useMemo(() => {
-    const list = employeePerformanceSignals.filter((row) => row.performanceScore >= 70);
+    const list = employeePerformanceSignals.filter((row) => hasMinimumSignal(row) && row.performanceScore >= 70);
     return list.sort((a, b) => b.performanceScore - a.performanceScore || a.goalsOverdue - b.goalsOverdue || a.goalsAtRisk - b.goalsAtRisk || b.avgProgress - a.avgProgress);
   }, [employeePerformanceSignals]);
 
@@ -523,6 +543,33 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
               )}
             </Card>
           </div>
+
+          {/* Needs Data — employees with no signal yet, excluded from scoring */}
+          {needsDataEmployees.length > 0 && (
+            <Card>
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider text-slate-500 inline-flex items-center gap-1.5"><HelpCircle size={12} /> Needs Data</p>
+                  <p className="text-xs text-slate-400 mt-0.5">These employees have no goals, appraisals, assessments, proof ratings, or feedback yet. They are excluded from performance scoring until at least one signal is recorded.</p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                  {needsDataEmployees.length} employee{needsDataEmployees.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {needsDataEmployees.map(({ employee }) => (
+                  <button
+                    key={`needs-data-${employee.employee_id}`}
+                    onClick={() => setSelectedPerformanceEmployeeId(employee.employee_id)}
+                    className={`inline-flex flex-col items-start gap-0.5 px-3 py-2 rounded-xl border text-left transition-colors text-xs ${Number(selectedPerformanceEmployeeId) === Number(employee.employee_id) ? 'border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-900/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                  >
+                    <span className="font-bold text-slate-700 dark:text-slate-200">{employee.employee_name}</span>
+                    <span className="text-[10px] text-slate-400">{employee.position || 'N/A'} · {employee.dept || 'N/A'}</span>
+                  </button>
+                ))}
+              </div>
+            </Card>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>

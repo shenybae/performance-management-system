@@ -2425,14 +2425,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         <div className="flex items-center justify-between mb-5">
           <button onClick={() => setShowUnderperforming(false)} className="flex items-center gap-1.5 text-sm font-bold text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors"><ArrowLeft size={18} /> Back to Dashboard</button>
           <div className="flex gap-2">
-            <button onClick={() => exportToCSV(monitorDisplayGoals.map(g => ({
-              goal: g.title || g.statement, scope: g.scope || 'Individual', department: g.department,
-              assigned: g.employee_name || g.delegation, priority: g.priority || 'Medium',
-              assignees: (g.assignees || []).map((a: any) => a.name).join('; '),
-              progress: `${g.progress || 0}%`, target_date: g.target_date,
-              days_overdue: g.target_date && new Date(g.target_date) < now ? daysOverdue(g.target_date) : 0,
-              issue: [g.target_date && new Date(g.target_date) < now ? 'OVERDUE' : '', g.status === 'At Risk' ? 'AT RISK' : '', (g.progress || 0) <= 10 && g.status === 'In Progress' ? 'STALLED' : ''].filter(Boolean).join(', ')
-            })), 'underperforming_goals')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> Export XLSX</button>
           </div>
         </div>
 
@@ -3122,11 +3114,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="Target & OKR Planner" subtitle="Set and track goals by level: Dept-wide, Team, or Individual" />
         <div className="flex gap-2">
-          <button onClick={() => exportToCSV(goals.map(g => ({
-            scope: g.scope === 'Department' ? 'Dept-wide' : g.scope === 'Team' ? 'Team' : 'Individual', department: g.department, team: g.team_name, employee: g.employee_name,
-            title: g.title, statement: g.statement, metric: g.metric, status: g.status,
-            progress: g.progress, priority: g.priority, quarter: g.quarter, frequency: g.frequency || 'One-time', owner: g.delegation, target_date: g.target_date
-          })), 'okr_goals')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
           <button onClick={openUnderperformingMonitor} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50`}>
             <AlertTriangle size={16} /> Underperforming ({stats.underperformingCount})
           </button>

@@ -393,26 +393,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
           )}
           {dropdownVariant === 'pills-horizontal' ? (
             <div className="p-2 space-y-2">
-              {searchable && (
-                <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5">
-                  <div className="flex items-center gap-2 px-2 py-1">
-                    <Search size={13} className="text-slate-400 shrink-0" />
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      placeholder="Search pills..."
-                      className="flex-1 bg-transparent text-sm text-slate-800 dark:text-slate-100 outline-none placeholder-slate-400"
-                    />
-                    {search && (
-                      <button type="button" onClick={() => setSearch('')} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                        <X size={12} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
+              {/* Search is handled by the main search input above */}
               <div className="rounded-md bg-slate-50 dark:bg-slate-900 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Selected
               </div>

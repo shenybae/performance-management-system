@@ -152,9 +152,6 @@ export const PIPManager = ({ employees }: PIPManagerProps) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="IDP & PIP Manager" subtitle="Create development plans (IDP) for growth or improvement plans (PIP) for correction" />
-        <div className="flex gap-2">
-          <button onClick={() => exportToCSV([...plans.map(p => ({ ...p, type: 'PIP' })), ...devPlans.map(d => ({ ...d, type: 'IDP' }))], 'idp_pip')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> XLSX</button>
-        </div>
       </div>
 
       {/* Analytics */}
