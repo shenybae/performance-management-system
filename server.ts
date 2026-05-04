@@ -4061,11 +4061,11 @@ async function startServer() {
             UNION
             SELECT g.id FROM goal_assignees ga JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id AND g.target_date IS NOT NULL AND DATE(g.target_date) < CURRENT_DATE AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')
           ) _go) AS goals_overdue,
-          (SELECT ROUND(COALESCE(AVG(progress), 0), 1) FROM (
-            SELECT COALESCE(g.progress, 0) AS progress FROM goals g WHERE g.employee_id = e.id
-            UNION ALL
-            SELECT COALESCE(g.progress, 0) FROM goal_assignees ga JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id AND g.employee_id <> e.id
-          ) _gp) AS goals_avg_progress,
+          (SELECT ROUND(COALESCE(AVG(g.progress), 0), 1) FROM goals g WHERE g.id IN (
+            SELECT g2.id FROM goals g2 WHERE g2.employee_id = e.id
+            UNION
+            SELECT ga.goal_id FROM goal_assignees ga WHERE ga.employee_id = e.id
+          )) AS goals_avg_progress,
 
           (SELECT COUNT(*) FROM goal_assignees ga LEFT JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id) AS delegated_goal_count,
           (SELECT COUNT(*) FROM goal_assignees ga LEFT JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id AND COALESCE(g.scope, 'Individual') = 'Team') AS team_goal_count,
