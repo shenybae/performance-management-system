@@ -966,11 +966,11 @@ export default function App() {
           )}
         </AnimatePresence>
         {/* Sticky top header */}
-        <div className="sticky top-0 z-20 -mx-2 sm:-mx-3 lg:-mx-4 px-5 sm:px-6 lg:px-8 py-4 shadow-sm border-b border-slate-200/50 dark:border-slate-700/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl mb-5">
+        <div className="sticky top-0 z-20 -mx-2 sm:-mx-3 lg:-mx-4 px-5 sm:px-6 lg:px-8 py-2.5 shadow-sm border-b border-slate-200/50 dark:border-slate-700/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl mb-5">
           <div className="flex items-center justify-between gap-4 mx-auto max-w-[1560px]">
             <div className="min-w-0">
-              <p className="truncate text-lg font-bold leading-snug text-slate-900 dark:text-slate-100">{activeTitle}</p>
-              <p className="truncate text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">{roleDisplay(user.role)} workspace · {userDisplay}</p>
+              <p className="truncate text-sm font-bold leading-snug text-slate-900 dark:text-slate-100">{activeTitle}</p>
+              <p className="truncate text-[11px] text-slate-500 dark:text-slate-400 leading-tight">{roleDisplay(user.role)} workspace · {userDisplay}</p>
             </div>
             <div className="flex items-center gap-4 shrink-0">
               <span className="hidden sm:inline-block text-[11px] font-bold tracking-[0.15em] uppercase text-teal-600 dark:text-teal-400">{user.role === 'HR' ? 'HR ADMIN' : (user.role || '').toUpperCase()}</span>
