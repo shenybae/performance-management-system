@@ -966,15 +966,18 @@ export default function App() {
           )}
         </AnimatePresence>
         <div className="w-full min-h-full pb-3 mx-auto max-w-[1560px] px-1 sm:px-2 lg:px-3">
-          <div className="mb-3 rounded-2xl border border-slate-200/70 dark:border-slate-800/70 bg-white/80 dark:bg-slate-900/70 backdrop-blur-sm px-3 py-2.5">
+          <div className="mb-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">{activeTitle}</p>
-                <p className="truncate text-[10px] text-slate-400">{roleDisplay(user.role)} workspace • {userDisplay}</p>
+                <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">{activeTitle}</p>
+                <p className="truncate text-xs text-slate-500 dark:text-slate-400">{roleDisplay(user.role)} workspace • {userDisplay}</p>
               </div>
-              <NotificationBell onNavigate={(screen, context) => {
-                goToScreen(screen, context || undefined);
-              }} />
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="hidden sm:inline-block text-xs font-bold tracking-widest uppercase text-teal-700 dark:text-teal-400">{user.role === 'HR' ? 'HR ADMIN' : (user.role || '').toUpperCase()}</span>
+                <NotificationBell onNavigate={(screen, context) => {
+                  goToScreen(screen, context || undefined);
+                }} />
+              </div>
             </div>
           </div>
           {renderScreen()}
