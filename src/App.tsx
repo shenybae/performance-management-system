@@ -968,28 +968,28 @@ export default function App() {
         {/* Sticky top header */}
         <div className="sticky top-0 z-20 pt-3 pb-2">
           <div
-            className="rounded-2xl border border-slate-200/60 dark:border-slate-700/50 shadow-sm px-4 py-3 mx-1 sm:mx-2 lg:mx-3"
+            className="rounded-2xl border border-slate-200/30 dark:border-slate-700/30 shadow-sm px-4 py-3 mx-1 sm:mx-2 lg:mx-3"
             style={{
-              backgroundColor: 'rgba(255,255,255,0.55)',
-              backdropFilter: 'blur(28px)',
-              WebkitBackdropFilter: 'blur(28px)',
+              backgroundColor: 'rgba(255,255,255,0.18)',
+              backdropFilter: 'blur(48px)',
+              WebkitBackdropFilter: 'blur(48px)',
             }}
           >
-            <div className="flex items-center justify-between gap-3 mx-auto max-w-[1560px]">
+            <div className="flex items-center justify-between gap-4 mx-auto max-w-[1560px]">
               {/* Hamburger — mobile only */}
               {!isDesktopViewport && (
                 <button
                   type="button"
                   onClick={() => setIsSidebarOpen(true)}
-                  className="shrink-0 p-1.5 -ml-1 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="shrink-0 p-1.5 -ml-1 rounded-lg text-slate-500 hover:bg-white/40 dark:hover:bg-slate-800/60 transition-colors"
                   aria-label="Open navigation"
                 >
                   <Menu size={18} />
                 </button>
               )}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold leading-snug text-slate-900 dark:text-slate-100">{activeTitle}</p>
-                <p className="truncate text-[11px] text-slate-500 dark:text-slate-400 leading-tight">{roleDisplay(user.role)} workspace · {userDisplay}</p>
+                <p className="truncate text-xl sm:text-2xl font-extrabold leading-tight tracking-tight text-slate-900 dark:text-slate-100">{activeTitle}</p>
+                <p className="truncate text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5">{roleDisplay(user.role)} workspace · {userDisplay}</p>
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <span className="hidden sm:inline-block text-[11px] font-bold tracking-[0.15em] uppercase text-teal-600 dark:text-teal-400">{user.role === 'HR' ? 'HR ADMIN' : (user.role || '').toUpperCase()}</span>
