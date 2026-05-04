@@ -4044,9 +4044,11 @@ async function startServer() {
             SELECT g.id
             FROM goals g
             WHERE g.employee_id = e.id
+            AND g.deleted_at IS NULL
             UNION
             SELECT ga.goal_id
             FROM goal_assignees ga
+            INNER JOIN goals g2 ON g2.id = ga.goal_id AND g2.deleted_at IS NULL
             WHERE ga.employee_id = e.id
       `;
 
@@ -4155,8 +4157,8 @@ ${relevantGoalIdsSql}
           (SELECT ROUND(COALESCE(AVG(COALESCE(a.overall, 0)), 0), 2) FROM appraisals a WHERE a.employee_id = e.id) AS appraisals_avg_overall,
           (SELECT MAX(a.sign_off_date) FROM appraisals a WHERE a.employee_id = e.id) AS last_appraisal_signoff,
 
-          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND COALESCE(d.employee_signature, '') <> '') AS disciplinary_count,
-          (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id AND COALESCE(d.employee_signature, '') <> '') AS last_disciplinary_date,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND COALESCE(d.deleted_at, '') = '') AS disciplinary_count,
+          (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id AND COALESCE(d.deleted_at, '') = '') AS last_disciplinary_date,
 
           (SELECT COUNT(*) FROM feedback_360 f WHERE LOWER(TRIM(COALESCE(f.target_employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS feedback_360_count,
 

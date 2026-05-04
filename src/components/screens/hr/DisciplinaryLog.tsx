@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Plus, X, Download, Search, Lock } from 'lucide-react';
+import { Plus, X, Download, Search, Lock, FileText, Eye, Archive, CheckCircle } from 'lucide-react';
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
@@ -260,6 +260,76 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
       (r.action_taken || '').toLowerCase().includes(q)
     ));
   }, [records, search]);
+
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+
+  const isFullyAcknowledged = (d: any) => {
+    return !!d.preparer_signature && !!d.supervisor_signature && !!d.employee_signature;
+  };
+
+  const handleAcknowledge = async (id: number) => {
+    if (!(await appConfirm('Mark this record as acknowledged?', { title: 'Acknowledge Record', confirmText: 'Acknowledge', icon: 'info' }))) return;
+    setActionLoading(prev => ({ ...prev, [`ack-${id}`]: true }));
+    try {
+      await fetch(`/api/discipline_records/${id}/acknowledge`, { method: 'PUT', headers: getAuthHeaders() });
+      window.notify?.('Record acknowledged', 'success');
+      fetchRecords();
+    } catch { window.notify?.('Failed to acknowledge', 'error'); }
+    finally { setActionLoading(prev => ({ ...prev, [`ack-${id}`]: false })); }
+  };
+
+  const handleView = async (id: number) => {
+    setActionLoading(prev => ({ ...prev, [`view-${id}`]: true }));
+    try {
+      await fetch(`/api/discipline_records/${id}/view`, { method: 'PUT', headers: getAuthHeaders() });
+      fetchRecords();
+    } catch {}
+    finally { setActionLoading(prev => ({ ...prev, [`view-${id}`]: false })); }
+  };
+
+  const handleArchive = async (id: number) => {
+    if (!(await appConfirm('Archive this disciplinary record?', { title: 'Archive Record', confirmText: 'Archive', icon: 'warning' }))) return;
+    setActionLoading(prev => ({ ...prev, [`arch-${id}`]: true }));
+    try {
+      await fetch(`/api/discipline_records/${id}/archive`, { method: 'PUT', headers: getAuthHeaders() });
+      window.notify?.('Record archived', 'success');
+      fetchRecords();
+    } catch { window.notify?.('Failed to archive', 'error'); }
+    finally { setActionLoading(prev => ({ ...prev, [`arch-${id}`]: false })); }
+  };
+
+  const exportRecordAsPDF = (d: any) => {
+    if (!isFullyAcknowledged(d)) {
+      window.notify?.('PDF export is only available after all three parties have signed (Preparer, Supervisor, Employee).', 'error');
+      return;
+    }
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Disciplinary Action - ${d.employee_name || ''}</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:24px 32px}h1{font-size:17px;font-weight:900;margin-bottom:2px}h2{font-size:13px;font-weight:700;margin:16px 0 6px;border-bottom:1px solid #ccc;padding-bottom:3px}table{width:100%;border-collapse:collapse;margin-bottom:8px}td,th{padding:5px 8px;border:1px solid #ccc;font-size:11px;vertical-align:top}th{background:#f3f4f6;font-weight:700;text-align:left}.label{font-weight:700;width:30%}.sig-row{display:flex;gap:24px;margin-top:16px}.sig-block{flex:1;text-align:center}.sig-block img{max-height:44px;max-width:100%;object-fit:contain;display:block;margin:0 auto}.sig-line{width:80%;height:1px;border-bottom:1px solid #000;margin:0 auto 2px}.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:#dcfce7;color:#166534}</style></head>
+<body>
+<h1>Employee Disciplinary Action Form</h1>
+<p style="color:#555;font-size:11px;">Generated ${new Date().toLocaleDateString()}</p>
+<h2>Employee Information</h2>
+<table><tr><td class="label">Employee Name</td><td>${d.employee_name || '—'}</td><td class="label">Department</td><td>${d.dept || '—'}</td></tr>
+<tr><td class="label">Supervisor</td><td>${d.supervisor || '—'}</td><td class="label">Date of Warning</td><td>${d.date_of_warning || '—'}</td></tr></table>
+<h2>Violation Details</h2>
+<table><tr><td class="label">Violation Type</td><td>${d.violation_type || '—'}</td><td class="label">Warning Level</td><td>${d.warning_level || '—'}</td></tr>
+<tr><td class="label">Violation Date</td><td>${d.violation_date || '—'}</td><td class="label">Time</td><td>${d.violation_time || '—'}</td></tr>
+<tr><td class="label">Place</td><td colspan="3">${d.violation_place || '—'}</td></tr></table>
+<h2>Statements</h2>
+<table><tr><th>Employer Statement</th><th>Employee Statement</th></tr><tr><td>${d.employer_statement || '—'}</td><td>${d.employee_statement || '—'}</td></tr></table>
+<h2>Warning Decision</h2>
+<table><tr><td class="label">Action Taken</td><td>${d.action_taken || '—'}</td></tr>
+<tr><td class="label">Approved By</td><td>${d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? ', ' + d.approved_by_title : ''}` : '—'}</td></tr></table>
+<h2>Signatures <span class="badge">Fully Acknowledged</span></h2>
+<div class="sig-row">
+${sigBlockHtml(d.preparer_signature, 'Preparer', d.preparer_signature_date)}
+${sigBlockHtml(d.supervisor_signature, 'Supervisor', d.supervisor_signature_date)}
+${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
+</div>
+</body></html>`;
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); win.print(); }
+  };
 
   const getSignatureStatus = (record: any) => {
     const hasPreparer = !!String(record?.preparer_signature || '').trim();
@@ -590,12 +660,51 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
                     <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.supervisor || '—'}</td>
                     <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : '—'}</td>
                     <td className="py-3 pr-4 text-slate-600 dark:text-slate-300">{d.action_taken || '—'}</td>
+                    <td className="py-3 pr-4">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => { handleView(d.id); exportRecordAsPDF(d); }}
+                          disabled={!isFullyAcknowledged(d)}
+                          title={isFullyAcknowledged(d) ? 'Export PDF Report' : 'PDF available only after all signatures are collected'}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${
+                            isFullyAcknowledged(d)
+                              ? 'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 border border-teal-200 dark:border-teal-700'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 border border-slate-200 dark:border-slate-700 cursor-not-allowed'
+                          }`}
+                        >
+                          <FileText size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleView(d.id)}
+                          title={d.is_viewed ? 'Already viewed' : 'Mark as Viewed'}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors border ${
+                            d.is_viewed
+                              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 border-blue-200 dark:border-blue-700'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-300'
+                          }`}
+                        >
+                          <Eye size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleArchive(d.id)}
+                          disabled={!!d.is_archived}
+                          title={d.is_archived ? 'Already archived' : 'Archive Record'}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors border ${
+                            d.is_archived
+                              ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-300 border-amber-200 dark:border-amber-700 cursor-default'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:text-amber-600 dark:hover:text-amber-300'
+                          }`}
+                        >
+                          <Archive size={12} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                   );
                 })}
                 {filteredRecords.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="py-10 text-center text-slate-400">{search ? 'No records match your search.' : 'No disciplinary records found.'}</td>
+                    <td colSpan={11} className="py-10 text-center text-slate-400">{search ? 'No records match your search.' : 'No disciplinary records found.'}</td>
                   </tr>
                 )}
               </tbody>
