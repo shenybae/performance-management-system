@@ -4,6 +4,7 @@ import { Plus, X, Download, Search, Lock, FileText, Eye, Archive, CheckCircle } 
 import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
+import { Modal } from '../../common/Modal';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
@@ -262,6 +263,7 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
   }, [records, search]);
 
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [viewRecord, setViewRecord] = useState<any | null>(null);
 
   const isFullyAcknowledged = (d: any) => {
     return !!d.preparer_signature && !!d.supervisor_signature && !!d.employee_signature;
@@ -278,15 +280,28 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
     finally { setActionLoading(prev => ({ ...prev, [`ack-${id}`]: false })); }
   };
 
-  const handleView = async (id: number) => {
+  const handleView = async (id: number, opts: { silent?: boolean } = {}) => {
+    const silent = !!opts.silent;
     setActionLoading(prev => ({ ...prev, [`view-${id}`]: true }));
     try {
       const res = await fetch(`/api/discipline_records/${id}/view`, { method: 'PUT', headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Failed');
-      window.notify?.('Record marked as viewed', 'success');
+      if (!silent) window.notify?.('Record marked as viewed', 'success');
       fetchRecords();
-    } catch { window.notify?.('Failed to mark as viewed', 'error'); }
+    } catch {
+      if (!silent) window.notify?.('Failed to mark as viewed', 'error');
+    }
     finally { setActionLoading(prev => ({ ...prev, [`view-${id}`]: false })); }
+  };
+
+  const openViewModal = async (record: any) => {
+    setViewRecord(record);
+    if (!record?.is_viewed) {
+      await handleView(record.id, { silent: true });
+      setViewRecord((prev) => (prev && prev.id === record.id
+        ? { ...prev, is_viewed: 1, viewed_at: new Date().toISOString() }
+        : prev));
+    }
   };
 
   const handleArchive = async (id: number) => {
@@ -677,9 +692,9 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
                           <FileText size={12} />
                         </button>
                         <button
-                          onClick={() => !d.is_viewed && handleView(d.id)}
-                          disabled={!!d.is_viewed || !!actionLoading[`view-${d.id}`]}
-                          title={d.is_viewed ? 'Already marked as viewed' : actionLoading[`view-${d.id}`] ? 'Marking...' : 'Mark as Viewed'}
+                          onClick={() => openViewModal(d)}
+                          disabled={!!actionLoading[`view-${d.id}`]}
+                          title={actionLoading[`view-${d.id}`] ? 'Opening...' : 'View Record'}
                           className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors border ${
                             d.is_viewed
                               ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 border-blue-200 dark:border-blue-700 cursor-default'
@@ -717,6 +732,64 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
           </div>
         </Card>
       )}
+
+      <Modal
+        open={!!viewRecord}
+        title={`Disciplinary Record${viewRecord?.employee_name ? ` - ${viewRecord.employee_name}` : ''}`}
+        onClose={() => setViewRecord(null)}
+        maxWidthClassName="max-w-4xl"
+      >
+        {viewRecord && (
+          <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-xs uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">Employee</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">{viewRecord.employee_name || `#${viewRecord.employee_id || '—'}`}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-xs uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">Department</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">{viewRecord.dept || '—'}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-xs uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">Warning Level</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">{viewRecord.warning_level || '—'}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-xs uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">Supervisor</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">{viewRecord.supervisor || '—'}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-xs uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">Violation Date</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">{viewRecord.violation_date || '—'} {viewRecord.violation_time ? `at ${viewRecord.violation_time}` : ''}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-xs uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">Violation Place</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">{viewRecord.violation_place || '—'}</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">Violation Type</p>
+              <p className="text-slate-700 dark:text-slate-200">{viewRecord.violation_type || '—'}</p>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">Employer Statement</p>
+              <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-200">{viewRecord.employer_statement || '—'}</p>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">Employee Statement</p>
+              <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-200">{viewRecord.employee_statement || '—'}</p>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">Action Taken</p>
+              <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-200">{viewRecord.action_taken || '—'}</p>
+            </div>
+          </div>
+        )}
+      </Modal>
     </motion.div>
   );
 };
