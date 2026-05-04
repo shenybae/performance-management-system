@@ -281,9 +281,11 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
   const handleView = async (id: number) => {
     setActionLoading(prev => ({ ...prev, [`view-${id}`]: true }));
     try {
-      await fetch(`/api/discipline_records/${id}/view`, { method: 'PUT', headers: getAuthHeaders() });
+      const res = await fetch(`/api/discipline_records/${id}/view`, { method: 'PUT', headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Failed');
+      window.notify?.('Record marked as viewed', 'success');
       fetchRecords();
-    } catch {}
+    } catch { window.notify?.('Failed to mark as viewed', 'error'); }
     finally { setActionLoading(prev => ({ ...prev, [`view-${id}`]: false })); }
   };
 
@@ -675,12 +677,15 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
                           <FileText size={12} />
                         </button>
                         <button
-                          onClick={() => handleView(d.id)}
-                          title={d.is_viewed ? 'Already viewed' : 'Mark as Viewed'}
+                          onClick={() => !d.is_viewed && handleView(d.id)}
+                          disabled={!!d.is_viewed || !!actionLoading[`view-${d.id}`]}
+                          title={d.is_viewed ? 'Already marked as viewed' : actionLoading[`view-${d.id}`] ? 'Marking...' : 'Mark as Viewed'}
                           className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors border ${
                             d.is_viewed
-                              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 border-blue-200 dark:border-blue-700'
-                              : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-300'
+                              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 border-blue-200 dark:border-blue-700 cursor-default'
+                              : actionLoading[`view-${d.id}`]
+                                ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 border-slate-200 dark:border-slate-600 cursor-wait'
+                                : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-300'
                           }`}
                         >
                           <Eye size={12} />

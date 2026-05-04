@@ -4051,6 +4051,8 @@ async function startServer() {
             INNER JOIN goals g2 ON g2.id = ga.goal_id AND g2.deleted_at IS NULL
             WHERE ga.employee_id = e.id
       `;
+      // Date comparison that works in both PostgreSQL (text vs date) and SQLite
+      const todaySql = usePostgres ? `TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')` : `DATE('now')`;
 
       const rows: any = await query(
         `SELECT
@@ -4073,7 +4075,7 @@ ${relevantGoalIdsSql}
           ) AND COALESCE(g.status, 'Not Started') = 'At Risk') AS goals_at_risk,
           (SELECT COUNT(*) FROM goals g WHERE g.id IN (
 ${relevantGoalIdsSql}
-          ) AND g.target_date IS NOT NULL AND DATE(g.target_date) < CURRENT_DATE AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS goals_overdue,
+          ) AND g.target_date IS NOT NULL AND g.target_date < ${todaySql} AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS goals_overdue,
           (SELECT ROUND(COALESCE(AVG(g.progress), 0), 1) FROM goals g WHERE g.id IN (
 ${relevantGoalIdsSql}
           )) AS goals_avg_progress,
@@ -4157,8 +4159,8 @@ ${relevantGoalIdsSql}
           (SELECT ROUND(COALESCE(AVG(COALESCE(a.overall, 0)), 0), 2) FROM appraisals a WHERE a.employee_id = e.id) AS appraisals_avg_overall,
           (SELECT MAX(a.sign_off_date) FROM appraisals a WHERE a.employee_id = e.id) AS last_appraisal_signoff,
 
-          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND COALESCE(d.deleted_at, '') = '') AS disciplinary_count,
-          (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id AND COALESCE(d.deleted_at, '') = '') AS last_disciplinary_date,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL) AS disciplinary_count,
+          (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL) AS last_disciplinary_date,
 
           (SELECT COUNT(*) FROM feedback_360 f WHERE LOWER(TRIM(COALESCE(f.target_employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS feedback_360_count,
 
