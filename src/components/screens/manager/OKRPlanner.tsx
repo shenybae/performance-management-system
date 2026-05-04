@@ -616,8 +616,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     if (!memberId) { window.notify?.('Select a delegated member for the recovery task', 'error'); return; }
     if (!title) { window.notify?.('Enter a recovery task title', 'error'); return; }
     if (!dueDate) { window.notify?.('Set a recovery deadline', 'error'); return; }
+    const goalStartDate = String(goal?.created_at || '').trim().slice(0, 10);
     const goalDueDate = String(goal?.target_date || '').trim().slice(0, 10);
     const normalizedDueDate = dueDate.slice(0, 10);
+    if (goalStartDate && normalizedDueDate && normalizedDueDate < goalStartDate) {
+      window.notify?.('Task due date cannot be before the goal start date', 'error');
+      return;
+    }
     if (goalDueDate && normalizedDueDate && normalizedDueDate > goalDueDate) {
       window.notify?.('Task due date cannot be later than the goal due date unless goal extension is approved', 'error');
       return;

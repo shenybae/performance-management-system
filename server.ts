@@ -4529,12 +4529,16 @@ async function startServer() {
 
       if (!goalId || !memberId || !title) return res.status(400).json({ error: 'Invalid task payload' });
 
-      const goalRows: any = await query('SELECT id, employee_id, leader_id, department, target_date, proof_review_status FROM goals WHERE id = ?', [goalId]);
+      const goalRows: any = await query('SELECT id, employee_id, leader_id, department, target_date, proof_review_status, created_at FROM goals WHERE id = ?', [goalId]);
       const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
       if (!goal) return res.status(404).json({ error: 'Goal not found' });
 
       const normalizedDueDate = normalizeDateOnly(dueDate);
       const normalizedGoalDueDate = normalizeDateOnly(goal.target_date);
+      const normalizedGoalStartDate = normalizeDateOnly(goal.created_at);
+      if (normalizedDueDate && normalizedGoalStartDate && normalizedDueDate < normalizedGoalStartDate) {
+        return res.status(400).json({ error: 'Task due date cannot be before the goal start date' });
+      }
       if (normalizedDueDate && normalizedGoalDueDate && normalizedDueDate > normalizedGoalDueDate) {
         return res.status(400).json({ error: 'Task due date cannot be later than the goal due date unless the goal deadline extension is approved' });
       }
