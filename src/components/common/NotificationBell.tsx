@@ -19,6 +19,7 @@ const SOURCE_SCREEN_MAP: Record<string, Record<string, string>> = {
 
 export const NotificationBell = ({ onNavigate }: { onNavigate?: (screen: string, context?: { source?: string; employee_id?: number }) => void }) => {
   const { history, unreadCount, markAllRead, clearHistory } = useNotifications();
+  const serverHistory = history.filter((n) => n.fromServer || !!n.source);
   const userRole: string = (() => { try { return JSON.parse(localStorage.getItem('talentflow_user') || '{}')?.role || ''; } catch { return ''; } })();
   const [isOpen, setIsOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -79,7 +80,7 @@ export const NotificationBell = ({ onNavigate }: { onNavigate?: (screen: string,
             <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100 dark:border-slate-700">
               <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Notifications</h4>
               <div className="flex items-center gap-1">
-                {history.length > 0 && (
+                {serverHistory.length > 0 && (
                   <button
                     onClick={clearHistory}
                     className="text-[10px] font-bold text-red-400 hover:text-red-600 px-1.5 py-0.5 rounded transition-colors"
@@ -94,13 +95,13 @@ export const NotificationBell = ({ onNavigate }: { onNavigate?: (screen: string,
               </div>
             </div>
             <div className="overflow-y-auto custom-scrollbar" style={{ maxHeight: 320 }}>
-              {history.length === 0 ? (
+              {serverHistory.length === 0 ? (
                 <div className="py-8 text-center">
                   <Bell size={24} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
                   <p className="text-xs text-slate-400 dark:text-slate-500">No notifications yet</p>
                 </div>
               ) : (
-                history.map(n => {
+                serverHistory.map(n => {
                   const targetScreen = n.source ? (SOURCE_SCREEN_MAP[n.source]?.[userRole] ?? null) : null;
                   return (
                     <div

@@ -61,11 +61,11 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     lastNotify.current = { msg: message, time: now };
     const id = Math.random().toString(36).slice(2, 9);
     pushToast(id, type, message, 'local');
-    setHistory(h => [{ id, type, message, timestamp: Date.now(), read: false }, ...h].slice(0, 100));
+    // Local UI toasts should not appear in the bell history.
     return id;
   }, [pushToast]);
 
-  const unreadCount = history.filter(h => !h.read).length;
+  const unreadCount = history.filter(h => !h.read && (h.fromServer || !!h.source)).length;
 
   const markAllRead = useCallback(() => {
     setHistory(h => h.map(n => ({ ...n, read: true })));
