@@ -48,6 +48,17 @@ interface EmployeePerformanceSnapshot {
   disciplinary_count: number;
   last_disciplinary_date: string | null;
   feedback_360_count: number;
+  suggestions_count: number;
+  last_suggestion_date: string | null;
+  onboarding_count: number;
+  onboarding_signed_count: number;
+  property_forms_count: number;
+  property_signed_count: number;
+  exit_interviews_count: number;
+  exit_interviews_signed_count: number;
+  coaching_logs_count: number;
+  last_coaching_log_at: string | null;
+  forms_total_count: number;
   team_improvement_plans: number;
   team_development_plans: number;
   department_improvement_plans: number;
@@ -165,6 +176,12 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
         const appraisalsAvg = Number(employee.appraisals_avg_overall || 0);
         const disciplinaryCount = Number(employee.disciplinary_count || 0);
         const feedback360 = Number(employee.feedback_360_count || 0);
+        const suggestionsCount = Number(employee.suggestions_count || 0);
+        const onboardingCount = Number(employee.onboarding_count || 0);
+        const propertyFormsCount = Number(employee.property_forms_count || 0);
+        const exitInterviewsCount = Number(employee.exit_interviews_count || 0);
+        const coachingLogsCount = Number(employee.coaching_logs_count || 0);
+        const formsTotalCount = Number(employee.forms_total_count || 0);
         const delegatedGoals = Number(employee.delegated_goal_count || 0);
         const teamGoals = Number(employee.team_goal_count || 0);
         const departmentGoals = Number(employee.department_goal_count || 0);
@@ -186,6 +203,12 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
           (appraisalsCount * 2) +
           (appraisalsAvg * 4) +
           (feedback360 * 2) +
+          (suggestionsCount * 1.5) +
+          (onboardingCount * 1) +
+          (propertyFormsCount * 1) +
+          (exitInterviewsCount * 1) +
+          (coachingLogsCount * 1.5) +
+          (formsTotalCount * 0.3) +
           (delegatedGoals * 1.5) +
           (teamGoals * 1) +
           (departmentGoals * 1) +
@@ -209,6 +232,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
           (proofRatingAvg > 0 ? Math.max(0, 3.5 - proofRatingAvg) * 4 : 2) +
           (appraisalsAvg > 0 ? Math.max(0, 3.5 - appraisalsAvg) * 5 : 3) +
           (selfAssessments === 0 ? 3 : 0) +
+          (formsTotalCount === 0 ? 5 : 0) +
           (appraisalsCount === 0 ? 4 : 0) +
           (goalsTotal === 0 ? 4 : 0)
         );
@@ -238,7 +262,8 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
     const hasSelfAssess = Number(e.self_assessments_count || 0) >= 1;
     const hasProof      = Number(e.proof_rating_avg     || 0) > 0;
     const hasFeedback   = Number(e.feedback_360_count   || 0) >= 1;
-    return hasGoal || hasAppraisal || hasSelfAssess || hasProof || hasFeedback;
+    const hasAnyForm    = Number(e.forms_total_count    || 0) >= 1;
+    return hasGoal || hasAppraisal || hasSelfAssess || hasProof || hasFeedback || hasAnyForm;
   };
 
   const underperformingEmployees = useMemo(() => {
@@ -406,6 +431,10 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                 <div className="rounded-lg bg-violet-50 dark:bg-violet-900/20 px-2.5 py-2">
                   <p className="text-[10px] font-bold uppercase text-violet-700 dark:text-violet-300">Avg Proof Rating</p>
                   <p className="text-lg font-black text-violet-700 dark:text-violet-300">{Number(employeePerformanceSummary?.avg_proof_rating ?? 0).toFixed(2)} / 5</p>
+                </div>
+                <div className="rounded-lg bg-cyan-50 dark:bg-cyan-900/20 px-2.5 py-2">
+                  <p className="text-[10px] font-bold uppercase text-cyan-700 dark:text-cyan-300">Total Forms</p>
+                  <p className="text-lg font-black text-cyan-700 dark:text-cyan-300">{employeePerformanceSummary?.total_forms ?? 0}</p>
                 </div>
               </div>
 
@@ -654,11 +683,19 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Proof Outcomes</p><p className="font-black text-slate-700 dark:text-slate-200">+{selectedPerformanceEmployee.proofs_approved} / -{selectedPerformanceEmployee.proofs_rejected}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Proof Rating</p><p className="font-black text-slate-700 dark:text-slate-200">{Number(selectedPerformanceEmployee.proof_rating_avg || 0).toFixed(2)} / 5</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Feedback 360</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.feedback_360_count}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Total Forms</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.forms_total_count}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Suggestions</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.suggestions_count}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Onboarding</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.onboarding_signed_count} / {selectedPerformanceEmployee.onboarding_count}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Property</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.property_signed_count} / {selectedPerformanceEmployee.property_forms_count}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Exit Interviews</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.exit_interviews_signed_count} / {selectedPerformanceEmployee.exit_interviews_count}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Coaching Logs</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.coaching_logs_count}</p></div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px] text-slate-500">
                   <p><span className="font-bold">Last Self-Assessment:</span> {selectedPerformanceEmployee.last_self_assessment_at ? new Date(selectedPerformanceEmployee.last_self_assessment_at).toLocaleDateString() : 'N/A'}</p>
                   <p><span className="font-bold">Last Appraisal:</span> {selectedPerformanceEmployee.last_appraisal_signoff || 'N/A'}</p>
                   <p><span className="font-bold">Last Disciplinary:</span> {selectedPerformanceEmployee.last_disciplinary_date || 'N/A'}</p>
+                  <p><span className="font-bold">Last Suggestion:</span> {selectedPerformanceEmployee.last_suggestion_date ? new Date(selectedPerformanceEmployee.last_suggestion_date).toLocaleDateString() : 'N/A'}</p>
+                  <p><span className="font-bold">Last Coaching Log:</span> {selectedPerformanceEmployee.last_coaching_log_at ? new Date(selectedPerformanceEmployee.last_coaching_log_at).toLocaleDateString() : 'N/A'}</p>
                   <p><span className="font-bold">Rated Proofs:</span> {selectedPerformanceEmployee.proof_ratings_count || 0}</p>
                 </div>
               </div>
@@ -685,6 +722,10 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
               <div className="rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 p-2.5">
                 <p className="text-[10px] font-bold uppercase text-violet-700 dark:text-violet-300">PIP + IDP</p>
                 <p className="text-lg font-black text-violet-700 dark:text-violet-300">{employeePerformance.reduce((sum, r) => sum + Number(r.pip_count || 0) + Number(r.idp_count || 0), 0)}</p>
+              </div>
+              <div className="rounded-lg border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 p-2.5">
+                <p className="text-[10px] font-bold uppercase text-cyan-700 dark:text-cyan-300">Total Forms</p>
+                <p className="text-lg font-black text-cyan-700 dark:text-cyan-300">{employeePerformance.reduce((sum, r) => sum + Number(r.forms_total_count || 0), 0)}</p>
               </div>
             </div>
           </Card>
