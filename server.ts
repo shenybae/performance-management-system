@@ -4035,13 +4035,7 @@ async function startServer() {
             UNION
             SELECT ga.goal_id
             FROM goal_assignees ga
-            LEFT JOIN users gau ON gau.id = ga.employee_id
-            WHERE ga.employee_id = e.id OR gau.employee_id = e.id
-            UNION
-            SELECT g.id
-            FROM goals g
-            LEFT JOIN users gul ON gul.id = g.leader_id
-            WHERE gul.employee_id = e.id
+            WHERE ga.employee_id = e.id
       `;
 
       const rows: any = await query(
