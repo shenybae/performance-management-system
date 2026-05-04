@@ -971,8 +971,8 @@ export default function App() {
             className="rounded-2xl mx-1 sm:mx-2 lg:mx-3 px-3 sm:px-3.5 py-2"
             style={{
               background: isDarkMode
-                ? 'rgba(15,23,42,0.08)'
-                : 'rgba(255,255,255,0.12)',
+                ? 'rgba(15,23,42,0.05)'
+                : 'rgba(255,255,255,0.08)',
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
               border: isDarkMode
