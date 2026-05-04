@@ -953,13 +953,6 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 min-w-0 overflow-y-auto p-2 sm:p-3 lg:p-4 bg-transparent transition-colors duration-500 relative">
-        <div className="pointer-events-none absolute right-2 top-2 z-30 sm:right-3 sm:top-3">
-          <div className="pointer-events-auto">
-            <NotificationBell onNavigate={(screen, context) => {
-              goToScreen(screen, context || undefined);
-            }} />
-          </div>
-        </div>
         <AnimatePresence>
           {isOffline && (
             <motion.div
@@ -973,6 +966,17 @@ export default function App() {
           )}
         </AnimatePresence>
         <div className="w-full min-h-full pb-3 mx-auto max-w-[1560px] px-1 sm:px-2 lg:px-3">
+          <div className="mb-3 rounded-2xl border border-slate-200/70 dark:border-slate-800/70 bg-white/80 dark:bg-slate-900/70 backdrop-blur-sm px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">{activeTitle}</p>
+                <p className="truncate text-[10px] text-slate-400">{roleDisplay(user.role)} workspace • {userDisplay}</p>
+              </div>
+              <NotificationBell onNavigate={(screen, context) => {
+                goToScreen(screen, context || undefined);
+              }} />
+            </div>
+          </div>
           {renderScreen()}
         </div>
       </main>
