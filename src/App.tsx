@@ -965,15 +965,15 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
-        {/* Sticky top header — blurs content scrolling beneath it */}
-        <div className="sticky top-0 z-20 -mx-2 sm:-mx-3 lg:-mx-4 px-4 sm:px-5 lg:px-6 py-3 border-b border-slate-200/70 dark:border-slate-800/70 bg-white/75 dark:bg-slate-900/75 backdrop-blur-lg mb-4">
+        {/* Sticky top header */}
+        <div className="sticky top-0 z-20 -mx-2 sm:-mx-3 lg:-mx-4 px-5 sm:px-6 lg:px-8 py-4 shadow-sm border-b border-slate-200/50 dark:border-slate-700/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl mb-5">
           <div className="flex items-center justify-between gap-4 mx-auto max-w-[1560px]">
             <div className="min-w-0">
-              <p className="truncate text-base font-bold leading-tight text-slate-900 dark:text-slate-100">{activeTitle}</p>
-              <p className="truncate text-xs text-slate-500 dark:text-slate-400 mt-0.5">{roleDisplay(user.role)} workspace · {userDisplay}</p>
+              <p className="truncate text-lg font-bold leading-snug text-slate-900 dark:text-slate-100">{activeTitle}</p>
+              <p className="truncate text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">{roleDisplay(user.role)} workspace · {userDisplay}</p>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <span className="hidden sm:inline-block text-xs font-bold tracking-widest uppercase text-teal-600 dark:text-teal-400">{user.role === 'HR' ? 'HR ADMIN' : (user.role || '').toUpperCase()}</span>
+            <div className="flex items-center gap-4 shrink-0">
+              <span className="hidden sm:inline-block text-[11px] font-bold tracking-[0.15em] uppercase text-teal-600 dark:text-teal-400">{user.role === 'HR' ? 'HR ADMIN' : (user.role || '').toUpperCase()}</span>
               <NotificationBell onNavigate={(screen, context) => {
                 goToScreen(screen, context || undefined);
               }} />
