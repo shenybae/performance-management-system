@@ -495,7 +495,7 @@ export const VerificationOfReview = () => {
   }), [appraisals]);
 
   const pendingEmployeeDiscipline = useMemo(
-    () => disciplineRecords.filter((d) => !!d.preparer_signature && !!d.supervisor_signature && !d.employee_signature),
+    () => disciplineRecords.filter((d) => !d.employee_signature),
     [disciplineRecords]
   );
 
@@ -1128,6 +1128,7 @@ export const VerificationOfReview = () => {
                 {(() => {
                   const disciplineKey = `emp-disc-${d.id}`;
                   const reviewed = !!disciplineReviewedKeys[disciplineKey];
+                  const readyForEmployeeSign = !!d.preparer_signature && !!d.supervisor_signature;
                   return (
                 <>
                 <div className="flex items-center justify-between gap-2">
@@ -1135,13 +1136,16 @@ export const VerificationOfReview = () => {
                     <p className="font-semibold">{d.warning_level || 'Warning'} - {d.violation_type || 'Disciplinary Action'}</p>
                     <p className="text-xs text-slate-500">{d.employee_name || 'Employee'} • {d.date_of_warning || '—'}</p>
                     <p className="text-[11px] text-teal-700 dark:text-teal-300 font-semibold mt-0.5">Progress: {getDisciplineSignProgress(d).done}/{getDisciplineSignProgress(d).total} signed</p>
+                    {!readyForEmployeeSign && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">Waiting for preparer and supervisor signatures before you can sign.</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => openDisciplineReview(disciplineKey, d)}>Review</button>
                     <button
                       className="text-sm font-bold text-teal-deep disabled:text-slate-400 disabled:cursor-not-allowed"
-                      disabled={!reviewed}
-                      title={!reviewed ? 'Review the form first' : 'Sign this disciplinary record'}
+                      disabled={!reviewed || !readyForEmployeeSign}
+                      title={!reviewed ? 'Review the form first' : !readyForEmployeeSign ? 'Awaiting preparer and supervisor signatures' : 'Sign this disciplinary record'}
                       onClick={() => setActiveId(disciplineKey)}
                     >
                       Sign

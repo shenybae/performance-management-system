@@ -2130,7 +2130,7 @@ async function startServer() {
   }
 
   async function getActorOrgContext(userId: number) {
-    if (!userId) return { dept: null as string | null, position: null as string | null, isSupervisor: false };
+    if (!userId) return { dept: null as string | null, position: null as string | null, isSupervisor: false, employeeId: null as number | null };
     const rows: any = await query(
       `SELECT u.id, u.employee_id, u.position AS user_position, u.dept AS user_dept,
               e.position AS employee_position, e.dept AS employee_dept
@@ -2143,7 +2143,8 @@ async function startServer() {
     const row = Array.isArray(rows) ? rows[0] : rows;
     const dept = row?.employee_dept || row?.user_dept || null;
     const position = row?.employee_position || row?.user_position || null;
-    return { dept, position, isSupervisor: isSupervisorPositionLabel(position) };
+    const employeeId = normalizeEmployeeId(row?.employee_id);
+    return { dept, position, isSupervisor: isSupervisorPositionLabel(position), employeeId };
   }
 
   async function canActorAccessEmployeeByDept(actorDept: any, employeeId: number | null) {
@@ -4017,17 +4018,18 @@ async function startServer() {
       const params: any[] = [];
 
       if (role === 'Employee') {
-        const actorEmployeeId = normalizeEmployeeId(actor.employee_id);
+        const actorEmployeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
         if (!actorEmployeeId) return res.json({ employees: [], summary: null, generated_at: new Date().toISOString() });
         whereClauses.push('e.id = ?');
         params.push(actorEmployeeId);
       } else if (role === 'Manager') {
-        const managerDept = normalizeDept(actorCtx.dept);
-        if (!managerDept) return res.json({ employees: [], summary: null, generated_at: new Date().toISOString() });
-        whereClauses.push("LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))");
-        params.push(managerDept);
+        const managerDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
+        if (managerDept) {
+          whereClauses.push("LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))");
+          params.push(managerDept);
+        }
       } else if (role === 'HR') {
-        const hrDept = normalizeDept(actorCtx.dept);
+        const hrDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
         if (hrDept) {
           whereClauses.push("LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))");
           params.push(hrDept);
@@ -4305,19 +4307,19 @@ ${relevantGoalIdsSql}
         const params: any[] = [];
 
         if (role === 'Employee') {
-          const actorEmployeeId = normalizeEmployeeId(actor.employee_id);
+          const actorEmployeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
           if (actorEmployeeId) {
             whereClauses.push('e.id = ?');
             params.push(actorEmployeeId);
           }
         } else if (role === 'Manager') {
-          const managerDept = normalizeDept(actorCtx.dept);
+          const managerDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
           if (managerDept) {
             whereClauses.push("LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))");
             params.push(managerDept);
           }
         } else if (role === 'HR') {
-          const hrDept = normalizeDept(actorCtx.dept);
+          const hrDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
           if (hrDept) {
             whereClauses.push("LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))");
             params.push(hrDept);
@@ -6145,7 +6147,7 @@ ${relevantGoalIdsSql}
       const actorCtx = await getActorOrgContext(Number(actor.id || 0));
 
       if (role === 'HR') {
-        const hrDept = normalizeDept(actorCtx.dept);
+        const hrDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
         if (!hrDept) return res.json([]);
         const rows = await query(
           "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
@@ -6155,7 +6157,7 @@ ${relevantGoalIdsSql}
       }
 
       if (role === 'Manager') {
-        const managerDept = normalizeDept(actorCtx.dept);
+        const managerDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
         if (!managerDept) return res.json([]);
         const rows = await query(
           "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
@@ -6166,7 +6168,7 @@ ${relevantGoalIdsSql}
 
       if (role === 'Employee') {
         if (actorCtx.isSupervisor) {
-          const supervisorDept = normalizeDept(actorCtx.dept);
+          const supervisorDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
           if (!supervisorDept) return res.json([]);
           const rows = await query(
             "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
@@ -6175,7 +6177,7 @@ ${relevantGoalIdsSql}
           return res.json(rows);
         }
 
-        const employeeId = normalizeEmployeeId(actor.employee_id);
+        const employeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
         if (!employeeId) return res.json([]);
         const rows = await query(
           "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE d.employee_id = ?",
@@ -6213,7 +6215,7 @@ ${relevantGoalIdsSql}
 
       if (role === 'Manager') {
         const actorCtx = await getActorOrgContext(Number(actor.id || 0));
-        const allowed = await canActorAccessEmployeeByDept(actorCtx.dept, targetEmployeeId);
+        const allowed = await canActorAccessEmployeeByDept(actorCtx.dept || actor.dept || actor.department, targetEmployeeId);
         if (!allowed) return res.status(403).json({ error: 'Managers can only create disciplinary records for their own department' });
       }
 
@@ -6267,8 +6269,20 @@ ${relevantGoalIdsSql}
       );
 
       try {
-        const empUserRows: any = await query('SELECT id FROM users WHERE employee_id = ? LIMIT 1', [targetEmployeeId]);
-        const empUser = Array.isArray(empUserRows) ? empUserRows[0] : empUserRows;
+        let empUserRows: any = await query('SELECT id FROM users WHERE employee_id = ? LIMIT 1', [targetEmployeeId]);
+        let empUser = Array.isArray(empUserRows) ? empUserRows[0] : empUserRows;
+        if (!empUser?.id) {
+          empUserRows = await query(
+            `SELECT u.id
+             FROM users u
+             INNER JOIN employees e ON e.id = ?
+             WHERE LOWER(TRIM(COALESCE(u.full_name, u.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))
+             ORDER BY u.id ASC
+             LIMIT 1`,
+            [targetEmployeeId]
+          );
+          empUser = Array.isArray(empUserRows) ? empUserRows[0] : empUserRows;
+        }
         if (empUser?.id) {
           await createNotification({
             user_id: Number(empUser.id),
@@ -6346,7 +6360,7 @@ ${relevantGoalIdsSql}
       if (!rec) return res.status(404).json({ error: 'Record not found' });
 
       const actorCtx = await getActorOrgContext(Number(actor.id || 0));
-      const allowed = await canActorAccessEmployeeByDept(actorCtx.dept, normalizeEmployeeId(rec.employee_id));
+      const allowed = await canActorAccessEmployeeByDept(actorCtx.dept || actor.dept || actor.department, normalizeEmployeeId(rec.employee_id));
       if (!allowed) return res.status(403).json({ error: 'Forbidden' });
 
       const assignedPreparer = Number(rec.preparer_user_id || 0);
@@ -6408,7 +6422,10 @@ ${relevantGoalIdsSql}
       }
 
       const allowed = await canActorAccessEmployeeByDept(actorCtx.dept, normalizeEmployeeId(rec.employee_id));
-      if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+      
+      // Fallback to token-provided department for accounts that are not fully linked in users/employees mapping
+      const allowedByTokenDept = await canActorAccessEmployeeByDept(actor.dept || actor.department, normalizeEmployeeId(rec.employee_id));
+      if (!allowed && !allowedByTokenDept) return res.status(403).json({ error: 'Forbidden' });
 
       const assignedSupervisor = Number(rec.supervisor_user_id || 0);
       if (assignedSupervisor && Number(actor.id || 0) !== assignedSupervisor) {
@@ -6429,8 +6446,20 @@ ${relevantGoalIdsSql}
         const rec2 = Array.isArray(recRows) ? recRows[0] : recRows;
         const targetEmpId = normalizeEmployeeId(rec2?.employee_id);
         if (targetEmpId) {
-          const empUserRows: any = await query('SELECT id FROM users WHERE employee_id = ? LIMIT 1', [targetEmpId]);
-          const empUser = Array.isArray(empUserRows) ? empUserRows[0] : empUserRows;
+          let empUserRows: any = await query('SELECT id FROM users WHERE employee_id = ? LIMIT 1', [targetEmpId]);
+          let empUser = Array.isArray(empUserRows) ? empUserRows[0] : empUserRows;
+          if (!empUser?.id) {
+            empUserRows = await query(
+              `SELECT u.id
+               FROM users u
+               INNER JOIN employees e ON e.id = ?
+               WHERE LOWER(TRIM(COALESCE(u.full_name, u.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))
+               ORDER BY u.id ASC
+               LIMIT 1`,
+              [targetEmpId]
+            );
+            empUser = Array.isArray(empUserRows) ? empUserRows[0] : empUserRows;
+          }
           if (empUser?.id) {
             await createNotification({
               user_id: Number(empUser.id),
