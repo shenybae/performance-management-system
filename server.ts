@@ -4028,6 +4028,21 @@ async function startServer() {
       }
 
       const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+      const relevantGoalIdsSql = `
+            SELECT g.id
+            FROM goals g
+            WHERE g.employee_id = e.id
+            UNION
+            SELECT ga.goal_id
+            FROM goal_assignees ga
+            LEFT JOIN users gau ON gau.id = ga.employee_id
+            WHERE ga.employee_id = e.id OR gau.employee_id = e.id
+            UNION
+            SELECT g.id
+            FROM goals g
+            LEFT JOIN users gul ON gul.id = g.leader_id
+            WHERE gul.employee_id = e.id
+      `;
 
       const rows: any = await query(
         `SELECT
@@ -4036,35 +4051,23 @@ async function startServer() {
           e.position,
           e.dept,
 
-          (SELECT COUNT(*) FROM (
-            SELECT g.id FROM goals g WHERE g.employee_id = e.id
-            UNION
-            SELECT g.id FROM goal_assignees ga JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id
-          ) _gt) AS goals_total,
-          (SELECT COUNT(*) FROM (
-            SELECT g.id FROM goals g WHERE g.employee_id = e.id AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')
-            UNION
-            SELECT g.id FROM goal_assignees ga JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')
-          ) _ga) AS goals_active,
-          (SELECT COUNT(*) FROM (
-            SELECT g.id FROM goals g WHERE g.employee_id = e.id AND COALESCE(g.status, 'Not Started') = 'Completed'
-            UNION
-            SELECT g.id FROM goal_assignees ga JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id AND COALESCE(g.status, 'Not Started') = 'Completed'
-          ) _gc) AS goals_completed,
-          (SELECT COUNT(*) FROM (
-            SELECT g.id FROM goals g WHERE g.employee_id = e.id AND COALESCE(g.status, 'Not Started') = 'At Risk'
-            UNION
-            SELECT g.id FROM goal_assignees ga JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id AND COALESCE(g.status, 'Not Started') = 'At Risk'
-          ) _gar) AS goals_at_risk,
-          (SELECT COUNT(*) FROM (
-            SELECT g.id FROM goals g WHERE g.employee_id = e.id AND g.target_date IS NOT NULL AND DATE(g.target_date) < CURRENT_DATE AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')
-            UNION
-            SELECT g.id FROM goal_assignees ga JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id AND g.target_date IS NOT NULL AND DATE(g.target_date) < CURRENT_DATE AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')
-          ) _go) AS goals_overdue,
+          (SELECT COUNT(*) FROM goals g WHERE g.id IN (
+${relevantGoalIdsSql}
+          )) AS goals_total,
+          (SELECT COUNT(*) FROM goals g WHERE g.id IN (
+${relevantGoalIdsSql}
+          ) AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS goals_active,
+          (SELECT COUNT(*) FROM goals g WHERE g.id IN (
+${relevantGoalIdsSql}
+          ) AND COALESCE(g.status, 'Not Started') = 'Completed') AS goals_completed,
+          (SELECT COUNT(*) FROM goals g WHERE g.id IN (
+${relevantGoalIdsSql}
+          ) AND COALESCE(g.status, 'Not Started') = 'At Risk') AS goals_at_risk,
+          (SELECT COUNT(*) FROM goals g WHERE g.id IN (
+${relevantGoalIdsSql}
+          ) AND g.target_date IS NOT NULL AND DATE(g.target_date) < CURRENT_DATE AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS goals_overdue,
           (SELECT ROUND(COALESCE(AVG(g.progress), 0), 1) FROM goals g WHERE g.id IN (
-            SELECT g2.id FROM goals g2 WHERE g2.employee_id = e.id
-            UNION
-            SELECT ga.goal_id FROM goal_assignees ga WHERE ga.employee_id = e.id
+${relevantGoalIdsSql}
           )) AS goals_avg_progress,
 
           (SELECT COUNT(*) FROM goal_assignees ga LEFT JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id) AS delegated_goal_count,
@@ -4077,22 +4080,66 @@ async function startServer() {
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id) AS recovery_tasks_total,
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS recovery_tasks_open,
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.status, 'Not Started') = 'Completed') AS recovery_tasks_completed,
-          (SELECT COUNT(*) FROM goal_member_tasks t LEFT JOIN users ur ON ur.id = t.proof_reviewed_by WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved' AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager') AS proofs_approved,
-          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Rejected') AS proofs_rejected,
-          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision') AS proofs_needs_revision,
+          (SELECT COUNT(*) FROM (
+            SELECT t.id
+            FROM goal_member_tasks t
+            LEFT JOIN users ur ON ur.id = t.proof_reviewed_by
+            WHERE t.member_employee_id = e.id
+              AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved'
+              AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager'
+            UNION ALL
+            SELECT g.id
+            FROM goals g
+            LEFT JOIN users ur ON ur.id = g.proof_reviewed_by
+            WHERE g.id IN (
+${relevantGoalIdsSql}
+            )
+              AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Approved'
+              AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager'
+          ) proof_approved_rows) AS proofs_approved,
+          (SELECT COUNT(*) FROM (
+            SELECT t.id
+            FROM goal_member_tasks t
+            WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Rejected'
+            UNION ALL
+            SELECT g.id
+            FROM goals g
+            WHERE g.id IN (
+${relevantGoalIdsSql}
+            ) AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Rejected'
+          ) proof_rejected_rows) AS proofs_rejected,
+          (SELECT COUNT(*) FROM (
+            SELECT t.id
+            FROM goal_member_tasks t
+            WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision'
+            UNION ALL
+            SELECT g.id
+            FROM goals g
+            WHERE g.id IN (
+${relevantGoalIdsSql}
+            ) AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Needs Revision'
+          ) proof_revision_rows) AS proofs_needs_revision,
           (SELECT COUNT(*) FROM goal_member_tasks t LEFT JOIN users ur ON ur.id = t.proof_reviewed_by WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager') AS member_proof_ratings_count,
           (SELECT ROUND(COALESCE(AVG(COALESCE(t.proof_review_rating, 0)), 0), 2) FROM goal_member_tasks t LEFT JOIN users ur ON ur.id = t.proof_reviewed_by WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager') AS member_proof_rating_avg,
-          (SELECT COUNT(*) FROM goals g LEFT JOIN users ul ON ul.id = g.leader_id LEFT JOIN users ur ON ur.id = g.proof_reviewed_by WHERE ul.employee_id = e.id AND g.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager') AS leader_proof_ratings_count,
-          (SELECT ROUND(COALESCE(AVG(COALESCE(g.proof_review_rating, 0)), 0), 2) FROM goals g LEFT JOIN users ul ON ul.id = g.leader_id LEFT JOIN users ur ON ur.id = g.proof_reviewed_by WHERE ul.employee_id = e.id AND g.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager') AS leader_proof_rating_avg,
+          (SELECT COUNT(*) FROM goals g LEFT JOIN users ur ON ur.id = g.proof_reviewed_by WHERE g.id IN (
+${relevantGoalIdsSql}
+          ) AND g.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager') AS leader_proof_ratings_count,
+          (SELECT ROUND(COALESCE(AVG(COALESCE(g.proof_review_rating, 0)), 0), 2) FROM goals g LEFT JOIN users ur ON ur.id = g.proof_reviewed_by WHERE g.id IN (
+${relevantGoalIdsSql}
+          ) AND g.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager') AS leader_proof_rating_avg,
           (SELECT COUNT(*) FROM (
             SELECT t.proof_review_rating AS rating FROM goal_member_tasks t LEFT JOIN users ur ON ur.id = t.proof_reviewed_by WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager'
             UNION ALL
-            SELECT g.proof_review_rating AS rating FROM goals g LEFT JOIN users ul ON ul.id = g.leader_id LEFT JOIN users ur ON ur.id = g.proof_reviewed_by WHERE ul.employee_id = e.id AND g.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager'
+            SELECT g.proof_review_rating AS rating FROM goals g LEFT JOIN users ur ON ur.id = g.proof_reviewed_by WHERE g.id IN (
+${relevantGoalIdsSql}
+            ) AND g.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager'
           ) proof_ratings) AS proof_ratings_count,
           (SELECT ROUND(COALESCE(AVG(proof_ratings.rating), 0), 2) FROM (
             SELECT t.proof_review_rating AS rating FROM goal_member_tasks t LEFT JOIN users ur ON ur.id = t.proof_reviewed_by WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager'
             UNION ALL
-            SELECT g.proof_review_rating AS rating FROM goals g LEFT JOIN users ul ON ul.id = g.leader_id LEFT JOIN users ur ON ur.id = g.proof_reviewed_by WHERE ul.employee_id = e.id AND g.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager'
+            SELECT g.proof_review_rating AS rating FROM goals g LEFT JOIN users ur ON ur.id = g.proof_reviewed_by WHERE g.id IN (
+${relevantGoalIdsSql}
+            ) AND g.proof_review_rating IS NOT NULL AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager'
           ) proof_ratings) AS proof_rating_avg,
 
           (SELECT COUNT(*) FROM self_assessments s WHERE s.employee_id = e.id) AS self_assessments_count,
