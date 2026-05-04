@@ -4331,77 +4331,132 @@ ${relevantGoalIdsSql}
 
         const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
         const fallbackRows: any = await query(
-          `SELECT e.id AS employee_id, e.name AS employee_name, e.position, e.dept
+          `SELECT
+             e.id AS employee_id,
+             e.name AS employee_name,
+             e.position,
+             e.dept,
+             (SELECT COUNT(*) FROM goals g WHERE g.employee_id = e.id) AS goals_total,
+             (SELECT COUNT(*) FROM pip_plans p WHERE p.employee_id = e.id) AS pip_count,
+             (SELECT COUNT(*) FROM development_plans d WHERE d.employee_id = e.id) AS idp_count,
+             (SELECT COUNT(*) FROM self_assessments s WHERE s.employee_id = e.id) AS self_assessments_count,
+             (SELECT MAX(s.created_at) FROM self_assessments s WHERE s.employee_id = e.id) AS last_self_assessment_at,
+             (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id) AS appraisals_count,
+             (SELECT ROUND(COALESCE(AVG(COALESCE(a.overall, 0)), 0), 2) FROM appraisals a WHERE a.employee_id = e.id) AS appraisals_avg_overall,
+             (SELECT MAX(a.sign_off_date) FROM appraisals a WHERE a.employee_id = e.id) AS last_appraisal_signoff,
+             (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id) AS disciplinary_count,
+             (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id) AS last_disciplinary_date,
+             (SELECT COUNT(*) FROM feedback_360 f WHERE LOWER(TRIM(COALESCE(f.target_employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS feedback_360_count,
+             (SELECT COUNT(*) FROM suggestions s WHERE s.employee_id = e.id) AS suggestions_count,
+             (SELECT MAX(s.created_at) FROM suggestions s WHERE s.employee_id = e.id) AS last_suggestion_date,
+             (SELECT COUNT(*) FROM onboarding o WHERE o.employee_id = e.id) AS onboarding_count,
+             (SELECT COUNT(*) FROM onboarding o WHERE o.employee_id = e.id AND COALESCE(o.employee_signature, '') <> '') AS onboarding_signed_count,
+             (SELECT COUNT(*) FROM property_accountability p WHERE p.employee_id = e.id) AS property_forms_count,
+             (SELECT COUNT(*) FROM property_accountability p WHERE p.employee_id = e.id AND COALESCE(p.received_by_sig, '') <> '') AS property_signed_count,
+             (SELECT COUNT(*) FROM exit_interviews ex WHERE LOWER(TRIM(COALESCE(ex.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS exit_interviews_count,
+             (SELECT COUNT(*) FROM exit_interviews ex WHERE LOWER(TRIM(COALESCE(ex.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, ''))) AND COALESCE(ex.employee_sig, '') <> '') AS exit_interviews_signed_count,
+             (SELECT COUNT(*) FROM coaching_logs cl WHERE cl.employee_id = e.id) AS coaching_logs_count,
+             (SELECT MAX(cl.created_at) FROM coaching_logs cl WHERE cl.employee_id = e.id) AS last_coaching_log_at
            FROM employees e
            ${whereSql}
            ORDER BY e.name ASC`,
           params
         );
 
-        const list = (Array.isArray(fallbackRows) ? fallbackRows : []).map((r: any) => ({
-          employee_id: Number(r.employee_id),
-          employee_name: r.employee_name || 'Unknown',
-          position: r.position || null,
-          dept: r.dept || null,
-          goals_total: 0,
-          goals_active: 0,
-          goals_completed: 0,
-          goals_at_risk: 0,
-          goals_overdue: 0,
-          goals_avg_progress: 0,
-          goals_completion_rate: 0,
-          delegated_goal_count: 0,
-          team_goal_count: 0,
-          department_goal_count: 0,
-          pip_count: 0,
-          idp_count: 0,
-          recovery_tasks_total: 0,
-          recovery_tasks_open: 0,
-          recovery_tasks_completed: 0,
-          proofs_approved: 0,
-          proofs_rejected: 0,
-          proofs_needs_revision: 0,
-          self_assessments_count: 0,
-          last_self_assessment_at: null,
-          appraisals_count: 0,
-          appraisals_avg_overall: 0,
-          last_appraisal_signoff: null,
-          disciplinary_count: 0,
-          last_disciplinary_date: null,
-          feedback_360_count: 0,
-          suggestions_count: 0,
-          last_suggestion_date: null,
-          onboarding_count: 0,
-          onboarding_signed_count: 0,
-          property_forms_count: 0,
-          property_signed_count: 0,
-          exit_interviews_count: 0,
-          exit_interviews_signed_count: 0,
-          coaching_logs_count: 0,
-          last_coaching_log_at: null,
-          forms_total_count: 0,
-          team_improvement_plans: 0,
-          team_development_plans: 0,
-          department_improvement_plans: 0,
-          department_development_plans: 0,
-        }));
+        const list = (Array.isArray(fallbackRows) ? fallbackRows : []).map((r: any) => {
+          const goalsTotal = Number(r.goals_total || 0);
+          const selfAssessmentsCount = Number(r.self_assessments_count || 0);
+          const appraisalsCount = Number(r.appraisals_count || 0);
+          const disciplinaryCount = Number(r.disciplinary_count || 0);
+          const feedbackCount = Number(r.feedback_360_count || 0);
+          const suggestionsCount = Number(r.suggestions_count || 0);
+          const onboardingCount = Number(r.onboarding_count || 0);
+          const propertyFormsCount = Number(r.property_forms_count || 0);
+          const exitInterviewsCount = Number(r.exit_interviews_count || 0);
+          const coachingLogsCount = Number(r.coaching_logs_count || 0);
+          const formsTotalCount =
+            selfAssessmentsCount +
+            appraisalsCount +
+            disciplinaryCount +
+            feedbackCount +
+            suggestionsCount +
+            onboardingCount +
+            propertyFormsCount +
+            exitInterviewsCount +
+            coachingLogsCount;
+
+          return {
+            employee_id: Number(r.employee_id),
+            employee_name: r.employee_name || 'Unknown',
+            position: r.position || null,
+            dept: r.dept || null,
+            goals_total: goalsTotal,
+            goals_active: 0,
+            goals_completed: 0,
+            goals_at_risk: 0,
+            goals_overdue: 0,
+            goals_avg_progress: 0,
+            goals_completion_rate: 0,
+            delegated_goal_count: 0,
+            team_goal_count: 0,
+            department_goal_count: 0,
+            pip_count: Number(r.pip_count || 0),
+            idp_count: Number(r.idp_count || 0),
+            recovery_tasks_total: 0,
+            recovery_tasks_open: 0,
+            recovery_tasks_completed: 0,
+            proofs_approved: 0,
+            proofs_rejected: 0,
+            proofs_needs_revision: 0,
+            member_proof_ratings_count: 0,
+            member_proof_rating_avg: 0,
+            leader_proof_ratings_count: 0,
+            leader_proof_rating_avg: 0,
+            proof_ratings_count: 0,
+            proof_rating_avg: 0,
+            self_assessments_count: selfAssessmentsCount,
+            last_self_assessment_at: r.last_self_assessment_at || null,
+            appraisals_count: appraisalsCount,
+            appraisals_avg_overall: Number(r.appraisals_avg_overall || 0),
+            last_appraisal_signoff: r.last_appraisal_signoff || null,
+            disciplinary_count: disciplinaryCount,
+            last_disciplinary_date: r.last_disciplinary_date || null,
+            feedback_360_count: feedbackCount,
+            suggestions_count: suggestionsCount,
+            last_suggestion_date: r.last_suggestion_date || null,
+            onboarding_count: onboardingCount,
+            onboarding_signed_count: Number(r.onboarding_signed_count || 0),
+            property_forms_count: propertyFormsCount,
+            property_signed_count: Number(r.property_signed_count || 0),
+            exit_interviews_count: exitInterviewsCount,
+            exit_interviews_signed_count: Number(r.exit_interviews_signed_count || 0),
+            coaching_logs_count: coachingLogsCount,
+            last_coaching_log_at: r.last_coaching_log_at || null,
+            forms_total_count: formsTotalCount,
+            team_improvement_plans: 0,
+            team_development_plans: 0,
+            department_improvement_plans: 0,
+            department_development_plans: 0,
+          };
+        });
 
         return res.json({
           employees: list,
           summary: list.length === 0 ? null : {
             employees: list.length,
             avg_goal_progress: 0,
-            total_goals: 0,
-            total_pips: 0,
-            total_idps: 0,
-            total_appraisals: 0,
-            total_disciplinary: 0,
-            total_self_assessments: 0,
-            total_forms: 0,
-            total_suggestions: 0,
-            total_onboarding: 0,
-            total_property_forms: 0,
-            total_exit_interviews: 0,
+            avg_proof_rating: 0,
+            total_goals: list.reduce((sum: number, item: any) => sum + Number(item.goals_total || 0), 0),
+            total_pips: list.reduce((sum: number, item: any) => sum + Number(item.pip_count || 0), 0),
+            total_idps: list.reduce((sum: number, item: any) => sum + Number(item.idp_count || 0), 0),
+            total_appraisals: list.reduce((sum: number, item: any) => sum + Number(item.appraisals_count || 0), 0),
+            total_disciplinary: list.reduce((sum: number, item: any) => sum + Number(item.disciplinary_count || 0), 0),
+            total_self_assessments: list.reduce((sum: number, item: any) => sum + Number(item.self_assessments_count || 0), 0),
+            total_forms: list.reduce((sum: number, item: any) => sum + Number(item.forms_total_count || 0), 0),
+            total_suggestions: list.reduce((sum: number, item: any) => sum + Number(item.suggestions_count || 0), 0),
+            total_onboarding: list.reduce((sum: number, item: any) => sum + Number(item.onboarding_count || 0), 0),
+            total_property_forms: list.reduce((sum: number, item: any) => sum + Number(item.property_forms_count || 0), 0),
+            total_exit_interviews: list.reduce((sum: number, item: any) => sum + Number(item.exit_interviews_count || 0), 0),
           },
           generated_at: new Date().toISOString(),
           degraded: true,
