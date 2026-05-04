@@ -966,13 +966,21 @@ export default function App() {
           )}
         </AnimatePresence>
         {/* Sticky top header */}
-        <div className="sticky top-0 z-20 pt-3 pb-2">
+        <div className="sticky top-0 z-20 pt-2 pb-2">
           <div
-            className="rounded-2xl border border-slate-200/30 dark:border-slate-700/30 shadow-sm px-4 py-3 mx-1 sm:mx-2 lg:mx-3"
+            className="rounded-2xl mx-1 sm:mx-2 lg:mx-3 px-4 py-3"
             style={{
-              backgroundColor: 'rgba(255,255,255,0.18)',
-              backdropFilter: 'blur(48px)',
-              WebkitBackdropFilter: 'blur(48px)',
+              background: isDarkMode
+                ? 'rgba(15, 23, 42, 0.30)'
+                : 'rgba(255, 255, 255, 0.20)',
+              backdropFilter: 'blur(64px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(64px) saturate(180%)',
+              border: isDarkMode
+                ? '1px solid rgba(255,255,255,0.08)'
+                : '1px solid rgba(255,255,255,0.55)',
+              boxShadow: isDarkMode
+                ? '0 2px 24px 0 rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05)'
+                : '0 2px 24px 0 rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
             }}
           >
             <div className="flex items-center justify-between gap-4 mx-auto max-w-[1560px]">
@@ -981,18 +989,29 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setIsSidebarOpen(true)}
-                  className="shrink-0 p-1.5 -ml-1 rounded-lg text-slate-500 hover:bg-white/40 dark:hover:bg-slate-800/60 transition-colors"
+                  className="shrink-0 p-1.5 -ml-1 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-white/30 dark:hover:bg-white/10 transition-colors"
                   aria-label="Open navigation"
                 >
                   <Menu size={18} />
                 </button>
               )}
+              {/* Title — left side */}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xl sm:text-2xl font-extrabold leading-tight tracking-tight text-slate-900 dark:text-slate-100">{activeTitle}</p>
+                <p className="truncate text-xl sm:text-2xl font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white drop-shadow-sm">{activeTitle}</p>
                 <p className="truncate text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5">{roleDisplay(user.role)} workspace · {userDisplay}</p>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <span className="hidden sm:inline-block text-[11px] font-bold tracking-[0.15em] uppercase text-teal-600 dark:text-teal-400">{user.role === 'HR' ? 'HR ADMIN' : (user.role || '').toUpperCase()}</span>
+              {/* Role badge + bell — right side, visually grouped */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div
+                  className="hidden sm:flex items-center px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-[0.12em] uppercase"
+                  style={{
+                    background: isDarkMode ? 'rgba(20,184,166,0.15)' : 'rgba(13,148,136,0.10)',
+                    color: isDarkMode ? '#2dd4bf' : '#0f766e',
+                    border: isDarkMode ? '1px solid rgba(45,212,191,0.20)' : '1px solid rgba(13,148,136,0.20)',
+                  }}
+                >
+                  {user.role === 'HR' ? 'HR ADMIN' : (user.role || '').toUpperCase()}
+                </div>
                 <NotificationBell onNavigate={(screen, context) => {
                   goToScreen(screen, context || undefined);
                 }} />
