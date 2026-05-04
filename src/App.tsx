@@ -953,6 +953,13 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 min-w-0 overflow-y-auto p-2 sm:p-3 lg:p-4 bg-transparent transition-colors duration-500 relative">
+        <div className="pointer-events-none absolute right-2 top-2 z-30 sm:right-3 sm:top-3">
+          <div className="pointer-events-auto">
+            <NotificationBell onNavigate={(screen, context) => {
+              goToScreen(screen, context || undefined);
+            }} />
+          </div>
+        </div>
         <AnimatePresence>
           {isOffline && (
             <motion.div
