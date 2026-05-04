@@ -3808,7 +3808,10 @@ async function startServer() {
       const eUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [employeeId]);
       const eUser = Array.isArray(eUsers) ? eUsers[0] : eUsers;
       if (eUser) {
-        await createNotification({ user_id: eUser.id, type: 'info', message: `A new ${b.form_type || 'performance'} evaluation has been submitted for you`, source: 'appraisal' });
+        await createNotification({ user_id: eUser.id, type: 'info', message: `Your ${b.form_type || 'performance'} evaluation is ready — please sign to acknowledge`, source: 'appraisal_sign' });
+      }
+      if (isPerformanceEval && hrOwnerUserId) {
+        await createNotification({ user_id: hrOwnerUserId, type: 'info', message: `A ${b.form_type || 'performance'} evaluation requires your HR signature`, source: 'appraisal_sign' });
       }
 
       res.json({ success: true });
