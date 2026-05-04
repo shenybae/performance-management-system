@@ -971,13 +971,13 @@ export default function App() {
             className="rounded-2xl mx-1 sm:mx-2 lg:mx-3 px-3 sm:px-3.5 py-2"
             style={{
               background: isDarkMode
-                ? 'rgba(15,23,42,0.10)'
-                : 'rgba(255,255,255,0.22)',
-              backdropFilter: 'blur(40px) saturate(150%)',
-              WebkitBackdropFilter: 'blur(40px) saturate(150%)',
+                ? 'rgba(15,23,42,0.08)'
+                : 'rgba(255,255,255,0.12)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
               border: isDarkMode
                 ? '1px solid rgba(255,255,255,0.06)'
-                : '1px solid rgba(203,213,225,0.35)',
+                : '1px solid rgba(203,213,225,0.30)',
               boxShadow: 'none',
             }}
           >
