@@ -971,19 +971,16 @@ export default function App() {
             className="rounded-2xl mx-1 sm:mx-2 lg:mx-3 px-3 sm:px-3.5 py-2"
             style={{
               background: isDarkMode
-                ? 'linear-gradient(135deg, rgba(15,23,42,0.36), rgba(30,41,59,0.20))'
-                : 'linear-gradient(135deg, rgba(226,232,240,0.24), rgba(148,163,184,0.11))',
-              backdropFilter: 'blur(30px) saturate(160%)',
-              WebkitBackdropFilter: 'blur(30px) saturate(160%)',
-              border: isDarkMode
-                ? '1px solid rgba(255,255,255,0.08)'
-                : '1px solid rgba(255,255,255,0.28)',
+                ? 'linear-gradient(135deg, rgba(15,23,42,0.34), rgba(30,41,59,0.16))'
+                : 'linear-gradient(135deg, rgba(203,213,225,0.26), rgba(148,163,184,0.10))',
+              backdropFilter: 'blur(32px) saturate(170%)',
+              WebkitBackdropFilter: 'blur(32px) saturate(170%)',
               boxShadow: isDarkMode
-                ? '0 2px 16px 0 rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.05)'
-                : '0 2px 16px 0 rgba(15,23,42,0.07), inset 0 1px 0 rgba(255,255,255,0.38)',
+                ? '0 2px 16px 0 rgba(0,0,0,0.24)'
+                : '0 2px 16px 0 rgba(15,23,42,0.06)',
             }}
           >
-            <div className="flex items-center justify-between gap-1.5 sm:gap-2.5 mx-auto max-w-[1560px]">
+            <div className="flex items-center justify-between gap-2 w-full">
               {/* Hamburger — mobile only */}
               {!isDesktopViewport && (
                 <button
@@ -998,12 +995,10 @@ export default function App() {
               {/* Title — left side */}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] sm:text-[15px] font-bold leading-tight tracking-tight text-slate-900 dark:text-white drop-shadow-sm">{activeTitle}</p>
+                <p className="truncate text-[10px] sm:text-[11px] text-slate-600 dark:text-slate-300 leading-tight mt-0.5">{roleDisplay(user.role)} workspace · {userDisplay}</p>
               </div>
-              {/* Right-side context text + role badge + bell */}
-              <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 max-w-[78%] sm:max-w-none">
-                <p className="hidden sm:block truncate text-[10px] text-slate-600 dark:text-slate-300 leading-tight max-w-[230px] lg:max-w-[300px] text-right">
-                  {roleDisplay(user.role)} workspace · {userDisplay}
-                </p>
+              {/* Right-side role badge + bell */}
+              <div className="flex items-center gap-1 shrink-0 ml-2">
                 <div
                   className="hidden sm:flex items-center px-1.5 py-0.5 rounded-lg text-[9px] font-bold tracking-[0.11em] uppercase"
                   style={{
