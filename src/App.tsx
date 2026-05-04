@@ -966,24 +966,24 @@ export default function App() {
           )}
         </AnimatePresence>
         {/* Sticky top header */}
-        <div className="sticky top-0 z-20 pt-2 pb-2">
+        <div className="sticky top-0 z-20 pt-1 pb-1">
           <div
-            className="rounded-2xl mx-1 sm:mx-2 lg:mx-3 px-4 py-3"
+            className="rounded-2xl mx-1 sm:mx-2 lg:mx-3 px-3 sm:px-3.5 py-2"
             style={{
               background: isDarkMode
-                ? 'rgba(15, 23, 42, 0.30)'
-                : 'rgba(255, 255, 255, 0.20)',
-              backdropFilter: 'blur(64px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(64px) saturate(180%)',
+                ? 'linear-gradient(135deg, rgba(15,23,42,0.36), rgba(30,41,59,0.20))'
+                : 'linear-gradient(135deg, rgba(226,232,240,0.24), rgba(148,163,184,0.11))',
+              backdropFilter: 'blur(30px) saturate(160%)',
+              WebkitBackdropFilter: 'blur(30px) saturate(160%)',
               border: isDarkMode
                 ? '1px solid rgba(255,255,255,0.08)'
-                : '1px solid rgba(255,255,255,0.55)',
+                : '1px solid rgba(255,255,255,0.28)',
               boxShadow: isDarkMode
-                ? '0 2px 24px 0 rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05)'
-                : '0 2px 24px 0 rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
+                ? '0 2px 16px 0 rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.05)'
+                : '0 2px 16px 0 rgba(15,23,42,0.07), inset 0 1px 0 rgba(255,255,255,0.38)',
             }}
           >
-            <div className="flex items-center justify-between gap-4 mx-auto max-w-[1560px]">
+            <div className="flex items-center justify-between gap-1.5 sm:gap-2.5 mx-auto max-w-[1560px]">
               {/* Hamburger — mobile only */}
               {!isDesktopViewport && (
                 <button
@@ -997,13 +997,15 @@ export default function App() {
               )}
               {/* Title — left side */}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xl sm:text-2xl font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white drop-shadow-sm">{activeTitle}</p>
-                <p className="truncate text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5">{roleDisplay(user.role)} workspace · {userDisplay}</p>
+                <p className="truncate text-[13px] sm:text-[15px] font-bold leading-tight tracking-tight text-slate-900 dark:text-white drop-shadow-sm">{activeTitle}</p>
               </div>
-              {/* Role badge + bell — right side, visually grouped */}
-              <div className="flex items-center gap-2 shrink-0">
+              {/* Right-side context text + role badge + bell */}
+              <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 max-w-[78%] sm:max-w-none">
+                <p className="hidden sm:block truncate text-[10px] text-slate-600 dark:text-slate-300 leading-tight max-w-[230px] lg:max-w-[300px] text-right">
+                  {roleDisplay(user.role)} workspace · {userDisplay}
+                </p>
                 <div
-                  className="hidden sm:flex items-center px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-[0.12em] uppercase"
+                  className="hidden sm:flex items-center px-1.5 py-0.5 rounded-lg text-[9px] font-bold tracking-[0.11em] uppercase"
                   style={{
                     background: isDarkMode ? 'rgba(20,184,166,0.15)' : 'rgba(13,148,136,0.10)',
                     color: isDarkMode ? '#2dd4bf' : '#0f766e',
