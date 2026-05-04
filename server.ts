@@ -3753,12 +3753,12 @@ async function startServer() {
       const employeeId = normalizeEmployeeId(b.employee_id);
       if (!employeeId) return res.status(400).json({ error: 'Invalid employee_id' });
 
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
       if (role === 'Manager') {
         const allowed = await canManagerAccessEmployee(actor.id, employeeId);
         if (!allowed) {
           // Backward-compatible fallback: some older datasets don't have
           // employees.manager_id mapped to manager user id. Allow same-dept access.
-          const actorCtx = await getActorOrgContext(Number(actor.id || 0));
           const allowedByDept = await canActorAccessEmployeeByDept(actorCtx.dept, employeeId);
           if (!allowedByDept) return res.status(403).json({ error: 'Forbidden' });
         }
