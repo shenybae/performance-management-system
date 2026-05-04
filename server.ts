@@ -675,6 +675,12 @@ async function initDb() {
       supervisor_signature_date TEXT,
       preparer_user_id INTEGER,
       supervisor_user_id INTEGER,
+      is_acknowledged INTEGER DEFAULT 0,
+      is_viewed INTEGER DEFAULT 0,
+      is_archived INTEGER DEFAULT 0,
+      acknowledged_at TEXT,
+      viewed_at TEXT,
+      archived_at TEXT,
       FOREIGN KEY(employee_id) REFERENCES employees(id)
     )`,
     `CREATE TABLE IF NOT EXISTS property_accountability (
@@ -1001,6 +1007,12 @@ async function initDb() {
       'ALTER TABLE discipline_records ADD COLUMN preparer_signature_date TEXT',
       'ALTER TABLE discipline_records ADD COLUMN supervisor_signature TEXT',
       'ALTER TABLE discipline_records ADD COLUMN supervisor_signature_date TEXT',
+      'ALTER TABLE discipline_records ADD COLUMN is_acknowledged INTEGER DEFAULT 0',
+      'ALTER TABLE discipline_records ADD COLUMN is_viewed INTEGER DEFAULT 0',
+      'ALTER TABLE discipline_records ADD COLUMN is_archived INTEGER DEFAULT 0',
+      'ALTER TABLE discipline_records ADD COLUMN acknowledged_at TEXT',
+      'ALTER TABLE discipline_records ADD COLUMN viewed_at TEXT',
+      'ALTER TABLE discipline_records ADD COLUMN archived_at TEXT',
       'ALTER TABLE discipline_records ADD COLUMN preparer_user_id INTEGER',
       'ALTER TABLE discipline_records ADD COLUMN supervisor_user_id INTEGER',
     ];
@@ -6378,6 +6390,33 @@ ${relevantGoalIdsSql}
 
   app.delete("/api/discipline_records/:id", authenticateToken, async (req, res) => {
     try { await softDeleteById('discipline_records', req.params.id); res.json({ success: true }); } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.put("/api/discipline_records/:id/acknowledge", authenticateToken, async (req, res) => {
+    try {
+      const recordId = req.params.id;
+      const now = new Date().toISOString();
+      await query("UPDATE discipline_records SET is_acknowledged = 1, acknowledged_at = ? WHERE id = ?", [now, recordId]);
+      res.json({ success: true, acknowledged_at: now });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.put("/api/discipline_records/:id/view", authenticateToken, async (req, res) => {
+    try {
+      const recordId = req.params.id;
+      const now = new Date().toISOString();
+      await query("UPDATE discipline_records SET is_viewed = 1, viewed_at = ? WHERE id = ?", [now, recordId]);
+      res.json({ success: true, viewed_at: now });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
+  app.put("/api/discipline_records/:id/archive", authenticateToken, async (req, res) => {
+    try {
+      const recordId = req.params.id;
+      const now = new Date().toISOString();
+      await query("UPDATE discipline_records SET is_archived = 1, archived_at = ? WHERE id = ?", [now, recordId]);
+      res.json({ success: true, archived_at: now });
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   // ---- Property Accountability CRUD ----

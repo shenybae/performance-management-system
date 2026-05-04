@@ -558,6 +558,7 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
                   <th className="text-left py-2 pr-4">Supervisor</th>
                   <th className="text-left py-2 pr-4">Approved By</th>
                   <th className="text-left py-2 pr-4">Action Taken</th>
+                  <th className="text-left py-2 pr-4">Actions</th>
                 </tr>
               </thead>
               <tbody>

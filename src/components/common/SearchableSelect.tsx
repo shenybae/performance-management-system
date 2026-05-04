@@ -127,6 +127,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      // Modal variant has its own backdrop/close handler — don't interfere
+      if (isModalVariant) return;
       const target = e.target as Node;
       // If click is inside the trigger container or inside the portal dropdown, ignore
       if (containerRef.current && containerRef.current.contains(target)) return;
@@ -136,7 +138,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [portalEl]);
+  }, [portalEl, isModalVariant]);
 
   useEffect(() => {
     if (!searchable) return;
