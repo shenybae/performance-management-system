@@ -4260,7 +4260,7 @@ ${relevantGoalIdsSql}
 
       const summary = list.length === 0 ? null : {
         employees: list.length,
-        avg_goal_progress: Math.round(list.reduce((sum: number, item: any) => sum + Number(item.goals_avg_progress || 0), 0) / list.length),
+        avg_goal_progress: Math.round(list.reduce((sum: number, item: any) => sum + Number(item.goals_completion_rate || 0), 0) / list.length),
         avg_proof_rating: Number((list.reduce((sum: number, item: any) => sum + Number(item.proof_rating_avg || 0), 0) / list.length).toFixed(2)),
         total_goals: list.reduce((sum: number, item: any) => sum + Number(item.goals_total || 0), 0),
         total_pips: list.reduce((sum: number, item: any) => sum + Number(item.pip_count || 0), 0),

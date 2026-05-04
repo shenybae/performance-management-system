@@ -131,11 +131,11 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
 
   const progressChartData = useMemo(() => {
     return [...employeePerformance]
-      .sort((a, b) => Number(b.goals_avg_progress || 0) - Number(a.goals_avg_progress || 0))
+      .sort((a, b) => Number(b.goals_completion_rate || 0) - Number(a.goals_completion_rate || 0))
       .slice(0, 8)
       .map((item) => ({
         name: item.employee_name.length > 12 ? `${item.employee_name.slice(0, 12)}...` : item.employee_name,
-        progress: Number(item.goals_avg_progress || 0),
+        progress: Number(item.goals_completion_rate || 0),
       }));
   }, [employeePerformance]);
 
@@ -472,7 +472,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                             <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{item.employee_name}</p>
                             <p className="text-[10px] text-slate-400 truncate">{item.position || 'N/A'} • {item.dept || 'N/A'}</p>
                           </div>
-                          <span className="text-[10px] font-black text-teal-600 dark:text-teal-300">{item.goals_avg_progress}%</span>
+                          <span className="text-[10px] font-black text-teal-600 dark:text-teal-300">{item.goals_completion_rate}%</span>
                         </div>
                       </button>
                     );
