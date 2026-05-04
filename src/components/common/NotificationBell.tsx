@@ -22,6 +22,7 @@ export const NotificationBell = ({ onNavigate }: { onNavigate?: (screen: string,
   const serverHistory = history.filter((n) => n.fromServer || !!n.source);
   const userRole: string = (() => { try { return JSON.parse(localStorage.getItem('talentflow_user') || '{}')?.role || ''; } catch { return ''; } })();
   const [isOpen, setIsOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -82,7 +83,7 @@ export const NotificationBell = ({ onNavigate }: { onNavigate?: (screen: string,
               <div className="flex items-center gap-1">
                 {serverHistory.length > 0 && (
                   <button
-                    onClick={clearHistory}
+                    onClick={() => setConfirmClear(true)}
                     className="text-[10px] font-bold text-red-400 hover:text-red-600 px-1.5 py-0.5 rounded transition-colors"
                     title="Clear all"
                   >
@@ -127,6 +128,25 @@ export const NotificationBell = ({ onNavigate }: { onNavigate?: (screen: string,
                 })
               )}
             </div>
+            {confirmClear && (
+              <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800">
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">Clear all notifications?</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { clearHistory(); setConfirmClear(false); }}
+                    className="flex-1 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+                  >
+                    Yes, clear all
+                  </button>
+                  <button
+                    onClick={() => setConfirmClear(false)}
+                    className="flex-1 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
