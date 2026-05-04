@@ -971,13 +971,16 @@ export default function App() {
             className="rounded-2xl mx-1 sm:mx-2 lg:mx-3 px-3 sm:px-3.5 py-2"
             style={{
               background: isDarkMode
-                ? 'linear-gradient(135deg, rgba(15,23,42,0.34), rgba(30,41,59,0.16))'
-                : 'linear-gradient(135deg, rgba(203,213,225,0.26), rgba(148,163,184,0.10))',
-              backdropFilter: 'blur(32px) saturate(170%)',
-              WebkitBackdropFilter: 'blur(32px) saturate(170%)',
+                ? 'rgba(15,23,42,0.45)'
+                : 'rgba(255,255,255,0.52)',
+              backdropFilter: 'blur(20px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              border: isDarkMode
+                ? '1px solid rgba(255,255,255,0.07)'
+                : '1px solid rgba(203,213,225,0.55)',
               boxShadow: isDarkMode
-                ? '0 2px 16px 0 rgba(0,0,0,0.24)'
-                : '0 2px 16px 0 rgba(15,23,42,0.06)',
+                ? '0 1px 12px 0 rgba(0,0,0,0.22)'
+                : '0 1px 12px 0 rgba(15,23,42,0.06)',
             }}
           >
             <div className="flex items-center justify-between gap-2 w-full">
