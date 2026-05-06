@@ -8017,7 +8017,18 @@ ${relevantGoalIdsSql}
 
       const [appraisals, goals, memberTasks, elearning, activePips, feedbackRows, suggestionRows, selfAssessmentRows, coachingRows, disciplineRows] = await Promise.all([
         query(`SELECT * FROM appraisals WHERE employee_id IN (${ph}) ORDER BY sign_off_date DESC`, empIds),
-        query(`SELECT * FROM goals WHERE employee_id IN (${ph}) AND deleted_at IS NULL`, empIds),
+        query(
+          `SELECT g.*, e2.id AS resolved_employee_id
+           FROM goals g
+           LEFT JOIN users ul ON ul.id = g.leader_id AND ul.deleted_at IS NULL
+           LEFT JOIN employees e2 ON e2.id = ul.employee_id
+           WHERE g.deleted_at IS NULL
+             AND (
+               g.employee_id IN (${ph})
+               OR ul.employee_id IN (${ph})
+             )`,
+          [...empIds, ...empIds]
+        ),
         query(
           `SELECT t.member_employee_id AS employee_id, t.status, t.progress, t.proof_review_status, t.proof_review_rating
            FROM goal_member_tasks t
@@ -8069,7 +8080,9 @@ ${relevantGoalIdsSql}
       };
 
       for (const g of (goals as any[])) {
-        addGoalSignal(Number(g.employee_id || 0), Number(g.id || 0), g.status, g.proof_review_status, g.progress, g.proof_review_rating);
+        // Use resolved_employee_id (from leader_id join) when employee_id is absent (supervisor-owned goals)
+        const ownerEmpId = Number(g.employee_id || g.resolved_employee_id || 0);
+        addGoalSignal(ownerEmpId, Number(g.id || 0), g.status, g.proof_review_status, g.progress, g.proof_review_rating);
       }
 
       const taskMap: Record<number, { total: number; completed: number; avgProgress: number }> = {};
