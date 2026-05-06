@@ -6529,7 +6529,15 @@ ${relevantGoalIdsSql}
 
       if (role === 'Employee') {
         if (actorCtx.isSupervisor) {
-          const supervisorDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
+          let supervisorDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
+          if (!supervisorDept) {
+            const actorEmployeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
+            if (actorEmployeeId) {
+              const deptRows: any = await query('SELECT dept FROM employees WHERE id = ? LIMIT 1', [actorEmployeeId]);
+              const deptRow = Array.isArray(deptRows) ? deptRows[0] : deptRows;
+              supervisorDept = normalizeDept(deptRow?.dept || '');
+            }
+          }
           if (!supervisorDept) return res.json([]);
           const rows = await query(
             `SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,

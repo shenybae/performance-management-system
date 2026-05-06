@@ -560,11 +560,11 @@ export const VerificationOfReview = () => {
       const assignedSupervisorId = Number(d.supervisor_user_id || 0);
       const me = Number(user?.id || 0);
       if (!d.preparer_signature && (!assignedPreparerId || assignedPreparerId === Number(user?.id || 0))) {
-        tasks.push({ ...d, queueStage: 'preparer', queueKey: `sup-disc-prep-${d.id}` });
+        tasks.push({ ...d, queueStage: 'preparer', queueKey: `sup-disc-prep-${d.id}`, queueReady: true });
       }
       const canSignAsSupervisor = !assignedSupervisorId || assignedSupervisorId === me || isSupervisor;
-      if (!!d.preparer_signature && !d.supervisor_signature && canSignAsSupervisor) {
-        tasks.push({ ...d, queueStage: 'supervisor', queueKey: `sup-disc-sup-${d.id}` });
+      if (!d.supervisor_signature && canSignAsSupervisor) {
+        tasks.push({ ...d, queueStage: 'supervisor', queueKey: `sup-disc-sup-${d.id}`, queueReady: !!d.preparer_signature });
       }
       return tasks;
     }),
@@ -1290,6 +1290,7 @@ export const VerificationOfReview = () => {
                 {(() => {
                   const disciplineKey = d.queueKey || `sup-disc-${d.id}`;
                   const reviewed = !!disciplineReviewedKeys[disciplineKey];
+                  const readyForSign = d.queueStage === 'preparer' ? true : !!d.queueReady;
                   return (
                 <>
                 <div className="flex items-center justify-between gap-2">
@@ -1297,13 +1298,16 @@ export const VerificationOfReview = () => {
                     <p className="font-semibold">{d.employee_name || 'Employee'} - {d.warning_level || 'Warning'}</p>
                     <p className="text-xs text-slate-500">{d.violation_type || 'Disciplinary Action'} • Stage: {d.queueStage === 'preparer' ? 'Preparer' : 'Supervisor'}</p>
                     <p className="text-[11px] text-teal-700 dark:text-teal-300 font-semibold mt-0.5">Progress: {getDisciplineSignProgress(d).done}/{getDisciplineSignProgress(d).total} signed</p>
+                    {!readyForSign && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">Waiting for preparer signature before supervisor can sign.</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => openDisciplineReview(disciplineKey, d)}>Review</button>
                     <button
                       className="text-sm font-bold text-teal-deep disabled:text-slate-400 disabled:cursor-not-allowed"
-                      disabled={!reviewed}
-                      title={!reviewed ? 'Review the form first' : 'Sign this disciplinary record'}
+                      disabled={!reviewed || !readyForSign}
+                      title={!reviewed ? 'Review the form first' : !readyForSign ? 'Awaiting preparer signature' : 'Sign this disciplinary record'}
                       onClick={() => setActiveId(disciplineKey)}
                     >
                       Sign
