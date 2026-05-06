@@ -4049,6 +4049,22 @@ async function startServer() {
       }
 
       const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+      // Only count goals the employee directly owns or leads, not goals they're assigned to
+      const ownedLeadGoalIdsSql = `
+            SELECT g.id
+            FROM goals g
+            WHERE g.employee_id = e.id
+            AND g.deleted_at IS NULL
+            UNION
+            SELECT g3.id
+            FROM goals g3
+            WHERE g3.deleted_at IS NULL
+              AND g3.leader_id IN (
+                SELECT u.id
+                FROM users u
+                WHERE u.employee_id = e.id
+              )
+      `;
       const relevantGoalIdsSql = `
             SELECT g.id
             FROM goals g
@@ -4080,22 +4096,22 @@ async function startServer() {
           e.dept,
 
           (SELECT COUNT(*) FROM goals g WHERE g.id IN (
-${relevantGoalIdsSql}
+${ownedLeadGoalIdsSql}
           )) AS goals_total,
           (SELECT COUNT(*) FROM goals g WHERE g.id IN (
-${relevantGoalIdsSql}
+${ownedLeadGoalIdsSql}
           ) AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS goals_active,
           (SELECT COUNT(*) FROM goals g WHERE g.id IN (
-${relevantGoalIdsSql}
+${ownedLeadGoalIdsSql}
           ) AND COALESCE(g.status, 'Not Started') = 'Completed') AS goals_completed,
           (SELECT COUNT(*) FROM goals g WHERE g.id IN (
-${relevantGoalIdsSql}
+${ownedLeadGoalIdsSql}
           ) AND COALESCE(g.status, 'Not Started') = 'At Risk') AS goals_at_risk,
           (SELECT COUNT(*) FROM goals g WHERE g.id IN (
-${relevantGoalIdsSql}
+${ownedLeadGoalIdsSql}
           ) AND g.target_date IS NOT NULL AND g.target_date < ${todaySql} AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS goals_overdue,
           (SELECT ROUND(COALESCE(AVG(g.progress), 0), 1) FROM goals g WHERE g.id IN (
-${relevantGoalIdsSql}
+${ownedLeadGoalIdsSql}
           )) AS goals_avg_progress,
 
           (SELECT COUNT(*) FROM goal_assignees ga LEFT JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id) AS delegated_goal_count,
@@ -4396,30 +4412,19 @@ ${relevantGoalIdsSql}
           const employeeId = Number(r.employee_id || 0);
           const employeeName = String(r.employee_name || '');
 
-          const relevantGoalIdsSql = `
-            SELECT g.id
-            FROM goals g
-            WHERE g.employee_id = ?
+          // Only count goals the employee directly owns or leads, not goals they're assigned to
+          const ownedLeadGoalIdsSql = `
+            SELECT g.id FROM goals g WHERE g.employee_id = ? AND g.deleted_at IS NULL
             UNION
-            SELECT ga.goal_id
-            FROM goal_assignees ga
-            WHERE ga.employee_id = ?
-            UNION
-            SELECT g3.id
-            FROM goals g3
-            WHERE g3.leader_id IN (
-              SELECT u.id
-              FROM users u
-              WHERE u.employee_id = ?
-            )
+            SELECT g3.id FROM goals g3 WHERE g3.deleted_at IS NULL AND g3.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = ?)
           `;
           const todaySql = usePostgres ? `TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')` : `DATE('now')`;
-          const goalsTotal = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql})`, [employeeId, employeeId, employeeId]);
-          const goalsCompleted = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.status, 'Not Started') = 'Completed'`, [employeeId, employeeId, employeeId]);
-          const goalsActive = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')`, [employeeId, employeeId, employeeId]);
-          const goalsAtRisk = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.status, 'Not Started') = 'At Risk'`, [employeeId, employeeId, employeeId]);
-          const goalsOverdue = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND g.target_date IS NOT NULL AND g.target_date < ${todaySql} AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')`, [employeeId, employeeId, employeeId]);
-          const goalsAvgProgress = await safeNumber(`SELECT ROUND(COALESCE(AVG(g.progress), 0), 1) AS avg_p FROM goals g WHERE g.id IN (${relevantGoalIdsSql})`, [employeeId, employeeId, employeeId]);
+          const goalsTotal = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${ownedLeadGoalIdsSql})`, [employeeId, employeeId]);
+          const goalsCompleted = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${ownedLeadGoalIdsSql}) AND COALESCE(g.status, 'Not Started') = 'Completed'`, [employeeId, employeeId]);
+          const goalsActive = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${ownedLeadGoalIdsSql}) AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')`, [employeeId, employeeId]);
+          const goalsAtRisk = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${ownedLeadGoalIdsSql}) AND COALESCE(g.status, 'Not Started') = 'At Risk'`, [employeeId, employeeId]);
+          const goalsOverdue = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${ownedLeadGoalIdsSql}) AND g.target_date IS NOT NULL AND g.target_date < ${todaySql} AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')`, [employeeId, employeeId]);
+          const goalsAvgProgress = await safeNumber(`SELECT ROUND(COALESCE(AVG(g.progress), 0), 1) AS avg_p FROM goals g WHERE g.id IN (${ownedLeadGoalIdsSql})`, [employeeId, employeeId]);
           const appraisalsCount = await safeCount('SELECT COUNT(*) AS c FROM appraisals WHERE employee_id = ?', [employeeId]);
           const appraisalsAvg = await safeNumber('SELECT ROUND(COALESCE(AVG(COALESCE(overall, 0)), 0), 2) AS avg_overall FROM appraisals WHERE employee_id = ?', [employeeId]);
           const disciplinaryCount = await safeCount('SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ?', [employeeId]);
