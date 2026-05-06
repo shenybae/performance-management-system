@@ -72,6 +72,9 @@ interface EmployeePerformanceSnapshot {
 
 const CHART_COLORS = ['#0f766e', '#0ea5e9', '#f59e0b', '#ef4444', '#8b5cf6'];
 
+const clampToHundred = (value: number) => Math.max(0, Math.min(100, value));
+const safeRatio = (num: number, den: number) => (den > 0 ? num / den : 0);
+
 export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) => {
   const [employeePerformance, setEmployeePerformance] = useState<EmployeePerformanceSnapshot[]>([]);
   const [employeePerformanceSummary, setEmployeePerformanceSummary] = useState<any>(null);
@@ -134,29 +137,15 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
     return employeePerformance.find((item) => Number(item.employee_id) === Number(selectedPerformanceEmployeeId)) || null;
   }, [employeePerformance, selectedPerformanceEmployeeId]);
 
-  const getDisplayedPercent = (item: EmployeePerformanceSnapshot) => {
-    const completionRate = Number(item.goals_completion_rate || 0);
-    if (completionRate > 0) return completionRate;
-
-    const proofBasedRating = Math.max(
-      Number(item.proof_rating_avg || 0),
-      Number(item.member_proof_rating_avg || 0),
-      Number(item.leader_proof_rating_avg || 0)
-    );
-    if (proofBasedRating > 0) return Math.round((proofBasedRating / 5) * 100);
-
-    return 0;
-  };
-
   const progressChartData = useMemo(() => {
-    return [...employeePerformance]
-      .sort((a, b) => getDisplayedPercent(b) - getDisplayedPercent(a))
+    return [...employeePerformanceSignals]
+      .sort((a, b) => b.performanceScore - a.performanceScore)
       .slice(0, 8)
-      .map((item) => ({
-        name: item.employee_name.length > 12 ? `${item.employee_name.slice(0, 12)}...` : item.employee_name,
-        progress: getDisplayedPercent(item),
+      .map(({ employee, performanceScore }) => ({
+        name: employee.employee_name.length > 12 ? `${employee.employee_name.slice(0, 12)}...` : employee.employee_name,
+        progress: Math.round(performanceScore),
       }));
-  }, [employeePerformance]);
+  }, [employeePerformanceSignals]);
 
   const riskBreakdownData = useMemo(() => {
     const atRisk = employeePerformance.reduce((sum, row) => sum + Number(row.goals_at_risk || 0), 0);
@@ -216,65 +205,75 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
         const departmentImprovementPlans = Number(employee.department_improvement_plans || 0);
         const departmentDevelopmentPlans = Number(employee.department_development_plans || 0);
 
-        const positiveScore = (
-          (goalsCompleted * 6) +
-          (avgProgress * 1.5) +
-          (completionRate * 1.5) +
-          (recoveryCompleted * 3) +
-          (proofsApproved * 2) +
-          (proofRatingAvg * 4) +
-          (memberProofRatingAvg * 1.5) +
-          (leaderProofRatingAvg * 1.5) +
-          (selfAssessments * 2) +
-          (performanceEvaluationFormsCount * 2) +
-          (appraisalsAvg * 4) +
-          (feedback360 * 2) +
-          (suggestionsCount * 1.5) +
-          (onboardingCount * 1) +
-          (propertyFormsCount * 1) +
-          (exitInterviewsCount * 1) +
-          (coachingLogsCount * 1.5) +
-          (formsTotalCount * 0.3) +
-          (ratedDelegatedGoals * 1.5) +
-          (teamGoals * 1) +
-          (departmentGoals * 1) +
-          (teamImprovementPlans * 1) +
-          (teamDevelopmentPlans * 1) +
-          (departmentImprovementPlans * 1) +
-          (departmentDevelopmentPlans * 1)
-        );
-
         // A rated proof means the employee has real goal signal even if they are
         // contributing as an assignee rather than goal owner.
         const hasRatedGoalSignal = proofRatingAvg > 0 || memberProofRatingAvg > 0 || leaderProofRatingAvg > 0;
         const effectiveProofRating = proofRatingAvg > 0 ? proofRatingAvg : Math.max(memberProofRatingAvg, leaderProofRatingAvg);
         const hasLowProofRating = effectiveProofRating > 0 && effectiveProofRating < 3.5;
 
-        const negativeScore = (
-          (goalsAtRisk * 5) +
-          (goalsOverdue * 8) +
-          (pipCount * 12) +
-          (idpCount * 4) +
-          (recoveryOpen * 4) +
-          (proofsRejected * 3) +
-          (proofsNeedsRevision * 4) +
-          (unratedDelegatedGoals * 12) +
-          (disciplinaryCount * 10) +
-          (disciplinaryViolationEntriesCount * 3) +
-          (disciplinaryActionsCount * 4) +
-          (goalRevisionsCount * 4) +
-          (hasRatedGoalSignal ? 0 : (Math.max(0, 70 - completionRate) * 0.5)) +
-          (hasRatedGoalSignal ? 0 : (Math.max(0, 65 - avgProgress) * 0.5)) +
-          (effectiveProofRating > 0 ? Math.max(0, 3.5 - effectiveProofRating) * 8 : 2) +
-          (appraisalsAvg > 0 ? Math.max(0, 3.5 - appraisalsAvg) * 5 : 3) +
-          (selfAssessments === 0 ? 3 : 0) +
-          (formsTotalCount === 0 ? 5 : 0) +
-          (appraisalsCount === 0 ? 4 : 0) +
-          (!hasRatedGoalSignal && goalsTotal === 0 ? 4 : 0)
+        const achievementScore = clampToHundred(
+          (completionRate * 0.55) +
+          (avgProgress * 0.25) +
+          (clampToHundred(safeRatio(proofsApproved, Math.max(1, proofsApproved + proofsRejected + proofsNeedsRevision)) * 100) * 0.20)
         );
 
-        const rawScore = 50 + positiveScore - negativeScore;
-        const performanceScore = Math.max(0, Math.min(100, Number(rawScore.toFixed(1))));
+        const ratingSignals = [effectiveProofRating > 0 ? effectiveProofRating : null, appraisalsAvg > 0 ? appraisalsAvg : null].filter((v): v is number => v !== null);
+        const ratingScore = ratingSignals.length
+          ? clampToHundred((ratingSignals.reduce((sum, val) => sum + val, 0) / ratingSignals.length / 5) * 100)
+          : clampToHundred(45 + (hasRatedGoalSignal ? 10 : 0));
+
+        const performanceEvalSignals = performanceEvaluationFormsCount + appraisalsCount;
+        const formsScore = clampToHundred(
+          20 +
+          Math.min(30, performanceEvalSignals * 8) +
+          Math.min(20, selfAssessments * 6) +
+          Math.min(15, feedback360 * 5) +
+          Math.min(15, Math.max(0, formsTotalCount - performanceEvalSignals - selfAssessments - feedback360) * 2)
+        );
+
+        const disciplinaryPenalty =
+          (disciplinaryCount * 12) +
+          (disciplinaryViolationEntriesCount * 5) +
+          (disciplinaryActionsCount * 7);
+        const disciplineScore = clampToHundred(100 - disciplinaryPenalty);
+
+        const revisionPenalty =
+          (goalRevisionsCount * 9) +
+          (proofsNeedsRevision * 7) +
+          (unratedDelegatedGoals * 12);
+        const revisionScore = clampToHundred(100 - revisionPenalty);
+
+        const riskPenalty =
+          (goalsAtRisk * 14) +
+          (goalsOverdue * 22) +
+          (recoveryOpen * 5) +
+          (pipCount * 10) +
+          (idpCount * 3);
+        const riskScore = clampToHundred(100 - riskPenalty);
+
+        const baseComposite =
+          (achievementScore * 0.30) +
+          (ratingScore * 0.20) +
+          (formsScore * 0.15) +
+          (revisionScore * 0.15) +
+          (disciplineScore * 0.10) +
+          (riskScore * 0.10);
+
+        // Avoid 100% when score is driven by goals alone; missing non-goal signals caps top score.
+        const hasFormsSignal = performanceEvalSignals > 0 || formsTotalCount > 0;
+        const hasRatingSignal = ratingSignals.length > 0;
+        const hasDisciplineSignal = disciplinaryCount > 0 || disciplinaryViolationEntriesCount > 0 || disciplinaryActionsCount > 0;
+        const hasRevisionSignal = goalRevisionsCount > 0 || proofsNeedsRevision > 0 || unratedDelegatedGoals > 0;
+        const signalCoverage = [hasFormsSignal, hasRatingSignal, hasDisciplineSignal, hasRevisionSignal].filter(Boolean).length;
+        const maxCap = signalCoverage <= 1 ? 82 : signalCoverage === 2 ? 90 : 98;
+        const performanceScore = Number(clampToHundred(Math.min(baseComposite, maxCap)).toFixed(1));
+
+        const severeRisk =
+          goalsOverdue >= 2 ||
+          goalsAtRisk >= 3 ||
+          unratedDelegatedGoals >= 2 ||
+          disciplinaryActionsCount >= 2 ||
+          (effectiveProofRating > 0 && effectiveProofRating < 2.8);
 
         return {
           employee,
@@ -284,6 +283,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
           completionRate,
           unratedDelegatedGoals,
           hasLowProofRating,
+          severeRisk,
           performanceScore,
           severity: 100 - performanceScore,
         };
@@ -311,13 +311,11 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
       (row) =>
         hasMinimumSignal(row) &&
         (
-          row.performanceScore < 55 ||
-          row.goalsOverdue > 0 ||
-          row.goalsAtRisk > 0 ||
-          row.unratedDelegatedGoals > 0 ||
+          row.performanceScore < 60 ||
+          row.severeRisk ||
           row.hasLowProofRating ||
           (row.completionRate < 40 && Number(row.employee.goal_revisions_count || 0) >= 2) ||
-          (Number(row.employee.forms_total_count || 0) === 0 && row.performanceScore < 65)
+          (Number(row.employee.performance_evaluation_forms_count || row.employee.appraisals_count || 0) === 0 && row.performanceScore < 64)
         )
     );
     return list.sort((a, b) => a.performanceScore - b.performanceScore || b.goalsOverdue - a.goalsOverdue || b.goalsAtRisk - a.goalsAtRisk || a.avgProgress - b.avgProgress);
@@ -332,14 +330,17 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
   const performingEmployees = useMemo(() => {
     const list = employeePerformanceSignals.filter((row) => {
       if (!hasMinimumSignal(row)) return false;
-      if (row.goalsOverdue > 0 || row.goalsAtRisk > 0 || row.unratedDelegatedGoals > 0 || row.hasLowProofRating) return false;
+      if (row.severeRisk) return false;
       const goalRevisionsCount = Number(row.employee.goal_revisions_count || 0);
+      const performanceEvalCount = Number(row.employee.performance_evaluation_forms_count || row.employee.appraisals_count || 0);
       const formsTotalCount = Number(row.employee.forms_total_count || 0);
+      const disciplineActionsCount = Number(row.employee.disciplinary_actions_count || 0);
       return (
-        row.performanceScore >= 75 &&
-        row.completionRate >= 60 &&
-        formsTotalCount >= 1 &&
-        goalRevisionsCount <= 1
+        row.performanceScore >= 72 &&
+        row.completionRate >= 55 &&
+        (formsTotalCount >= 1 || performanceEvalCount >= 1) &&
+        goalRevisionsCount <= 3 &&
+        disciplineActionsCount <= 1
       );
     });
     return list.sort((a, b) => b.performanceScore - a.performanceScore || a.goalsOverdue - b.goalsOverdue || a.goalsAtRisk - b.goalsAtRisk || b.avgProgress - a.avgProgress);
@@ -531,6 +532,8 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                 <div className="max-h-105 overflow-y-auto pr-1 space-y-1.5">
                   {filteredPerformanceEmployees.map((item) => {
                     const active = Number(item.employee_id) === Number(selectedPerformanceEmployeeId);
+                    const scoreForEmployee = employeePerformanceSignals.find((row) => Number(row.employee.employee_id) === Number(item.employee_id));
+                    const displayScore = Math.round(scoreForEmployee?.performanceScore ?? 0);
                     return (
                       <button
                         key={item.employee_id}
@@ -542,7 +545,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                             <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{item.employee_name}</p>
                             <p className="text-[10px] text-slate-400 truncate">{item.position || 'N/A'} • {item.dept || 'N/A'}</p>
                           </div>
-                          <span className="text-[10px] font-black text-teal-600 dark:text-teal-300">{getDisplayedPercent(item)}%</span>
+                          <span className="text-[10px] font-black text-teal-600 dark:text-teal-300">Score {displayScore}</span>
                         </div>
                       </button>
                     );
