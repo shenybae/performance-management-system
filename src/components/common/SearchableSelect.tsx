@@ -370,7 +370,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
       {!isModalVariant && isOpen && portalEl && createPortal(
         <div
-          style={{ left: portalStyle.left, top: portalStyle.top, bottom: portalStyle.bottom, width: portalStyle.width, maxHeight: portalStyle.maxHeight, position: 'fixed' }}
+          style={{ left: portalStyle.left, top: portalStyle.top, bottom: portalStyle.bottom, width: portalStyle.width, height: portalStyle.maxHeight, maxHeight: portalStyle.maxHeight, position: 'fixed' }}
           className="z-[9999] flex flex-col bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden pointer-events-auto"
         >
           {searchable && (
@@ -394,7 +394,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             </div>
           )}
           {dropdownVariant === 'pills-horizontal' ? (
-            <div className="p-2 space-y-2">
+            <div className="p-2 h-full min-h-0 flex flex-col gap-2">
               {/* Search is handled by the main search input above */}
               <div className="rounded-md bg-slate-50 dark:bg-slate-900 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Selected
@@ -449,10 +449,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
               <div className="rounded-md bg-slate-50 dark:bg-slate-900 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Options
               </div>
-              <div
-                style={{ maxHeight: optionsMaxHeight }}
-                className="mt-1 min-h-[72px] overflow-y-auto overscroll-contain px-1 pb-1 pr-2 custom-scrollbar"
-              >
+              <div className="mt-1 flex-1 min-h-[72px] overflow-y-auto overscroll-contain px-1 pb-1 pr-2 custom-scrollbar">
                 <div className="grid gap-2 pt-1" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
                 {filteredOptionsOnly.length === 0 && (
                   <div className="px-3 py-2 text-xs text-slate-400 italic col-span-full">No matches found</div>
