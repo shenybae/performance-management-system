@@ -1484,7 +1484,11 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const filtered = useMemo(() => {
     return goals.filter(g => {
       const isArchived = !!g.deleted_at || !!g.archived_at;
-      if (!showArchived && isArchived) return false;
+      if (showArchived) {
+        if (!isArchived) return false;
+      } else if (isArchived) {
+        return false;
+      }
       const scope = g.scope || 'Individual';
       if (scope !== activeTab) return false;
       if (filterDept && filterDept !== 'All' && g.department !== filterDept) return false;
