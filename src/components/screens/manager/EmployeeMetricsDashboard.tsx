@@ -284,13 +284,15 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
   // before being classified as underperforming. Without signal → "Needs Data".
   const hasMinimumSignal = (row: (typeof employeePerformanceSignals)[number]) => {
     const e = row.employee;
-    const hasGoal       = Number(e.goals_total          || 0) >= 1;
-    const hasAppraisal  = Number(e.appraisals_count     || 0) >= 1;
-    const hasSelfAssess = Number(e.self_assessments_count || 0) >= 1;
-    const hasProof      = Math.max(Number(e.proof_rating_avg || 0), Number(e.member_proof_rating_avg || 0), Number(e.leader_proof_rating_avg || 0)) > 0;
-    const hasFeedback   = Number(e.feedback_360_count   || 0) >= 1;
-    const hasAnyForm    = Number(e.forms_total_count    || 0) >= 1;
-    return hasGoal || hasAppraisal || hasSelfAssess || hasProof || hasFeedback || hasAnyForm;
+    const hasGoal           = Number(e.goals_total            || 0) >= 1;
+    const hasAppraisal      = Number(e.appraisals_count       || 0) >= 1;
+    const hasSelfAssess     = Number(e.self_assessments_count || 0) >= 1;
+    const hasProof          = Math.max(Number(e.proof_rating_avg || 0), Number(e.member_proof_rating_avg || 0), Number(e.leader_proof_rating_avg || 0)) > 0;
+    const hasFeedback       = Number(e.feedback_360_count     || 0) >= 1;
+    const hasAnyForm        = Number(e.forms_total_count      || 0) >= 1;
+    // Being assigned to a goal (rated or unrated) is itself a signal
+    const hasDelegatedGoal  = Number(e.delegated_goal_count   || 0) >= 1;
+    return hasGoal || hasAppraisal || hasSelfAssess || hasProof || hasFeedback || hasAnyForm || hasDelegatedGoal;
   };
 
   const underperformingEmployees = useMemo(() => {
@@ -314,15 +316,15 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
   }, [employeePerformanceSignals]);
 
   const performingEmployees = useMemo(() => {
-    const list = employeePerformanceSignals.filter(
-      (row) =>
-        hasMinimumSignal(row) &&
-        row.performanceScore >= 70 &&
-        row.goalsOverdue === 0 &&
-        row.goalsAtRisk === 0 &&
-        row.unratedDelegatedGoals === 0 &&
-        !row.hasLowProofRating
-    );
+    const list = employeePerformanceSignals.filter((row) => {
+      if (!hasMinimumSignal(row)) return false;
+      if (row.goalsOverdue > 0 || row.goalsAtRisk > 0 || row.unratedDelegatedGoals > 0 || row.hasLowProofRating) return false;
+      // Score threshold OR a strong proof rating (assignee who was rated highly)
+      const proofRatingAvg = Number(row.employee.proof_rating_avg || 0);
+      const meetsScoreThreshold = row.performanceScore >= 70;
+      const hasStrongProofRating = proofRatingAvg >= 4.0;
+      return meetsScoreThreshold || hasStrongProofRating;
+    });
     return list.sort((a, b) => b.performanceScore - a.performanceScore || a.goalsOverdue - b.goalsOverdue || a.goalsAtRisk - b.goalsAtRisk || b.avgProgress - a.avgProgress);
   }, [employeePerformanceSignals]);
 
