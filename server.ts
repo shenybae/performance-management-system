@@ -4346,50 +4346,81 @@ ${relevantGoalIdsSql}
         }
 
         const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-        const fallbackRows: any = await query(
-          `SELECT
-             e.id AS employee_id,
-             e.name AS employee_name,
-             e.position,
-             e.dept,
-             (SELECT COUNT(*) FROM goals g WHERE g.employee_id = e.id) AS goals_total,
-             (SELECT COUNT(*) FROM pip_plans p WHERE p.employee_id = e.id) AS pip_count,
-             (SELECT COUNT(*) FROM development_plans d WHERE d.employee_id = e.id) AS idp_count,
-             (SELECT COUNT(*) FROM self_assessments s WHERE s.employee_id = e.id) AS self_assessments_count,
-             (SELECT MAX(s.created_at) FROM self_assessments s WHERE s.employee_id = e.id) AS last_self_assessment_at,
-             (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id) AS appraisals_count,
-             (SELECT ROUND(COALESCE(AVG(COALESCE(a.overall, 0)), 0), 2) FROM appraisals a WHERE a.employee_id = e.id) AS appraisals_avg_overall,
-             (SELECT MAX(a.sign_off_date) FROM appraisals a WHERE a.employee_id = e.id) AS last_appraisal_signoff,
-             (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id) AS disciplinary_count,
-             (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id) AS last_disciplinary_date,
-             (SELECT COUNT(*) FROM feedback_360 f WHERE LOWER(TRIM(COALESCE(f.target_employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS feedback_360_count,
-             (SELECT COUNT(*) FROM suggestions s WHERE s.employee_id = e.id) AS suggestions_count,
-             (SELECT MAX(s.created_at) FROM suggestions s WHERE s.employee_id = e.id) AS last_suggestion_date,
-             (SELECT COUNT(*) FROM onboarding o WHERE o.employee_id = e.id) AS onboarding_count,
-             (SELECT COUNT(*) FROM onboarding o WHERE o.employee_id = e.id AND COALESCE(o.employee_signature, '') <> '') AS onboarding_signed_count,
-             (SELECT COUNT(*) FROM property_accountability p WHERE p.employee_id = e.id) AS property_forms_count,
-             (SELECT COUNT(*) FROM property_accountability p WHERE p.employee_id = e.id AND COALESCE(p.received_by_sig, '') <> '') AS property_signed_count,
-             (SELECT COUNT(*) FROM exit_interviews ex WHERE LOWER(TRIM(COALESCE(ex.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS exit_interviews_count,
-             (SELECT COUNT(*) FROM exit_interviews ex WHERE LOWER(TRIM(COALESCE(ex.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, ''))) AND COALESCE(ex.employee_sig, '') <> '') AS exit_interviews_signed_count,
-             (SELECT COUNT(*) FROM coaching_logs cl WHERE cl.employee_id = e.id) AS coaching_logs_count,
-             (SELECT MAX(cl.created_at) FROM coaching_logs cl WHERE cl.employee_id = e.id) AS last_coaching_log_at
+        const baseRows: any = await query(
+          `SELECT e.id AS employee_id, e.name AS employee_name, e.position, e.dept
            FROM employees e
            ${whereSql}
            ORDER BY e.name ASC`,
           params
         );
 
-        const list = (Array.isArray(fallbackRows) ? fallbackRows : []).map((r: any) => {
-          const goalsTotal = Number(r.goals_total || 0);
-          const selfAssessmentsCount = Number(r.self_assessments_count || 0);
-          const appraisalsCount = Number(r.appraisals_count || 0);
-          const disciplinaryCount = Number(r.disciplinary_count || 0);
-          const feedbackCount = Number(r.feedback_360_count || 0);
-          const suggestionsCount = Number(r.suggestions_count || 0);
-          const onboardingCount = Number(r.onboarding_count || 0);
-          const propertyFormsCount = Number(r.property_forms_count || 0);
-          const exitInterviewsCount = Number(r.exit_interviews_count || 0);
-          const coachingLogsCount = Number(r.coaching_logs_count || 0);
+        const safeCount = async (sql: string, sqlParams: any[] = []) => {
+          try {
+            const rows: any = await query(sql, sqlParams);
+            const row = Array.isArray(rows) ? rows[0] : rows;
+            if (!row) return 0;
+            const key = Object.keys(row)[0];
+            return Number((row as any)[key] || 0);
+          } catch {
+            return 0;
+          }
+        };
+
+        const safeNumber = async (sql: string, sqlParams: any[] = []) => {
+          try {
+            const rows: any = await query(sql, sqlParams);
+            const row = Array.isArray(rows) ? rows[0] : rows;
+            if (!row) return 0;
+            const key = Object.keys(row)[0];
+            return Number((row as any)[key] || 0);
+          } catch {
+            return 0;
+          }
+        };
+
+        const safeText = async (sql: string, sqlParams: any[] = []) => {
+          try {
+            const rows: any = await query(sql, sqlParams);
+            const row = Array.isArray(rows) ? rows[0] : rows;
+            if (!row) return null;
+            const key = Object.keys(row)[0];
+            const value = (row as any)[key];
+            return value ?? null;
+          } catch {
+            return null;
+          }
+        };
+
+        const list = await Promise.all((Array.isArray(baseRows) ? baseRows : []).map(async (r: any) => {
+          const employeeId = Number(r.employee_id || 0);
+          const employeeName = String(r.employee_name || '');
+
+          const goalsTotal = await safeCount('SELECT COUNT(*) AS c FROM goals WHERE employee_id = ?', [employeeId]);
+          const goalsCompleted = await safeCount("SELECT COUNT(*) AS c FROM goals WHERE employee_id = ? AND COALESCE(status, 'Not Started') = 'Completed'", [employeeId]);
+          const goalsActive = await safeCount("SELECT COUNT(*) AS c FROM goals WHERE employee_id = ? AND COALESCE(status, 'Not Started') NOT IN ('Completed', 'Cancelled')", [employeeId]);
+          const appraisalsCount = await safeCount('SELECT COUNT(*) AS c FROM appraisals WHERE employee_id = ?', [employeeId]);
+          const appraisalsAvg = await safeNumber('SELECT ROUND(COALESCE(AVG(COALESCE(overall, 0)), 0), 2) AS avg_overall FROM appraisals WHERE employee_id = ?', [employeeId]);
+          const disciplinaryCount = await safeCount('SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ?', [employeeId]);
+          const selfAssessmentsCount = await safeCount('SELECT COUNT(*) AS c FROM self_assessments WHERE employee_id = ?', [employeeId]);
+          const feedbackCount = await safeCount("SELECT COUNT(*) AS c FROM feedback_360 WHERE LOWER(TRIM(COALESCE(target_employee_name, ''))) = LOWER(TRIM(?))", [employeeName]);
+          const suggestionsCount = await safeCount('SELECT COUNT(*) AS c FROM suggestions WHERE employee_id = ?', [employeeId]);
+          const onboardingCount = await safeCount('SELECT COUNT(*) AS c FROM onboarding WHERE employee_id = ?', [employeeId]);
+          const onboardingSignedCount = await safeCount("SELECT COUNT(*) AS c FROM onboarding WHERE employee_id = ? AND COALESCE(employee_signature, '') <> ''", [employeeId]);
+          const propertyFormsCount = await safeCount('SELECT COUNT(*) AS c FROM property_accountability WHERE employee_id = ?', [employeeId]);
+          const propertySignedCount = await safeCount("SELECT COUNT(*) AS c FROM property_accountability WHERE employee_id = ? AND COALESCE(received_by_sig, '') <> ''", [employeeId]);
+          const exitInterviewsCount = await safeCount("SELECT COUNT(*) AS c FROM exit_interviews WHERE LOWER(TRIM(COALESCE(employee_name, ''))) = LOWER(TRIM(?))", [employeeName]);
+          const exitInterviewsSignedCount = await safeCount("SELECT COUNT(*) AS c FROM exit_interviews WHERE LOWER(TRIM(COALESCE(employee_name, ''))) = LOWER(TRIM(?)) AND COALESCE(employee_sig, '') <> ''", [employeeName]);
+          const coachingLogsCount = await safeCount('SELECT COUNT(*) AS c FROM coaching_logs WHERE employee_id = ?', [employeeId]);
+          const pipCount = await safeCount('SELECT COUNT(*) AS c FROM pip_plans WHERE employee_id = ?', [employeeId]);
+          const idpCount = await safeCount('SELECT COUNT(*) AS c FROM development_plans WHERE employee_id = ?', [employeeId]);
+
+          const lastSelfAssessmentAt = await safeText('SELECT MAX(created_at) AS max_created_at FROM self_assessments WHERE employee_id = ?', [employeeId]);
+          const lastAppraisalSignoff = await safeText('SELECT MAX(sign_off_date) AS max_sign_off_date FROM appraisals WHERE employee_id = ?', [employeeId]);
+          const lastDisciplinaryDate = await safeText('SELECT MAX(date_of_warning) AS max_date_of_warning FROM discipline_records WHERE employee_id = ?', [employeeId]);
+          const lastSuggestionDate = await safeText('SELECT MAX(created_at) AS max_created_at FROM suggestions WHERE employee_id = ?', [employeeId]);
+          const lastCoachingLogAt = await safeText('SELECT MAX(created_at) AS max_created_at FROM coaching_logs WHERE employee_id = ?', [employeeId]);
+
+          const goalsCompletionRate = goalsTotal > 0 ? Math.round((goalsCompleted / goalsTotal) * 100) : 0;
           const formsTotalCount =
             selfAssessmentsCount +
             appraisalsCount +
@@ -4402,22 +4433,22 @@ ${relevantGoalIdsSql}
             coachingLogsCount;
 
           return {
-            employee_id: Number(r.employee_id),
+            employee_id: employeeId,
             employee_name: r.employee_name || 'Unknown',
             position: r.position || null,
             dept: r.dept || null,
             goals_total: goalsTotal,
-            goals_active: 0,
-            goals_completed: 0,
+            goals_active: goalsActive,
+            goals_completed: goalsCompleted,
             goals_at_risk: 0,
             goals_overdue: 0,
             goals_avg_progress: 0,
-            goals_completion_rate: 0,
+            goals_completion_rate: goalsCompletionRate,
             delegated_goal_count: 0,
             team_goal_count: 0,
             department_goal_count: 0,
-            pip_count: Number(r.pip_count || 0),
-            idp_count: Number(r.idp_count || 0),
+            pip_count: pipCount,
+            idp_count: idpCount,
             recovery_tasks_total: 0,
             recovery_tasks_open: 0,
             recovery_tasks_completed: 0,
@@ -4431,30 +4462,30 @@ ${relevantGoalIdsSql}
             proof_ratings_count: 0,
             proof_rating_avg: 0,
             self_assessments_count: selfAssessmentsCount,
-            last_self_assessment_at: r.last_self_assessment_at || null,
+            last_self_assessment_at: lastSelfAssessmentAt,
             appraisals_count: appraisalsCount,
-            appraisals_avg_overall: Number(r.appraisals_avg_overall || 0),
-            last_appraisal_signoff: r.last_appraisal_signoff || null,
+            appraisals_avg_overall: appraisalsAvg,
+            last_appraisal_signoff: lastAppraisalSignoff,
             disciplinary_count: disciplinaryCount,
-            last_disciplinary_date: r.last_disciplinary_date || null,
+            last_disciplinary_date: lastDisciplinaryDate,
             feedback_360_count: feedbackCount,
             suggestions_count: suggestionsCount,
-            last_suggestion_date: r.last_suggestion_date || null,
+            last_suggestion_date: lastSuggestionDate,
             onboarding_count: onboardingCount,
-            onboarding_signed_count: Number(r.onboarding_signed_count || 0),
+            onboarding_signed_count: onboardingSignedCount,
             property_forms_count: propertyFormsCount,
-            property_signed_count: Number(r.property_signed_count || 0),
+            property_signed_count: propertySignedCount,
             exit_interviews_count: exitInterviewsCount,
-            exit_interviews_signed_count: Number(r.exit_interviews_signed_count || 0),
+            exit_interviews_signed_count: exitInterviewsSignedCount,
             coaching_logs_count: coachingLogsCount,
-            last_coaching_log_at: r.last_coaching_log_at || null,
+            last_coaching_log_at: lastCoachingLogAt,
             forms_total_count: formsTotalCount,
             team_improvement_plans: 0,
             team_development_plans: 0,
             department_improvement_plans: 0,
             department_development_plans: 0,
           };
-        });
+        }));
 
         return res.json({
           employees: list,
