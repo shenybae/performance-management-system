@@ -3360,6 +3360,14 @@ async function startServer() {
       const normalizedLeaderId = isIndividualScope ? null : (leader_id ? parseInt(String(leader_id)) : null);
       const normalizedDelegation = isIndividualScope ? null : (delegation || null);
       const normalizedTeamName = isIndividualScope ? null : (team_name || null);
+
+      if (role === 'Manager') {
+        const actorDept = String(actor.dept || '').trim();
+        const requestedDept = String(department || '').trim();
+        if (!actorDept || !requestedDept || actorDept.toLowerCase() !== requestedDept.toLowerCase()) {
+          return res.status(403).json({ error: 'Managers can only create goals in their own department' });
+        }
+      }
       
       // Department-scoped delegation: Manager can only delegate within their own department
       if (role === 'Manager') {
@@ -3547,15 +3555,10 @@ async function startServer() {
           if (!allowed) return res.status(403).json({ error: 'Forbidden' });
         }
 
-        // Enforce department scoping for progress/status updates
-        const b = req.body || {};
-        const isUpdatingProgressOrStatus = b.progress !== undefined || b.status !== undefined;
-        if (isUpdatingProgressOrStatus) {
-          const actorDept = String(actor.dept || '').trim();
-          const goalDept = String(existing.department || '').trim();
-          if (!goalDept || !actorDept || goalDept.toLowerCase() !== actorDept.toLowerCase()) {
-            return res.status(403).json({ error: 'Managers can only update progress/status for goals in their own department' });
-          }
+        const actorDept = String(actor.dept || '').trim();
+        const goalDept = String(existing.department || '').trim();
+        if (!goalDept || !actorDept || goalDept.toLowerCase() !== actorDept.toLowerCase()) {
+          return res.status(403).json({ error: 'Managers can only modify goals in their own department' });
         }
       }
 
@@ -4566,11 +4569,16 @@ ${relevantGoalIdsSql}
       const role = actor.role;
       if (!isPrivilegedRole(role) && role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
 
-      const existingRows: any = await query('SELECT id, employee_id FROM goals WHERE id = ?', [req.params.id]);
+      const existingRows: any = await query('SELECT id, employee_id, department FROM goals WHERE id = ?', [req.params.id]);
       const existing = Array.isArray(existingRows) ? existingRows[0] : existingRows;
       if (!existing) return res.status(404).json({ error: 'Goal not found' });
 
       if (role === 'Manager') {
+        const actorDept = String(actor.dept || '').trim();
+        const goalDept = String(existing.department || '').trim();
+        if (!goalDept || !actorDept || goalDept.toLowerCase() !== actorDept.toLowerCase()) {
+          return res.status(403).json({ error: 'Managers can only modify goals in their own department' });
+        }
         const existingEmpId = normalizeEmployeeId(existing.employee_id);
         if (existingEmpId) {
           const allowed = await canManagerAccessEmployee(actor.id, existingEmpId);
@@ -4595,14 +4603,13 @@ ${relevantGoalIdsSql}
         return res.json({ success: true });
       }
 
-      const managedIds = await getManagedEmployeeIds(actor.id);
-      if (!Array.isArray(managedIds) || managedIds.length === 0) {
-        await query("UPDATE goals SET deleted_at = CURRENT_TIMESTAMP WHERE employee_id IS NULL AND deleted_at IS NULL");
-        return res.json({ success: true });
-      }
+      const actorDept = String(actor.dept || '').trim();
+      if (!actorDept) return res.status(403).json({ error: 'Manager department is required' });
 
-      const placeholders = managedIds.map(() => '?').join(',');
-      await query(`UPDATE goals SET deleted_at = CURRENT_TIMESTAMP WHERE deleted_at IS NULL AND (employee_id IN (${placeholders}) OR employee_id IS NULL)`, managedIds);
+      await query(
+        "UPDATE goals SET deleted_at = CURRENT_TIMESTAMP WHERE deleted_at IS NULL AND LOWER(TRIM(COALESCE(department, ''))) = LOWER(TRIM(?))",
+        [actorDept]
+      );
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: 'Database error' });
@@ -4694,13 +4701,18 @@ ${relevantGoalIdsSql}
       const goalId = parseInt(String(req.params.id));
       const memberId = normalizeEmployeeId(req.body.employee_id);
       if (!goalId || !memberId) return res.status(400).json({ error: 'Invalid parameters' });
-      const goalRows: any = await query('SELECT id, employee_id FROM goals WHERE id = ?', [goalId]);
+      const goalRows: any = await query('SELECT id, employee_id, department FROM goals WHERE id = ?', [goalId]);
       const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
       if (!goal) return res.status(404).json({ error: 'Goal not found' });
 
       let allowed = false;
       if (isPrivilegedRole(role)) allowed = true;
       else if (role === 'Manager') {
+        const actorDept = String(actor.dept || '').trim();
+        const goalDept = String(goal.department || '').trim();
+        if (!goalDept || !actorDept || goalDept.toLowerCase() !== actorDept.toLowerCase()) {
+          return res.status(403).json({ error: 'Managers can only modify goals in their own department' });
+        }
         const allowedMgr = await canManagerAccessEmployee(actor.id, memberId);
         if (allowedMgr) allowed = true;
       } else if (role === 'Employee') {
@@ -4728,6 +4740,14 @@ ${relevantGoalIdsSql}
       let allowed = false;
       if (isPrivilegedRole(role)) allowed = true;
       else if (role === 'Manager') {
+        const goalRows: any = await query('SELECT id, department FROM goals WHERE id = ?', [goalId]);
+        const goal = Array.isArray(goalRows) ? goalRows[0] : goalRows;
+        if (!goal) return res.status(404).json({ error: 'Goal not found' });
+        const actorDept = String(actor.dept || '').trim();
+        const goalDept = String(goal.department || '').trim();
+        if (!goalDept || !actorDept || goalDept.toLowerCase() !== actorDept.toLowerCase()) {
+          return res.status(403).json({ error: 'Managers can only modify goals in their own department' });
+        }
         const allowedMgr = await canManagerAccessEmployee(actor.id, memberId);
         if (allowedMgr) allowed = true;
       } else if (role === 'Employee') {
@@ -4840,6 +4860,11 @@ ${relevantGoalIdsSql}
       let allowed = false;
       if (isPrivilegedRole(role)) allowed = true;
       else if (role === 'Manager') {
+        const actorDept = String(actor.dept || '').trim();
+        const goalDept = String(goal.department || '').trim();
+        if (!goalDept || !actorDept || goalDept.toLowerCase() !== actorDept.toLowerCase()) {
+          return res.status(403).json({ error: 'Managers can only modify goals in their own department' });
+        }
         const allowedMgr = await canManagerAccessEmployee(actor.id, normalizeEmployeeId(goal.employee_id));
         if (allowedMgr) allowed = true;
       } else if (role === 'Employee') {
