@@ -3600,17 +3600,17 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
       {/* GOALS TABLE */}
       <Card>
         <div className="overflow-x-auto pb-1">
-          <table className="w-full text-left border-collapse table-fixed">
+          <table className="w-full min-w-[1060px] text-left border-collapse table-fixed text-[13px]">
             <thead><tr className="border-b border-slate-100 dark:border-slate-800">
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[320px]">Title</th>
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-42.5">Department</th>
-              {activeTab === 'Team' && <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-42.5">Team</th>}
-              {activeTab === 'Individual' && <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-42.5">Employee</th>}
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-55">Owner</th>
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-24">Priority</th>
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-42.5">Progress</th>
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-32.5">Status</th>
-              <th className="py-3 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right w-30">Actions</th>
+              <th className="py-2.5 px-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-[270px]">Title</th>
+              <th className="py-2.5 px-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-35">Department</th>
+              {activeTab === 'Team' && <th className="py-2.5 px-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-35">Team</th>}
+              {activeTab === 'Individual' && <th className="py-2.5 px-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-35">Employee</th>}
+              <th className="py-2.5 px-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-44">Owner</th>
+              <th className="py-2.5 px-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-20">Priority</th>
+              <th className="py-2.5 px-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-32">Progress</th>
+              <th className="py-2.5 px-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider w-28">Status</th>
+              <th className="py-2.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right w-24">Actions</th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 && (
@@ -3624,13 +3624,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 return (
                   <React.Fragment key={g.id}>
                     <tr className={`border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors ${overdue ? 'bg-red-50/30 dark:bg-red-900/5' : ''} ${isArchived ? 'opacity-60' : ''}`}>
-                      <td className="py-3 px-3 align-top">
+                      <td className="py-2.5 px-2.5 align-top">
                         <div className="space-y-0.5 min-w-0">
-                          <span className="block min-w-0 truncate font-medium text-slate-700 dark:text-slate-100 text-sm" title={g.title || g.statement}>{g.title || g.statement}</span>
+                          <span className="block min-w-0 truncate font-semibold text-slate-700 dark:text-slate-100 text-[14px]" title={g.title || g.statement}>{g.title || g.statement}</span>
                           <div className="flex flex-wrap items-center gap-1">
-                            {overdue && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
-                            {isArchived && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">ARCHIVED</span>}
-                            {g.frequency && g.frequency !== 'One-time' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">{g.frequency}</span>}
+                            {overdue && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600">OVERDUE</span>}
+                            {isArchived && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">ARCHIVED</span>}
+                            {g.frequency && g.frequency !== 'One-time' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">{g.frequency}</span>}
                           </div>
                           {g.assignees && g.assignees.length > 0 && (
                             <div className="flex items-center gap-1 flex-wrap pt-0.5">
@@ -3642,27 +3642,27 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-3 text-xs text-slate-500 dark:text-slate-400 truncate" title={g.department || '\u2014'}>{g.department || '\u2014'}</td>
-                      {activeTab === 'Team' && <td className="py-3 px-3 text-xs text-slate-500 dark:text-slate-400 truncate" title={g.team_name || '\u2014'}>{g.team_name || '\u2014'}</td>}
-                      {activeTab === 'Individual' && <td className="py-3 px-3 text-xs text-slate-500 dark:text-slate-400">
+                      <td className="py-2.5 px-2.5 text-sm text-slate-500 dark:text-slate-400 truncate" title={g.department || '\u2014'}>{g.department || '\u2014'}</td>
+                      {activeTab === 'Team' && <td className="py-2.5 px-2.5 text-sm text-slate-500 dark:text-slate-400 truncate" title={g.team_name || '\u2014'}>{g.team_name || '\u2014'}</td>}
+                      {activeTab === 'Individual' && <td className="py-2.5 px-2.5 text-sm text-slate-500 dark:text-slate-400">
                         <div className="min-w-0"><span className="truncate max-w-55" title={g.employee_name || '\u2014'}>{g.employee_name || '\u2014'}</span></div>
                       </td>}
-                      <td className="py-3 px-3">
+                      <td className="py-2.5 px-2.5">
                         {g.delegation ? (
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span className="w-6 h-6 rounded-full bg-teal-600/15 dark:bg-teal-500/15 text-teal-700 dark:text-teal-400 flex items-center justify-center text-[10px] font-black shrink-0">
                               {g.delegation.charAt(0).toUpperCase()}
                             </span>
-                            <span className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate min-w-0" title={g.delegation}>
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate min-w-0" title={g.delegation}>
                               {g.delegation}
                             </span>
                           </div>
                         ) : (
-                          <span className="text-xs text-slate-400 italic">Unassigned</span>
+                          <span className="text-sm text-slate-400 italic">Unassigned</span>
                         )}
                       </td>
-                      <td className="py-3 px-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority || 'Medium')}`}>{g.priority || 'Medium'}</span></td>
-                      <td className="py-3 px-3">
+                      <td className="py-2.5 px-2.5"><span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${priorityColor(g.priority || 'Medium')}`}>{g.priority || 'Medium'}</span></td>
+                      <td className="py-2.5 px-2.5">
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                             <div
@@ -3670,21 +3670,21 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                               style={{ width: `${g.progress || 0}%` }}
                             ></div>
                           </div>
-                          <span className="text-xs font-bold text-slate-600 dark:text-slate-300 w-9 text-right shrink-0">{g.progress || 0}%</span>
+                          <span className="text-sm font-bold text-slate-600 dark:text-slate-300 w-10 text-right shrink-0">{g.progress || 0}%</span>
                         </div>
                       </td>
-                      <td className="py-3 px-3 whitespace-nowrap">
+                      <td className="py-2.5 px-2.5 whitespace-nowrap">
                         {isArchived ? (
-                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border text-slate-500 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700">Archived</span>
+                          <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded-full border text-slate-500 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700">Archived</span>
                         ) : (
                         <div className="flex items-center gap-1 whitespace-nowrap">
-                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${statusColor(g.status || 'Not Started')}`}>
+                          <span className={`text-[11px] font-bold uppercase px-2 py-0.5 rounded-full border ${statusColor(g.status || 'Not Started')}`}>
                             {g.status || 'Not Started'}
                           </span>
                         </div>
                         )}
                       </td>
-                      <td className="py-3 px-3 text-right whitespace-nowrap">
+                      <td className="py-2.5 px-2 text-right whitespace-nowrap">
                         <div className="inline-flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
                           <button onClick={() => setViewGoalId(g.id)} className="text-slate-500 hover:text-blue-700 p-1" title="View"><Eye size={14} /></button>
                           <button
