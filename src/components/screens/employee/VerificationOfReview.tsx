@@ -4,7 +4,7 @@ import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Modal } from '../../common/Modal';
 import { SignatureUpload } from '../../common/SignatureUpload';
-import { CheckCircle, FileCheck, ShieldAlert } from 'lucide-react';
+import { CheckCircle, FileCheck, ShieldAlert, Eye, PenLine, User, Calendar, BarChart2, FileText, Clock, Building2 } from 'lucide-react';
 import { getAuthHeaders } from '../../../utils/csv';
 
 export const VerificationOfReview = () => {
@@ -44,6 +44,8 @@ export const VerificationOfReview = () => {
   const [applicantSignerName, setApplicantSignerName] = useState('');
   const [applicantSignerTitle, setApplicantSignerTitle] = useState('');
   const [applicantSignerDate, setApplicantSignerDate] = useState(new Date().toISOString().split('T')[0]);
+  const [appraisalViewModal, setAppraisalViewModal] = useState<any | null>(null);
+  const [appraisalSignModal, setAppraisalSignModal] = useState<{ record: any; stage: 'supervisor' | 'reviewer' } | null>(null);
 
   const resetQueueSignerState = () => {
     setActiveId(null);
@@ -1248,21 +1250,61 @@ export const VerificationOfReview = () => {
         <div className="space-y-4">
           {activeQueueSection === 'mgmt-appraisals' && (
           <Card>
-            <h3 className="text-sm font-bold mb-3">Appraisals Needing Management Signature</h3>
-            {pendingSupervisorAppraisals.length === 0 && <p className="text-sm text-slate-400">No pending management signatures.</p>}
-            {pendingSupervisorAppraisals.map((a) => (
-              <div key={a.queueKey || `sup-app-${a.id}`} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{a.employee_name || 'Employee'} - {a.form_type || a.eval_type || 'Appraisal'}</p>
-                    <p className="text-xs text-slate-500">Department: {a.employee_department || a.dept || user?.dept || '—'} • Stage: {a.queueStage === 'reviewer' ? 'Reviewer' : 'Supervisor'}</p>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Appraisals Needing Management Signature</h3>
+              <span className="text-xs font-semibold px-2 py-1 rounded-full bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300">{pendingSupervisorAppraisals.length} pending</span>
+            </div>
+            {pendingSupervisorAppraisals.length === 0 && (
+              <div className="flex flex-col items-center py-8 text-slate-400 gap-2">
+                <CheckCircle size={32} className="text-emerald-400" />
+                <p className="text-sm">No pending management signatures.</p>
+              </div>
+            )}
+            <div className="space-y-3">
+            {pendingSupervisorAppraisals.map((a) => {
+              const key = a.queueKey || `sup-app-${a.id}`;
+              const isAch = (a.form_type || '').toLowerCase().includes('achievement');
+              const stage = a.queueStage === 'reviewer' ? 'Reviewer' : 'Supervisor';
+              const overall = a.overall ?? '—';
+              const ratingColor = Number(a.overall) >= 4 ? 'text-emerald-600' : Number(a.overall) >= 3 ? 'text-amber-500' : 'text-red-500';
+              return (
+              <div key={key} className="group relative rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 hover:border-teal-300 dark:hover:border-teal-700 hover:shadow-md transition-all duration-200">
+                <div className="p-4">
+                  {/* Header row */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
+                        {isAch ? <BarChart2 size={16} className="text-teal-600 dark:text-teal-400" /> : <FileText size={16} className="text-teal-600 dark:text-teal-400" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight truncate">{a.employee_name || 'Employee'}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">{a.form_type || a.eval_type || 'Appraisal'}</p>
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{stage}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => setActivePreviewId(activePreviewId === (a.queueKey || `sup-app-${a.id}`) ? null : (a.queueKey || `sup-app-${a.id}`))}>View Form</button>
+
+                  {/* Info pills */}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400"><Building2 size={11} /> {a.employee_department || a.dept || user?.dept || '—'}</span>
+                    <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400"><Calendar size={11} /> {a.eval_period_from || a.review_period_from || '—'} – {a.eval_period_to || a.review_period_to || '—'}</span>
+                    <span className={`inline-flex items-center gap-1 text-[11px] font-bold ${ratingColor}`}><BarChart2 size={11} /> Overall: {overall}</span>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end gap-2">
                     <button
-                      className="text-sm font-bold text-teal-deep"
+                      onClick={() => setAppraisalViewModal(a)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                    >
+                      <Eye size={13} /> View Form
+                    </button>
+                    <button
                       onClick={() => {
-                        setActiveId(a.queueKey || `sup-app-${a.id}`);
+                        setAppraisalSignModal({ record: a, stage: a.queueStage === 'reviewer' ? 'reviewer' : 'supervisor' });
+                        setActiveId(key);
                         setSignerPrintTitle(String(user?.full_name || user?.employee_name || user?.username || ''));
                         setSupervisorOverallRating((a?.overall_rating || '') as 'Satisfactory' | 'Unsatisfactory' | '');
                         setSupervisorRecommendation(String(a?.recommendation || ''));
@@ -1271,18 +1313,97 @@ export const VerificationOfReview = () => {
                         setReviewerRevisedRating((a?.revised_rating || '') as 'Satisfactory' | 'Unsatisfactory' | '');
                         setReviewerComments(String(a?.reviewers_comment || ''));
                       }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 transition-colors"
                     >
-                      Sign
+                      <PenLine size={13} /> Sign
                     </button>
                   </div>
                 </div>
-                {activePreviewId === (a.queueKey || `sup-app-${a.id}`) && renderAppraisalPreview(a)}
-                {activeId === (a.queueKey || `sup-app-${a.id}`) && renderAppraisalSignBox(() => signManagementAppraisal(a), a.queueStage === 'reviewer' ? 'reviewer' : 'supervisor')}
               </div>
-            ))}
-            <p className="mt-2 text-xs text-emerald-600">Finished: {doneSupervisorAppraisals.length}</p>
+              );
+            })}
+            </div>
+            {doneSupervisorAppraisals.length > 0 && (
+              <p className="mt-4 text-xs text-emerald-600 flex items-center gap-1"><CheckCircle size={12} /> {doneSupervisorAppraisals.length} completed</p>
+            )}
           </Card>
           )}
+
+          {/* View Form Modal */}
+          <Modal
+            open={!!appraisalViewModal}
+            title={appraisalViewModal ? `${appraisalViewModal.form_type || appraisalViewModal.eval_type || 'Appraisal'} — ${appraisalViewModal.employee_name || 'Employee'}` : ''}
+            onClose={() => setAppraisalViewModal(null)}
+            maxWidthClassName="max-w-xl"
+          >
+            {appraisalViewModal && (() => {
+              const a = appraisalViewModal;
+              const isAch = (a.form_type || '').toLowerCase().includes('achievement');
+              const ratingRows: [string, number][] = isAch
+                ? [['Job Knowledge', a.job_knowledge], ['Work Quality', a.work_quality], ['Attendance', a.attendance], ['Productivity', a.productivity], ['Communication', a.communication], ['Dependability', a.dependability]]
+                : [['Quality of Work', a.work_quality], ['Quantity of Work', a.quantity_of_work], ['Relationship w/ Others', a.relationship_with_others], ['Work Habits', a.work_habits], ['Job Knowledge', a.job_knowledge], ['Attendance', a.attendance], ['Promotability', a.promotability_score ?? a.promotability]];
+              const ratingLabel = (v: number) => (['', 'Poor', 'Fair', 'Satisfactory', 'Good', 'Excellent'][v] || '');
+              return (
+                <div className="space-y-4 text-sm">
+                  {/* Info */}
+                  <div className="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800 rounded-lg p-3">
+                    <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Employee</p><p className="font-semibold text-slate-700 dark:text-slate-200">{a.employee_name || '—'}</p></div>
+                    <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Department</p><p className="text-slate-600 dark:text-slate-300">{a.employee_department || a.dept || '—'}</p></div>
+                    <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Period</p><p className="text-slate-600 dark:text-slate-300">{a.eval_period_from || a.review_period_from || '—'} – {a.eval_period_to || a.review_period_to || '—'}</p></div>
+                    <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Overall Score</p><p className="font-bold text-teal-600 dark:text-teal-400 text-base">{a.overall ?? '—'}</p></div>
+                  </div>
+                  {/* Ratings */}
+                  <div>
+                    <p className="text-[10px] font-bold uppercase text-slate-400 mb-2">Performance Ratings</p>
+                    <div className="space-y-1.5">
+                      {ratingRows.map(([label, val]) => (
+                        <div key={label} className="flex items-center gap-2">
+                          <span className="text-xs text-slate-600 dark:text-slate-300 w-36 shrink-0">{label}</span>
+                          <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div className="h-full bg-teal-500 rounded-full" style={{ width: `${((Number(val) || 0) / 5) * 100}%` }} />
+                          </div>
+                          <span className="text-xs font-bold text-teal-700 dark:text-teal-300 w-8 text-right">{val || 0}/5</span>
+                          <span className="text-[10px] text-slate-400 w-20 text-right">{ratingLabel(Number(val) || 0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Comments */}
+                  {(a.additional_comments || a.employee_goals || a.supervisors_overall_comment) && (
+                    <div className="space-y-2">
+                      {a.employee_goals && <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Employee Goals</p><p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded p-2">{a.employee_goals}</p></div>}
+                      {a.additional_comments && <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Additional Comments</p><p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded p-2">{a.additional_comments}</p></div>}
+                      {a.supervisors_overall_comment && <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Supervisor Comments</p><p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded p-2">{a.supervisors_overall_comment}</p></div>}
+                    </div>
+                  )}
+                  <div className="flex justify-end pt-1">
+                    <button onClick={() => setAppraisalViewModal(null)} className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm font-bold text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">Close</button>
+                  </div>
+                </div>
+              );
+            })()}
+          </Modal>
+
+          {/* Sign Modal */}
+          <Modal
+            open={!!appraisalSignModal}
+            title={appraisalSignModal ? `Sign — ${appraisalSignModal.record.form_type || 'Appraisal'} (${appraisalSignModal.record.employee_name || 'Employee'})` : ''}
+            onClose={() => { setAppraisalSignModal(null); resetQueueSignerState(); }}
+            maxWidthClassName="max-w-lg"
+          >
+            {appraisalSignModal && (
+              <div>
+                <div className="mb-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                  <ShieldAlert size={14} className="mt-0.5 flex-shrink-0" />
+                  By signing, you confirm you have reviewed this form. Your digital signature will be recorded.
+                </div>
+                {renderAppraisalSignBox(
+                  () => signManagementAppraisal(appraisalSignModal.record).then(() => setAppraisalSignModal(null)),
+                  appraisalSignModal.stage
+                )}
+              </div>
+            )}
+          </Modal>
 
           {activeQueueSection === 'mgmt-discipline' && (
           <Card>
