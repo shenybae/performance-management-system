@@ -220,6 +220,8 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   /* ── submit handlers ────────────────────────────────────────────── */
   const submitAchievement = async () => {
     if (!achForm.employee_id) { window.notify?.('Please select an employee', 'error'); return; }
+    const confirmed = await appConfirm('Are you sure you want to save this Achievement Measure?', { title: 'Save Achievement Measure', confirmText: 'Save' });
+    if (!confirmed) return;
     if (!achForm.date || !achForm.review_period_from || !achForm.review_period_to) {
       window.notify?.('Please complete the date and review period fields', 'error');
       return;
@@ -272,6 +274,8 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
 
   const submitPerformance = async () => {
     if (!perfForm.employee_id) { window.notify?.('Please select an employee', 'error'); return; }
+    const confirmed = await appConfirm('Are you sure you want to save this Performance Evaluation?', { title: 'Save Performance Evaluation', confirmText: 'Save' });
+    if (!confirmed) return;
     if (!perfForm.eval_period_from || !perfForm.eval_period_to) {
       window.notify?.('Please complete the evaluation period', 'error');
       return;
@@ -878,6 +882,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                 <thead><tr className="border-b border-slate-100 dark:border-slate-800">
                   <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Employee</th>
                   <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Type</th>
+                  <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Period</th>
                   <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Knowledge</th>
                   <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prod.</th>
                   <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Overall</th>
@@ -901,6 +906,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                           </div>
                         </td>
                         <td className="py-3 text-[10px] font-bold uppercase text-slate-500">{a.form_type || a.eval_type || '—'}</td>
+                        <td className="py-3 text-[10px] text-slate-500 whitespace-nowrap">{(a.eval_period_from || a.review_period_from) ? `${a.eval_period_from || a.review_period_from} – ${a.eval_period_to || a.review_period_to}` : '—'}</td>
                         <td className="py-3 text-slate-600 dark:text-slate-300">{a.job_knowledge}/5</td>
                         <td className="py-3 text-slate-600 dark:text-slate-300">{a.productivity}/5</td>
                         <td className="py-3 font-bold text-teal-green">{a.overall}</td>
@@ -918,7 +924,17 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                           })()}
                         </td>
                         <td className="py-3 flex items-center gap-2">
-                          <button onClick={() => { setDetailRecord(a); setView('detail'); }} className="text-slate-400 hover:text-teal-deep dark:hover:text-teal-green transition-colors"><Eye size={14} /></button>
+                          <button onClick={() => { setDetailRecord(a); setView('detail'); }} className="text-slate-400 hover:text-teal-deep dark:hover:text-teal-green transition-colors" title="View"><Eye size={14} /></button>
+                          {(() => {
+                            const ft2 = (a.form_type || a.eval_type || '').toString().toLowerCase();
+                            const ip2 = ft2.includes('performance');
+                            const fullySignedForExport = ip2
+                              ? !!(a.supervisor_signature && a.reviewer_signature && a.employee_signature && a.hr_signature)
+                              : !!(a.supervisor_signature && a.employee_signature);
+                            return fullySignedForExport
+                              ? <button onClick={() => exportPDF(a)} className="text-teal-600 hover:text-teal-800 transition-colors" title="Export PDF"><Download size={14} /></button>
+                              : null;
+                          })()}
                           <button onClick={() => handleDelete(a.id)} className="text-red-500 hover:text-red-600 p-1 rounded transition-colors" title="Archive"><Archive size={15} /></button>
                         </td>
                       </tr>
