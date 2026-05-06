@@ -184,10 +184,14 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
     if (form.weakness_tags.trim().length > 200) { window.notify?.('Weakness tags must be 200 characters or less', 'error'); return; }
     try {
       const user = JSON.parse(localStorage.getItem('talentflow_user') || '{}');
-      await fetch('/api/coaching_logs', {
+      const saveRes = await fetch('/api/coaching_logs', {
         method: 'POST', headers: getAuthHeaders(),
         body: JSON.stringify({ ...form, notes, employee_id: parseInt(form.employee_id), is_positive: form.is_positive ? 1 : 0, logged_by: form.logged_by || user.full_name || user.email || user.username || 'Manager' }),
       });
+      if (!saveRes.ok) {
+        const err = await saveRes.json().catch(() => ({} as any));
+        throw new Error(err?.error || 'Failed to save coaching entry');
+      }
       window.notify?.('Coaching entry saved', 'success');
 
       // Auto-recommend e-learning if constructive / weakness found
@@ -215,7 +219,7 @@ export const CoachingJournal = ({ employees, currentUser, navContext, onNavConte
       setForm({ employee_id: '', category: '', notes: '', is_positive: true, logged_by: '', weakness_tags: '' });
       setView('dashboard');
       fetchLogs();
-    } catch { window.notify?.('Failed to save entry', 'error'); }
+    } catch (e: any) { window.notify?.(e?.message || 'Failed to save entry', 'error'); }
   };
 
   const handleDelete = async (id: number) => {

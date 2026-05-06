@@ -6189,9 +6189,12 @@ ${relevantGoalIdsSql}
 
       // Managers see only logs for their department's employees
       if (role === 'Manager') {
-        const actorDept = String(actor.dept || '').trim();
+        const actorDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
         if (!actorDept) return res.json([]);
-        const rows = await query("SELECT c.*, e.name as employee_name FROM coaching_logs c LEFT JOIN employees e ON c.employee_id = e.id WHERE LOWER(e.dept) = LOWER(?) ORDER BY c.created_at DESC", [actorDept]);
+        const rows = await query(
+          "SELECT c.*, e.name as employee_name FROM coaching_logs c LEFT JOIN employees e ON c.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?)) AND c.deleted_at IS NULL ORDER BY c.created_at DESC",
+          [actorDept]
+        );
         return res.json(Array.isArray(rows) ? rows : []);
       }
 
