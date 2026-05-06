@@ -39,6 +39,20 @@ const ScoreBar = ({ label, value, color }: { label: string; value: number; color
 
 const scoreColor = (v: number) => v >= 75 ? '#10b981' : v >= 50 ? '#0d9488' : v >= 25 ? '#f59e0b' : '#ef4444';
 
+const getReadinessIndicators = (emp: any): string[] => {
+  const indicators: string[] = [];
+  if (Number(emp?.appraisal_score || 0) > 0 || emp?.latest_appraisal) indicators.push('Appraisal');
+  if (Number(emp?.goal_summary?.total || 0) > 0) indicators.push('Goals');
+  if (Number(emp?.training_summary?.total || 0) > 0) indicators.push('Training');
+  if (Number(emp?.tenure_months || 0) > 0) indicators.push('Tenure');
+  if (Number(emp?.indicator_summary?.feedback_count || 0) > 0) indicators.push('Feedback');
+  if (Number(emp?.indicator_summary?.self_assessments_count || 0) > 0) indicators.push('Self-Assessment');
+  if (Number(emp?.indicator_summary?.coaching_total || 0) > 0) indicators.push('Coaching');
+  if (Number(emp?.indicator_summary?.disciplinary_count || 0) > 0) indicators.push('Disciplinary');
+  if (Number(emp?.indicator_summary?.suggestions_count || 0) > 0) indicators.push('Suggestions');
+  return indicators;
+};
+
 export const Promotability = ({ employees }: Props) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'readiness' | 'recommendations' | 'history' | 'succession' | 'analytics' | 'career_paths'>('overview');
   const [readinessData, setReadinessData] = useState<any[]>([]);
@@ -429,6 +443,7 @@ export const Promotability = ({ employees }: Props) => {
               <AnimatePresence>
                 {filteredReadiness.map((emp, idx) => {
                   const tier = TIER_CONFIG[emp.succession_tier] || TIER_CONFIG['Developing'];
+                  const indicatorsUsed = getReadinessIndicators(emp);
                   return (
                     <motion.div key={emp.employee_id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.03 }}>
                       <Card className={`border-l-4 ${tier.border} hover:shadow-md transition-shadow`}>
@@ -473,6 +488,13 @@ export const Promotability = ({ employees }: Props) => {
                         <div className="flex items-center gap-3 text-[10px] text-slate-500 mb-3">
                           <span><Target size={10} className="inline mr-0.5" />{emp.goal_summary?.completed || 0}/{emp.goal_summary?.total || 0} goals</span>
                           <span><BookOpen size={10} className="inline mr-0.5" />{emp.training_summary?.completed || 0}/{emp.training_summary?.total || 0} courses</span>
+                        </div>
+
+                        <div className="mb-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 px-2.5 py-2">
+                          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Data indicators used</p>
+                          <p className="text-[10px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                            {indicatorsUsed.length > 0 ? indicatorsUsed.join(' • ') : 'No indicator data yet'}
+                          </p>
                         </div>
 
                         {/* Career Path Next Role */}
