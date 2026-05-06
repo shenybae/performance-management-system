@@ -350,12 +350,12 @@ export const Promotability = ({ employees }: Props) => {
                 <h3 className="text-sm font-bold text-slate-500 uppercase mb-4">Readiness by Department</h3>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={deptReadiness} layout="vertical">
+                    <BarChart data={deptReadiness} margin={{ top: 8, right: 8, left: 8, bottom: 48 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                      <XAxis type="number" domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
-                      <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} width={100} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} interval={0} angle={-15} textAnchor="end" height={44} />
+                      <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
                       <Tooltip formatter={(v: any) => `${v}%`} />
-                      <Bar dataKey="avg" fill="#0f766e" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="avg" fill="#0f766e" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
