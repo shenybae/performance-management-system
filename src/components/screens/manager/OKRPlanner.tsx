@@ -1483,7 +1483,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   // Filtered goals
   const filtered = useMemo(() => {
     return goals.filter(g => {
-      const isArchived = !!g.deleted_at;
+      const isArchived = !!g.deleted_at || !!g.archived_at;
       if (!showArchived && isArchived) return false;
       const scope = g.scope || 'Individual';
       if (scope !== activeTab) return false;
@@ -3569,7 +3569,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                 </td></tr>
               )}
               {filtered.map((g: any) => {
-                const isArchived = !!g.deleted_at;
+                const isArchived = !!g.deleted_at || !!g.archived_at;
                 const overdue = g.target_date && new Date(g.target_date) < new Date() && g.status !== 'Completed' && g.status !== 'Cancelled';
                 return (
                   <React.Fragment key={g.id}>
