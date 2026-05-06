@@ -8015,11 +8015,23 @@ ${relevantGoalIdsSql}
       const empIds = employeeRows.map((e: any) => e.id);
       const ph = empIds.map(() => '?').join(',');
 
-      const [appraisals, goals, elearning, activePips] = await Promise.all([
+      const [appraisals, goals, elearning, activePips, feedbackRows, suggestionRows, selfAssessmentRows, coachingRows, disciplineRows] = await Promise.all([
         query(`SELECT * FROM appraisals WHERE employee_id IN (${ph}) ORDER BY sign_off_date DESC`, empIds),
         query(`SELECT * FROM goals WHERE employee_id IN (${ph})`, empIds),
         query(`SELECT * FROM elearning_recommendations WHERE employee_id IN (${ph})`, empIds),
         query(`SELECT DISTINCT employee_id FROM pip_plans WHERE employee_id IN (${ph}) AND outcome = 'In Progress'`, empIds),
+        query(
+          `SELECT e.id AS employee_id, COUNT(*) AS feedback_count
+           FROM employees e
+           INNER JOIN feedback_360 f ON LOWER(TRIM(COALESCE(f.target_employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))
+           WHERE e.id IN (${ph})
+           GROUP BY e.id`,
+          empIds
+        ),
+        query(`SELECT employee_id, COUNT(*) AS suggestions_count FROM suggestions WHERE employee_id IN (${ph}) GROUP BY employee_id`, empIds),
+        query(`SELECT employee_id, COUNT(*) AS self_assessments_count FROM self_assessments WHERE employee_id IN (${ph}) GROUP BY employee_id`, empIds),
+        query(`SELECT employee_id, COUNT(*) AS coaching_count, SUM(CASE WHEN is_positive = 1 THEN 1 ELSE 0 END) AS positive_coaching_count FROM coaching_logs WHERE employee_id IN (${ph}) AND deleted_at IS NULL GROUP BY employee_id`, empIds),
+        query(`SELECT employee_id, COUNT(*) AS disciplinary_count FROM discipline_records WHERE employee_id IN (${ph}) AND deleted_at IS NULL GROUP BY employee_id`, empIds),
       ]);
 
       // Group appraisals by employee â€” take latest
@@ -8048,18 +8060,78 @@ ${relevantGoalIdsSql}
       // Active PIPs set
       const pipSet = new Set((activePips as any[]).map((p: any) => p.employee_id));
 
+      const feedbackMap: Record<number, number> = {};
+      for (const r of (feedbackRows as any[])) feedbackMap[Number(r.employee_id)] = Number(r.feedback_count || 0);
+
+      const suggestionsMap: Record<number, number> = {};
+      for (const r of (suggestionRows as any[])) suggestionsMap[Number(r.employee_id)] = Number(r.suggestions_count || 0);
+
+      const selfAssessMap: Record<number, number> = {};
+      for (const r of (selfAssessmentRows as any[])) selfAssessMap[Number(r.employee_id)] = Number(r.self_assessments_count || 0);
+
+      const coachingMap: Record<number, { total: number; positive: number }> = {};
+      for (const r of (coachingRows as any[])) {
+        coachingMap[Number(r.employee_id)] = {
+          total: Number(r.coaching_count || 0),
+          positive: Number(r.positive_coaching_count || 0),
+        };
+      }
+
+      const disciplineMap: Record<number, number> = {};
+      for (const r of (disciplineRows as any[])) disciplineMap[Number(r.employee_id)] = Number(r.disciplinary_count || 0);
+
+      const clampPct = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
+
       const now = Date.now();
       const results = employeeRows.map((emp: any) => {
         const latest = appraisalMap[emp.id];
-        const appraisalScore = latest ? Math.min(100, ((latest.overall || 0) / 5) * 100) : 0;
+        const appraisalScoreRaw = latest && latest.overall != null ? ((Number(latest.overall || 0) / 5) * 100) : null;
         const gd = goalMap[emp.id] || { total: 0, completed: 0, avgProgress: 0 };
-        const goalScore = gd.total > 0 ? gd.avgProgress : 0;
+        const goalScoreRaw = gd.total > 0
+          ? ((Number(gd.avgProgress || 0) * 0.7) + ((Number(gd.completed || 0) / Math.max(1, Number(gd.total || 0))) * 100 * 0.3))
+          : null;
         const td = trainingMap[emp.id] || { total: 0, completed: 0 };
-        const trainingScore = td.total > 0 ? Math.round((td.completed / td.total) * 100) : 0;
+        const trainingScoreRaw = td.total > 0 ? ((Number(td.completed || 0) / Number(td.total || 1)) * 100) : null;
         const hireDate = emp.hire_date ? new Date(emp.hire_date) : null;
         const tenureMonths = hireDate ? Math.floor((now - hireDate.getTime()) / (30.44 * 24 * 60 * 60 * 1000)) : 0;
-        const tenureScore = Math.max(0, Math.min(100, Math.round((tenureMonths / 60) * 100)));
-        const readinessScore = Math.round((appraisalScore * 0.40) + (goalScore * 0.30) + (trainingScore * 0.15) + (tenureScore * 0.15));
+        const tenureScoreRaw = Math.max(0, Math.min(100, (tenureMonths / 60) * 100));
+
+        const feedbackCount = Number(feedbackMap[emp.id] || 0);
+        const suggestionsCount = Number(suggestionsMap[emp.id] || 0);
+        const selfAssessCount = Number(selfAssessMap[emp.id] || 0);
+        const coaching = coachingMap[emp.id] || { total: 0, positive: 0 };
+        const disciplinaryCount = Number(disciplineMap[emp.id] || 0);
+
+        const feedbackScoreRaw = feedbackCount > 0 ? Math.min(100, feedbackCount * 25) : null;
+        const selfAssessScoreRaw = selfAssessCount > 0 ? Math.min(100, selfAssessCount * 25) : null;
+        const coachingScoreRaw = coaching.total > 0 ? ((coaching.positive / coaching.total) * 100) : null;
+        const disciplineScoreRaw = disciplinaryCount > 0 ? Math.max(0, 100 - (disciplinaryCount * 25)) : null;
+
+        const signals = [
+          { key: 'appraisal', score: appraisalScoreRaw, weight: 0.32 },
+          { key: 'goals', score: goalScoreRaw, weight: 0.26 },
+          { key: 'training', score: trainingScoreRaw, weight: 0.12 },
+          { key: 'tenure', score: tenureScoreRaw, weight: 0.12 },
+          { key: 'feedback', score: feedbackScoreRaw, weight: 0.07 },
+          { key: 'self_assessment', score: selfAssessScoreRaw, weight: 0.05 },
+          { key: 'coaching', score: coachingScoreRaw, weight: 0.03 },
+          { key: 'discipline', score: disciplineScoreRaw, weight: 0.03 },
+        ].filter((s) => s.score !== null && s.score !== undefined) as Array<{ key: string; score: number; weight: number }>;
+
+        const totalWeight = signals.reduce((sum, s) => sum + s.weight, 0);
+        const weightedScore = totalWeight > 0
+          ? signals.reduce((sum, s) => sum + (Number(s.score) * s.weight), 0) / totalWeight
+          : 0;
+
+        // Small bonus for broad evidence coverage from multiple independent indicators.
+        const evidenceCount = signals.length;
+        const evidenceBonus = evidenceCount >= 6 ? 4 : evidenceCount >= 4 ? 2 : 0;
+        const readinessScore = clampPct(weightedScore + evidenceBonus);
+
+        const appraisalScore = clampPct(appraisalScoreRaw || 0);
+        const goalScore = clampPct(goalScoreRaw || 0);
+        const trainingScore = clampPct(trainingScoreRaw || 0);
+        const tenureScore = clampPct(tenureScoreRaw || 0);
         const successionTier = readinessScore >= 80 ? 'Ready Now' : readinessScore >= 60 ? 'Ready in 1-2 Years' : readinessScore >= 40 ? 'High Potential' : 'Developing';
         return {
           employee_id: emp.id, employee_name: emp.name, position: emp.position, dept: emp.dept,
@@ -8069,6 +8141,15 @@ ${relevantGoalIdsSql}
           training_score: trainingScore, tenure_score: tenureScore,
           latest_appraisal: latest ? { overall: latest.overall, promotability_score: latest.promotability_score, promotability_status: latest.promotability_status, sign_off_date: latest.sign_off_date } : null,
           goal_summary: gd, training_summary: td,
+          indicator_summary: {
+            feedback_count: feedbackCount,
+            suggestions_count: suggestionsCount,
+            self_assessments_count: selfAssessCount,
+            coaching_total: coaching.total,
+            coaching_positive: coaching.positive,
+            disciplinary_count: disciplinaryCount,
+            evidence_count: evidenceCount,
+          },
           tenure_months: tenureMonths, has_active_pip: pipSet.has(emp.id), succession_tier: successionTier,
         };
       });
