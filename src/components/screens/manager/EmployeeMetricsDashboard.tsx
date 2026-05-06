@@ -129,13 +129,27 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
     return employeePerformance.find((item) => Number(item.employee_id) === Number(selectedPerformanceEmployeeId)) || null;
   }, [employeePerformance, selectedPerformanceEmployeeId]);
 
+  const getDisplayedPercent = (item: EmployeePerformanceSnapshot) => {
+    const completionRate = Number(item.goals_completion_rate || 0);
+    if (completionRate > 0) return completionRate;
+
+    const proofBasedRating = Math.max(
+      Number(item.proof_rating_avg || 0),
+      Number(item.member_proof_rating_avg || 0),
+      Number(item.leader_proof_rating_avg || 0)
+    );
+    if (proofBasedRating > 0) return Math.round((proofBasedRating / 5) * 100);
+
+    return 0;
+  };
+
   const progressChartData = useMemo(() => {
     return [...employeePerformance]
-      .sort((a, b) => Number(b.goals_completion_rate || 0) - Number(a.goals_completion_rate || 0))
+      .sort((a, b) => getDisplayedPercent(b) - getDisplayedPercent(a))
       .slice(0, 8)
       .map((item) => ({
         name: item.employee_name.length > 12 ? `${item.employee_name.slice(0, 12)}...` : item.employee_name,
-        progress: Number(item.goals_completion_rate || 0),
+        progress: getDisplayedPercent(item),
       }));
   }, [employeePerformance]);
 
@@ -481,7 +495,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                             <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{item.employee_name}</p>
                             <p className="text-[10px] text-slate-400 truncate">{item.position || 'N/A'} • {item.dept || 'N/A'}</p>
                           </div>
-                          <span className="text-[10px] font-black text-teal-600 dark:text-teal-300">{item.goals_completion_rate}%</span>
+                          <span className="text-[10px] font-black text-teal-600 dark:text-teal-300">{getDisplayedPercent(item)}%</span>
                         </div>
                       </button>
                     );
