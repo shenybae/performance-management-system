@@ -4059,6 +4059,15 @@ async function startServer() {
             FROM goal_assignees ga
             INNER JOIN goals g2 ON g2.id = ga.goal_id AND g2.deleted_at IS NULL
             WHERE ga.employee_id = e.id
+            UNION
+            SELECT g3.id
+            FROM goals g3
+            WHERE g3.deleted_at IS NULL
+              AND g3.leader_id IN (
+                SELECT u.id
+                FROM users u
+                WHERE u.employee_id = e.id
+              )
       `;
       // Date comparison that works in both PostgreSQL (text vs date) and SQLite
       const todaySql = usePostgres ? `TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')` : `DATE('now')`;
@@ -4395,9 +4404,26 @@ ${relevantGoalIdsSql}
           const employeeId = Number(r.employee_id || 0);
           const employeeName = String(r.employee_name || '');
 
-          const goalsTotal = await safeCount('SELECT COUNT(*) AS c FROM goals WHERE employee_id = ?', [employeeId]);
-          const goalsCompleted = await safeCount("SELECT COUNT(*) AS c FROM goals WHERE employee_id = ? AND COALESCE(status, 'Not Started') = 'Completed'", [employeeId]);
-          const goalsActive = await safeCount("SELECT COUNT(*) AS c FROM goals WHERE employee_id = ? AND COALESCE(status, 'Not Started') NOT IN ('Completed', 'Cancelled')", [employeeId]);
+          const relevantGoalIdsSql = `
+            SELECT g.id
+            FROM goals g
+            WHERE g.employee_id = ?
+            UNION
+            SELECT ga.goal_id
+            FROM goal_assignees ga
+            WHERE ga.employee_id = ?
+            UNION
+            SELECT g3.id
+            FROM goals g3
+            WHERE g3.leader_id IN (
+              SELECT u.id
+              FROM users u
+              WHERE u.employee_id = ?
+            )
+          `;
+          const goalsTotal = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql})`, [employeeId, employeeId, employeeId]);
+          const goalsCompleted = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.status, 'Not Started') = 'Completed'`, [employeeId, employeeId, employeeId]);
+          const goalsActive = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')`, [employeeId, employeeId, employeeId]);
           const appraisalsCount = await safeCount('SELECT COUNT(*) AS c FROM appraisals WHERE employee_id = ?', [employeeId]);
           const appraisalsAvg = await safeNumber('SELECT ROUND(COALESCE(AVG(COALESCE(overall, 0)), 0), 2) AS avg_overall FROM appraisals WHERE employee_id = ?', [employeeId]);
           const disciplinaryCount = await safeCount('SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ?', [employeeId]);
@@ -4413,6 +4439,24 @@ ${relevantGoalIdsSql}
           const coachingLogsCount = await safeCount('SELECT COUNT(*) AS c FROM coaching_logs WHERE employee_id = ?', [employeeId]);
           const pipCount = await safeCount('SELECT COUNT(*) AS c FROM pip_plans WHERE employee_id = ?', [employeeId]);
           const idpCount = await safeCount('SELECT COUNT(*) AS c FROM development_plans WHERE employee_id = ?', [employeeId]);
+          const proofRatingsCount = await safeCount(
+            `SELECT COUNT(*) AS c
+             FROM goals g
+             LEFT JOIN users ur ON ur.id = g.proof_reviewed_by
+             WHERE g.id IN (${relevantGoalIdsSql})
+               AND g.proof_review_rating IS NOT NULL
+               AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager'`,
+            [employeeId, employeeId, employeeId]
+          );
+          const proofRatingAvg = await safeNumber(
+            `SELECT ROUND(COALESCE(AVG(COALESCE(g.proof_review_rating, 0)), 0), 2) AS avg_rating
+             FROM goals g
+             LEFT JOIN users ur ON ur.id = g.proof_reviewed_by
+             WHERE g.id IN (${relevantGoalIdsSql})
+               AND g.proof_review_rating IS NOT NULL
+               AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager'`,
+            [employeeId, employeeId, employeeId]
+          );
 
           const lastSelfAssessmentAt = await safeText('SELECT MAX(created_at) AS max_created_at FROM self_assessments WHERE employee_id = ?', [employeeId]);
           const lastAppraisalSignoff = await safeText('SELECT MAX(sign_off_date) AS max_sign_off_date FROM appraisals WHERE employee_id = ?', [employeeId]);
@@ -4459,8 +4503,8 @@ ${relevantGoalIdsSql}
             member_proof_rating_avg: 0,
             leader_proof_ratings_count: 0,
             leader_proof_rating_avg: 0,
-            proof_ratings_count: 0,
-            proof_rating_avg: 0,
+            proof_ratings_count: proofRatingsCount,
+            proof_rating_avg: proofRatingAvg,
             self_assessments_count: selfAssessmentsCount,
             last_self_assessment_at: lastSelfAssessmentAt,
             appraisals_count: appraisalsCount,
