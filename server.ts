@@ -4024,9 +4024,16 @@ async function startServer() {
         params.push(actorEmployeeId);
       } else if (role === 'Manager') {
         const managerDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
-        if (managerDept) {
+        const managerEmployeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
+        if (managerDept && managerEmployeeId) {
+          whereClauses.push("(LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?)) OR e.manager_id = ?)");
+          params.push(managerDept, managerEmployeeId);
+        } else if (managerDept) {
           whereClauses.push("LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))");
           params.push(managerDept);
+        } else if (managerEmployeeId) {
+          whereClauses.push('e.manager_id = ?');
+          params.push(managerEmployeeId);
         }
       } else if (role === 'HR') {
         const hrDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
@@ -4314,9 +4321,16 @@ ${relevantGoalIdsSql}
           }
         } else if (role === 'Manager') {
           const managerDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
-          if (managerDept) {
+          const managerEmployeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
+          if (managerDept && managerEmployeeId) {
+            whereClauses.push("(LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?)) OR e.manager_id = ?)");
+            params.push(managerDept, managerEmployeeId);
+          } else if (managerDept) {
             whereClauses.push("LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))");
             params.push(managerDept);
+          } else if (managerEmployeeId) {
+            whereClauses.push('e.manager_id = ?');
+            params.push(managerEmployeeId);
           }
         } else if (role === 'HR') {
           const hrDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
@@ -6158,11 +6172,24 @@ ${relevantGoalIdsSql}
 
       if (role === 'Manager') {
         const managerDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
-        if (!managerDept) return res.json([]);
-        const rows = await query(
-          "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
-          [managerDept]
-        );
+        const managerEmployeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
+        let rows: any[] = [];
+        if (managerDept && managerEmployeeId) {
+          rows = await query(
+            "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE (LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?)) OR e.manager_id = ?)",
+            [managerDept, managerEmployeeId]
+          ) as any[];
+        } else if (managerDept) {
+          rows = await query(
+            "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+            [managerDept]
+          ) as any[];
+        } else if (managerEmployeeId) {
+          rows = await query(
+            "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE e.manager_id = ?",
+            [managerEmployeeId]
+          ) as any[];
+        }
         return res.json(Array.isArray(rows) ? rows : []);
       }
 
