@@ -106,11 +106,13 @@ export const CoachingChat = ({ navContext, onNavContextClear }: { navContext?: {
     try { const res = await fetch('/api/elearning_courses', { headers: getAuthHeaders() }); const data = await res.json(); setCourses(Array.isArray(data) ? data : []); } catch { setCourses([]); }
   };
   const fetchCoachingLogs = async () => {
-    if (!employeeId) return;
     try {
       const res = await fetch('/api/coaching_logs', { headers: getAuthHeaders() });
       const data = await res.json();
-      const myLogs = (Array.isArray(data) ? data : []).filter((l: any) => l.employee_id === employeeId || l.employee_id === Number(employeeId));
+      const list = Array.isArray(data) ? data : [];
+      const myLogs = employeeId
+        ? list.filter((l: any) => Number(l.employee_id) === Number(employeeId))
+        : list;
       setCoachingLogs(myLogs);
     } catch { setCoachingLogs([]); }
   };

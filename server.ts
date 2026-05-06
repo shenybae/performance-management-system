@@ -3735,13 +3735,14 @@ async function startServer() {
       
       // Enforce department scoping for managers
       if (role === 'Manager') {
-        const actorDept = String(actor.dept || '').trim();
+        const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+        const actorDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
         if (!actorDept) return res.status(403).json({ error: 'Manager department not set' });
         const empRows: any = await query('SELECT dept FROM employees WHERE id = ? LIMIT 1', [employee_id]);
         const emp = Array.isArray(empRows) ? empRows[0] : empRows;
         if (!emp || !emp.dept) return res.status(404).json({ error: 'Employee not found' });
-        const empDept = String(emp.dept || '').trim();
-        if (empDept.toLowerCase() !== actorDept.toLowerCase()) {
+        const empDept = normalizeDept(emp.dept || '');
+        if (!empDept || empDept.toLowerCase() !== actorDept.toLowerCase()) {
           return res.status(403).json({ error: 'Managers can only log coaching for employees in their own department' });
         }
       }
@@ -6200,9 +6201,13 @@ ${relevantGoalIdsSql}
 
       // Employees see logs about them
       if (role === 'Employee') {
-        const empId = normalizeEmployeeId(actor.employee_id);
+        const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+        const empId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
         if (!empId) return res.json([]);
-        const rows = await query("SELECT c.*, e.name as employee_name FROM coaching_logs c LEFT JOIN employees e ON c.employee_id = e.id WHERE c.employee_id = ? ORDER BY c.created_at DESC", [empId]);
+        const rows = await query(
+          "SELECT c.*, e.name as employee_name FROM coaching_logs c LEFT JOIN employees e ON c.employee_id = e.id WHERE c.employee_id = ? AND c.deleted_at IS NULL ORDER BY c.created_at DESC",
+          [empId]
+        );
         return res.json(Array.isArray(rows) ? rows : []);
       }
 
