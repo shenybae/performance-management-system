@@ -4216,6 +4216,17 @@ ${relevantGoalIdsSql}
 ${relevantGoalIdsSql}
             ) AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Needs Revision'
           ) proof_revision_rows) AS proofs_needs_revision,
+          (SELECT COUNT(*) FROM (
+            SELECT t.id
+            FROM goal_member_tasks t
+            WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision'
+            UNION ALL
+            SELECT g.id
+            FROM goals g
+            WHERE g.id IN (
+${relevantGoalIdsSql}
+            ) AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Needs Revision'
+          ) goal_revision_rows) AS goal_revisions_count,
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_ratings_count,
           (SELECT ROUND(COALESCE(AVG(t.proof_review_rating), 0), 2) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_rating_avg,
           (SELECT COUNT(*) FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id))) AS leader_proof_ratings_count,
@@ -4235,10 +4246,13 @@ ${relevantGoalIdsSql}
           (SELECT MAX(s.created_at) FROM self_assessments s WHERE s.employee_id = e.id) AS last_self_assessment_at,
 
           (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id) AS appraisals_count,
+          (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id) AS performance_evaluation_forms_count,
           (SELECT ROUND(COALESCE(AVG(COALESCE(a.overall, 0)), 0), 2) FROM appraisals a WHERE a.employee_id = e.id) AS appraisals_avg_overall,
           (SELECT MAX(a.sign_off_date) FROM appraisals a WHERE a.employee_id = e.id) AS last_appraisal_signoff,
 
           (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL) AS disciplinary_count,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(TRIM(d.violation_type), '') <> '') AS disciplinary_violation_entries_count,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(TRIM(d.action_taken), '') <> '') AS disciplinary_actions_count,
           (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL) AS last_disciplinary_date,
 
           (SELECT COUNT(*) FROM feedback_360 f WHERE LOWER(TRIM(COALESCE(f.target_employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS feedback_360_count,
@@ -4316,6 +4330,7 @@ ${relevantGoalIdsSql}
           proofs_approved: Number(r.proofs_approved || 0),
           proofs_rejected: Number(r.proofs_rejected || 0),
           proofs_needs_revision: Number(r.proofs_needs_revision || 0),
+          goal_revisions_count: Number(r.goal_revisions_count || 0),
           member_proof_ratings_count: Number(r.member_proof_ratings_count || 0),
           member_proof_rating_avg: Number(r.member_proof_rating_avg || 0),
           leader_proof_ratings_count: Number(r.leader_proof_ratings_count || 0),
@@ -4325,9 +4340,12 @@ ${relevantGoalIdsSql}
           self_assessments_count: selfAssessmentsCount,
           last_self_assessment_at: r.last_self_assessment_at || null,
           appraisals_count: appraisalsCount,
+          performance_evaluation_forms_count: Number(r.performance_evaluation_forms_count || 0),
           appraisals_avg_overall: Number(r.appraisals_avg_overall || 0),
           last_appraisal_signoff: r.last_appraisal_signoff || null,
           disciplinary_count: disciplinaryCount,
+          disciplinary_violation_entries_count: Number(r.disciplinary_violation_entries_count || 0),
+          disciplinary_actions_count: Number(r.disciplinary_actions_count || 0),
           last_disciplinary_date: r.last_disciplinary_date || null,
           feedback_360_count: feedbackCount,
           suggestions_count: suggestionsCount,
@@ -4553,6 +4571,8 @@ ${relevantGoalIdsSql}
           const appraisalsCount = await safeCount('SELECT COUNT(*) AS c FROM appraisals WHERE employee_id = ?', [employeeId]);
           const appraisalsAvg = await safeNumber('SELECT ROUND(COALESCE(AVG(COALESCE(overall, 0)), 0), 2) AS avg_overall FROM appraisals WHERE employee_id = ?', [employeeId]);
           const disciplinaryCount = await safeCount('SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ?', [employeeId]);
+          const disciplinaryViolationEntriesCount = await safeCount("SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ? AND COALESCE(TRIM(violation_type), '') <> ''", [employeeId]);
+          const disciplinaryActionsCount = await safeCount("SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ? AND COALESCE(TRIM(action_taken), '') <> ''", [employeeId]);
           const selfAssessmentsCount = await safeCount('SELECT COUNT(*) AS c FROM self_assessments WHERE employee_id = ?', [employeeId]);
           const feedbackCount = await safeCount("SELECT COUNT(*) AS c FROM feedback_360 WHERE LOWER(TRIM(COALESCE(target_employee_name, ''))) = LOWER(TRIM(?))", [employeeName]);
           const suggestionsCount = await safeCount('SELECT COUNT(*) AS c FROM suggestions WHERE employee_id = ?', [employeeId]);
@@ -4592,7 +4612,19 @@ ${relevantGoalIdsSql}
           const recoveryTasksCompleted = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.status, 'Not Started') = 'Completed'`, [employeeId]);
           const proofsApproved = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved'`, [employeeId]);
           const proofsRejected = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Rejected'`, [employeeId]);
-          const proofsNeedsRevision = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision'`, [employeeId]);
+          const proofsNeedsRevision = await safeCount(
+            `SELECT COUNT(*) AS c FROM (
+               SELECT t.id
+               FROM goal_member_tasks t
+               WHERE t.member_employee_id = ? AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision'
+               UNION ALL
+               SELECT g.id
+               FROM goals g
+               WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Needs Revision'
+             ) revision_rows`,
+            [employeeId, employeeId, employeeId, employeeId]
+          );
+          const goalRevisionsCount = proofsNeedsRevision;
           const employeeDept = String(r.dept || '');
           const teamImprovementPlans = await safeCount(
             `SELECT COUNT(*) AS c FROM goal_improvement_plans gip INNER JOIN goals g ON g.id = gip.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Team'`,
@@ -4653,6 +4685,7 @@ ${relevantGoalIdsSql}
             proofs_approved: proofsApproved,
             proofs_rejected: proofsRejected,
             proofs_needs_revision: proofsNeedsRevision,
+            goal_revisions_count: goalRevisionsCount,
             member_proof_ratings_count: memberProofRatingsCount,
             member_proof_rating_avg: memberProofRatingAvg,
             leader_proof_ratings_count: leaderProofRatingsCount,
@@ -4662,9 +4695,12 @@ ${relevantGoalIdsSql}
             self_assessments_count: selfAssessmentsCount,
             last_self_assessment_at: lastSelfAssessmentAt,
             appraisals_count: appraisalsCount,
+            performance_evaluation_forms_count: appraisalsCount,
             appraisals_avg_overall: appraisalsAvg,
             last_appraisal_signoff: lastAppraisalSignoff,
             disciplinary_count: disciplinaryCount,
+            disciplinary_violation_entries_count: disciplinaryViolationEntriesCount,
+            disciplinary_actions_count: disciplinaryActionsCount,
             last_disciplinary_date: lastDisciplinaryDate,
             feedback_360_count: feedbackCount,
             suggestions_count: suggestionsCount,

@@ -35,6 +35,7 @@ interface EmployeePerformanceSnapshot {
   proofs_approved: number;
   proofs_rejected: number;
   proofs_needs_revision: number;
+  goal_revisions_count: number;
   member_proof_ratings_count: number;
   member_proof_rating_avg: number;
   leader_proof_ratings_count: number;
@@ -44,9 +45,12 @@ interface EmployeePerformanceSnapshot {
   self_assessments_count: number;
   last_self_assessment_at: string | null;
   appraisals_count: number;
+  performance_evaluation_forms_count: number;
   appraisals_avg_overall: number;
   last_appraisal_signoff: string | null;
   disciplinary_count: number;
+  disciplinary_violation_entries_count: number;
+  disciplinary_actions_count: number;
   last_disciplinary_date: string | null;
   feedback_360_count: number;
   suggestions_count: number;
@@ -189,8 +193,12 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
         const memberProofRatingsCount = Number(employee.member_proof_ratings_count || 0);
         const selfAssessments = Number(employee.self_assessments_count || 0);
         const appraisalsCount = Number(employee.appraisals_count || 0);
+        const performanceEvaluationFormsCount = Number(employee.performance_evaluation_forms_count || appraisalsCount);
         const appraisalsAvg = Number(employee.appraisals_avg_overall || 0);
         const disciplinaryCount = Number(employee.disciplinary_count || 0);
+        const disciplinaryViolationEntriesCount = Number(employee.disciplinary_violation_entries_count || 0);
+        const disciplinaryActionsCount = Number(employee.disciplinary_actions_count || 0);
+        const goalRevisionsCount = Number(employee.goal_revisions_count || employee.proofs_needs_revision || 0);
         const feedback360 = Number(employee.feedback_360_count || 0);
         const suggestionsCount = Number(employee.suggestions_count || 0);
         const onboardingCount = Number(employee.onboarding_count || 0);
@@ -218,7 +226,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
           (memberProofRatingAvg * 1.5) +
           (leaderProofRatingAvg * 1.5) +
           (selfAssessments * 2) +
-          (appraisalsCount * 2) +
+          (performanceEvaluationFormsCount * 2) +
           (appraisalsAvg * 4) +
           (feedback360 * 2) +
           (suggestionsCount * 1.5) +
@@ -252,6 +260,9 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
           (proofsNeedsRevision * 4) +
           (unratedDelegatedGoals * 12) +
           (disciplinaryCount * 10) +
+          (disciplinaryViolationEntriesCount * 3) +
+          (disciplinaryActionsCount * 4) +
+          (goalRevisionsCount * 4) +
           (hasRatedGoalSignal ? 0 : (Math.max(0, 70 - completionRate) * 0.5)) +
           (hasRatedGoalSignal ? 0 : (Math.max(0, 65 - avgProgress) * 0.5)) +
           (effectiveProofRating > 0 ? Math.max(0, 3.5 - effectiveProofRating) * 8 : 2) +
@@ -303,7 +314,10 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
           row.goalsOverdue > 0 ||
           row.goalsAtRisk > 0 ||
           row.unratedDelegatedGoals > 0 ||
-          row.hasLowProofRating
+          row.hasLowProofRating ||
+          Number(row.employee.goal_revisions_count || 0) > 0 ||
+          Number(row.employee.disciplinary_actions_count || 0) > 0 ||
+          Number(row.employee.disciplinary_violation_entries_count || 0) > 0
         )
     );
     return list.sort((a, b) => a.performanceScore - b.performanceScore || b.goalsOverdue - a.goalsOverdue || b.goalsAtRisk - a.goalsAtRisk || a.avgProgress - b.avgProgress);
@@ -319,6 +333,9 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
     const list = employeePerformanceSignals.filter((row) => {
       if (!hasMinimumSignal(row)) return false;
       if (row.goalsOverdue > 0 || row.goalsAtRisk > 0 || row.unratedDelegatedGoals > 0 || row.hasLowProofRating) return false;
+      if (Number(row.employee.goal_revisions_count || 0) > 0) return false;
+      if (Number(row.employee.disciplinary_actions_count || 0) > 0) return false;
+      if (Number(row.employee.disciplinary_violation_entries_count || 0) > 0) return false;
       // Score threshold OR a strong proof rating (assignee who was rated highly)
       const proofRatingAvg = Number(row.employee.proof_rating_avg || 0);
       const meetsScoreThreshold = row.performanceScore >= 70;
@@ -728,8 +745,12 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">At Risk / Overdue</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goals_at_risk} / {selectedPerformanceEmployee.goals_overdue}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Recovery Open</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.recovery_tasks_open}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Proof Outcomes</p><p className="font-black text-slate-700 dark:text-slate-200">+{selectedPerformanceEmployee.proofs_approved} / -{selectedPerformanceEmployee.proofs_rejected}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Goal Revisions</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goal_revisions_count || 0}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Proof Rating</p><p className="font-black text-slate-700 dark:text-slate-200">{Number(selectedPerformanceEmployee.proof_rating_avg || 0).toFixed(2)} / 5</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Feedback 360</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.feedback_360_count}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Violation Types</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.disciplinary_violation_entries_count || 0}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Disciplinary Actions</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.disciplinary_actions_count || 0}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Eval Forms</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.performance_evaluation_forms_count || selectedPerformanceEmployee.appraisals_count || 0}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Total Forms</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.forms_total_count}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Suggestions</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.suggestions_count}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Onboarding</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.onboarding_signed_count} / {selectedPerformanceEmployee.onboarding_count}</p></div>
