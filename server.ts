@@ -4435,14 +4435,24 @@ ${relevantGoalIdsSql}
           const coachingLogsCount = await safeCount('SELECT COUNT(*) AS c FROM coaching_logs WHERE employee_id = ?', [employeeId]);
           const pipCount = await safeCount('SELECT COUNT(*) AS c FROM pip_plans WHERE employee_id = ?', [employeeId]);
           const idpCount = await safeCount('SELECT COUNT(*) AS c FROM development_plans WHERE employee_id = ?', [employeeId]);
-          const proofRatingsCount = await safeCount(
+          const memberProofRatingsCount = await safeCount(
+            `SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND t.proof_review_rating IS NOT NULL`,
+            [employeeId]
+          );
+          const memberProofRatingAvg = await safeNumber(
+            `SELECT ROUND(COALESCE(AVG(t.proof_review_rating), 0), 2) AS avg_rating FROM goal_member_tasks t WHERE t.member_employee_id = ? AND t.proof_review_rating IS NOT NULL`,
+            [employeeId]
+          );
+          const leaderProofRatingsCount = await safeCount(
             `SELECT COUNT(*) AS c FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = ? OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = ?))`,
             [employeeId, employeeId]
           );
-          const proofRatingAvg = await safeNumber(
+          const leaderProofRatingAvg = await safeNumber(
             `SELECT ROUND(COALESCE(AVG(g.proof_review_rating), 0), 2) AS avg_rating FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = ? OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = ?))`,
             [employeeId, employeeId]
           );
+          const proofRatingsCount = memberProofRatingsCount + leaderProofRatingsCount;
+          const proofRatingAvg = proofRatingsCount > 0 ? Number(((memberProofRatingAvg * memberProofRatingsCount + leaderProofRatingAvg * leaderProofRatingsCount) / proofRatingsCount).toFixed(2)) : 0;
 
           const lastSelfAssessmentAt = await safeText('SELECT MAX(created_at) AS max_created_at FROM self_assessments WHERE employee_id = ?', [employeeId]);
           const lastAppraisalSignoff = await safeText('SELECT MAX(sign_off_date) AS max_sign_off_date FROM appraisals WHERE employee_id = ?', [employeeId]);
@@ -4485,10 +4495,10 @@ ${relevantGoalIdsSql}
             proofs_approved: 0,
             proofs_rejected: 0,
             proofs_needs_revision: 0,
-            member_proof_ratings_count: 0,
-            member_proof_rating_avg: 0,
-            leader_proof_ratings_count: 0,
-            leader_proof_rating_avg: 0,
+            member_proof_ratings_count: memberProofRatingsCount,
+            member_proof_rating_avg: memberProofRatingAvg,
+            leader_proof_ratings_count: leaderProofRatingsCount,
+            leader_proof_rating_avg: leaderProofRatingAvg,
             proof_ratings_count: proofRatingsCount,
             proof_rating_avg: proofRatingAvg,
             self_assessments_count: selfAssessmentsCount,
