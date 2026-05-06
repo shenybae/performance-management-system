@@ -4529,6 +4529,33 @@ ${relevantGoalIdsSql}
           const proofRatingsCount = memberProofRatingsCount + leaderProofRatingsCount;
           const proofRatingAvg = proofRatingsCount > 0 ? Number(((memberProofRatingAvg * memberProofRatingsCount + leaderProofRatingAvg * leaderProofRatingsCount) / proofRatingsCount).toFixed(2)) : 0;
 
+          const delegatedGoalCount = await safeCount(`SELECT COUNT(*) AS c FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = ?`, [employeeId]);
+          const teamGoalCount = await safeCount(`SELECT COUNT(*) AS c FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = ? AND COALESCE(g.scope, 'Individual') = 'Team'`, [employeeId]);
+          const departmentGoalCount = await safeCount(`SELECT COUNT(*) AS c FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = ? AND COALESCE(g.scope, 'Individual') = 'Department'`, [employeeId]);
+          const recoveryTasksTotal = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ?`, [employeeId]);
+          const recoveryTasksOpen = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.status, 'Not Started') NOT IN ('Completed', 'Cancelled')`, [employeeId]);
+          const recoveryTasksCompleted = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.status, 'Not Started') = 'Completed'`, [employeeId]);
+          const proofsApproved = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved'`, [employeeId]);
+          const proofsRejected = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Rejected'`, [employeeId]);
+          const proofsNeedsRevision = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision'`, [employeeId]);
+          const employeeDept = String(r.dept || '');
+          const teamImprovementPlans = await safeCount(
+            `SELECT COUNT(*) AS c FROM goal_improvement_plans gip INNER JOIN goals g ON g.id = gip.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Team'`,
+            [employeeDept]
+          );
+          const teamDevelopmentPlans = await safeCount(
+            `SELECT COUNT(*) AS c FROM goal_development_plans gdp INNER JOIN goals g ON g.id = gdp.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Team'`,
+            [employeeDept]
+          );
+          const departmentImprovementPlans = await safeCount(
+            `SELECT COUNT(*) AS c FROM goal_improvement_plans gip INNER JOIN goals g ON g.id = gip.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Department'`,
+            [employeeDept]
+          );
+          const departmentDevelopmentPlans = await safeCount(
+            `SELECT COUNT(*) AS c FROM goal_development_plans gdp INNER JOIN goals g ON g.id = gdp.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Department'`,
+            [employeeDept]
+          );
+
           const lastSelfAssessmentAt = await safeText('SELECT MAX(created_at) AS max_created_at FROM self_assessments WHERE employee_id = ?', [employeeId]);
           const lastAppraisalSignoff = await safeText('SELECT MAX(sign_off_date) AS max_sign_off_date FROM appraisals WHERE employee_id = ?', [employeeId]);
           const lastDisciplinaryDate = await safeText('SELECT MAX(date_of_warning) AS max_date_of_warning FROM discipline_records WHERE employee_id = ?', [employeeId]);
@@ -4559,18 +4586,18 @@ ${relevantGoalIdsSql}
             goals_overdue: goalsOverdue,
             goals_avg_progress: goalsAvgProgress,
             goals_completion_rate: goalsCompletionRate,
-            delegated_goal_count: 0,
-            team_goal_count: 0,
-            department_goal_count: 0,
+            delegated_goal_count: delegatedGoalCount,
+            team_goal_count: teamGoalCount,
+            department_goal_count: departmentGoalCount,
             assigned_unrated_goals_count: assignedUnratedGoalsCount,
             pip_count: pipCount,
             idp_count: idpCount,
-            recovery_tasks_total: 0,
-            recovery_tasks_open: 0,
-            recovery_tasks_completed: 0,
-            proofs_approved: 0,
-            proofs_rejected: 0,
-            proofs_needs_revision: 0,
+            recovery_tasks_total: recoveryTasksTotal,
+            recovery_tasks_open: recoveryTasksOpen,
+            recovery_tasks_completed: recoveryTasksCompleted,
+            proofs_approved: proofsApproved,
+            proofs_rejected: proofsRejected,
+            proofs_needs_revision: proofsNeedsRevision,
             member_proof_ratings_count: memberProofRatingsCount,
             member_proof_rating_avg: memberProofRatingAvg,
             leader_proof_ratings_count: leaderProofRatingsCount,
@@ -4596,10 +4623,10 @@ ${relevantGoalIdsSql}
             coaching_logs_count: coachingLogsCount,
             last_coaching_log_at: lastCoachingLogAt,
             forms_total_count: formsTotalCount,
-            team_improvement_plans: 0,
-            team_development_plans: 0,
-            department_improvement_plans: 0,
-            department_development_plans: 0,
+            team_improvement_plans: teamImprovementPlans,
+            team_development_plans: teamDevelopmentPlans,
+            department_improvement_plans: departmentImprovementPlans,
+            department_development_plans: departmentDevelopmentPlans,
           };
         }));
 
