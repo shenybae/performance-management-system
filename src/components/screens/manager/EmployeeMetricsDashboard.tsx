@@ -756,11 +756,11 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
               <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-2.5">
                 <p className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">Completed Goals</p>
-                <p className="text-lg font-black text-emerald-700 dark:text-emerald-300">{employeePerformance.reduce((sum, r) => sum + Number(r.goals_completed || 0), 0)}</p>
+                <p className="text-lg font-black text-emerald-700 dark:text-emerald-300">{Number(employeePerformanceSummary?.total_completed_goals ?? employeePerformance.reduce((sum, r) => sum + Number(r.goals_completed || 0), 0))}</p>
               </div>
               <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-2.5">
                 <p className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">Active Goals</p>
-                <p className="text-lg font-black text-amber-700 dark:text-amber-300">{employeePerformance.reduce((sum, r) => sum + Number(r.goals_active || 0), 0)}</p>
+                <p className="text-lg font-black text-amber-700 dark:text-amber-300">{Number(employeePerformanceSummary?.total_active_goals ?? employeePerformance.reduce((sum, r) => sum + Number(r.goals_active || 0), 0))}</p>
               </div>
               <div className="rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 p-2.5">
                 <p className="text-[10px] font-bold uppercase text-sky-700 dark:text-sky-300">Total Self-Assessments</p>

@@ -4348,11 +4348,46 @@ ${relevantGoalIdsSql}
         };
       });
 
+      const uniqueGoalSummaryRows: any = await query(
+        `WITH scoped_employees AS (
+           SELECT e.id
+           FROM employees e
+           ${whereSql}
+         ),
+         scoped_goals AS (
+           SELECT DISTINCT g.id, LOWER(TRIM(COALESCE(g.status, 'Not Started'))) AS status
+           FROM goals g
+           WHERE g.deleted_at IS NULL
+             AND (
+               g.employee_id IN (SELECT id FROM scoped_employees)
+               OR g.leader_id IN (
+                 SELECT u.id
+                 FROM users u
+                 WHERE u.employee_id IN (SELECT id FROM scoped_employees)
+               )
+               OR g.id IN (
+                 SELECT ga.goal_id
+                 FROM goal_assignees ga
+                 WHERE ga.employee_id IN (SELECT id FROM scoped_employees)
+               )
+             )
+         )
+         SELECT
+           COUNT(*) AS total_goals,
+           SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS total_completed_goals,
+           SUM(CASE WHEN status = 'in progress' THEN 1 ELSE 0 END) AS total_active_goals
+         FROM scoped_goals`,
+        params
+      );
+      const uniqueGoalSummary = (Array.isArray(uniqueGoalSummaryRows) ? uniqueGoalSummaryRows[0] : uniqueGoalSummaryRows) || {};
+
       const summary = list.length === 0 ? null : {
         employees: list.length,
         avg_goal_progress: Math.round(list.reduce((sum: number, item: any) => sum + Number(item.goals_completion_rate || 0), 0) / list.length),
         avg_proof_rating: Number((list.reduce((sum: number, item: any) => sum + Number(item.proof_rating_avg || 0), 0) / list.length).toFixed(2)),
-        total_goals: list.reduce((sum: number, item: any) => sum + Number(item.goals_total || 0), 0),
+        total_goals: Number(uniqueGoalSummary.total_goals || 0),
+        total_completed_goals: Number(uniqueGoalSummary.total_completed_goals || 0),
+        total_active_goals: Number(uniqueGoalSummary.total_active_goals || 0),
         total_pips: list.reduce((sum: number, item: any) => sum + Number(item.pip_count || 0), 0),
         total_idps: list.reduce((sum: number, item: any) => sum + Number(item.idp_count || 0), 0),
         total_appraisals: list.reduce((sum: number, item: any) => sum + Number(item.appraisals_count || 0), 0),
@@ -4650,13 +4685,48 @@ ${relevantGoalIdsSql}
           };
         }));
 
+        const uniqueGoalSummaryRows: any = await query(
+          `WITH scoped_employees AS (
+             SELECT e.id
+             FROM employees e
+             ${whereSql}
+           ),
+           scoped_goals AS (
+             SELECT DISTINCT g.id, LOWER(TRIM(COALESCE(g.status, 'Not Started'))) AS status
+             FROM goals g
+             WHERE g.deleted_at IS NULL
+               AND (
+                 g.employee_id IN (SELECT id FROM scoped_employees)
+                 OR g.leader_id IN (
+                   SELECT u.id
+                   FROM users u
+                   WHERE u.employee_id IN (SELECT id FROM scoped_employees)
+                 )
+                 OR g.id IN (
+                   SELECT ga.goal_id
+                   FROM goal_assignees ga
+                   WHERE ga.employee_id IN (SELECT id FROM scoped_employees)
+                 )
+               )
+           )
+           SELECT
+             COUNT(*) AS total_goals,
+             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS total_completed_goals,
+             SUM(CASE WHEN status = 'in progress' THEN 1 ELSE 0 END) AS total_active_goals
+           FROM scoped_goals`,
+          params
+        );
+        const uniqueGoalSummary = (Array.isArray(uniqueGoalSummaryRows) ? uniqueGoalSummaryRows[0] : uniqueGoalSummaryRows) || {};
+
         return res.json({
           employees: list,
           summary: list.length === 0 ? null : {
             employees: list.length,
             avg_goal_progress: Math.round(list.reduce((sum: number, item: any) => sum + Number(item.goals_completion_rate || 0), 0) / list.length),
             avg_proof_rating: Number((list.reduce((sum: number, item: any) => sum + Number(item.proof_rating_avg || 0), 0) / list.length).toFixed(2)),
-            total_goals: list.reduce((sum: number, item: any) => sum + Number(item.goals_total || 0), 0),
+            total_goals: Number(uniqueGoalSummary.total_goals || 0),
+            total_completed_goals: Number(uniqueGoalSummary.total_completed_goals || 0),
+            total_active_goals: Number(uniqueGoalSummary.total_active_goals || 0),
             total_pips: list.reduce((sum: number, item: any) => sum + Number(item.pip_count || 0), 0),
             total_idps: list.reduce((sum: number, item: any) => sum + Number(item.idp_count || 0), 0),
             total_appraisals: list.reduce((sum: number, item: any) => sum + Number(item.appraisals_count || 0), 0),
