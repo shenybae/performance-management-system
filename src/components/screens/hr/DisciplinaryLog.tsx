@@ -18,6 +18,7 @@ interface DisciplinaryLogProps {
 
 export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps) => {
   const [showForm, setShowForm] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [records, setRecords] = useState<any[]>([]);
   const buildEmptyForm = () => ({
     employee_id: '', violation_type: [] as string[], warning_level: '',
@@ -88,7 +89,7 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
 
   const trimText = (value: string) => value.trim();
 
-  useEffect(() => { fetchRecords(); }, []);
+  useEffect(() => { fetchRecords(); }, [showArchived]);
 
   useEffect(() => {
     if (!showForm) return;
@@ -98,7 +99,7 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
 
   const fetchRecords = async () => {
     try {
-      const res = await fetch('/api/discipline_records', { headers: getAuthHeaders() });
+      const res = await fetch(`/api/discipline_records?include_archived=${showArchived ? '1' : '0'}`, { headers: getAuthHeaders() });
       const data = await res.json();
       setRecords(Array.isArray(data) ? data : []);
     } catch { setRecords([]); }
@@ -364,6 +365,12 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="Disciplinary & Warning Log" subtitle="Track behavioral issues and corrective actions" />
         <div className="flex gap-2">
+          <button
+            onClick={() => setShowArchived((prev) => !prev)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${showArchived ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+          >
+            <Archive size={16} /> {showArchived ? 'Hide Archived' : 'Show Archived'}
+          </button>
           <button onClick={() => exportToCSV(records, 'discipline_records')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
             <Download size={16} /> Export XLSX
           </button>

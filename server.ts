@@ -6445,12 +6445,14 @@ ${relevantGoalIdsSql}
       const actor = (req as any).user || {};
       const role = actor.role;
       const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      const includeArchived = String(req.query.include_archived || '0') === '1';
+      const archivedFilter = includeArchived ? '' : ' AND d.deleted_at IS NULL';
 
       if (role === 'HR') {
         const hrDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
         if (!hrDept) return res.json([]);
         const rows = await query(
-          "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+          `SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
           [hrDept]
         );
         return res.json(rows);
@@ -6462,17 +6464,17 @@ ${relevantGoalIdsSql}
         let rows: any[] = [];
         if (managerDept && managerEmployeeId) {
           rows = await query(
-            "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE (LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?)) OR e.manager_id = ?)",
+            `SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE (LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?)) OR e.manager_id = ?)${archivedFilter}`,
             [managerDept, managerEmployeeId]
           ) as any[];
         } else if (managerDept) {
           rows = await query(
-            "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+            `SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
             [managerDept]
           ) as any[];
         } else if (managerEmployeeId) {
           rows = await query(
-            "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE e.manager_id = ?",
+            `SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE e.manager_id = ?${archivedFilter}`,
             [managerEmployeeId]
           ) as any[];
         }
@@ -6484,7 +6486,7 @@ ${relevantGoalIdsSql}
           const supervisorDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
           if (!supervisorDept) return res.json([]);
           const rows = await query(
-            "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+            `SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
             [supervisorDept]
           );
           return res.json(rows);
@@ -6493,7 +6495,7 @@ ${relevantGoalIdsSql}
         const employeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
         if (!employeeId) return res.json([]);
         const rows = await query(
-          "SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE d.employee_id = ?",
+          `SELECT d.*, e.name as employee_name, e.dept as dept FROM discipline_records d LEFT JOIN employees e ON d.employee_id = e.id WHERE d.employee_id = ?${archivedFilter}`,
           [employeeId]
         );
         return res.json(rows);
