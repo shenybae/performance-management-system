@@ -4149,17 +4149,17 @@ ${relevantGoalIdsSql}
           ) proof_revision_rows) AS proofs_needs_revision,
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_ratings_count,
           (SELECT ROUND(COALESCE(AVG(t.proof_review_rating), 0), 2) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_rating_avg,
-          (SELECT COUNT(*) FROM goals g WHERE (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id)) AND g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL) AS leader_proof_ratings_count,
-          (SELECT ROUND(COALESCE(AVG(g.proof_review_rating), 0), 2) FROM goals g WHERE (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id)) AND g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL) AS leader_proof_rating_avg,
+          (SELECT COUNT(*) FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id))) AS leader_proof_ratings_count,
+          (SELECT ROUND(COALESCE(AVG(g.proof_review_rating), 0), 2) FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id))) AS leader_proof_rating_avg,
           (SELECT COUNT(*) FROM (
             SELECT t.proof_review_rating AS rating FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL
             UNION ALL
-            SELECT g.proof_review_rating AS rating FROM goals g WHERE (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id)) AND g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL
+            SELECT g.proof_review_rating AS rating FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id))
           ) proof_ratings) AS proof_ratings_count,
           (SELECT ROUND(COALESCE(AVG(proof_ratings.rating), 0), 2) FROM (
             SELECT t.proof_review_rating AS rating FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL
             UNION ALL
-            SELECT g.proof_review_rating AS rating FROM goals g WHERE (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id)) AND g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL
+            SELECT g.proof_review_rating AS rating FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id))
           ) proof_ratings) AS proof_rating_avg,
 
           (SELECT COUNT(*) FROM self_assessments s WHERE s.employee_id = e.id) AS self_assessments_count,
@@ -4435,19 +4435,12 @@ ${relevantGoalIdsSql}
           const coachingLogsCount = await safeCount('SELECT COUNT(*) AS c FROM coaching_logs WHERE employee_id = ?', [employeeId]);
           const pipCount = await safeCount('SELECT COUNT(*) AS c FROM pip_plans WHERE employee_id = ?', [employeeId]);
           const idpCount = await safeCount('SELECT COUNT(*) AS c FROM development_plans WHERE employee_id = ?', [employeeId]);
-          const ownedGoalIdsSql = `
-            SELECT g.id FROM goals g
-            WHERE g.employee_id = ? AND g.deleted_at IS NULL
-            UNION
-            SELECT g3.id FROM goals g3
-            WHERE g3.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = ?) AND g3.deleted_at IS NULL
-          `;
           const proofRatingsCount = await safeCount(
-            `SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${ownedGoalIdsSql}) AND g.proof_review_rating IS NOT NULL`,
+            `SELECT COUNT(*) AS c FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = ? OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = ?))`,
             [employeeId, employeeId]
           );
           const proofRatingAvg = await safeNumber(
-            `SELECT ROUND(COALESCE(AVG(g.proof_review_rating), 0), 2) AS avg_rating FROM goals g WHERE g.id IN (${ownedGoalIdsSql}) AND g.proof_review_rating IS NOT NULL`,
+            `SELECT ROUND(COALESCE(AVG(g.proof_review_rating), 0), 2) AS avg_rating FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = ? OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = ?))`,
             [employeeId, employeeId]
           );
 
