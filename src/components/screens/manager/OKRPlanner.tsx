@@ -344,6 +344,27 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     return String(goal?.department || goal?.dept || emp?.dept || '').trim() || 'Unassigned';
   };
 
+  const allDepartments = useMemo(() => {
+    const merged = new Set<string>();
+    DEPARTMENTS.forEach((dept) => merged.add(String(dept).trim()));
+
+    for (const emp of employees) {
+      const dept = String((emp as any)?.dept || '').trim();
+      if (dept) merged.add(dept);
+    }
+
+    for (const goal of goals) {
+      const dept = String(goal?.department || goal?.dept || '').trim();
+      if (dept) merged.add(dept);
+    }
+
+    if (managerDept) merged.add(managerDept);
+
+    return Array.from(merged)
+      .filter((dept) => dept && dept.toLowerCase() !== 'unassigned')
+      .sort((a, b) => a.localeCompare(b));
+  }, [employees, goals, managerDept]);
+
   const getGoalTeam = (goal: any) => {
     const explicit = String(goal?.team_name || goal?.team || '').trim();
     if (explicit) return explicit;
@@ -2941,7 +2962,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                   </>
                 ) : (
                   <SearchableSelect
-                    options={DEPARTMENTS.map(d => ({ value: d, label: d }))}
+                    options={allDepartments.map(d => ({ value: d, label: d }))}
                     value={form.department}
                     onChange={v => setForm({ ...form, department: String(v) })}
                     placeholder="Select Department..."
@@ -3518,7 +3539,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
         <div className="mt-3 flex items-center gap-2 min-w-0 overflow-hidden">
           <SearchableSelect
             className="w-52.5 shrink-0"
-            options={[{ value: 'All', label: 'All Departments' }, ...DEPARTMENTS.map(d => ({ value: d, label: d }))]}
+            options={[{ value: 'All', label: 'All Departments' }, ...allDepartments.map(d => ({ value: d, label: d }))]}
             value={filterDept}
             onChange={v => setFilterDept(String(v))}
             placeholder="All Departments"
