@@ -365,12 +365,6 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="Disciplinary & Warning Log" subtitle="Track behavioral issues and corrective actions" />
         <div className="flex gap-2">
-          <button
-            onClick={() => setShowArchived((prev) => !prev)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${showArchived ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
-          >
-            <Archive size={16} /> {showArchived ? 'Hide Archived' : 'Show Archived'}
-          </button>
           <button onClick={() => exportToCSV(records, 'discipline_records')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
             <Download size={16} /> Export XLSX
           </button>
@@ -626,15 +620,23 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
         <Card>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
             <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">All Disciplinary Records</h3>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-              <input
-                type="text"
-                placeholder="Search records..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/50 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-              />
+            <div className="flex w-full sm:w-auto items-center gap-2">
+              <button
+                onClick={() => setShowArchived((prev) => !prev)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-colors shrink-0 ${showArchived ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+              >
+                <Archive size={14} /> {showArchived ? 'Hide Archived' : 'Show Archived'}
+              </button>
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                <input
+                  type="text"
+                  placeholder="Search records..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/50 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                />
+              </div>
             </div>
           </div>
 
