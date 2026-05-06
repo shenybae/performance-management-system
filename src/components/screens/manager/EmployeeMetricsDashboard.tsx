@@ -547,6 +547,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
               ) : (
                 <div className="max-h-82.5 overflow-y-auto pr-1 space-y-2">
                   {underperformingEmployees.map(({ employee, goalsAtRisk, goalsOverdue, avgProgress, performanceScore }) => (
+                                      {underperformingEmployees.map(({ employee, goalsAtRisk, goalsOverdue, avgProgress, performanceScore, unratedDelegatedGoals }) => (
                     <button
                       key={`employee-metrics-underperf-${employee.employee_id}`}
                       onClick={() => setSelectedPerformanceEmployeeId(employee.employee_id)}
@@ -566,6 +567,9 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                       <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-slate-500">
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 text-amber-700 dark:text-amber-300">{goalsAtRisk} at risk</span>
                         <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 dark:bg-rose-900/20 px-2 py-0.5 text-rose-700 dark:text-rose-300">{goalsOverdue} overdue</span>
+                          {unratedDelegatedGoals > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 dark:bg-orange-900/20 px-2 py-0.5 text-orange-700 dark:text-orange-300">{unratedDelegatedGoals} unrated goal{unratedDelegatedGoals !== 1 ? 's' : ''}</span>
+                          )}
                       </div>
                     </button>
                   ))}
