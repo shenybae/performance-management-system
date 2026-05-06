@@ -311,13 +311,13 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
       (row) =>
         hasMinimumSignal(row) &&
         (
+          row.performanceScore < 55 ||
           row.goalsOverdue > 0 ||
           row.goalsAtRisk > 0 ||
           row.unratedDelegatedGoals > 0 ||
           row.hasLowProofRating ||
-          Number(row.employee.goal_revisions_count || 0) > 0 ||
-          Number(row.employee.disciplinary_actions_count || 0) > 0 ||
-          Number(row.employee.disciplinary_violation_entries_count || 0) > 0
+          (row.completionRate < 40 && Number(row.employee.goal_revisions_count || 0) >= 2) ||
+          (Number(row.employee.forms_total_count || 0) === 0 && row.performanceScore < 65)
         )
     );
     return list.sort((a, b) => a.performanceScore - b.performanceScore || b.goalsOverdue - a.goalsOverdue || b.goalsAtRisk - a.goalsAtRisk || a.avgProgress - b.avgProgress);
@@ -333,14 +333,14 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
     const list = employeePerformanceSignals.filter((row) => {
       if (!hasMinimumSignal(row)) return false;
       if (row.goalsOverdue > 0 || row.goalsAtRisk > 0 || row.unratedDelegatedGoals > 0 || row.hasLowProofRating) return false;
-      if (Number(row.employee.goal_revisions_count || 0) > 0) return false;
-      if (Number(row.employee.disciplinary_actions_count || 0) > 0) return false;
-      if (Number(row.employee.disciplinary_violation_entries_count || 0) > 0) return false;
-      // Score threshold OR a strong proof rating (assignee who was rated highly)
-      const proofRatingAvg = Number(row.employee.proof_rating_avg || 0);
-      const meetsScoreThreshold = row.performanceScore >= 70;
-      const hasStrongProofRating = proofRatingAvg >= 4.0;
-      return meetsScoreThreshold || hasStrongProofRating;
+      const goalRevisionsCount = Number(row.employee.goal_revisions_count || 0);
+      const formsTotalCount = Number(row.employee.forms_total_count || 0);
+      return (
+        row.performanceScore >= 75 &&
+        row.completionRate >= 60 &&
+        formsTotalCount >= 1 &&
+        goalRevisionsCount <= 1
+      );
     });
     return list.sort((a, b) => b.performanceScore - a.performanceScore || a.goalsOverdue - b.goalsOverdue || a.goalsAtRisk - b.goalsAtRisk || b.avgProgress - a.avgProgress);
   }, [employeePerformanceSignals]);
@@ -748,7 +748,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Goal Revisions</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goal_revisions_count || 0}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Proof Rating</p><p className="font-black text-slate-700 dark:text-slate-200">{Number(selectedPerformanceEmployee.proof_rating_avg || 0).toFixed(2)} / 5</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Feedback 360</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.feedback_360_count}</p></div>
-                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Violation Types</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.disciplinary_violation_entries_count || 0}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Violation Records</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.disciplinary_violation_entries_count || 0}</p><p className="text-[10px] text-slate-400">Logged violation entries</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Disciplinary Actions</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.disciplinary_actions_count || 0}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Eval Forms</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.performance_evaluation_forms_count || selectedPerformanceEmployee.appraisals_count || 0}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Total Forms</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.forms_total_count}</p></div>
