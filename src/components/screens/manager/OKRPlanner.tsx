@@ -1524,6 +1524,43 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     });
   }, [goals, activeTab, filterDept, filterStatus, searchTerm, showArchived]);
 
+  const combinedStatusFilterValue = useMemo(() => {
+    if (showArchived) return 'show_archived';
+    if (filterStatus === 'In Progress') return 'active_only';
+    if (filterStatus === 'All') return 'all_statuses';
+    return `status:${filterStatus}`;
+  }, [showArchived, filterStatus]);
+
+  const combinedStatusFilterOptions = useMemo(() => ([
+    { value: 'all_statuses', label: 'All Statuses' },
+    { value: 'active_only', label: 'Active Only (In Progress)' },
+    { value: 'show_archived', label: 'Show Archived' },
+    ...STATUSES.map((s) => ({ value: `status:${s}`, label: s })),
+  ]), []);
+
+  const handleCombinedStatusFilterChange = (v: string | number | Array<string | number>) => {
+    const next = String(v || 'all_statuses');
+    if (next === 'show_archived') {
+      setShowArchived(true);
+      setFilterStatus('All');
+      return;
+    }
+    if (next === 'active_only') {
+      setShowArchived(false);
+      setFilterStatus('In Progress');
+      return;
+    }
+    if (next === 'all_statuses') {
+      setShowArchived(false);
+      setFilterStatus('All');
+      return;
+    }
+    if (next.startsWith('status:')) {
+      setShowArchived(false);
+      setFilterStatus(next.slice('status:'.length) || 'All');
+    }
+  };
+
   const proofReviewGoal = useMemo(() => {
     if (!proofReviewOpenGoal) return null;
     return goals.find((goal: any) => Number(goal?.id) === Number(proofReviewOpenGoal)) || null;
@@ -3548,25 +3585,13 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
             dropdownVariant="pills-horizontal"
           />
           <SearchableSelect
-            className="w-47.5 shrink-0"
-            options={[{ value: 'All', label: 'All Statuses' }, ...STATUSES.map(s => ({ value: s, label: s }))]}
-            value={filterStatus}
-            onChange={v => setFilterStatus(String(v))}
+            className="w-72 shrink-0"
+            options={combinedStatusFilterOptions}
+            value={combinedStatusFilterValue}
+            onChange={handleCombinedStatusFilterChange}
             placeholder="All Statuses"
             pill
             searchable
-            dropdownVariant="pills-horizontal"
-          />
-          <SearchableSelect
-            className="w-45 shrink-0"
-            options={[
-              { value: 'active', label: 'Active Only' },
-              { value: 'include', label: 'Show Archived' },
-            ]}
-            value={showArchived ? 'include' : 'active'}
-            onChange={v => setShowArchived(String(v) === 'include')}
-            pill
-            searchable={false}
             dropdownVariant="pills-horizontal"
           />
         </div>
