@@ -641,7 +641,20 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-245 text-sm">
+            <table className="w-full min-w-[1180px] table-fixed text-sm">
+              <colgroup>
+                <col className="w-[13%]" />
+                <col className="w-[7%]" />
+                <col className="w-[5%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[8%]" />
+                <col className="w-[5%]" />
+                <col className="w-[10%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[4%]" />
+              </colgroup>
               <thead>
                 <tr className="border-b dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   <th className="text-left py-2 pr-4">Employee</th>
@@ -654,7 +667,7 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
                   <th className="text-left py-2 pr-4">Supervisor</th>
                   <th className="text-left py-2 pr-4">Approved By</th>
                   <th className="text-left py-2 pr-4">Action Taken</th>
-                  <th className="text-left py-2 pr-4">Actions</th>
+                  <th className="text-center py-2 pr-2">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -662,8 +675,8 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
                   const sigStatus = getSignatureStatus(d);
                   return (
                   <tr key={d.id} className="border-b dark:border-slate-800">
-                    <td className="py-3 pr-4 font-semibold text-slate-800 dark:text-slate-100">{d.employee_name || `#${d.employee_id}`}</td>
-                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.dept || '—'}</td>
+                    <td className="py-3 pr-4 font-semibold text-slate-800 dark:text-slate-100 break-words">{d.employee_name || `#${d.employee_id}`}</td>
+                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 break-words">{d.dept || '—'}</td>
                     <td className="py-3 pr-4">
                       <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-bold ${
                         d.warning_level === 'Final' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
@@ -676,18 +689,18 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
                       </span>
                     </td>
                     <td className="py-3 pr-4">
-                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${sigStatus.className}`}>
+                      <span className={`inline-flex text-[10px] px-2 py-0.5 rounded font-bold ${sigStatus.className}`}>
                         {sigStatus.label}
                       </span>
                     </td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-300">{d.violation_type || '—'}</td>
-                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.violation_date || '—'}</td>
-                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.violation_place || '—'}</td>
-                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.supervisor || '—'}</td>
-                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : '—'}</td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-300">{d.action_taken || '—'}</td>
-                    <td className="py-3 pr-4">
-                      <div className="flex items-center gap-1">
+                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-300 break-words">{d.violation_type || '—'}</td>
+                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{d.violation_date || '—'}</td>
+                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 break-words">{d.violation_place || '—'}</td>
+                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 break-words">{d.supervisor || '—'}</td>
+                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 break-words">{d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : '—'}</td>
+                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-300 break-words">{d.action_taken || '—'}</td>
+                    <td className="py-3 pr-2">
+                      <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => { handleView(d.id); exportRecordAsPDF(d); }}
                           disabled={!isFullyAcknowledged(d)}
@@ -733,7 +746,7 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
                 })}
                 {filteredRecords.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="py-10 text-center text-slate-400">{search ? 'No records match your search.' : 'No disciplinary records found.'}</td>
+                    <td colSpan={11} className="py-10 text-center text-slate-400">No records found.</td>
                   </tr>
                 )}
               </tbody>

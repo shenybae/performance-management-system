@@ -6446,7 +6446,9 @@ ${relevantGoalIdsSql}
       const role = actor.role;
       const actorCtx = await getActorOrgContext(Number(actor.id || 0));
       const includeArchived = String(req.query.include_archived || '0') === '1';
-      const archivedFilter = includeArchived ? '' : ' AND d.deleted_at IS NULL';
+      const archivedFilter = includeArchived
+        ? ' AND (COALESCE(d.is_archived, 0) = 1 OR d.archived_at IS NOT NULL OR d.deleted_at IS NOT NULL)'
+        : ' AND COALESCE(d.is_archived, 0) = 0 AND d.archived_at IS NULL AND d.deleted_at IS NULL';
 
       if (role === 'HR') {
         const hrDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
