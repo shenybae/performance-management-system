@@ -546,8 +546,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                 <p className="text-xs text-slate-400">No underperforming employees found for the current metrics.</p>
               ) : (
                 <div className="max-h-82.5 overflow-y-auto pr-1 space-y-2">
-                  {underperformingEmployees.map(({ employee, goalsAtRisk, goalsOverdue, avgProgress, performanceScore }) => (
-                                      {underperformingEmployees.map(({ employee, goalsAtRisk, goalsOverdue, avgProgress, performanceScore, unratedDelegatedGoals }) => (
+                  {underperformingEmployees.map(({ employee, goalsAtRisk, goalsOverdue, avgProgress, performanceScore, unratedDelegatedGoals }) => (
                     <button
                       key={`employee-metrics-underperf-${employee.employee_id}`}
                       onClick={() => setSelectedPerformanceEmployeeId(employee.employee_id)}
