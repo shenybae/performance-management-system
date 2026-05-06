@@ -428,7 +428,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                       <span className="h-3 w-3 rounded-full border border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400">
                         <span className="block h-full w-full text-center text-[8px] leading-[10px] text-white">✓</span>
                       </span>
-                      <span className="max-w-35 truncate">{opt.label}</span>
+                      <span className="whitespace-normal break-words leading-tight text-left">{opt.label}</span>
                     </button>
                   );
                 })}
@@ -450,7 +450,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 Options
               </div>
               <div className="mt-1 flex-1 min-h-[72px] overflow-y-auto overscroll-contain px-1 pb-1 pr-2 custom-scrollbar">
-                <div className="grid gap-2 pt-1" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+                <div className="grid gap-2 pt-1" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                 {filteredOptionsOnly.length === 0 && (
                   <div className="px-3 py-2 text-xs text-slate-400 italic col-span-full">No matches found</div>
                 )}
@@ -461,7 +461,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                       key={String(opt.value)}
                       type="button"
                       onClick={() => toggleMultiValue(opt.value)}
-                      className={`inline-flex min-h-8 w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
+                      className={`inline-flex min-h-10 w-full items-start gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${
                         selected
                           ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/25 dark:text-blue-300'
                           : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800'
@@ -470,7 +470,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                       <span className={`h-3 w-3 rounded-full border ${selected ? 'border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400' : 'border-slate-300 dark:border-slate-600'}`}>
                         {selected ? <span className="block h-full w-full text-center text-[8px] leading-[10px] text-white">✓</span> : null}
                       </span>
-                      <span className="truncate text-left">{opt.label}</span>
+                      <span className="text-left whitespace-normal break-words leading-tight">{opt.label}</span>
                     </button>
                   );
                 })}

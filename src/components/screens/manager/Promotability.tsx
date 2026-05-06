@@ -286,10 +286,6 @@ export const Promotability = ({ employees }: Props) => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
         <SectionHeader title="Promotability & Recommendation" subtitle="Readiness scoring, recommendations, succession planning" />
-        <button onClick={() => exportToCSV(readinessData.map(e => ({ Name: e.employee_name, Dept: e.dept, Position: e.position, Readiness: e.readiness_score, Tier: e.succession_tier, Appraisal: e.appraisal_score, Goals: e.goal_score, Training: e.training_score, Tenure: e.tenure_score })), 'promotability_report')}
-          className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shrink-0">
-          <Download size={16} /> Export XLSX
-        </button>
       </div>
 
       {/* Tabs */}
