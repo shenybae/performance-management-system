@@ -447,12 +447,21 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
         subtitle="Dedicated performance intelligence screen for managers"
       />
 
+      <Card>
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <span className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 font-bold text-slate-600 dark:text-slate-300">How scoring works</span>
+          <span className="text-slate-500">Score is out of 100 and combines goals, proof ratings, appraisals, disciplinary signals, revisions, and forms.</span>
+          <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 font-bold text-emerald-700 dark:text-emerald-300">Performing: score ≥ 75 + healthy goal/form signals</span>
+          <span className="inline-flex items-center rounded-full bg-red-50 dark:bg-red-900/20 px-2 py-0.5 font-bold text-red-700 dark:text-red-300">Underperforming: low score or strong risk signals</span>
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 xl:grid-cols-[340px_minmax(0,1fr)] gap-4 items-start">
         <Card>
           <div className="flex items-center justify-between gap-2 mb-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Employee Sidebar</p>
-              <p className="text-xs text-slate-400">Own analytics panel for employee performance</p>
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Team Overview</p>
+              <p className="text-xs text-slate-400">Quick summary and employee picker</p>
             </div>
             <div className="flex gap-2">
               <button
@@ -571,7 +580,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                     >
                       <div className="flex items-center justify-between gap-2 w-full">
                         <span className="font-bold text-xs text-slate-700 dark:text-slate-200 truncate max-w-45" title={employee.employee_name}>{employee.employee_name}</span>
-                        <span className="text-[10px] font-black text-red-600 dark:text-red-300">{performanceScore.toFixed(0)}</span>
+                        <span className="text-[10px] font-black text-red-600 dark:text-red-300">Score {performanceScore.toFixed(0)}</span>
                       </div>
                       <div className="flex items-center gap-2 text-[10px] text-slate-400">
                         <span>{employee.position || 'N/A'}</span>
@@ -585,6 +594,9 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                         <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 dark:bg-rose-900/20 px-2 py-0.5 text-rose-700 dark:text-rose-300">{goalsOverdue} overdue</span>
                           {unratedDelegatedGoals > 0 && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 dark:bg-orange-900/20 px-2 py-0.5 text-orange-700 dark:text-orange-300">{unratedDelegatedGoals} unrated goal{unratedDelegatedGoals !== 1 ? 's' : ''}</span>
+                          )}
+                          {Number(employee.goal_revisions_count || 0) > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-900/20 px-2 py-0.5 text-violet-700 dark:text-violet-300">{Number(employee.goal_revisions_count || 0)} revisions</span>
                           )}
                       </div>
                     </button>
@@ -615,7 +627,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                     >
                       <div className="flex items-center justify-between gap-2 w-full">
                         <span className="font-bold text-xs text-slate-700 dark:text-slate-200 truncate max-w-45" title={employee.employee_name}>{employee.employee_name}</span>
-                        <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-300">{performanceScore.toFixed(0)}</span>
+                        <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-300">Score {performanceScore.toFixed(0)}</span>
                       </div>
                       <div className="flex items-center gap-2 text-[10px] text-slate-400">
                         <span>{employee.position || 'N/A'}</span>
@@ -721,6 +733,9 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                   <p className="text-sm font-black text-slate-800 dark:text-slate-100">{selectedPerformanceEmployee.employee_name}</p>
                   <p className="text-[11px] text-slate-500">{selectedPerformanceEmployee.position || 'N/A'} • {selectedPerformanceEmployee.dept || 'N/A'}</p>
                 </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30 text-[11px] text-slate-500">
+                  <p><span className="font-bold">Performance Score:</span> calculated from goals, revisions, ratings, disciplinary signals, and forms.</p>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => void createPIPFromMetrics(selectedPerformanceEmployee)}
@@ -738,8 +753,8 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                   </button>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
-                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Goals</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goals_total}</p></div>
-                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Completion</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goals_completion_rate}%</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Goals in Scope</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goals_total}</p></div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Goal Completion</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goals_completion_rate}%</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">PIP / IDP</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.pip_count} / {selectedPerformanceEmployee.idp_count}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">Appraisals</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.appraisals_count}</p></div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30"><p className="text-slate-500 font-bold">At Risk / Overdue</p><p className="font-black text-slate-700 dark:text-slate-200">{selectedPerformanceEmployee.goals_at_risk} / {selectedPerformanceEmployee.goals_overdue}</p></div>
