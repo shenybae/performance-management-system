@@ -137,16 +137,6 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
     return employeePerformance.find((item) => Number(item.employee_id) === Number(selectedPerformanceEmployeeId)) || null;
   }, [employeePerformance, selectedPerformanceEmployeeId]);
 
-  const progressChartData = useMemo(() => {
-    return [...employeePerformanceSignals]
-      .sort((a, b) => b.performanceScore - a.performanceScore)
-      .slice(0, 8)
-      .map(({ employee, performanceScore }) => ({
-        name: employee.employee_name.length > 12 ? `${employee.employee_name.slice(0, 12)}...` : employee.employee_name,
-        progress: Math.round(performanceScore),
-      }));
-  }, [employeePerformanceSignals]);
-
   const riskBreakdownData = useMemo(() => {
     const atRisk = employeePerformance.reduce((sum, row) => sum + Number(row.goals_at_risk || 0), 0);
     const overdue = employeePerformance.reduce((sum, row) => sum + Number(row.goals_overdue || 0), 0);
@@ -290,6 +280,16 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
       })
       .sort((a, b) => b.performanceScore - a.performanceScore || a.goalsOverdue - b.goalsOverdue || a.goalsAtRisk - b.goalsAtRisk || b.avgProgress - a.avgProgress);
   }, [employeePerformance]);
+
+  const progressChartData = useMemo(() => {
+    return [...employeePerformanceSignals]
+      .sort((a, b) => b.performanceScore - a.performanceScore)
+      .slice(0, 8)
+      .map(({ employee, performanceScore }) => ({
+        name: employee.employee_name.length > 12 ? `${employee.employee_name.slice(0, 12)}...` : employee.employee_name,
+        progress: Math.round(performanceScore),
+      }));
+  }, [employeePerformanceSignals]);
 
   // Minimum-signal gate: employee must have at least one meaningful data point
   // before being classified as underperforming. Without signal → "Needs Data".
