@@ -4148,11 +4148,11 @@ ${relevantGoalIdsSql}
             ) AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Needs Revision'
           ) proof_revision_rows) AS proofs_needs_revision,
           (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_ratings_count,
-          (SELECT ROUND(COALESCE(AVG(COALESCE(t.proof_review_rating, 0)), 0), 2) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_rating_avg,
+          (SELECT ROUND(COALESCE(AVG(t.proof_review_rating), 0), 2) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_rating_avg,
           (SELECT COUNT(*) FROM goals g WHERE g.id IN (
 ${relevantGoalIdsSql}
           ) AND g.proof_review_rating IS NOT NULL) AS leader_proof_ratings_count,
-          (SELECT ROUND(COALESCE(AVG(COALESCE(g.proof_review_rating, 0)), 0), 2) FROM goals g WHERE g.id IN (
+          (SELECT ROUND(COALESCE(AVG(g.proof_review_rating), 0), 2) FROM goals g WHERE g.id IN (
 ${relevantGoalIdsSql}
           ) AND g.proof_review_rating IS NOT NULL) AS leader_proof_rating_avg,
           (SELECT COUNT(*) FROM (
@@ -4421,9 +4421,13 @@ ${relevantGoalIdsSql}
               WHERE u.employee_id = ?
             )
           `;
+          const todaySql = usePostgres ? `TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')` : `DATE('now')`;
           const goalsTotal = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql})`, [employeeId, employeeId, employeeId]);
           const goalsCompleted = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.status, 'Not Started') = 'Completed'`, [employeeId, employeeId, employeeId]);
           const goalsActive = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')`, [employeeId, employeeId, employeeId]);
+          const goalsAtRisk = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.status, 'Not Started') = 'At Risk'`, [employeeId, employeeId, employeeId]);
+          const goalsOverdue = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND g.target_date IS NOT NULL AND g.target_date < ${todaySql} AND COALESCE(g.status, 'Not Started') NOT IN ('Completed', 'Cancelled')`, [employeeId, employeeId, employeeId]);
+          const goalsAvgProgress = await safeNumber(`SELECT ROUND(COALESCE(AVG(g.progress), 0), 1) AS avg_p FROM goals g WHERE g.id IN (${relevantGoalIdsSql})`, [employeeId, employeeId, employeeId]);
           const appraisalsCount = await safeCount('SELECT COUNT(*) AS c FROM appraisals WHERE employee_id = ?', [employeeId]);
           const appraisalsAvg = await safeNumber('SELECT ROUND(COALESCE(AVG(COALESCE(overall, 0)), 0), 2) AS avg_overall FROM appraisals WHERE employee_id = ?', [employeeId]);
           const disciplinaryCount = await safeCount('SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ?', [employeeId]);
@@ -4444,7 +4448,7 @@ ${relevantGoalIdsSql}
             [employeeId, employeeId, employeeId]
           );
           const proofRatingAvg = await safeNumber(
-            `SELECT ROUND(COALESCE(AVG(COALESCE(g.proof_review_rating, 0)), 0), 2) AS avg_rating FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND g.proof_review_rating IS NOT NULL`,
+            `SELECT ROUND(COALESCE(AVG(g.proof_review_rating), 0), 2) AS avg_rating FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND g.proof_review_rating IS NOT NULL`,
             [employeeId, employeeId, employeeId]
           );
 
@@ -4474,9 +4478,9 @@ ${relevantGoalIdsSql}
             goals_total: goalsTotal,
             goals_active: goalsActive,
             goals_completed: goalsCompleted,
-            goals_at_risk: 0,
-            goals_overdue: 0,
-            goals_avg_progress: 0,
+            goals_at_risk: goalsAtRisk,
+            goals_overdue: goalsOverdue,
+            goals_avg_progress: goalsAvgProgress,
             goals_completion_rate: goalsCompletionRate,
             delegated_goal_count: 0,
             team_goal_count: 0,
