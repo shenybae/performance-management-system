@@ -8019,7 +8019,7 @@ ${relevantGoalIdsSql}
         query(`SELECT * FROM appraisals WHERE employee_id IN (${ph}) ORDER BY sign_off_date DESC`, empIds),
         query(`SELECT * FROM goals WHERE employee_id IN (${ph}) AND deleted_at IS NULL`, empIds),
         query(
-          `SELECT ga.employee_id, g.id AS goal_id, g.status, g.progress
+          `SELECT ga.employee_id, g.id AS goal_id, g.status, g.progress, g.proof_review_rating
            FROM goal_assignees ga
            INNER JOIN goals g ON g.id = ga.goal_id
            WHERE ga.employee_id IN (${ph})
@@ -8027,7 +8027,7 @@ ${relevantGoalIdsSql}
           empIds
         ),
         query(
-          `SELECT t.member_employee_id AS employee_id, t.status, t.progress
+          `SELECT t.member_employee_id AS employee_id, t.status, t.progress, t.proof_review_rating
            FROM goal_member_tasks t
            WHERE t.member_employee_id IN (${ph})
              AND t.deleted_at IS NULL`,
@@ -8056,10 +8056,16 @@ ${relevantGoalIdsSql}
       }
       // Group goals by employee using owned + assigned goals (deduped by goal id)
       const goalBucketMap: Record<number, Record<string, { status: string; progress: number }>> = {};
-      const addGoalSignal = (employeeId: number, goalId: number, status: any, progress: any) => {
+      const isCompletedAndRated = (status: any, rating: any) => {
+        const statusOk = String(status || '').toLowerCase() === 'completed';
+        const numericRating = Number(rating || 0);
+        const ratingOk = numericRating >= 1 && numericRating <= 5;
+        return statusOk && ratingOk;
+      };
+      const addGoalSignal = (employeeId: number, goalId: number, status: any, progress: any, rating: any) => {
         const eid = Number(employeeId || 0);
         const gid = Number(goalId || 0);
-        if (!eid || !gid) return;
+        if (!eid || !gid || !isCompletedAndRated(status, rating)) return;
         if (!goalBucketMap[eid]) goalBucketMap[eid] = {};
         goalBucketMap[eid][String(gid)] = {
           status: String(status || ''),
@@ -8068,19 +8074,19 @@ ${relevantGoalIdsSql}
       };
 
       for (const g of (goals as any[])) {
-        addGoalSignal(Number(g.employee_id || 0), Number(g.id || 0), g.status, g.progress);
+        addGoalSignal(Number(g.employee_id || 0), Number(g.id || 0), g.status, g.progress, g.proof_review_rating);
       }
       for (const g of (assignedGoals as any[])) {
-        addGoalSignal(Number(g.employee_id || 0), Number(g.goal_id || 0), g.status, g.progress);
+        addGoalSignal(Number(g.employee_id || 0), Number(g.goal_id || 0), g.status, g.progress, g.proof_review_rating);
       }
 
       const taskMap: Record<number, { total: number; completed: number; avgProgress: number }> = {};
       for (const t of (memberTasks as any[])) {
         const eid = Number(t.employee_id || 0);
-        if (!eid) continue;
+        if (!eid || !isCompletedAndRated(t.status, t.proof_review_rating)) continue;
         if (!taskMap[eid]) taskMap[eid] = { total: 0, completed: 0, avgProgress: 0 };
         taskMap[eid].total++;
-        if (String(t.status || '').toLowerCase() === 'completed') taskMap[eid].completed++;
+        taskMap[eid].completed++;
         taskMap[eid].avgProgress += Number(t.progress || 0);
       }
       for (const eid of Object.keys(taskMap)) {
