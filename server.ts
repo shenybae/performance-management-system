@@ -4150,7 +4150,7 @@ ${relevantGoalIdsSql}
           )) AS goals_total,
           (SELECT COUNT(*) FROM goals g WHERE g.id IN (
 ${relevantGoalIdsSql}
-          ) AND COALESCE(g.status, 'Not Started') <> 'Cancelled' AND COALESCE(g.status, 'Not Started') <> 'Completed') AS goals_active,
+          ) AND LOWER(TRIM(COALESCE(g.status, 'Not Started'))) = 'in progress') AS goals_active,
           (SELECT COUNT(*) FROM (
             SELECT cg.id FROM goals cg WHERE cg.id IN (
 ${completedGoalIdsSql}
@@ -4510,7 +4510,7 @@ ${relevantGoalIdsSql}
           const todaySql = usePostgres ? `TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')` : `DATE('now')`;
           const goalsTotal = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql})`, [employeeId, employeeId, employeeId]);
           const goalsCompleted = await safeCount(`SELECT COUNT(*) AS c FROM (SELECT cg.id FROM goals cg WHERE cg.id IN (${completedGoalIdsSql})) completed_rows`, [employeeId, employeeId, employeeId, employeeId]);
-          const goalsActive = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.status, 'Not Started') <> 'Cancelled' AND COALESCE(g.status, 'Not Started') <> 'Completed'`, [employeeId, employeeId, employeeId]);
+          const goalsActive = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND LOWER(TRIM(COALESCE(g.status, 'Not Started'))) = 'in progress'`, [employeeId, employeeId, employeeId]);
           const goalsAtRisk = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.status, 'Not Started') = 'At Risk'`, [employeeId, employeeId, employeeId]);
           const goalsOverdue = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND g.target_date IS NOT NULL AND g.target_date < ${todaySql} AND COALESCE(g.status, 'Not Started') <> 'Cancelled' AND COALESCE(g.status, 'Not Started') <> 'Completed'`, [employeeId, employeeId, employeeId]);
           const goalsAvgProgress = await safeNumber(`SELECT ROUND(COALESCE(AVG(g.progress), 0), 1) AS avg_p FROM goals g WHERE g.id IN (${scoredGoalIdsSql})`, [employeeId, employeeId, employeeId, employeeId]);
