@@ -558,15 +558,17 @@ export const VerificationOfReview = () => {
       const tasks: any[] = [];
       const assignedPreparerId = Number(d.preparer_user_id || 0);
       const assignedSupervisorId = Number(d.supervisor_user_id || 0);
+      const me = Number(user?.id || 0);
       if (!d.preparer_signature && (!assignedPreparerId || assignedPreparerId === Number(user?.id || 0))) {
         tasks.push({ ...d, queueStage: 'preparer', queueKey: `sup-disc-prep-${d.id}` });
       }
-      if (!!d.preparer_signature && !d.supervisor_signature && (!assignedSupervisorId || assignedSupervisorId === Number(user?.id || 0))) {
+      const canSignAsSupervisor = !assignedSupervisorId || assignedSupervisorId === me || isSupervisor;
+      if (!!d.preparer_signature && !d.supervisor_signature && canSignAsSupervisor) {
         tasks.push({ ...d, queueStage: 'supervisor', queueKey: `sup-disc-sup-${d.id}` });
       }
       return tasks;
     }),
-    [disciplineRecords, queueDept, user?.id]
+    [disciplineRecords, queueDept, user?.id, isSupervisor]
   );
   const doneSupervisorDiscipline = useMemo(
     () => disciplineRecords.filter((d) => !!d.supervisor_signature && sameDept(d)),

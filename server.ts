@@ -6789,7 +6789,8 @@ ${relevantGoalIdsSql}
       if (!allowed && !allowedByTokenDept) return res.status(403).json({ error: 'Forbidden' });
 
       const assignedSupervisor = Number(rec.supervisor_user_id || 0);
-      if (assignedSupervisor && Number(actor.id || 0) !== assignedSupervisor) {
+      const allowDeptSupervisorFallback = actorRole === 'Employee' && !!actorCtx.isSupervisor;
+      if (assignedSupervisor && Number(actor.id || 0) !== assignedSupervisor && !allowDeptSupervisorFallback) {
         return res.status(403).json({ error: 'This supervisor signature is assigned to a different user' });
       }
 
