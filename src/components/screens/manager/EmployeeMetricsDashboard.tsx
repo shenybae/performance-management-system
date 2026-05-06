@@ -218,6 +218,10 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
           (departmentDevelopmentPlans * 1)
         );
 
+        // A rated proof means the employee has real goal signal even if they are
+        // contributing as an assignee rather than goal owner.
+        const hasRatedGoalSignal = proofRatingAvg > 0 || memberProofRatingAvg > 0 || leaderProofRatingAvg > 0;
+
         const negativeScore = (
           (goalsAtRisk * 5) +
           (goalsOverdue * 8) +
@@ -227,14 +231,14 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
           (proofsRejected * 3) +
           (proofsNeedsRevision * 4) +
           (disciplinaryCount * 10) +
-          (Math.max(0, 70 - completionRate) * 0.5) +
-          (Math.max(0, 65 - avgProgress) * 0.5) +
+          (hasRatedGoalSignal ? 0 : (Math.max(0, 70 - completionRate) * 0.5)) +
+          (hasRatedGoalSignal ? 0 : (Math.max(0, 65 - avgProgress) * 0.5)) +
           (proofRatingAvg > 0 ? Math.max(0, 3.5 - proofRatingAvg) * 4 : 2) +
           (appraisalsAvg > 0 ? Math.max(0, 3.5 - appraisalsAvg) * 5 : 3) +
           (selfAssessments === 0 ? 3 : 0) +
           (formsTotalCount === 0 ? 5 : 0) +
           (appraisalsCount === 0 ? 4 : 0) +
-          (goalsTotal === 0 ? 4 : 0)
+          (!hasRatedGoalSignal && goalsTotal === 0 ? 4 : 0)
         );
 
         const rawScore = 50 + positiveScore - negativeScore;
