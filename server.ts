@@ -8015,9 +8015,24 @@ ${relevantGoalIdsSql}
       const empIds = employeeRows.map((e: any) => e.id);
       const ph = empIds.map(() => '?').join(',');
 
-      const [appraisals, goals, elearning, activePips, feedbackRows, suggestionRows, selfAssessmentRows, coachingRows, disciplineRows] = await Promise.all([
+      const [appraisals, goals, assignedGoals, memberTasks, elearning, activePips, feedbackRows, suggestionRows, selfAssessmentRows, coachingRows, disciplineRows] = await Promise.all([
         query(`SELECT * FROM appraisals WHERE employee_id IN (${ph}) ORDER BY sign_off_date DESC`, empIds),
-        query(`SELECT * FROM goals WHERE employee_id IN (${ph})`, empIds),
+        query(`SELECT * FROM goals WHERE employee_id IN (${ph}) AND deleted_at IS NULL`, empIds),
+        query(
+          `SELECT ga.employee_id, g.id AS goal_id, g.status, g.progress
+           FROM goal_assignees ga
+           INNER JOIN goals g ON g.id = ga.goal_id
+           WHERE ga.employee_id IN (${ph})
+             AND g.deleted_at IS NULL`,
+          empIds
+        ),
+        query(
+          `SELECT t.member_employee_id AS employee_id, t.status, t.progress
+           FROM goal_member_tasks t
+           WHERE t.member_employee_id IN (${ph})
+             AND t.deleted_at IS NULL`,
+          empIds
+        ),
         query(`SELECT * FROM elearning_recommendations WHERE employee_id IN (${ph})`, empIds),
         query(`SELECT DISTINCT employee_id FROM pip_plans WHERE employee_id IN (${ph}) AND outcome = 'In Progress'`, empIds),
         query(
@@ -8039,16 +8054,53 @@ ${relevantGoalIdsSql}
       for (const a of (appraisals as any[])) {
         if (!appraisalMap[a.employee_id]) appraisalMap[a.employee_id] = a;
       }
-      // Group goals by employee
-      const goalMap: Record<number, { total: number; completed: number; avgProgress: number }> = {};
+      // Group goals by employee using owned + assigned goals (deduped by goal id)
+      const goalBucketMap: Record<number, Record<string, { status: string; progress: number }>> = {};
+      const addGoalSignal = (employeeId: number, goalId: number, status: any, progress: any) => {
+        const eid = Number(employeeId || 0);
+        const gid = Number(goalId || 0);
+        if (!eid || !gid) return;
+        if (!goalBucketMap[eid]) goalBucketMap[eid] = {};
+        goalBucketMap[eid][String(gid)] = {
+          status: String(status || ''),
+          progress: Number(progress || 0),
+        };
+      };
+
       for (const g of (goals as any[])) {
-        if (!goalMap[g.employee_id]) goalMap[g.employee_id] = { total: 0, completed: 0, avgProgress: 0 };
-        goalMap[g.employee_id].total++;
-        if ((g.status || '').toLowerCase() === 'completed') goalMap[g.employee_id].completed++;
+        addGoalSignal(Number(g.employee_id || 0), Number(g.id || 0), g.status, g.progress);
       }
-      for (const eid of Object.keys(goalMap)) {
-        const empGoals = (goals as any[]).filter((g: any) => g.employee_id === Number(eid));
-        goalMap[Number(eid)].avgProgress = empGoals.length > 0 ? Math.round(empGoals.reduce((s: number, g: any) => s + (g.progress || 0), 0) / empGoals.length) : 0;
+      for (const g of (assignedGoals as any[])) {
+        addGoalSignal(Number(g.employee_id || 0), Number(g.goal_id || 0), g.status, g.progress);
+      }
+
+      const taskMap: Record<number, { total: number; completed: number; avgProgress: number }> = {};
+      for (const t of (memberTasks as any[])) {
+        const eid = Number(t.employee_id || 0);
+        if (!eid) continue;
+        if (!taskMap[eid]) taskMap[eid] = { total: 0, completed: 0, avgProgress: 0 };
+        taskMap[eid].total++;
+        if (String(t.status || '').toLowerCase() === 'completed') taskMap[eid].completed++;
+        taskMap[eid].avgProgress += Number(t.progress || 0);
+      }
+      for (const eid of Object.keys(taskMap)) {
+        const key = Number(eid);
+        const total = Number(taskMap[key].total || 0);
+        taskMap[key].avgProgress = total > 0 ? Math.round(taskMap[key].avgProgress / total) : 0;
+      }
+
+      const goalMap: Record<number, { total: number; completed: number; avgProgress: number }> = {};
+      for (const eid of empIds) {
+        const goalsById = goalBucketMap[eid] || {};
+        const goalEntries = Object.values(goalsById);
+        if (goalEntries.length > 0) {
+          const total = goalEntries.length;
+          const completed = goalEntries.filter((g) => String(g.status || '').toLowerCase() === 'completed').length;
+          const avgProgress = Math.round(goalEntries.reduce((sum, g) => sum + Number(g.progress || 0), 0) / total);
+          goalMap[eid] = { total, completed, avgProgress };
+        } else {
+          goalMap[eid] = taskMap[eid] || { total: 0, completed: 0, avgProgress: 0 };
+        }
       }
       // Group training by employee
       const trainingMap: Record<number, { total: number; completed: number }> = {};
