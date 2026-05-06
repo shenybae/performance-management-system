@@ -906,9 +906,9 @@ export const Promotability = ({ employees }: Props) => {
                         </div>
                       </td>
                       <td className="py-3 px-3 text-xs text-slate-500">{cp.department || '—'}</td>
-                      <td className="py-3 px-3 text-xs font-bold text-slate-600 dark:text-slate-300">{cp.min_tenure_months || 12}mo</td>
+                      <td className="py-3 px-3 text-xs font-bold text-slate-600 dark:text-slate-300">{Number(cp.min_tenure_months ?? 0)}mo</td>
                       <td className="py-3 px-3">
-                        <span className="text-xs font-black" style={{ color: scoreColor(cp.min_readiness_score || 60) }}>{cp.min_readiness_score || 60}%</span>
+                        <span className="text-xs font-black" style={{ color: scoreColor(Number(cp.min_readiness_score ?? 0)) }}>{Number(cp.min_readiness_score ?? 0)}%</span>
                       </td>
                       <td className="py-3 px-3 text-xs text-slate-500 truncate max-w-[200px]">{cp.notes || '—'}</td>
                       <td className="py-3 px-3 text-right">

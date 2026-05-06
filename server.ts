@@ -8055,10 +8055,10 @@ ${relevantGoalIdsSql}
         const gd = goalMap[emp.id] || { total: 0, completed: 0, avgProgress: 0 };
         const goalScore = gd.total > 0 ? gd.avgProgress : 0;
         const td = trainingMap[emp.id] || { total: 0, completed: 0 };
-        const trainingScore = td.total > 0 ? Math.round((td.completed / td.total) * 100) : 50;
+        const trainingScore = td.total > 0 ? Math.round((td.completed / td.total) * 100) : 0;
         const hireDate = emp.hire_date ? new Date(emp.hire_date) : null;
         const tenureMonths = hireDate ? Math.floor((now - hireDate.getTime()) / (30.44 * 24 * 60 * 60 * 1000)) : 0;
-        const tenureScore = tenureMonths >= 48 ? 100 : tenureMonths >= 24 ? 80 : tenureMonths >= 12 ? 60 : tenureMonths >= 6 ? 40 : 20;
+        const tenureScore = Math.max(0, Math.min(100, Math.round((tenureMonths / 60) * 100)));
         const readinessScore = Math.round((appraisalScore * 0.40) + (goalScore * 0.30) + (trainingScore * 0.15) + (tenureScore * 0.15));
         const successionTier = readinessScore >= 80 ? 'Ready Now' : readinessScore >= 60 ? 'Ready in 1-2 Years' : readinessScore >= 40 ? 'High Potential' : 'Developing';
         return {
