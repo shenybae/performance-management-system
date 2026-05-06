@@ -74,6 +74,7 @@ const CHART_COLORS = ['#0f766e', '#0ea5e9', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 const clampToHundred = (value: number) => Math.max(0, Math.min(100, value));
 const safeRatio = (num: number, den: number) => (den > 0 ? num / den : 0);
+const PERFORMING_THRESHOLD = 65;
 
 export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) => {
   const [employeePerformance, setEmployeePerformance] = useState<EmployeePerformanceSnapshot[]>([]);
@@ -306,18 +307,20 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
     return hasGoal || hasAppraisal || hasSelfAssess || hasProof || hasFeedback || hasAnyForm || hasDelegatedGoal;
   };
 
-  const underperformingEmployees = useMemo(() => {
-    const list = employeePerformanceSignals.filter(
-      (row) =>
-        hasMinimumSignal(row) &&
-        (
-          row.performanceScore < 60 ||
-          row.severeRisk ||
-          row.hasLowProofRating ||
-          (row.completionRate < 40 && Number(row.employee.goal_revisions_count || 0) >= 2) ||
-          (Number(row.employee.performance_evaluation_forms_count || row.employee.appraisals_count || 0) === 0 && row.performanceScore < 64)
-        )
+  const isUnderperforming = (row: (typeof employeePerformanceSignals)[number]) => {
+    if (!hasMinimumSignal(row)) return false;
+    const hasNoEvalForms = Number(row.employee.performance_evaluation_forms_count || row.employee.appraisals_count || 0) === 0;
+    return (
+      row.severeRisk ||
+      row.hasLowProofRating ||
+      row.performanceScore < PERFORMING_THRESHOLD ||
+      (row.completionRate < 40 && Number(row.employee.goal_revisions_count || 0) >= 2) ||
+      (hasNoEvalForms && row.performanceScore < PERFORMING_THRESHOLD)
     );
+  };
+
+  const underperformingEmployees = useMemo(() => {
+    const list = employeePerformanceSignals.filter((row) => isUnderperforming(row));
     return list.sort((a, b) => a.performanceScore - b.performanceScore || b.goalsOverdue - a.goalsOverdue || b.goalsAtRisk - a.goalsAtRisk || a.avgProgress - b.avgProgress);
   }, [employeePerformanceSignals]);
 
@@ -330,18 +333,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
   const performingEmployees = useMemo(() => {
     const list = employeePerformanceSignals.filter((row) => {
       if (!hasMinimumSignal(row)) return false;
-      if (row.severeRisk) return false;
-      const goalRevisionsCount = Number(row.employee.goal_revisions_count || 0);
-      const performanceEvalCount = Number(row.employee.performance_evaluation_forms_count || row.employee.appraisals_count || 0);
-      const formsTotalCount = Number(row.employee.forms_total_count || 0);
-      const disciplineActionsCount = Number(row.employee.disciplinary_actions_count || 0);
-      return (
-        row.performanceScore >= 72 &&
-        row.completionRate >= 55 &&
-        (formsTotalCount >= 1 || performanceEvalCount >= 1) &&
-        goalRevisionsCount <= 3 &&
-        disciplineActionsCount <= 1
-      );
+      return !isUnderperforming(row);
     });
     return list.sort((a, b) => b.performanceScore - a.performanceScore || a.goalsOverdue - b.goalsOverdue || a.goalsAtRisk - b.goalsAtRisk || b.avgProgress - a.avgProgress);
   }, [employeePerformanceSignals]);
