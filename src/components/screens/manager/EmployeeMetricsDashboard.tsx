@@ -272,9 +272,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
         hasMinimumSignal(row) &&
         (
           row.goalsOverdue > 0 ||
-          row.goalsAtRisk > 0 ||
-          Number(row.employee.pip_count || 0) > 0 ||
-          Number(row.employee.disciplinary_count || 0) > 0
+          row.goalsAtRisk > 0
         )
     );
     return list.sort((a, b) => a.performanceScore - b.performanceScore || b.goalsOverdue - a.goalsOverdue || b.goalsAtRisk - a.goalsAtRisk || a.avgProgress - b.avgProgress);
