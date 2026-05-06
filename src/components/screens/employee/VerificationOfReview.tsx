@@ -268,14 +268,17 @@ export const VerificationOfReview = () => {
           employee_statement: remarks || undefined,
         }),
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as any));
+        throw new Error(err?.error || 'Failed to sign disciplinary record');
+      }
       window.notify?.('Disciplinary acknowledgement saved', 'success');
       setActiveId(null);
       setSignature('');
       setRemarks('');
       fetchDisciplineRecords();
-    } catch {
-      window.notify?.('Failed to sign disciplinary record', 'error');
+    } catch (e: any) {
+      window.notify?.(e?.message || 'Failed to sign disciplinary record', 'error');
     }
   };
 

@@ -6680,7 +6680,8 @@ ${relevantGoalIdsSql}
       const actor = (req as any).user || {};
       if (actor.role !== 'Employee') return res.status(403).json({ error: 'Only employees can sign this record' });
 
-      const employeeId = normalizeEmployeeId(actor.employee_id);
+      const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      const employeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
       if (!employeeId) return res.status(400).json({ error: 'Employee profile not linked to this account' });
 
       const id = Number(req.params.id);
