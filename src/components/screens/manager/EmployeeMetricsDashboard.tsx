@@ -24,6 +24,7 @@ interface EmployeePerformanceSnapshot {
   goals_avg_progress: number;
   goals_completion_rate: number;
   delegated_goal_count: number;
+  assigned_unrated_goals_count: number;
   team_goal_count: number;
   department_goal_count: number;
   pip_count: number;
@@ -198,8 +199,8 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
         const coachingLogsCount = Number(employee.coaching_logs_count || 0);
         const formsTotalCount = Number(employee.forms_total_count || 0);
         const delegatedGoals = Number(employee.delegated_goal_count || 0);
-        const ratedDelegatedGoals = Math.min(delegatedGoals, memberProofRatingsCount);
-        const unratedDelegatedGoals = Math.max(0, delegatedGoals - ratedDelegatedGoals);
+        const unratedDelegatedGoals = Number(employee.assigned_unrated_goals_count ?? Math.max(0, delegatedGoals - Math.min(delegatedGoals, memberProofRatingsCount)));
+        const ratedDelegatedGoals = Math.max(0, delegatedGoals - unratedDelegatedGoals);
         const teamGoals = Number(employee.team_goal_count || 0);
         const departmentGoals = Number(employee.department_goal_count || 0);
         const teamImprovementPlans = Number(employee.team_improvement_plans || 0);

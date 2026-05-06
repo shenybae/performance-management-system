@@ -4133,35 +4133,28 @@ async function startServer() {
           e.dept,
 
           (SELECT COUNT(*) FROM goals g WHERE g.id IN (
-${relevantGoalIdsSql}
+${ownedLeadGoalIdsSql}
           )) AS goals_total,
           (SELECT COUNT(*) FROM goals g WHERE g.id IN (
-${relevantGoalIdsSql}
-          ) AND COALESCE(g.status, 'Not Started') <> 'Cancelled' AND g.id NOT IN (
-${completedGoalIdsSql}
-          )) AS goals_active,
-          (SELECT COUNT(*) FROM (
-            SELECT cg.id FROM goals cg WHERE cg.id IN (
-${completedGoalIdsSql}
-            )
-          ) completed_rows) AS goals_completed,
+${ownedLeadGoalIdsSql}
+          ) AND COALESCE(g.status, 'Not Started') <> 'Cancelled' AND COALESCE(g.status, 'Not Started') <> 'Completed') AS goals_active,
           (SELECT COUNT(*) FROM goals g WHERE g.id IN (
-${relevantGoalIdsSql}
-          ) AND COALESCE(g.status, 'Not Started') = 'At Risk' AND g.id NOT IN (
-${completedGoalIdsSql}
-          )) AS goals_at_risk,
+${ownedLeadGoalIdsSql}
+          ) AND COALESCE(g.status, 'Not Started') = 'Completed') AS goals_completed,
           (SELECT COUNT(*) FROM goals g WHERE g.id IN (
-${relevantGoalIdsSql}
-          ) AND g.target_date IS NOT NULL AND g.target_date < ${todaySql} AND COALESCE(g.status, 'Not Started') <> 'Cancelled' AND g.id NOT IN (
-${completedGoalIdsSql}
-          )) AS goals_overdue,
+${ownedLeadGoalIdsSql}
+          ) AND COALESCE(g.status, 'Not Started') = 'At Risk') AS goals_at_risk,
+          (SELECT COUNT(*) FROM goals g WHERE g.id IN (
+${ownedLeadGoalIdsSql}
+          ) AND g.target_date IS NOT NULL AND g.target_date < ${todaySql} AND COALESCE(g.status, 'Not Started') <> 'Cancelled' AND COALESCE(g.status, 'Not Started') <> 'Completed') AS goals_overdue,
           (SELECT ROUND(COALESCE(AVG(g.progress), 0), 1) FROM goals g WHERE g.id IN (
-${relevantGoalIdsSql}
+${ownedLeadGoalIdsSql}
           )) AS goals_avg_progress,
 
-          (SELECT COUNT(*) FROM goal_assignees ga LEFT JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id) AS delegated_goal_count,
-          (SELECT COUNT(*) FROM goal_assignees ga LEFT JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id AND COALESCE(g.scope, 'Individual') = 'Team') AS team_goal_count,
-          (SELECT COUNT(*) FROM goal_assignees ga LEFT JOIN goals g ON g.id = ga.goal_id WHERE ga.employee_id = e.id AND COALESCE(g.scope, 'Individual') = 'Department') AS department_goal_count,
+          (SELECT COUNT(*) FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = e.id) AS delegated_goal_count,
+          (SELECT COUNT(*) FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = e.id AND COALESCE(g.scope, 'Individual') = 'Team') AS team_goal_count,
+          (SELECT COUNT(*) FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = e.id AND COALESCE(g.scope, 'Individual') = 'Department') AS department_goal_count,
+          (SELECT COUNT(*) FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = e.id AND NOT EXISTS (SELECT 1 FROM goal_member_tasks t WHERE t.goal_id = ga.goal_id AND t.member_employee_id = e.id AND t.deleted_at IS NULL AND t.proof_review_rating IS NOT NULL)) AS assigned_unrated_goals_count,
 
           (SELECT COUNT(*) FROM pip_plans p WHERE p.employee_id = e.id) AS pip_count,
           (SELECT COUNT(*) FROM development_plans d WHERE d.employee_id = e.id) AS idp_count,
@@ -4299,6 +4292,7 @@ ${relevantGoalIdsSql}
           delegated_goal_count: Number(r.delegated_goal_count || 0),
           team_goal_count: Number(r.team_goal_count || 0),
           department_goal_count: Number(r.department_goal_count || 0),
+          assigned_unrated_goals_count: Number(r.assigned_unrated_goals_count || 0),
           pip_count: Number(r.pip_count || 0),
           idp_count: Number(r.idp_count || 0),
           recovery_tasks_total: Number(r.recovery_tasks_total || 0),
@@ -4494,12 +4488,13 @@ ${relevantGoalIdsSql}
             SELECT g2.id FROM goals g2 WHERE g2.id IN (${assignedRatedGoalIdsSql})
           `;
           const todaySql = usePostgres ? `TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')` : `DATE('now')`;
-          const goalsTotal = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql})`, [employeeId, employeeId, employeeId]);
-          const goalsCompleted = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${completedGoalIdsSql})`, [employeeId, employeeId, employeeId, employeeId]);
-          const goalsActive = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.status, 'Not Started') <> 'Cancelled' AND g.id NOT IN (${completedGoalIdsSql})`, [employeeId, employeeId, employeeId, employeeId, employeeId, employeeId, employeeId]);
-          const goalsAtRisk = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.status, 'Not Started') = 'At Risk' AND g.id NOT IN (${completedGoalIdsSql})`, [employeeId, employeeId, employeeId, employeeId, employeeId, employeeId, employeeId]);
-          const goalsOverdue = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND g.target_date IS NOT NULL AND g.target_date < ${todaySql} AND COALESCE(g.status, 'Not Started') <> 'Cancelled' AND g.id NOT IN (${completedGoalIdsSql})`, [employeeId, employeeId, employeeId, employeeId, employeeId, employeeId, employeeId]);
-          const goalsAvgProgress = await safeNumber(`SELECT ROUND(COALESCE(AVG(g.progress), 0), 1) AS avg_p FROM goals g WHERE g.id IN (${relevantGoalIdsSql})`, [employeeId, employeeId, employeeId]);
+          const goalsTotal = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${ownedLeadGoalIdsSql})`, [employeeId, employeeId]);
+          const goalsCompleted = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${ownedLeadGoalIdsSql}) AND COALESCE(g.status, 'Not Started') = 'Completed'`, [employeeId, employeeId]);
+          const goalsActive = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${ownedLeadGoalIdsSql}) AND COALESCE(g.status, 'Not Started') <> 'Cancelled' AND COALESCE(g.status, 'Not Started') <> 'Completed'`, [employeeId, employeeId]);
+          const goalsAtRisk = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${ownedLeadGoalIdsSql}) AND COALESCE(g.status, 'Not Started') = 'At Risk'`, [employeeId, employeeId]);
+          const goalsOverdue = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${ownedLeadGoalIdsSql}) AND g.target_date IS NOT NULL AND g.target_date < ${todaySql} AND COALESCE(g.status, 'Not Started') <> 'Cancelled' AND COALESCE(g.status, 'Not Started') <> 'Completed'`, [employeeId, employeeId]);
+          const goalsAvgProgress = await safeNumber(`SELECT ROUND(COALESCE(AVG(g.progress), 0), 1) AS avg_p FROM goals g WHERE g.id IN (${ownedLeadGoalIdsSql})`, [employeeId, employeeId]);
+          const assignedUnratedGoalsCount = await safeCount(`SELECT COUNT(*) AS c FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = ? AND NOT EXISTS (SELECT 1 FROM goal_member_tasks t WHERE t.goal_id = ga.goal_id AND t.member_employee_id = ? AND t.deleted_at IS NULL AND t.proof_review_rating IS NOT NULL)`, [employeeId, employeeId]);
           const appraisalsCount = await safeCount('SELECT COUNT(*) AS c FROM appraisals WHERE employee_id = ?', [employeeId]);
           const appraisalsAvg = await safeNumber('SELECT ROUND(COALESCE(AVG(COALESCE(overall, 0)), 0), 2) AS avg_overall FROM appraisals WHERE employee_id = ?', [employeeId]);
           const disciplinaryCount = await safeCount('SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ?', [employeeId]);
@@ -4567,6 +4562,7 @@ ${relevantGoalIdsSql}
             delegated_goal_count: 0,
             team_goal_count: 0,
             department_goal_count: 0,
+            assigned_unrated_goals_count: assignedUnratedGoalsCount,
             pip_count: pipCount,
             idp_count: idpCount,
             recovery_tasks_total: 0,
