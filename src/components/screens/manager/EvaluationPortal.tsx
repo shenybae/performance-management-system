@@ -745,9 +745,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
           <button onClick={() => { setView('dashboard'); setDetailRecord(null); }} className="flex items-center gap-2 text-sm text-slate-500 hover:text-teal-deep dark:hover:text-teal-green transition-colors">
             <ArrowLeft size={16} /> Back to Dashboard
           </button>
-          <button onClick={() => exportPDF(a)} className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">
-            <FileText size={16} /> Export PDF
-          </button>
+
         </div>
         <Card>
           <div className="flex items-center justify-between mb-4">
@@ -888,7 +886,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                   <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Overall</th>
                   <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Signed</th>
                   <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Verified</th>
-                  <th className="pb-2"></th>
+                  <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Actions</th>
                 </tr></thead>
                 <tbody>
                   {appraisals.map(a => {
