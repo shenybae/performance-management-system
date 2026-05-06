@@ -321,6 +321,10 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
       window.notify?.('PDF export is only available after all three parties have signed (Preparer, Supervisor, Employee).', 'error');
       return;
     }
+    const preparerPrintedName = d.preparer_name || d.preparer_full_name || d.prepared_by || d.approved_by_name || 'Preparer';
+    const supervisorPrintedName = d.supervisor_signer_name || d.supervisor || 'Supervisor';
+    const employeePrintedName = d.employee_name || `Employee #${d.employee_id || '—'}`;
+
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Disciplinary Action - ${d.employee_name || ''}</title>
 <style>body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:24px 32px}h1{font-size:17px;font-weight:900;margin-bottom:2px}h2{font-size:13px;font-weight:700;margin:16px 0 6px;border-bottom:1px solid #ccc;padding-bottom:3px}table{width:100%;border-collapse:collapse;margin-bottom:8px}td,th{padding:5px 8px;border:1px solid #ccc;font-size:11px;vertical-align:top}th{background:#f3f4f6;font-weight:700;text-align:left}.label{font-weight:700;width:30%}.sig-row{display:flex;gap:24px;margin-top:16px}.sig-block{flex:1;text-align:center}.sig-block img{max-height:44px;max-width:100%;object-fit:contain;display:block;margin:0 auto}.sig-line{width:80%;height:1px;border-bottom:1px solid #000;margin:0 auto 2px}.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:#dcfce7;color:#166534}</style></head>
 <body>
@@ -340,9 +344,9 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
 <tr><td class="label">Approved By</td><td>${d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? ', ' + d.approved_by_title : ''}` : '—'}</td></tr></table>
 <h2>Signatures <span class="badge">Fully Acknowledged</span></h2>
 <div class="sig-row">
-${sigBlockHtml(d.preparer_signature, 'Preparer', d.preparer_signature_date)}
-${sigBlockHtml(d.supervisor_signature, 'Supervisor', d.supervisor_signature_date)}
-${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
+${sigBlockHtml(d.preparer_signature, 'Preparer', d.preparer_signature_date, preparerPrintedName)}
+${sigBlockHtml(d.supervisor_signature, 'Supervisor', d.supervisor_signature_date, supervisorPrintedName)}
+${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date, employeePrintedName)}
 </div>
 </body></html>`;
     const win = window.open('', '_blank');
