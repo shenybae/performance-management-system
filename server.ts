@@ -8015,17 +8015,9 @@ ${relevantGoalIdsSql}
       const empIds = employeeRows.map((e: any) => e.id);
       const ph = empIds.map(() => '?').join(',');
 
-      const [appraisals, goals, assignedGoals, memberTasks, elearning, activePips, feedbackRows, suggestionRows, selfAssessmentRows, coachingRows, disciplineRows] = await Promise.all([
+      const [appraisals, goals, memberTasks, elearning, activePips, feedbackRows, suggestionRows, selfAssessmentRows, coachingRows, disciplineRows] = await Promise.all([
         query(`SELECT * FROM appraisals WHERE employee_id IN (${ph}) ORDER BY sign_off_date DESC`, empIds),
         query(`SELECT * FROM goals WHERE employee_id IN (${ph}) AND deleted_at IS NULL`, empIds),
-        query(
-          `SELECT ga.employee_id, g.id AS goal_id, g.status, g.progress, g.proof_review_rating
-           FROM goal_assignees ga
-           INNER JOIN goals g ON g.id = ga.goal_id
-           WHERE ga.employee_id IN (${ph})
-             AND g.deleted_at IS NULL`,
-          empIds
-        ),
         query(
           `SELECT t.member_employee_id AS employee_id, t.status, t.progress, t.proof_review_rating
            FROM goal_member_tasks t
@@ -8054,7 +8046,8 @@ ${relevantGoalIdsSql}
       for (const a of (appraisals as any[])) {
         if (!appraisalMap[a.employee_id]) appraisalMap[a.employee_id] = a;
       }
-      // Group goals by employee using owned + assigned goals (deduped by goal id)
+      // Group goals by employee using owned goals only.
+      // Assignees must have their own rated member-task evidence to count.
       const goalBucketMap: Record<number, Record<string, { status: string; progress: number }>> = {};
       const isCompletedAndRated = (status: any, rating: any) => {
         const statusOk = String(status || '').toLowerCase() === 'completed';
@@ -8075,9 +8068,6 @@ ${relevantGoalIdsSql}
 
       for (const g of (goals as any[])) {
         addGoalSignal(Number(g.employee_id || 0), Number(g.id || 0), g.status, g.progress, g.proof_review_rating);
-      }
-      for (const g of (assignedGoals as any[])) {
-        addGoalSignal(Number(g.employee_id || 0), Number(g.goal_id || 0), g.status, g.progress, g.proof_review_rating);
       }
 
       const taskMap: Record<number, { total: number; completed: number; avgProgress: number }> = {};
