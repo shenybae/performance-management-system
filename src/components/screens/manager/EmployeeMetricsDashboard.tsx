@@ -185,6 +185,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
         const proofRatingAvg = Number(employee.proof_rating_avg || 0);
         const memberProofRatingAvg = Number(employee.member_proof_rating_avg || 0);
         const leaderProofRatingAvg = Number(employee.leader_proof_rating_avg || 0);
+        const memberProofRatingsCount = Number(employee.member_proof_ratings_count || 0);
         const selfAssessments = Number(employee.self_assessments_count || 0);
         const appraisalsCount = Number(employee.appraisals_count || 0);
         const appraisalsAvg = Number(employee.appraisals_avg_overall || 0);
@@ -197,6 +198,8 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
         const coachingLogsCount = Number(employee.coaching_logs_count || 0);
         const formsTotalCount = Number(employee.forms_total_count || 0);
         const delegatedGoals = Number(employee.delegated_goal_count || 0);
+        const ratedDelegatedGoals = Math.min(delegatedGoals, memberProofRatingsCount);
+        const unratedDelegatedGoals = Math.max(0, delegatedGoals - ratedDelegatedGoals);
         const teamGoals = Number(employee.team_goal_count || 0);
         const departmentGoals = Number(employee.department_goal_count || 0);
         const teamImprovementPlans = Number(employee.team_improvement_plans || 0);
@@ -223,7 +226,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
           (exitInterviewsCount * 1) +
           (coachingLogsCount * 1.5) +
           (formsTotalCount * 0.3) +
-          (delegatedGoals * 1.5) +
+          (ratedDelegatedGoals * 1.5) +
           (teamGoals * 1) +
           (departmentGoals * 1) +
           (teamImprovementPlans * 1) +
@@ -235,6 +238,8 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
         // A rated proof means the employee has real goal signal even if they are
         // contributing as an assignee rather than goal owner.
         const hasRatedGoalSignal = proofRatingAvg > 0 || memberProofRatingAvg > 0 || leaderProofRatingAvg > 0;
+        const effectiveProofRating = proofRatingAvg > 0 ? proofRatingAvg : Math.max(memberProofRatingAvg, leaderProofRatingAvg);
+        const hasLowProofRating = effectiveProofRating > 0 && effectiveProofRating < 3.5;
 
         const negativeScore = (
           (goalsAtRisk * 5) +
@@ -244,10 +249,11 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
           (recoveryOpen * 4) +
           (proofsRejected * 3) +
           (proofsNeedsRevision * 4) +
+          (unratedDelegatedGoals * 12) +
           (disciplinaryCount * 10) +
           (hasRatedGoalSignal ? 0 : (Math.max(0, 70 - completionRate) * 0.5)) +
           (hasRatedGoalSignal ? 0 : (Math.max(0, 65 - avgProgress) * 0.5)) +
-          (proofRatingAvg > 0 ? Math.max(0, 3.5 - proofRatingAvg) * 4 : 2) +
+          (effectiveProofRating > 0 ? Math.max(0, 3.5 - effectiveProofRating) * 8 : 2) +
           (appraisalsAvg > 0 ? Math.max(0, 3.5 - appraisalsAvg) * 5 : 3) +
           (selfAssessments === 0 ? 3 : 0) +
           (formsTotalCount === 0 ? 5 : 0) +
@@ -264,6 +270,8 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
           goalsOverdue,
           avgProgress,
           completionRate,
+          unratedDelegatedGoals,
+          hasLowProofRating,
           performanceScore,
           severity: 100 - performanceScore,
         };
@@ -278,7 +286,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
     const hasGoal       = Number(e.goals_total          || 0) >= 1;
     const hasAppraisal  = Number(e.appraisals_count     || 0) >= 1;
     const hasSelfAssess = Number(e.self_assessments_count || 0) >= 1;
-    const hasProof      = Number(e.proof_rating_avg     || 0) > 0;
+    const hasProof      = Math.max(Number(e.proof_rating_avg || 0), Number(e.member_proof_rating_avg || 0), Number(e.leader_proof_rating_avg || 0)) > 0;
     const hasFeedback   = Number(e.feedback_360_count   || 0) >= 1;
     const hasAnyForm    = Number(e.forms_total_count    || 0) >= 1;
     return hasGoal || hasAppraisal || hasSelfAssess || hasProof || hasFeedback || hasAnyForm;
@@ -290,7 +298,9 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
         hasMinimumSignal(row) &&
         (
           row.goalsOverdue > 0 ||
-          row.goalsAtRisk > 0
+          row.goalsAtRisk > 0 ||
+          row.unratedDelegatedGoals > 0 ||
+          row.hasLowProofRating
         )
     );
     return list.sort((a, b) => a.performanceScore - b.performanceScore || b.goalsOverdue - a.goalsOverdue || b.goalsAtRisk - a.goalsAtRisk || a.avgProgress - b.avgProgress);
@@ -303,7 +313,15 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
   }, [employeePerformanceSignals]);
 
   const performingEmployees = useMemo(() => {
-    const list = employeePerformanceSignals.filter((row) => hasMinimumSignal(row) && row.performanceScore >= 70);
+    const list = employeePerformanceSignals.filter(
+      (row) =>
+        hasMinimumSignal(row) &&
+        row.performanceScore >= 70 &&
+        row.goalsOverdue === 0 &&
+        row.goalsAtRisk === 0 &&
+        row.unratedDelegatedGoals === 0 &&
+        !row.hasLowProofRating
+    );
     return list.sort((a, b) => b.performanceScore - a.performanceScore || a.goalsOverdue - b.goalsOverdue || a.goalsAtRisk - b.goalsAtRisk || b.avgProgress - a.avgProgress);
   }, [employeePerformanceSignals]);
 
