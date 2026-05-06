@@ -545,7 +545,7 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date)}
         </motion.div>
       )}
 
-      {!showForm && records.length > 0 && (
+      {!showForm && (
         <>
           {/* Stat Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
