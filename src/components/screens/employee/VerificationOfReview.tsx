@@ -1046,6 +1046,34 @@ export const VerificationOfReview = () => {
             {a.reviewers_comment && <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Reviewer Comments</p><p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded p-2 whitespace-pre-line">{a.reviewers_comment}</p></div>}
           </div>
         )}
+        {/* Signatures section — same layout across all roles */}
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+          <p className="text-[10px] font-bold uppercase text-slate-400 mb-3">Signatures</p>
+          <div className={`grid gap-3 ${isAch ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
+            {(isAch ? [
+              { label: 'Manager', printName: a.supervisor_print_name, sig: a.supervisor_signature, date: a.supervisor_signature_date },
+              { label: 'Employee', printName: a.employee_print_name || a.employee_name, sig: a.employee_signature, date: a.employee_signature_date },
+            ] : [
+              { label: 'Supervisor', printName: a.supervisor_print_name, sig: a.supervisor_signature, date: a.supervisor_signature_date },
+              { label: 'Reviewer', printName: a.reviewer_print_name, sig: a.reviewer_signature, date: a.reviewer_signature_date },
+              { label: 'Employee', printName: a.employee_print_name || a.employee_name, sig: a.employee_signature, date: a.employee_signature_date },
+              { label: 'HR Admin', printName: a.hr_print_name, sig: a.hr_signature, date: a.hr_signature_date },
+            ]).map(s => (
+              <div key={s.label} className="text-center">
+                <p className="text-[10px] font-bold uppercase text-slate-400">{s.label}</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate mb-1">{s.printName || '—'}</p>
+                {s.sig ? (
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-1 bg-white dark:bg-slate-800">
+                    <img src={s.sig} alt={`${s.label} signature`} className="h-10 mx-auto object-contain" />
+                  </div>
+                ) : (
+                  <div className="border border-dashed border-slate-300 dark:border-slate-600 rounded-lg h-12 flex items-center justify-center text-[10px] text-slate-400">No signature</div>
+                )}
+                <p className="text-[10px] text-slate-400 mt-1">{s.date || '—'}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   };

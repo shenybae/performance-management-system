@@ -3783,8 +3783,10 @@ async function startServer() {
 
       const formType = (b.form_type || '').toString().toLowerCase();
       const isPerformanceEval = formType.includes('performance');
-      const supervisorUserId = Number(actor.id || 0) || null;
-      const reviewerUserId = Number(actor.id || 0) || null;
+      // Performance: creator is the Reviewer (manager reviewing the employee)
+      // Achievement: creator is the Supervisor/Manager (signs the supervisor slot)
+      const supervisorUserId = isPerformanceEval ? null : (Number(actor.id || 0) || null);
+      const reviewerUserId = isPerformanceEval ? (Number(actor.id || 0) || null) : null;
       const employeeRows: any = await query('SELECT dept FROM employees WHERE id = ? LIMIT 1', [employeeId]);
       const employeeRow = Array.isArray(employeeRows) ? employeeRows[0] : employeeRows;
       const hrOwnerUserId = await resolveDeptHrOwnerUserId(employeeRow?.dept || b.employee_department || actorCtx.dept);

@@ -465,6 +465,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                     ...achForm,
                     employee_id: String(v),
                     supervisor_print_name: achForm.supervisor_print_name || String(currentUser?.full_name || currentUser?.username || '').trim(),
+                    // Achievement form: manager signs as supervisor (correct as-is)
                   })}
                   placeholder="Select Employee..."
                   dropdownVariant="pills-horizontal"
@@ -594,7 +595,8 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                     employee_department: selected?.dept || managerDept,
                     employee_title: selected?.position || (selected as any)?.title || '',
                     status: selected?.status || perfForm.status,
-                    supervisor_print_name: perfForm.supervisor_print_name || String(currentUser?.full_name || currentUser?.username || '').trim(),
+                    // Performance form: the creating manager is the Reviewer, not the Supervisor
+                    reviewer_print_name: perfForm.reviewer_print_name || String(currentUser?.full_name || currentUser?.username || '').trim(),
                   });
                 }}
                 placeholder="Select Employee..."
