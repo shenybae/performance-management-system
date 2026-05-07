@@ -402,13 +402,11 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
         <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 4px 4px;">${content}</table>
       </div>`;
 
-    const sigRow = (label: string, name: string, date: string, sig: string) => `
-      <tr>
-        <td style="padding:8px 10px;font-weight:600;color:#475569;width:180px;">${label}</td>
-        <td style="padding:8px 10px;color:#1e293b;width:240px;">${name || '—'}</td>
-        <td style="padding:8px 10px;color:#64748b;width:120px;">${date || '—'}</td>
-        <td style="padding:8px 10px;width:160px;text-align:center;">${sig ? sigBlockHtml(sig, '', date, name, 140) : '—'}</td>
-      </tr>`;
+    const sigCard = (label: string, name: string, date: string, sig: string) => `
+      <div class="sig-card">
+        <div class="sig-role">${label}</div>
+        ${sigBlockHtml(sig || null, '', date || '', name || '', 0)}
+      </div>`;
 
     const html = `<!DOCTYPE html>
 <html>
@@ -416,11 +414,16 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   <meta charset="UTF-8"/>
   <title>Staff Requisition — ${r.job_title}</title>
   <style>
-    body { font-family: Arial, sans-serif; font-size: 13px; color: #1e293b; margin: 0; padding: 24px 32px; }
+    body { font-family: Arial, sans-serif; font-size: 13px; line-height: 1.35; color: #1e293b; margin: 0; padding: 24px 32px; }
     h1 { font-size: 20px; color: #0f766e; margin: 0 0 2px 0; }
     .subtitle { font-size: 11px; color: #64748b; margin-bottom: 18px; }
+    table { table-layout: fixed; }
+    td, th { overflow-wrap: anywhere; word-break: break-word; }
+    .sig-grid { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+    .sig-card { border:1px solid #e2e8f0; border-radius: 6px; padding: 8px; min-width: 0; page-break-inside: avoid; }
+    .sig-role { font-size: 10px; font-weight: 700; color: #0f766e; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px; }
     table tr:nth-child(even) { background: #f8fafc; }
-    @media print { body { padding: 0; } button { display: none; } }
+    @media print { body { padding: 8px 14px; } button { display: none; } .sig-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   </style>
 </head>
 <body>
@@ -461,21 +464,15 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
 
   <div style="margin-bottom:18px;">
     <div style="background:#0f766e;color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 10px;text-transform:uppercase;border-radius:4px 4px 0 0;">Approvals</div>
-    <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none;table-layout:fixed;">
-      <thead><tr style="background:#f1f5f9;">
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:180px;">Role</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:240px;">Name</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:120px;">Date</th>
-        <th style="padding:6px 10px;text-align:center;font-size:11px;color:#64748b;width:160px;">Signature</th>
-      </tr></thead>
-      <tbody>
-        ${sigRow('Supervisor', r.supervisor_approval, r.supervisor_approval_date, r.supervisor_approval_sig)}
-        ${sigRow('Department Head', r.dept_head_approval, r.dept_head_approval_date, r.dept_head_approval_sig)}
-        ${sigRow('Cabinet Member', r.cabinet_approval, r.cabinet_approval_date, r.cabinet_approval_sig)}
-        ${sigRow('VP for Business & Finance', r.vp_approval, r.vp_approval_date, r.vp_approval_sig)}
-        ${sigRow('President', r.president_approval, r.president_approval_date, r.president_approval_sig)}
-      </tbody>
-    </table>
+    <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 4px 4px;padding:10px;">
+      <div class="sig-grid">
+        ${sigCard('Supervisor', r.supervisor_approval, r.supervisor_approval_date, r.supervisor_approval_sig)}
+        ${sigCard('Department Head', r.dept_head_approval, r.dept_head_approval_date, r.dept_head_approval_sig)}
+        ${sigCard('Cabinet Member', r.cabinet_approval, r.cabinet_approval_date, r.cabinet_approval_sig)}
+        ${sigCard('VP for Business & Finance', r.vp_approval, r.vp_approval_date, r.vp_approval_sig)}
+        ${sigCard('President', r.president_approval, r.president_approval_date, r.president_approval_sig)}
+      </div>
+    </div>
   </div>
 
 </body>
@@ -520,11 +517,17 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   <meta charset="UTF-8"/>
   <title>Applicant Appraisal — ${a.name || 'Applicant'}</title>
   <style>
-    body { font-family: Arial, sans-serif; font-size: 13px; color: #1e293b; margin: 0; padding: 24px 32px; }
+    body { font-family: Arial, sans-serif; font-size: 13px; line-height: 1.35; color: #1e293b; margin: 0; padding: 24px 32px; }
     h1 { font-size: 20px; color: #0f766e; margin: 0 0 2px 0; }
     .subtitle { font-size: 11px; color: #64748b; margin-bottom: 18px; }
+    table { table-layout: fixed; }
+    td, th { overflow-wrap: anywhere; word-break: break-word; }
+    .sig-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+    .sig-card { border:1px solid #e2e8f0; border-radius: 6px; padding: 8px; min-width: 0; page-break-inside: avoid; }
+    .sig-role { font-size: 10px; font-weight: 700; color: #0f766e; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 2px; }
+    .sig-title { font-size: 10px; color: #64748b; margin-bottom: 6px; overflow-wrap: anywhere; word-break: break-word; }
     table tr:nth-child(even) { background: #f8fafc; }
-    @media print { body { padding: 0; } button { display: none; } }
+    @media print { body { padding: 8px 14px; } button { display: none; } .sig-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   </style>
 </head>
 <body>
@@ -570,31 +573,20 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
 
   <div style="margin-bottom:18px;">
     <div style="background:#0f766e;color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 10px;text-transform:uppercase;border-radius:4px 4px 0 0;">Part IV — Signatures</div>
-    <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none;table-layout:fixed;">
-      <thead><tr style="background:#f1f5f9;">
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:160px;">Role</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:220px;">Printed Name</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:140px;">Title</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#64748b;width:120px;">Date</th>
-        <th style="padding:6px 10px;text-align:center;font-size:11px;color:#64748b;width:160px;">Signature</th>
-      </tr></thead>
-      <tbody>
-        <tr>
-          <td style="padding:8px 10px;font-weight:600;color:#475569;">Interviewer</td>
-          <td style="padding:8px 10px;color:#1e293b;">${a.interviewer_name || '—'}</td>
-          <td style="padding:8px 10px;color:#1e293b;">${a.interviewer_title || '—'}</td>
-          <td style="padding:8px 10px;color:#64748b;">${a.interview_date || '—'}</td>
-          <td style="padding:8px 10px;text-align:center;">${a.interviewer_signature ? sigBlockHtml(a.interviewer_signature, '', a.interview_date || '', a.interviewer_name || '', 140) : '—'}</td>
-        </tr>
-        <tr>
-          <td style="padding:8px 10px;font-weight:600;color:#475569;">HR Admin Reviewer</td>
-          <td style="padding:8px 10px;color:#1e293b;">${a.hr_reviewer_name || '—'}</td>
-          <td style="padding:8px 10px;color:#1e293b;">—</td>
-          <td style="padding:8px 10px;color:#64748b;">${a.hr_reviewer_date || '—'}</td>
-          <td style="padding:8px 10px;text-align:center;">${a.hr_reviewer_signature ? sigBlockHtml(a.hr_reviewer_signature, '', a.hr_reviewer_date || '', a.hr_reviewer_name || '', 140) : '—'}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 4px 4px;padding:10px;">
+      <div class="sig-grid">
+        <div class="sig-card">
+          <div class="sig-role">Interviewer</div>
+          <div class="sig-title">${a.interviewer_title || '—'}</div>
+          ${sigBlockHtml(a.interviewer_signature || null, '', a.interview_date || '', a.interviewer_name || '', 0)}
+        </div>
+        <div class="sig-card">
+          <div class="sig-role">HR Admin Reviewer</div>
+          <div class="sig-title">—</div>
+          ${sigBlockHtml(a.hr_reviewer_signature || null, '', a.hr_reviewer_date || '', a.hr_reviewer_name || '', 0)}
+        </div>
+      </div>
+    </div>
   </div>
 
 </body>

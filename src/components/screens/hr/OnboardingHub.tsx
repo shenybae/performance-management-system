@@ -6,6 +6,7 @@ import { SearchableSelect } from '../../common/SearchableSelect';
 import { UserPlus, CheckCircle, Package, FileText, ChevronDown, ChevronUp, Download, Eye, Archive } from 'lucide-react';
 import { SignatureUpload } from '../../common/SignatureUpload';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
+import { sigBlockHtml } from '../../../utils/print';
 import { Employee } from '../../../types';
 import { appConfirm } from '../../../utils/appDialog';
 
@@ -247,7 +248,14 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
     `).join('');
     const w = window.open('', '_blank');
     if (!w) { window.notify?.('Please allow popups to export PDF', 'error'); return; }
-    w.document.write(`<!DOCTYPE html><html><head><title>Onboarding Record — ${rec.employee_name || ''}</title></head><body style="font-family:Arial,sans-serif;padding:24px;color:#0f172a;">
+    w.document.write(`<!DOCTYPE html><html><head><title>Onboarding Record — ${rec.employee_name || ''}</title><style>
+      body{font-family:Arial,sans-serif;padding:24px;color:#0f172a;line-height:1.35}
+      table{table-layout:fixed}
+      td,th{overflow-wrap:anywhere;word-break:break-word}
+      .sig-row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+      .sig-row > div{flex:1 1 260px;min-width:0;page-break-inside:avoid}
+      @media print{body{padding:12px 16px}}
+    </style></head><body>
       <h2 style="margin:0 0 6px;color:#0f766e;">Onboarding Record</h2>
       <p style="margin:0 0 16px;color:#64748b;">Employee: ${rec.employee_name || '—'} | Date: ${(rec.created_at || '').toString().split('T')[0] || '—'}</p>
       <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px;">
@@ -259,14 +267,12 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
         <thead><tr><th style="padding:6px 8px;border:1px solid #e2e8f0;text-align:left;background:#f8fafc;">Item</th><th style="padding:6px 8px;border:1px solid #e2e8f0;text-align:center;background:#f8fafc;">Status</th></tr></thead>
         <tbody>${checklistRows || '<tr><td colspan="2" style="padding:8px;border:1px solid #e2e8f0;text-align:center;color:#64748b;">No checklist data</td></tr>'}</tbody>
       </table>
-      <div style="display:flex;gap:24px;align-items:flex-start;">
-        <div style="flex:1;">
-          <div style="font-size:11px;font-weight:bold;color:#475569;text-transform:uppercase;margin-bottom:6px;">HR Admin Signature</div>
-          ${rec.hr_signature ? `<img src="${rec.hr_signature}" alt="HR Admin Signature" style="max-height:64px;border-bottom:1px solid #94a3b8;padding-bottom:4px;" />` : '<div style="height:64px;border-bottom:1px solid #94a3b8;"></div>'}
+      <div class="sig-row">
+        <div>
+          ${sigBlockHtml(rec.hr_signature || null, 'HR Admin Signature', (rec.hr_signature_date || '').toString().split('T')[0] || '', rec.hr_signer_name || 'HR Admin', 0)}
         </div>
-        <div style="flex:1;">
-          <div style="font-size:11px;font-weight:bold;color:#475569;text-transform:uppercase;margin-bottom:6px;">Employee Signature</div>
-          ${rec.employee_signature ? `<img src="${rec.employee_signature}" alt="Employee Signature" style="max-height:64px;border-bottom:1px solid #94a3b8;padding-bottom:4px;" />` : '<div style="height:64px;border-bottom:1px solid #94a3b8;"></div>'}
+        <div>
+          ${sigBlockHtml(rec.employee_signature || null, 'Employee Signature', (rec.employee_signature_date || '').toString().split('T')[0] || '', rec.employee_name || 'Employee', 0)}
         </div>
       </div>
     </body></html>`);
