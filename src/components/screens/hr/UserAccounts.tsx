@@ -58,6 +58,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const actorDeptNormalized = normalizeDeptValue(currentUser?.dept || '');
   const creatorDept = (currentUser?.dept || '').toString().trim();
   const [createRole, setCreateRole] = useState('');
+  const [createEmployeeId, setCreateEmployeeId] = useState('');
   const [createPosition, setCreatePosition] = useState('');
   const [createDept, setCreateDept] = useState(creatorDept);
   const createFormRef = useRef<HTMLFormElement | null>(null);
@@ -168,6 +169,25 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
 
   const strength = pwStrength(createPassword);
 
+  const employeeDirectoryOptions = useMemo(() => {
+    const allowedStatuses = new Set(['PROBATIONARY', 'REGULAR', 'PERMANENT', 'HIRED']);
+    return (Array.isArray(employees) ? employees : [])
+      .filter((emp: any) => allowedStatuses.has(String(emp?.status || '').trim().toUpperCase()))
+      .map((emp: any) => {
+        const name = String(emp?.name || '').trim();
+        const dept = String(emp?.dept || '').trim();
+        const position = String(emp?.position || emp?.title || '').trim();
+        const meta = [dept, position].filter(Boolean).join(' • ');
+        return {
+          value: String(emp?.id || ''),
+          label: `${name}${meta ? ` • ${meta}` : ''} • #${emp?.id}`,
+          avatarUrl: (emp as any)?.profile_picture || null,
+        };
+      })
+      .filter((opt: any) => opt.value && opt.label)
+      .sort((a: any, b: any) => a.label.localeCompare(b.label));
+  }, [employees]);
+
   const pageCount = (count: number) => Math.max(1, Math.ceil(count / rowsPerPage));
   const paginate = <T,>(items: T[], page: number) => {
     const total = pageCount(items.length);
@@ -206,7 +226,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     setModalAddress((refreshedUser.employee_address || refreshedUser.address || '').toString());
   }, [allUsers, modalOpen, editingUser?.id]);
 
-  const validateCreateForm = (email: string, fullName: string, role: string, position: string, dept: string): Record<string, string> => {
+  const validateCreateForm = (email: string, fullName: string, role: string, position: string, dept: string, employeeId: string): Record<string, string> => {
     const errs: Record<string, string> = {};
     if (!email) errs.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'Enter a valid email address';
@@ -221,6 +241,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     if (!confirmPassword) errs.confirm = 'Confirm password is required';
     else if (confirmPassword !== createPassword) errs.confirm = 'Passwords do not match';
     if (!role) errs.role = 'Role is required';
+    if (role === 'Employee' && !String(employeeId || '').trim()) errs.employee_id = 'Select an employee from the Employee Directory';
     if ((role === 'Manager' || role === 'HR') && !position.trim()) errs.position = 'Position is required for Manager/HR';
     if ((role === 'Manager' || role === 'HR') && position.trim().length > 100) errs.position = 'Position must be 100 characters or less';
     if ((role === 'Manager' || role === 'HR') && !dept.trim()) errs.dept = 'Your account must have a department to create Manager/HR users';
@@ -237,12 +258,13 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     const role = createRole;
 
     const effectiveCreateDept = createDept.trim() || creatorDept;
-    const errs = validateCreateForm(email, full_name, role, createPosition, effectiveCreateDept);
+    const errs = validateCreateForm(email, full_name, role, createPosition, effectiveCreateDept, createEmployeeId);
     setCreateErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
     const body: any = { email, password: createPassword, role };
     if (full_name) body.full_name = full_name;
+    if (role === 'Employee') body.employee_id = Number(createEmployeeId);
     if (role === 'Manager' || role === 'HR') {
       body.position = createPosition.trim();
       body.dept = effectiveCreateDept.trim();
@@ -260,6 +282,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
         onRefresh();
         form.reset();
         setCreateRole('');
+        setCreateEmployeeId('');
         setCreatePosition('');
         setCreateDept(creatorDept);
         setCreatePassword('');
@@ -354,6 +377,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const openCreateModal = () => {
     setCreateErrors({});
     setCreateRole('');
+    setCreateEmployeeId('');
     setCreatePosition('');
     setCreateDept(creatorDept);
     setCreatePassword('');
@@ -367,6 +391,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     setCreateModalOpen(false);
     setCreateErrors({});
     setCreateRole('');
+    setCreateEmployeeId('');
     setCreatePosition('');
     setCreateDept(creatorDept);
     setCreatePassword('');
@@ -762,8 +787,28 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Full name</label>
               <input name="full_name" type="text" className="w-full mt-1 p-3 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50" placeholder="e.g. Jane Smith" maxLength={120} />
-              <p className="mt-1 text-[11px] text-slate-400">If this matches an existing employee name, account linking is automatic.</p>
+              <p className="mt-1 text-[11px] text-slate-400">Displayed name for the account. Linking uses the Employee Directory selection below.</p>
             </div>
+            {createRole === 'Employee' && (
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Employee Directory Record</label>
+                <div className="mt-1">
+                  <SearchableSelect
+                    options={employeeDirectoryOptions}
+                    value={createEmployeeId}
+                    onChange={(v) => {
+                      setCreateEmployeeId(String(v || ''));
+                      if (createErrors.employee_id) setCreateErrors((p) => ({ ...p, employee_id: '' }));
+                    }}
+                    placeholder="Select employee from directory..."
+                    dropdownVariant="pills-horizontal"
+                    searchable
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">Required to prevent wrong matches when employees share the same name.</p>
+                {createErrors.employee_id && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.employee_id}</p>}
+              </div>
+            )}
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Password</label>
               <div className="relative">
@@ -833,6 +878,10 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                   setCreateErrors(p => ({ ...p, position: '', dept: '' }));
                 } else if (!createDept.trim() && creatorDept) {
                   setCreateDept(creatorDept);
+                }
+                if (nextRole !== 'Employee') {
+                  setCreateEmployeeId('');
+                  setCreateErrors(p => ({ ...p, employee_id: '' }));
                 }
               }} className={`w-full mt-1 p-3 bg-white dark:bg-black border ${createErrors.role ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} required>
                 <option value="">Select Role...</option>

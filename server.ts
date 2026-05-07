@@ -369,11 +369,12 @@ async function ensureEmployeeIdByFullName(fullName: string): Promise<number | nu
      WHERE ${hiredStatusCheck}
        AND REGEXP_REPLACE(LOWER(TRIM(name)), '\\s+', ' ', 'g') = REGEXP_REPLACE(LOWER(TRIM(?)), '\\s+', ' ', 'g')
      ORDER BY id DESC
-     LIMIT 1`,
+     LIMIT 2`,
     [candidate]
   ) as any[];
-  const strictMatch = Array.isArray(strictRows) ? strictRows[0] : strictRows;
-  if (strictMatch?.id) return Number(strictMatch.id);
+  const strictMatches = Array.isArray(strictRows) ? strictRows : (strictRows ? [strictRows] : []);
+  if (strictMatches.length === 1 && strictMatches[0]?.id) return Number(strictMatches[0].id);
+  if (strictMatches.length > 1) return null;
 
   const looseRows = await query(
     `SELECT id
@@ -381,11 +382,12 @@ async function ensureEmployeeIdByFullName(fullName: string): Promise<number | nu
      WHERE ${hiredStatusCheck}
        AND REGEXP_REPLACE(LOWER(COALESCE(name, '')), '[^a-z0-9]', '', 'g') = REGEXP_REPLACE(LOWER(COALESCE(?, '')), '[^a-z0-9]', '', 'g')
      ORDER BY id DESC
-     LIMIT 1`,
+     LIMIT 2`,
     [candidate]
   ) as any[];
-  const looseMatch = Array.isArray(looseRows) ? looseRows[0] : looseRows;
-  if (looseMatch?.id) return Number(looseMatch.id);
+  const looseMatches = Array.isArray(looseRows) ? looseRows : (looseRows ? [looseRows] : []);
+  if (looseMatches.length === 1 && looseMatches[0]?.id) return Number(looseMatches[0].id);
+  if (looseMatches.length > 1) return null;
 
   return null;
 }
@@ -2635,7 +2637,7 @@ async function startServer() {
       const { email, username, password, role, employee_id, full_name, linked_user_id, position, dept } = req.body;
       if ((!email && !username) || !password) return res.status(400).json({ error: 'Missing email (or username) or password' });
       const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
-      const normalizedFullName = sanitizeUserFullName(typeof full_name === 'string' ? full_name : '', normalizedEmail || null);
+      let normalizedFullName = sanitizeUserFullName(typeof full_name === 'string' ? full_name : '', normalizedEmail || null);
       const normalizedPosition = typeof position === 'string' ? position.trim() : '';
       const normalizedDept = typeof dept === 'string' ? dept.trim() : '';
       const requestedUsername = typeof username === 'string' ? username.trim() : '';
@@ -2651,12 +2653,43 @@ async function startServer() {
 
       let resolvedEmployeeId: number | null = null;
       if (normalizedRole === 'Employee') {
-        if (!normalizedFullName) {
-          return res.status(400).json({ error: 'Full name is required for Employee account creation' });
-        }
-        resolvedEmployeeId = await ensureEmployeeIdByFullName(normalizedFullName);
-        if (!resolvedEmployeeId) {
-          return res.status(400).json({ error: 'Employee account can only be created for hired employees in Employee Master Directory' });
+        const explicitEmployeeId = Number(employee_id);
+        if (Number.isFinite(explicitEmployeeId) && explicitEmployeeId > 0) {
+          const employeeRows = await query(
+            `SELECT id, name
+             FROM employees
+             WHERE id = ?
+               AND UPPER(COALESCE(status, '')) IN ('PROBATIONARY', 'REGULAR', 'PERMANENT', 'HIRED')
+             LIMIT 1`,
+            [explicitEmployeeId]
+          ) as any[];
+          const employeeMatch = Array.isArray(employeeRows) ? employeeRows[0] : employeeRows;
+          if (!employeeMatch?.id) {
+            return res.status(400).json({ error: 'Selected employee is not eligible for account creation in Employee Master Directory' });
+          }
+          resolvedEmployeeId = Number(employeeMatch.id);
+          if (!normalizedFullName) normalizedFullName = String(employeeMatch.name || '').trim();
+        } else {
+          if (!normalizedFullName) {
+            return res.status(400).json({ error: 'Select an employee from Employee Directory or provide a full name' });
+          }
+          const strictCandidates = await query(
+            `SELECT id
+             FROM employees
+             WHERE UPPER(COALESCE(status, '')) IN ('PROBATIONARY', 'REGULAR', 'PERMANENT', 'HIRED')
+               AND REGEXP_REPLACE(LOWER(TRIM(name)), '\\s+', ' ', 'g') = REGEXP_REPLACE(LOWER(TRIM(?)), '\\s+', ' ', 'g')
+             ORDER BY id DESC
+             LIMIT 2`,
+            [normalizedFullName]
+          ) as any[];
+          const strictList = Array.isArray(strictCandidates) ? strictCandidates : (strictCandidates ? [strictCandidates] : []);
+          if (strictList.length > 1) {
+            return res.status(409).json({ error: 'Multiple employees found with this name. Please select from Employee Directory.' });
+          }
+          resolvedEmployeeId = await ensureEmployeeIdByFullName(normalizedFullName);
+          if (!resolvedEmployeeId) {
+            return res.status(400).json({ error: 'Employee account can only be created for hired employees in Employee Master Directory' });
+          }
         }
       }
 
