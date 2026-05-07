@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Search, ChevronRight } from 'lucide-react';
 import { Employee } from '../../../types';
@@ -13,12 +13,31 @@ interface EmployeeDirectoryProps {
 
 export const EmployeeDirectory = ({ employees, onSelectEmployee }: EmployeeDirectoryProps) => {
   const [search, setSearch] = useState('');
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filtered = employees.filter(e =>
     e.name.toLowerCase().includes(search.toLowerCase()) ||
     e.position?.toLowerCase().includes(search.toLowerCase()) ||
     e.dept?.toLowerCase().includes(search.toLowerCase())
   );
+
+  const pageCount = useMemo(() => Math.max(1, Math.ceil(filtered.length / rowsPerPage)), [filtered.length, rowsPerPage]);
+  const safePage = Math.min(Math.max(currentPage, 1), pageCount);
+  const pageStart = filtered.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1;
+  const pageEnd = Math.min(safePage * rowsPerPage, filtered.length);
+  const pagedRows = useMemo(() => {
+    const start = (safePage - 1) * rowsPerPage;
+    return filtered.slice(start, start + rowsPerPage);
+  }, [filtered, safePage, rowsPerPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, rowsPerPage]);
+
+  useEffect(() => {
+    if (currentPage > pageCount) setCurrentPage(pageCount);
+  }, [currentPage, pageCount]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -49,7 +68,7 @@ export const EmployeeDirectory = ({ employees, onSelectEmployee }: EmployeeDirec
               </tr>
             </thead>
             <tbody>
-              {filtered.map(emp => (
+              {pagedRows.map(emp => (
                 <tr 
                   key={emp.id} 
                   className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer group" 
@@ -74,8 +93,50 @@ export const EmployeeDirectory = ({ employees, onSelectEmployee }: EmployeeDirec
                   </td>
                 </tr>
               ))}
+              {pagedRows.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-8 px-5 text-center text-sm text-slate-500 dark:text-slate-400">
+                    No employees found.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-300">
+          <div className="flex items-center gap-2">
+            <span>Rows</span>
+            <select
+              value={rowsPerPage}
+              onChange={(e) => setRowsPerPage(Number(e.target.value) || 10)}
+              className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+            <span className="text-slate-400">{pageStart}-{pageEnd} of {filtered.length}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span>Page {safePage} of {pageCount}</span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 disabled:opacity-40"
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))}
+              disabled={safePage >= pageCount}
+              className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </Card>
     </motion.div>
