@@ -261,6 +261,30 @@ function escapeRegExp(value: string) {
 
 const ALLOWED_ACCOUNT_EMAIL_DOMAIN = 'maptech.com';
 
+function accountEmailLocalPart(seed: string) {
+  return String(seed || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s._-]+/g, ' ')
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, '.')
+    .replace(/\.{2,}/g, '.')
+    .replace(/^\.|\.$/g, '')
+    .slice(0, 60) || 'user';
+}
+
+async function generateUniqueAccountEmail(seed: string) {
+  const base = accountEmailLocalPart(seed);
+  let suffix = 1;
+  while (true) {
+    const localPart = suffix === 1 ? base : `${base}${suffix}`;
+    const candidate = `${localPart}@${ALLOWED_ACCOUNT_EMAIL_DOMAIN}`;
+    const existing = await query('SELECT id FROM users WHERE LOWER(COALESCE(email, \''\')) = LOWER(?) LIMIT 1', [candidate]) as any[];
+    if (!Array.isArray(existing) || existing.length === 0) return candidate;
+    suffix += 1;
+  }
+}
+
 function isAllowedAccountEmailDomain(email: string) {
   const normalized = String(email || '').trim().toLowerCase();
   return normalized.endsWith(`@${ALLOWED_ACCOUNT_EMAIL_DOMAIN}`);
@@ -2634,22 +2658,22 @@ async function startServer() {
         return res.status(401).json({ error: 'Invalid token' });
       }
 
-      const { email, username, password, role, employee_id, full_name, linked_user_id, position, dept } = req.body;
-      if ((!email && !username) || !password) return res.status(400).json({ error: 'Missing email (or username) or password' });
+      const { email, username, password, role, employee_id, full_name, first_name, last_name, linked_user_id, position, dept } = req.body;
+      if (!password) return res.status(400).json({ error: 'Missing password' });
       const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+      const normalizedFirstName = typeof first_name === 'string' ? first_name.trim() : '';
+      const normalizedLastName = typeof last_name === 'string' ? last_name.trim() : '';
       let normalizedFullName = sanitizeUserFullName(typeof full_name === 'string' ? full_name : '', normalizedEmail || null);
+      if (!normalizedFullName && (normalizedFirstName || normalizedLastName)) {
+        normalizedFullName = sanitizeUserFullName(`${normalizedFirstName} ${normalizedLastName}`.trim(), normalizedEmail || null);
+      }
       const normalizedPosition = typeof position === 'string' ? position.trim() : '';
       const normalizedDept = typeof dept === 'string' ? dept.trim() : '';
       const requestedUsername = typeof username === 'string' ? username.trim() : '';
-      if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return res.status(400).json({ error: 'Invalid email format' });
-      if (normalizedEmail && !isAllowedAccountEmailDomain(normalizedEmail)) return res.status(400).json({ error: `Email must use @${ALLOWED_ACCOUNT_EMAIL_DOMAIN}` });
       const passwordPolicyError = getPasswordPolicyError(password);
       if (passwordPolicyError) return res.status(400).json({ error: passwordPolicyError });
       const normalizedRole = normalizeUserRole(role);
       if (!normalizedRole) return res.status(400).json({ error: 'Invalid or missing role' });
-
-      const usernameSeed = requestedUsername || normalizedEmail.split('@')[0] || normalizedFullName || 'user';
-      const finalUsername = await generateUniqueUsername(usernameSeed);
 
       let resolvedEmployeeId: number | null = null;
       if (normalizedRole === 'Employee') {
@@ -2691,7 +2715,27 @@ async function startServer() {
             return res.status(400).json({ error: 'Employee account can only be created for hired employees in Employee Master Directory' });
           }
         }
+
+        const existingLinkedUserRows = await query(
+          'SELECT id FROM users WHERE employee_id = ? AND deleted_at IS NULL LIMIT 1',
+          [resolvedEmployeeId]
+        ) as any[];
+        const existingLinkedUser = Array.isArray(existingLinkedUserRows) ? existingLinkedUserRows[0] : existingLinkedUserRows;
+        if (existingLinkedUser?.id) {
+          return res.status(409).json({ error: 'Selected employee already has a user account' });
+        }
       }
+
+      let effectiveEmail = normalizedEmail;
+      if (!effectiveEmail) {
+        const emailSeed = normalizedFullName || `${normalizedFirstName} ${normalizedLastName}`.trim() || requestedUsername || `user${resolvedEmployeeId || ''}`;
+        effectiveEmail = await generateUniqueAccountEmail(emailSeed);
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(effectiveEmail)) return res.status(400).json({ error: 'Invalid email format' });
+      if (!isAllowedAccountEmailDomain(effectiveEmail)) return res.status(400).json({ error: `Email must use @${ALLOWED_ACCOUNT_EMAIL_DOMAIN}` });
+
+      const usernameSeed = requestedUsername || effectiveEmail.split('@')[0] || normalizedFullName || 'user';
+      const finalUsername = await generateUniqueUsername(usernameSeed);
 
       const explicitLinkedUserId = Number(linked_user_id);
       const resolvedLinkedUserId = Number.isFinite(explicitLinkedUserId) && explicitLinkedUserId > 0 ? explicitLinkedUserId : null;
@@ -2710,7 +2754,7 @@ async function startServer() {
       await query("INSERT INTO users (username, email, password, role, employee_id, full_name, linked_user_id, position, dept, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
         [
           finalUsername,
-          normalizedEmail || null,
+          effectiveEmail || null,
           hashed,
           normalizedRole,
           resolvedEmployeeId,
@@ -2723,7 +2767,7 @@ async function startServer() {
         ]);
 
       try {
-        await recordAudit(creatorPayload, 'create', 'users', null, null, { email: normalizedEmail || null, username: finalUsername, role: normalizedRole, employee_id: resolvedEmployeeId, full_name: normalizedFullName || null, linked_user_id: resolvedLinkedUserId, position: shouldStoreOrgMeta ? (normalizedPosition || null) : null, dept: shouldStoreOrgMeta ? (effectiveDept || null) : null });
+        await recordAudit(creatorPayload, 'create', 'users', null, null, { email: effectiveEmail || null, username: finalUsername, role: normalizedRole, employee_id: resolvedEmployeeId, full_name: normalizedFullName || null, linked_user_id: resolvedLinkedUserId, position: shouldStoreOrgMeta ? (normalizedPosition || null) : null, dept: shouldStoreOrgMeta ? (effectiveDept || null) : null });
       } catch (e) { /* ignore audit errors */ }
 
       res.json({ success: true });

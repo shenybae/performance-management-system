@@ -15,6 +15,26 @@ const isAllowedAccountEmail = (email: string) => {
   return normalized.endsWith(`@${ACCOUNT_EMAIL_DOMAIN}`);
 };
 
+const emailLocalFromName = (value: string) => {
+  const base = (value || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s._-]+/g, ' ')
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, '.')
+    .replace(/\.{2,}/g, '.')
+    .replace(/^\.|\.$/g, '');
+  return base || 'user';
+};
+
+const splitFirstLastName = (fullName: string) => {
+  const parts = (fullName || '').toString().trim().replace(/\s+/g, ' ').split(' ').filter(Boolean);
+  if (parts.length === 0) return { firstName: '', lastName: '' };
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+};
+
 const pwStrength = (pw: string) => {
   if (!pw) return null;
   let score = 0;
@@ -59,6 +79,9 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const creatorDept = (currentUser?.dept || '').toString().trim();
   const [createRole, setCreateRole] = useState('');
   const [createEmployeeId, setCreateEmployeeId] = useState('');
+  const [createFirstName, setCreateFirstName] = useState('');
+  const [createLastName, setCreateLastName] = useState('');
+  const [createEmail, setCreateEmail] = useState('');
   const [createPosition, setCreatePosition] = useState('');
   const [createDept, setCreateDept] = useState(creatorDept);
   const createFormRef = useRef<HTMLFormElement | null>(null);
@@ -141,6 +164,21 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
 
   const allUsers = users || [];
   const selectedAccountIds = useMemo(() => new Set((accountSearchSelection || []).map(String)), [accountSearchSelection]);
+  const linkedEmployeeIds = useMemo(() => {
+    return new Set(
+      (allUsers || [])
+        .filter((u: any) => !u?.deleted_at)
+        .map((u: any) => Number(u?.employee_id || 0))
+        .filter((id: number) => Number.isFinite(id) && id > 0)
+    );
+  }, [allUsers]);
+  const existingEmailSet = useMemo(() => {
+    return new Set(
+      (allUsers || [])
+        .map((u: any) => String(u?.email || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+  }, [allUsers]);
   const accountOptions = useMemo(() => {
     return [...allUsers]
       .map((u: any) => {
@@ -172,6 +210,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const employeeDirectoryOptions = useMemo(() => {
     const allowedStatuses = new Set(['PROBATIONARY', 'REGULAR', 'PERMANENT', 'HIRED']);
     return (Array.isArray(employees) ? employees : [])
+      .filter((emp: any) => !linkedEmployeeIds.has(Number(emp?.id || 0)))
       .filter((emp: any) => allowedStatuses.has(String(emp?.status || '').trim().toUpperCase()))
       .map((emp: any) => {
         const name = String(emp?.name || '').trim();
@@ -186,7 +225,40 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
       })
       .filter((opt: any) => opt.value && opt.label)
       .sort((a: any, b: any) => a.label.localeCompare(b.label));
-  }, [employees]);
+  }, [employees, linkedEmployeeIds]);
+
+  const selectedCreateEmployee = useMemo(() => {
+    return (Array.isArray(employees) ? employees : []).find((emp: any) => String(emp?.id) === String(createEmployeeId)) || null;
+  }, [employees, createEmployeeId]);
+
+  useEffect(() => {
+    if (!createEmployeeId) return;
+    const stillAvailable = employeeDirectoryOptions.some((opt: any) => String(opt.value) === String(createEmployeeId));
+    if (!stillAvailable) setCreateEmployeeId('');
+  }, [createEmployeeId, employeeDirectoryOptions]);
+
+  useEffect(() => {
+    if (createRole !== 'Employee' || !selectedCreateEmployee?.name) return;
+    const parts = splitFirstLastName(String(selectedCreateEmployee.name || ''));
+    setCreateFirstName(parts.firstName);
+    setCreateLastName(parts.lastName);
+  }, [createRole, selectedCreateEmployee?.name]);
+
+  const generatedCreateEmail = useMemo(() => {
+    const fullNameSeed = `${createFirstName} ${createLastName}`.trim() || String(selectedCreateEmployee?.name || '').trim() || 'user';
+    const localBase = emailLocalFromName(fullNameSeed);
+    let suffix = 1;
+    let candidateLocal = localBase;
+    while (existingEmailSet.has(`${candidateLocal}@${ACCOUNT_EMAIL_DOMAIN}`.toLowerCase())) {
+      suffix += 1;
+      candidateLocal = `${localBase}${suffix}`;
+    }
+    return `${candidateLocal}@${ACCOUNT_EMAIL_DOMAIN}`;
+  }, [createFirstName, createLastName, selectedCreateEmployee?.name, existingEmailSet]);
+
+  useEffect(() => {
+    setCreateEmail(generatedCreateEmail);
+  }, [generatedCreateEmail]);
 
   const pageCount = (count: number) => Math.max(1, Math.ceil(count / rowsPerPage));
   const paginate = <T,>(items: T[], page: number) => {
@@ -226,12 +298,14 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     setModalAddress((refreshedUser.employee_address || refreshedUser.address || '').toString());
   }, [allUsers, modalOpen, editingUser?.id]);
 
-  const validateCreateForm = (email: string, fullName: string, role: string, position: string, dept: string, employeeId: string): Record<string, string> => {
+  const validateCreateForm = (email: string, firstName: string, lastName: string, role: string, position: string, dept: string, employeeId: string): Record<string, string> => {
     const errs: Record<string, string> = {};
     if (!email) errs.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'Enter a valid email address';
     else if (!isAllowedAccountEmail(email)) errs.email = `Email must use @${ACCOUNT_EMAIL_DOMAIN}`;
-    if (fullName && fullName.length > 120) errs.full_name = 'Full name must be 120 characters or less';
+    if (!firstName.trim()) errs.first_name = 'First name is required';
+    if (!lastName.trim()) errs.last_name = 'Last name is required';
+    if ((`${firstName} ${lastName}`).trim().length > 120) errs.full_name = 'Combined first and last name must be 120 characters or less';
     if (!createPassword) errs.password = 'Password is required';
     else if (createPassword.length < 8) errs.password = 'Minimum 8 characters';
     else if (createPassword.length > 128) errs.password = 'Password must be 128 characters or less';
@@ -252,17 +326,18 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
-    const fd = new FormData(form);
-    const email = (fd.get('email') || '').toString().trim();
-    const full_name = (fd.get('full_name') || '').toString().trim();
+    const email = createEmail.trim().toLowerCase();
+    const full_name = `${createFirstName} ${createLastName}`.trim();
     const role = createRole;
 
     const effectiveCreateDept = createDept.trim() || creatorDept;
-    const errs = validateCreateForm(email, full_name, role, createPosition, effectiveCreateDept, createEmployeeId);
+    const errs = validateCreateForm(email, createFirstName, createLastName, role, createPosition, effectiveCreateDept, createEmployeeId);
     setCreateErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
     const body: any = { email, password: createPassword, role };
+    body.first_name = createFirstName.trim();
+    body.last_name = createLastName.trim();
     if (full_name) body.full_name = full_name;
     if (role === 'Employee') body.employee_id = Number(createEmployeeId);
     if (role === 'Manager' || role === 'HR') {
@@ -283,6 +358,9 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
         form.reset();
         setCreateRole('');
         setCreateEmployeeId('');
+        setCreateFirstName('');
+        setCreateLastName('');
+        setCreateEmail('');
         setCreatePosition('');
         setCreateDept(creatorDept);
         setCreatePassword('');
@@ -378,6 +456,9 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     setCreateErrors({});
     setCreateRole('');
     setCreateEmployeeId('');
+    setCreateFirstName('');
+    setCreateLastName('');
+    setCreateEmail('');
     setCreatePosition('');
     setCreateDept(creatorDept);
     setCreatePassword('');
@@ -392,6 +473,9 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
     setCreateErrors({});
     setCreateRole('');
     setCreateEmployeeId('');
+    setCreateFirstName('');
+    setCreateLastName('');
+    setCreateEmail('');
     setCreatePosition('');
     setCreateDept(creatorDept);
     setCreatePassword('');
@@ -766,7 +850,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
           </div>
           <div>
             <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Matched User</label>
-            <p className="mt-1 text-xs text-slate-400">Automatic by full name only. Manual employee selection is disabled. Phone/address are editable for linked employee profiles.</p>
+            <p className="mt-1 text-xs text-slate-400">Linked by selected employee directory record for employee accounts. Phone/address are editable for linked employee profiles.</p>
           </div>
           <div className="flex justify-end gap-2">
             <button onClick={() => setModalOpen(false)} className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800">{modalMode === 'view' ? 'Close' : 'Cancel'}</button>
@@ -778,17 +862,6 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
       <Modal open={createModalOpen} title="Create New Account" onClose={closeCreateModal}>
         <form ref={createFormRef} onSubmit={handleSubmit} className="space-y-4 max-w-3xl">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</label>
-              <input name="email" type="email" className={`w-full mt-1 p-3 bg-white dark:bg-black border ${createErrors.email ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} placeholder="e.g. jane@maptech.com" maxLength={254} autoComplete="email" required />
-              <p className="mt-1 text-[11px] text-slate-400">Only @maptech.com emails are allowed.</p>
-              {createErrors.email && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.email}</p>}
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Full name</label>
-              <input name="full_name" type="text" className="w-full mt-1 p-3 bg-white dark:bg-black border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50" placeholder="e.g. Jane Smith" maxLength={120} />
-              <p className="mt-1 text-[11px] text-slate-400">Displayed name for the account. Linking uses the Employee Directory selection below.</p>
-            </div>
             {createRole === 'Employee' && (
               <div>
                 <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Employee Directory Record</label>
@@ -805,10 +878,79 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                     searchable
                   />
                 </div>
-                <p className="mt-1 text-[11px] text-slate-400">Required to prevent wrong matches when employees share the same name.</p>
+                <p className="mt-1 text-[11px] text-slate-400">Only employees without existing user accounts are listed.</p>
                 {createErrors.employee_id && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.employee_id}</p>}
               </div>
             )}
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</label>
+              <select name="role" value={createRole} onChange={e => {
+                const nextRole = e.target.value;
+                setCreateRole(nextRole);
+                if (createErrors.role) setCreateErrors(p => ({ ...p, role: '' }));
+                if (nextRole !== 'Manager' && nextRole !== 'HR') {
+                  setCreatePosition('');
+                  setCreateDept(creatorDept);
+                  setCreateErrors(p => ({ ...p, position: '', dept: '' }));
+                } else if (!createDept.trim() && creatorDept) {
+                  setCreateDept(creatorDept);
+                }
+                if (nextRole !== 'Employee') {
+                  setCreateEmployeeId('');
+                  setCreateErrors(p => ({ ...p, employee_id: '' }));
+                }
+              }} className={`w-full mt-1 p-3 bg-white dark:bg-black border ${createErrors.role ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} required>
+                <option value="">Select Role...</option>
+                <option value="Employee">Employee</option>
+                <option value="Manager">Manager</option>
+                <option value="HR">HR Admin</option>
+              </select>
+              {createErrors.role && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.role}</p>}
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">First name</label>
+              <input
+                type="text"
+                value={createFirstName}
+                onChange={(e) => {
+                  setCreateFirstName(e.target.value);
+                  setCreateErrors((p) => ({ ...p, first_name: '', full_name: '' }));
+                }}
+                className={`w-full mt-1 p-3 bg-white dark:bg-black border ${(createErrors.first_name || createErrors.full_name) ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
+                placeholder="e.g. Jane"
+                maxLength={60}
+                required
+              />
+              {createErrors.first_name && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.first_name}</p>}
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Last name</label>
+              <input
+                type="text"
+                value={createLastName}
+                onChange={(e) => {
+                  setCreateLastName(e.target.value);
+                  setCreateErrors((p) => ({ ...p, last_name: '', full_name: '' }));
+                }}
+                className={`w-full mt-1 p-3 bg-white dark:bg-black border ${(createErrors.last_name || createErrors.full_name) ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`}
+                placeholder="e.g. Smith"
+                maxLength={60}
+                required
+              />
+              {createErrors.last_name && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.last_name}</p>}
+              {createErrors.full_name && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.full_name}</p>}
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email (Auto-generated)</label>
+              <input
+                type="email"
+                value={createEmail}
+                readOnly
+                className={`w-full mt-1 p-3 bg-slate-50 dark:bg-slate-900/40 border ${createErrors.email ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-700 dark:text-slate-200`}
+              />
+              <p className="mt-1 text-[11px] text-slate-400">Generated uniquely under @maptech.com.</p>
+              {createErrors.email && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.email}</p>}
+            </div>
             <div>
               <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Password</label>
               <div className="relative">
@@ -866,31 +1008,6 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
               {createErrors.confirm && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.confirm}</p>}
               {confirmPassword && confirmPassword === createPassword && <p className="mt-1 text-sm text-emerald-500 flex items-center gap-1"><CheckCircle size={12} />Passwords match</p>}
             </div>
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</label>
-              <select name="role" value={createRole} onChange={e => {
-                const nextRole = e.target.value;
-                setCreateRole(nextRole);
-                if (createErrors.role) setCreateErrors(p => ({ ...p, role: '' }));
-                if (nextRole !== 'Manager' && nextRole !== 'HR') {
-                  setCreatePosition('');
-                  setCreateDept(creatorDept);
-                  setCreateErrors(p => ({ ...p, position: '', dept: '' }));
-                } else if (!createDept.trim() && creatorDept) {
-                  setCreateDept(creatorDept);
-                }
-                if (nextRole !== 'Employee') {
-                  setCreateEmployeeId('');
-                  setCreateErrors(p => ({ ...p, employee_id: '' }));
-                }
-              }} className={`w-full mt-1 p-3 bg-white dark:bg-black border ${createErrors.role ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-green/50`} required>
-                <option value="">Select Role...</option>
-                <option value="Employee">Employee</option>
-                <option value="Manager">Manager</option>
-                <option value="HR">HR Admin</option>
-              </select>
-              {createErrors.role && <p className="mt-1 text-sm text-red-500 flex items-center gap-1"><AlertCircle size={12} />{createErrors.role}</p>}
-            </div>
             {(createRole === 'Manager' || createRole === 'HR') && (
               <>
                 <div>
@@ -929,7 +1046,14 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <button type="button" onClick={closeCreateModal} className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800">Cancel</button>
-            <button type="submit" className="px-4 py-2 rounded-lg bg-teal-deep text-white font-bold">Create User</button>
+            <button
+              type="submit"
+              disabled={createRole === 'Employee' && employeeDirectoryOptions.length === 0}
+              className="px-4 py-2 rounded-lg bg-teal-deep text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+              title={createRole === 'Employee' && employeeDirectoryOptions.length === 0 ? 'All employee directory records already have user accounts' : 'Create User'}
+            >
+              Create User
+            </button>
           </div>
         </form>
       </Modal>
