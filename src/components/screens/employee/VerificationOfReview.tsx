@@ -539,7 +539,13 @@ export const VerificationOfReview = () => {
       const assignedReviewer = Number(a.reviewer_user_id || 0);
       const me = Number(user?.id || 0);
 
-      if (!a.supervisor_signature && (!assignedSupervisor || assignedSupervisor === me)) {
+      // Supervisor slot: for Performance forms, show to any dept-matched management signer
+      // (supervisor_user_id may have been set to the manager's ID by old records — don't enforce it)
+      const canSignSupervisorSlot = isPerformance
+        ? true  // any management signer in same dept can sign the supervisor slot
+        : (!assignedSupervisor || assignedSupervisor === me);
+
+      if (!a.supervisor_signature && canSignSupervisorSlot) {
         tasks.push({ ...a, queueStage: isPerformance ? 'supervisor' : 'manager', queueKey: `sup-app-sup-${a.id}` });
       } else if (isPerformance && !!a.supervisor_signature && !a.reviewer_signature && (!assignedReviewer || assignedReviewer === me)) {
         tasks.push({ ...a, queueStage: 'reviewer', queueKey: `sup-app-rev-${a.id}` });
@@ -628,15 +634,15 @@ export const VerificationOfReview = () => {
     const isPerformance = String(a.form_type || a.eval_type || '').toLowerCase().includes('performance');
     const isReady = isPerformance && !!a.supervisor_signature && !!a.reviewer_signature && !!a.employee_signature && !a.hr_signature;
     if (!isReady) return false;
-    
-    // If HR ownership is set, only show to assigned HR user
+
+    // Type-safe comparison: both coerced to Number to avoid string vs number mismatch
     if (a.hr_owner_user_id) {
-      return a.hr_owner_user_id === user?.id;
+      return Number(a.hr_owner_user_id) === Number(user?.id || 0);
     }
-    
-    // Otherwise show to all HR users in department
-    return true;
-  }), [appraisals, user?.id]);
+
+    // No owner assigned — show to all HR users in same department
+    return sameDept(a);
+  }), [appraisals, user?.id, queueDept]);
 
   const doneHrAppraisals = useMemo(
     () => appraisals.filter((a) => !!a.hr_signature),
@@ -649,7 +655,7 @@ export const VerificationOfReview = () => {
       if (!sameDept(o)) return false;
       // If HR ownership is set, only show to assigned HR user
       if (o.hr_owner_user_id) {
-        return o.hr_owner_user_id === user?.id;
+        return Number(o.hr_owner_user_id) === Number(user?.id || 0);
       }
       return true;
     }),
@@ -662,6 +668,7 @@ export const VerificationOfReview = () => {
       if (!sameDept(a)) return false;
       // If HR ownership is set, only show to assigned HR user
       if (a.hr_owner_user_id) {
+        return Number(a.hr_owner_user_id) === Number(user?.id || 0);
         return a.hr_owner_user_id === user?.id;
       }
       return true;
