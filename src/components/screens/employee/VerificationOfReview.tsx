@@ -45,7 +45,7 @@ export const VerificationOfReview = () => {
   const [applicantSignerTitle, setApplicantSignerTitle] = useState('');
   const [applicantSignerDate, setApplicantSignerDate] = useState(new Date().toISOString().split('T')[0]);
   const [appraisalViewModal, setAppraisalViewModal] = useState<any | null>(null);
-  const [appraisalSignModal, setAppraisalSignModal] = useState<{ record: any; stage: 'supervisor' | 'reviewer' } | null>(null);
+  const [appraisalSignModal, setAppraisalSignModal] = useState<{ record: any; stage: 'supervisor' | 'manager' | 'reviewer' } | null>(null);
 
   const resetQueueSignerState = () => {
     setActiveId(null);
@@ -847,7 +847,7 @@ export const VerificationOfReview = () => {
     </div>
   );
 
-  const renderAppraisalSignBox = (action: () => void, stage: 'supervisor' | 'reviewer' | 'employee' | 'hr') => (
+  const renderAppraisalSignBox = (action: () => void, stage: 'supervisor' | 'manager' | 'reviewer' | 'employee' | 'hr') => (
     <div className="mt-3 border-t dark:border-slate-700 pt-3 space-y-3">
       <label className="inline-flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
         <input
@@ -867,7 +867,7 @@ export const VerificationOfReview = () => {
         maxLength={120}
       />
 
-      {stage === 'supervisor' && (
+      {(stage === 'supervisor' || stage === 'manager') && (
         <>
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Overall Rating</label>
@@ -906,7 +906,7 @@ export const VerificationOfReview = () => {
             value={supervisorComments}
             onChange={(e) => setSupervisorComments(e.target.value)}
             className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
-            placeholder="Supervisor comments"
+            placeholder={stage === 'manager' ? 'Manager comments' : 'Supervisor comments'}
             maxLength={2000}
           />
         </>
@@ -1304,7 +1304,7 @@ export const VerificationOfReview = () => {
                     </button>
                     <button
                       onClick={() => {
-                        setAppraisalSignModal({ record: a, stage: a.queueStage === 'reviewer' ? 'reviewer' : 'supervisor' as 'supervisor' | 'reviewer' });
+                        setAppraisalSignModal({ record: a, stage: a.queueStage === 'reviewer' ? 'reviewer' : a.queueStage === 'manager' ? 'manager' : 'supervisor' });
                         setActiveId(key);
                         setSignerPrintTitle(String(user?.full_name || user?.employee_name || user?.username || ''));
                         setSupervisorOverallRating((a?.overall_rating || '') as 'Satisfactory' | 'Unsatisfactory' | '');
