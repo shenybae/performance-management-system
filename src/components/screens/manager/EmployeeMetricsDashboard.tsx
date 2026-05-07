@@ -338,7 +338,42 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
     return list.sort((a, b) => b.performanceScore - a.performanceScore || a.goalsOverdue - b.goalsOverdue || a.goalsAtRisk - b.goalsAtRisk || b.avgProgress - a.avgProgress);
   }, [employeePerformanceSignals]);
 
+  const selectedPerformanceSignal = useMemo(() => {
+    if (!selectedPerformanceEmployee) return null;
+    return employeePerformanceSignals.find((row) => Number(row.employee.employee_id) === Number(selectedPerformanceEmployee.employee_id)) || null;
+  }, [employeePerformanceSignals, selectedPerformanceEmployee]);
+
+  const selectedPipEligibility = useMemo(() => {
+    if (!selectedPerformanceSignal) {
+      return { allowed: false, reason: 'No metrics signal available yet.' };
+    }
+    if (!hasMinimumSignal(selectedPerformanceSignal)) {
+      return { allowed: false, reason: 'Insufficient metrics signal. Complete goals/forms first.' };
+    }
+    if (isUnderperforming(selectedPerformanceSignal)) {
+      return { allowed: true, reason: `Eligible: score < ${PERFORMING_THRESHOLD} or high-risk indicators detected.` };
+    }
+    return { allowed: false, reason: `Not eligible: PIP is for score < ${PERFORMING_THRESHOLD} or high-risk indicators.` };
+  }, [selectedPerformanceSignal]);
+
+  const selectedIdpEligibility = useMemo(() => {
+    if (!selectedPerformanceSignal) {
+      return { allowed: false, reason: 'No metrics signal available yet.' };
+    }
+    if (!hasMinimumSignal(selectedPerformanceSignal)) {
+      return { allowed: false, reason: 'Insufficient metrics signal. Complete goals/forms first.' };
+    }
+    if (isUnderperforming(selectedPerformanceSignal)) {
+      return { allowed: false, reason: `Not eligible: underperforming employees should start with PIP (score < ${PERFORMING_THRESHOLD} or high-risk indicators).` };
+    }
+    return { allowed: true, reason: `Eligible: score >= ${PERFORMING_THRESHOLD} with no high-risk trigger.` };
+  }, [selectedPerformanceSignal]);
+
   const createPIPFromMetrics = async (employee: EmployeePerformanceSnapshot) => {
+    if (!selectedPipEligibility.allowed) {
+      window.notify?.(selectedPipEligibility.reason, 'warning');
+      return;
+    }
     const employeeId = Number(employee?.employee_id || 0);
     if (!employeeId) {
       window.notify?.('Unable to identify employee for PIP creation', 'error');
@@ -393,6 +428,10 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
   };
 
   const createIDPFromMetrics = async (employee: EmployeePerformanceSnapshot) => {
+    if (!selectedIdpEligibility.allowed) {
+      window.notify?.(selectedIdpEligibility.reason, 'warning');
+      return;
+    }
     const employeeId = Number(employee?.employee_id || 0);
     if (!employeeId) {
       window.notify?.('Unable to identify employee for IDP creation', 'error');
@@ -730,18 +769,21 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                 </div>
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30 text-[11px] text-slate-500">
                   <p><span className="font-bold">Performance Score:</span> calculated from goals, revisions, ratings, disciplinary signals, and forms.</p>
+                  <p className="mt-1"><span className="font-bold">Auto Threshold:</span> PIP when score &lt; {PERFORMING_THRESHOLD} (or risk-triggered), IDP when score ≥ {PERFORMING_THRESHOLD} and no high-risk trigger.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => void createPIPFromMetrics(selectedPerformanceEmployee)}
-                    disabled={metricsPlanSubmitting !== null}
+                    disabled={metricsPlanSubmitting !== null || !selectedPipEligibility.allowed}
+                    title={selectedPipEligibility.reason}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/30 disabled:opacity-60"
                   >
                     {metricsPlanSubmitting === 'pip' ? 'Creating PIP...' : 'Create PIP from Metrics'}
                   </button>
                   <button
                     onClick={() => void createIDPFromMetrics(selectedPerformanceEmployee)}
-                    disabled={metricsPlanSubmitting !== null}
+                    disabled={metricsPlanSubmitting !== null || !selectedIdpEligibility.allowed}
+                    title={selectedIdpEligibility.reason}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 dark:hover:bg-teal-900/30 disabled:opacity-60"
                   >
                     {metricsPlanSubmitting === 'idp' ? 'Creating IDP...' : 'Create IDP from Metrics'}
