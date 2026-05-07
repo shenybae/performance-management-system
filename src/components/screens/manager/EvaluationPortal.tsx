@@ -116,6 +116,7 @@ interface EvaluationPortalProps {
 export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalProps) => {
   const [view, setView] = useState<'dashboard' | 'achievement' | 'performance' | 'detail'>('dashboard');
   const [appraisals, setAppraisals] = useState<any[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [detailRecord, setDetailRecord] = useState<any>(null);
 
   /* ── Achievement Measure form state ─────────────────────────────── */
@@ -190,11 +191,11 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   };
 
   /* ── data fetch ─────────────────────────────────────────────────── */
-  useEffect(() => { fetchAppraisals(); }, []);
+  useEffect(() => { fetchAppraisals(); }, [showArchived]);
 
   const fetchAppraisals = async () => {
     try {
-      const res = await fetch('/api/appraisals', { headers: getAuthHeaders() });
+      const res = await fetch(`/api/appraisals?include_archived=${showArchived ? '1' : '0'}`, { headers: getAuthHeaders() });
       const data = await res.json();
       setAppraisals(Array.isArray(data) ? data : []);
     } catch { setAppraisals([]); }
@@ -852,6 +853,12 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
         <SectionHeader title="Evaluation Portal" subtitle="Formal performance appraisal forms" />
         <div className="flex gap-2">
           <button onClick={() => exportToCSV(appraisals, 'appraisals')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> Export XLSX</button>
+          <button
+            onClick={() => setShowArchived((prev) => !prev)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${showArchived ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+          >
+            <Archive size={16} /> {showArchived ? 'Hide Archived' : 'Show Archived'}
+          </button>
           <button onClick={() => setView('achievement')} className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors"><Star size={16} /> Achievement Measure</button>
           <button onClick={() => setView('performance')} className="flex items-center gap-2 bg-teal-green text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-deep transition-colors"><FileText size={16} /> Performance Evaluation</button>
         </div>

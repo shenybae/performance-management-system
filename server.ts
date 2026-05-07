@@ -6405,6 +6405,10 @@ ${relevantGoalIdsSql}
       const actor = (req as any).user || {};
       const role = actor.role;
       const normalizedRole = normalizeUserRole(role);
+      const includeArchived = String(req.query.include_archived || '0') === '1';
+      const archivedFilter = includeArchived
+        ? ' AND (COALESCE(a.is_archived, 0) = 1 OR a.archived_at IS NOT NULL OR a.deleted_at IS NOT NULL)'
+        : ' AND COALESCE(a.is_archived, 0) = 0 AND a.archived_at IS NULL AND a.deleted_at IS NULL';
       const queryEmployeeId = normalizeEmployeeId(req.query.employee_id);
       const actorCtx = await getActorOrgContext(Number(actor.id || 0));
 
@@ -6415,22 +6419,22 @@ ${relevantGoalIdsSql}
             const allowed = await canActorAccessEmployeeByDept(hrDept, queryEmployeeId);
             if (!allowed) return res.status(403).json({ error: 'Forbidden' });
             const rows = await query(
-              "SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ? AND LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+              `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ? AND LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
               [queryEmployeeId, hrDept]
             );
             return res.json(rows);
           }
 
           const rows = await query(
-            "SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+            `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
             [hrDept]
           );
           return res.json(rows);
         }
 
         const rows = queryEmployeeId
-          ? await query("SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?", [queryEmployeeId])
-          : await query("SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id");
+          ? await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?${archivedFilter}`, [queryEmployeeId])
+          : await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE 1=1${archivedFilter}`);
         return res.json(rows);
       }
 
@@ -6438,13 +6442,13 @@ ${relevantGoalIdsSql}
         const managedIds = await getManagedEmployeeIds(actor.id);
         if (queryEmployeeId) {
           if (!managedIds.includes(queryEmployeeId)) return res.status(403).json({ error: 'Forbidden' });
-          const rows = await query("SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?", [queryEmployeeId]);
+          const rows = await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?${archivedFilter}`, [queryEmployeeId]);
           return res.json(rows);
         }
 
         if (managedIds.length === 0) return res.json([]);
         const placeholders = managedIds.map(() => '?').join(',');
-        const rows = await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id IN (${placeholders})`, managedIds);
+        const rows = await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id IN (${placeholders})${archivedFilter}`, managedIds);
         return res.json(rows);
       }
 
@@ -6457,14 +6461,14 @@ ${relevantGoalIdsSql}
             const allowed = await canActorAccessEmployeeByDept(supervisorDept, queryEmployeeId);
             if (!allowed) return res.status(403).json({ error: 'Forbidden' });
             const rows = await query(
-              "SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ? AND LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+              `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ? AND LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
               [queryEmployeeId, supervisorDept]
             );
             return res.json(rows);
           }
 
           const rows = await query(
-            "SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))",
+            `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
             [supervisorDept]
           );
           return res.json(rows);
@@ -6472,7 +6476,7 @@ ${relevantGoalIdsSql}
 
         const employeeId = normalizeEmployeeId(actor.employee_id);
         if (!employeeId) return res.json([]);
-        const rows = await query("SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?", [employeeId]);
+        const rows = await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?${archivedFilter}`, [employeeId]);
         return res.json(rows);
       }
 
