@@ -897,6 +897,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                 </tr></thead>
                 <tbody>
                   {appraisals.map(a => {
+                    const isArchived = !!String(a.deleted_at || '').trim();
                     const formTypeStr = (a.form_type || a.eval_type || '').toString().toLowerCase();
                     const isPerformanceEval = formTypeStr.includes('performance');
                     const sigCount = isPerformanceEval
@@ -904,13 +905,18 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                       : [a.supervisor_signature, a.employee_signature].filter(Boolean).length;
                     const sigTotal = isPerformanceEval ? 4 : 2;
                     return (
-                      <tr key={a.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                      <tr key={a.id} className={`border-b border-slate-50 dark:border-slate-800/50 transition-colors ${isArchived ? 'bg-amber-50/40 dark:bg-amber-900/10 hover:bg-amber-50/60 dark:hover:bg-amber-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'}`}>
                         <td className="py-3 font-medium text-slate-700 dark:text-slate-200">
                           <div className="min-w-0">
                             <span className="truncate max-w-55" title={a.employee_name || `#${a.employee_id}`}>{a.employee_name || `#${a.employee_id}`}</span>
                           </div>
                         </td>
-                        <td className="py-3 text-[10px] font-bold uppercase text-slate-500">{a.form_type || a.eval_type || '—'}</td>
+                        <td className="py-3 text-[10px] font-bold uppercase text-slate-500">
+                          <div className="flex items-center gap-2">
+                            <span>{a.form_type || a.eval_type || '—'}</span>
+                            {isArchived && <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 animate-pulse">Archived</span>}
+                          </div>
+                        </td>
                         <td className="py-3 text-[10px] text-slate-500 whitespace-nowrap">{(a.eval_period_from || a.review_period_from) ? `${a.eval_period_from || a.review_period_from} – ${a.eval_period_to || a.review_period_to}` : '—'}</td>
                         <td className="py-3 text-slate-600 dark:text-slate-300">{a.job_knowledge}/5</td>
                         <td className="py-3 text-slate-600 dark:text-slate-300">{a.productivity}/5</td>
@@ -940,7 +946,14 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                               ? <button onClick={() => exportPDF(a)} className="text-teal-600 hover:text-teal-800 transition-colors" title="Export PDF"><Download size={14} /></button>
                               : null;
                           })()}
-                          <button onClick={() => handleDelete(a.id)} className="text-red-500 hover:text-red-600 p-1 rounded transition-colors" title="Archive"><Archive size={15} /></button>
+                          <button
+                            onClick={() => { if (!isArchived) handleDelete(a.id); }}
+                            disabled={isArchived}
+                            className={`p-1 rounded transition-colors ${isArchived ? 'text-amber-400 dark:text-amber-500 cursor-not-allowed' : 'text-red-500 hover:text-red-600'}`}
+                            title={isArchived ? 'Already archived' : 'Archive'}
+                          >
+                            <Archive size={15} />
+                          </button>
                         </td>
                       </tr>
                     );
