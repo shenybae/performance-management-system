@@ -18,7 +18,8 @@ interface DisciplinaryLogProps {
 
 export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps) => {
   const [showForm, setShowForm] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
+  const [recordArchiveFilter, setRecordArchiveFilter] = useState<'active' | 'archived' | 'all'>('active');
+  const [recordStatusFilter, setRecordStatusFilter] = useState<'all' | 'acknowledged' | 'pending'>('all');
   const [records, setRecords] = useState<any[]>([]);
   const buildEmptyForm = () => ({
     employee_id: '', violation_type: [] as string[], warning_level: '',
@@ -90,7 +91,7 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
 
   const trimText = (value: string) => value.trim();
 
-  useEffect(() => { fetchRecords(); }, [showArchived]);
+  useEffect(() => { fetchRecords(); }, []);
 
   useEffect(() => {
     if (!showForm) return;
@@ -116,7 +117,7 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
 
   const fetchRecords = async () => {
     try {
-      const res = await fetch(`/api/discipline_records?include_archived=${showArchived ? '1' : '0'}`, { headers: getAuthHeaders() });
+      const res = await fetch('/api/discipline_records?include_archived=1', { headers: getAuthHeaders() });
       const data = await res.json();
       setRecords(Array.isArray(data) ? data : []);
     } catch { setRecords([]); }
@@ -268,17 +269,35 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
   const [search, setSearch] = useState('');
 
   const filteredRecords = useMemo(() => {
-    if (!search.trim()) return records;
-    const q = search.toLowerCase();
-    return records.filter((r: any) => (
-      (r.employee_name || '').toLowerCase().includes(q) ||
-      (r.violation_type || '').toLowerCase().includes(q) ||
-      (r.warning_level || '').toLowerCase().includes(q) ||
-      (r.dept || '').toLowerCase().includes(q) ||
-      (r.supervisor || '').toLowerCase().includes(q) ||
-      (r.action_taken || '').toLowerCase().includes(q)
-    ));
-  }, [records, search]);
+    const q = search.toLowerCase().trim();
+    return records.filter((r: any) => {
+      const isArchived = !!(r.is_archived || String(r.deleted_at || '').trim());
+      const isAcknowledged = !!r.preparer_signature && !!r.supervisor_signature && !!r.employee_signature;
+
+      const archiveMatch = recordArchiveFilter === 'all'
+        ? true
+        : recordArchiveFilter === 'archived'
+          ? isArchived
+          : !isArchived;
+
+      const statusMatch = recordStatusFilter === 'all'
+        ? true
+        : recordStatusFilter === 'acknowledged'
+          ? isAcknowledged
+          : !isAcknowledged;
+
+      const searchMatch = !q || (
+        (r.employee_name || '').toLowerCase().includes(q) ||
+        (r.violation_type || '').toLowerCase().includes(q) ||
+        (r.warning_level || '').toLowerCase().includes(q) ||
+        (r.dept || '').toLowerCase().includes(q) ||
+        (r.supervisor || '').toLowerCase().includes(q) ||
+        (r.action_taken || '').toLowerCase().includes(q)
+      );
+
+      return archiveMatch && statusMatch && searchMatch;
+    });
+  }, [records, search, recordArchiveFilter, recordStatusFilter]);
 
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [viewRecord, setViewRecord] = useState<any | null>(null);
@@ -386,7 +405,7 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date, empl
       <div className="flex justify-between items-end mb-4">
         <SectionHeader title="Disciplinary & Warning Log" subtitle="Track behavioral issues and corrective actions" />
         <div className="flex gap-2">
-          <button onClick={() => exportToCSV(records, 'discipline_records')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+          <button onClick={() => exportToCSV(filteredRecords, 'discipline_records')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
             <Download size={16} /> Export XLSX
           </button>
           <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors">
@@ -648,12 +667,16 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date, empl
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
             <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">All Disciplinary Records</h3>
             <div className="flex w-full sm:w-auto items-center gap-2">
-              <button
-                onClick={() => setShowArchived((prev) => !prev)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-colors shrink-0 ${showArchived ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
-              >
-                <Archive size={14} /> {showArchived ? 'Hide Archived' : 'Show Archived'}
-              </button>
+              <select value={recordArchiveFilter} onChange={(e) => setRecordArchiveFilter(e.target.value as 'active' | 'archived' | 'all')} className="px-3 py-2 rounded-lg text-sm font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
+                <option value="active">Active</option>
+                <option value="archived">Archived</option>
+                <option value="all">All Records</option>
+              </select>
+              <select value={recordStatusFilter} onChange={(e) => setRecordStatusFilter(e.target.value as 'all' | 'acknowledged' | 'pending')} className="px-3 py-2 rounded-lg text-sm font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
+                <option value="all">All Statuses</option>
+                <option value="acknowledged">Acknowledged</option>
+                <option value="pending">Pending</option>
+              </select>
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                 <input
@@ -773,7 +796,7 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date, empl
                 })}
                 {filteredRecords.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="py-10 text-center text-slate-400">No records found.</td>
+                    <td colSpan={11} className="py-10 text-center text-slate-400">No records match the selected filters.</td>
                   </tr>
                 )}
               </tbody>

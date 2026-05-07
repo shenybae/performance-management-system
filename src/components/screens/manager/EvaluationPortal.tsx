@@ -117,7 +117,8 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   const todayISO = useMemo(() => new Date().toISOString().split('T')[0], []);
   const [view, setView] = useState<'dashboard' | 'achievement' | 'performance' | 'detail'>('dashboard');
   const [appraisals, setAppraisals] = useState<any[]>([]);
-  const [showArchived, setShowArchived] = useState(false);
+  const [appraisalArchiveFilter, setAppraisalArchiveFilter] = useState<'active' | 'archived' | 'all'>('active');
+  const [appraisalStatusFilter, setAppraisalStatusFilter] = useState<'all' | 'verified' | 'pending'>('all');
   const [detailRecord, setDetailRecord] = useState<any>(null);
 
   /* ── Achievement Measure form state ─────────────────────────────── */
@@ -192,15 +193,40 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   };
 
   /* ── data fetch ─────────────────────────────────────────────────── */
-  useEffect(() => { fetchAppraisals(); }, [showArchived]);
+  useEffect(() => { fetchAppraisals(); }, []);
 
   const fetchAppraisals = async () => {
     try {
-      const res = await fetch(`/api/appraisals?include_archived=${showArchived ? '1' : '0'}`, { headers: getAuthHeaders() });
+      const res = await fetch('/api/appraisals?include_archived=1', { headers: getAuthHeaders() });
       const data = await res.json();
       setAppraisals(Array.isArray(data) ? data : []);
     } catch { setAppraisals([]); }
   };
+
+  const filteredAppraisals = useMemo(() => {
+    return appraisals.filter((a) => {
+      const isArchived = !!String(a.deleted_at || '').trim();
+      const formTypeStr = (a.form_type || a.eval_type || '').toString().toLowerCase();
+      const isPerformanceEval = formTypeStr.includes('performance');
+      const isVerified = isPerformanceEval
+        ? !!(a.supervisor_signature && a.reviewer_signature && a.employee_signature && a.hr_signature)
+        : !!(a.supervisor_signature && a.employee_signature);
+
+      const archiveMatch = appraisalArchiveFilter === 'all'
+        ? true
+        : appraisalArchiveFilter === 'archived'
+          ? isArchived
+          : !isArchived;
+
+      const statusMatch = appraisalStatusFilter === 'all'
+        ? true
+        : appraisalStatusFilter === 'verified'
+          ? isVerified
+          : !isVerified;
+
+      return archiveMatch && statusMatch;
+    });
+  }, [appraisals, appraisalArchiveFilter, appraisalStatusFilter]);
 
   /* ── Form validation helpers ────────────────────────────────────── */
   const isAchievementFormValid = () => {
@@ -871,13 +897,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
       <div className="flex justify-between items-end mb-6">
         <SectionHeader title="Evaluation Portal" subtitle="Formal performance appraisal forms" />
         <div className="flex gap-2">
-          <button onClick={() => exportToCSV(appraisals, 'appraisals')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> Export XLSX</button>
-          <button
-            onClick={() => setShowArchived((prev) => !prev)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${showArchived ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
-          >
-            <Archive size={16} /> {showArchived ? 'Hide Archived' : 'Show Archived'}
-          </button>
+          <button onClick={() => exportToCSV(filteredAppraisals, 'appraisals')} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><Download size={16} /> Export XLSX</button>
           <button onClick={() => setView('achievement')} className="flex items-center gap-2 bg-teal-deep text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-green transition-colors"><Star size={16} /> Achievement Measure</button>
           <button onClick={() => setView('performance')} className="flex items-center gap-2 bg-teal-green text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-deep transition-colors"><FileText size={16} /> Performance Evaluation</button>
         </div>
@@ -900,7 +920,21 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
         </Card>
         <div className="md:col-span-2">
           <Card>
-            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-300 uppercase mb-4">Appraisal Records</h3>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="text-sm font-bold text-slate-500 dark:text-slate-300 uppercase">Appraisal Records</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <select value={appraisalArchiveFilter} onChange={(e) => setAppraisalArchiveFilter(e.target.value as 'active' | 'archived' | 'all')} className="px-3 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+                  <option value="active">Active</option>
+                  <option value="archived">Archived</option>
+                  <option value="all">All Records</option>
+                </select>
+                <select value={appraisalStatusFilter} onChange={(e) => setAppraisalStatusFilter(e.target.value as 'all' | 'verified' | 'pending')} className="px-3 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+                  <option value="all">All Statuses</option>
+                  <option value="verified">Verified</option>
+                  <option value="pending">Pending</option>
+                </select>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead><tr className="border-b border-slate-100 dark:border-slate-800">
@@ -915,7 +949,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                   <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Actions</th>
                 </tr></thead>
                 <tbody>
-                  {appraisals.map(a => {
+                  {filteredAppraisals.map(a => {
                     const isArchived = !!String(a.deleted_at || '').trim();
                     const formTypeStr = (a.form_type || a.eval_type || '').toString().toLowerCase();
                     const isPerformanceEval = formTypeStr.includes('performance');
@@ -977,12 +1011,10 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                       </tr>
                     );
                   })}
-                  {appraisals.length === 0 && (
+                  {filteredAppraisals.length === 0 && (
                     <tr>
                       <td colSpan={9} className="py-8 text-center text-slate-400">
-                        {showArchived
-                          ? 'No archived appraisals found.'
-                          : 'No active appraisals. Click "Show Archived" to view archived records.'}
+                        No appraisal records match the selected filters.
                       </td>
                     </tr>
                   )}
