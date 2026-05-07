@@ -4323,10 +4323,10 @@ ${relevantGoalIdsSql}
           (SELECT ROUND(COALESCE(AVG(COALESCE(a.overall, 0)), 0), 2) FROM appraisals a WHERE a.employee_id = e.id AND COALESCE(a.employee_signature, '') <> '') AS appraisals_avg_overall,
           (SELECT MAX(a.sign_off_date) FROM appraisals a WHERE a.employee_id = e.id AND COALESCE(a.employee_signature, '') <> '') AS last_appraisal_signoff,
 
-          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(d.employee_signature, '') <> '') AS disciplinary_count,
-          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(d.employee_signature, '') <> '' AND COALESCE(TRIM(d.violation_type), '') <> '') AS disciplinary_violation_entries_count,
-          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(d.employee_signature, '') <> '' AND COALESCE(TRIM(d.action_taken), '') <> '') AS disciplinary_actions_count,
-          (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(d.employee_signature, '') <> '') AS last_disciplinary_date,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND (COALESCE(d.is_acknowledged, 0) = 1 OR d.acknowledged_at IS NOT NULL)) AS disciplinary_count,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND (COALESCE(d.is_acknowledged, 0) = 1 OR d.acknowledged_at IS NOT NULL) AND COALESCE(TRIM(d.violation_type), '') <> '') AS disciplinary_violation_entries_count,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND (COALESCE(d.is_acknowledged, 0) = 1 OR d.acknowledged_at IS NOT NULL) AND COALESCE(TRIM(d.action_taken), '') <> '') AS disciplinary_actions_count,
+          (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND (COALESCE(d.is_acknowledged, 0) = 1 OR d.acknowledged_at IS NOT NULL)) AS last_disciplinary_date,
 
           (SELECT COUNT(*) FROM feedback_360 f WHERE LOWER(TRIM(COALESCE(f.target_employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS feedback_360_count,
 
@@ -6817,15 +6817,16 @@ ${relevantGoalIdsSql}
 
       if (!employee_signature) return res.status(400).json({ error: 'Employee signature is required' });
 
+      const acknowledgedAt = new Date().toISOString();
       if (employee_statement !== null) {
         await query(
-          "UPDATE discipline_records SET employee_signature = ?, employee_signature_date = ?, employee_statement = ? WHERE id = ?",
-          [employee_signature, employee_signature_date, employee_statement, id]
+          "UPDATE discipline_records SET employee_signature = ?, employee_signature_date = ?, employee_statement = ?, is_acknowledged = 1, acknowledged_at = ? WHERE id = ?",
+          [employee_signature, employee_signature_date, employee_statement, acknowledgedAt, id]
         );
       } else {
         await query(
-          "UPDATE discipline_records SET employee_signature = ?, employee_signature_date = ? WHERE id = ?",
-          [employee_signature, employee_signature_date, id]
+          "UPDATE discipline_records SET employee_signature = ?, employee_signature_date = ?, is_acknowledged = 1, acknowledged_at = ? WHERE id = ?",
+          [employee_signature, employee_signature_date, acknowledgedAt, id]
         );
       }
 
