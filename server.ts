@@ -4318,28 +4318,28 @@ ${relevantGoalIdsSql}
           (SELECT COUNT(*) FROM self_assessments s WHERE s.employee_id = e.id) AS self_assessments_count,
           (SELECT MAX(s.created_at) FROM self_assessments s WHERE s.employee_id = e.id) AS last_self_assessment_at,
 
-          (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id) AS appraisals_count,
-          (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id) AS performance_evaluation_forms_count,
-          (SELECT ROUND(COALESCE(AVG(COALESCE(a.overall, 0)), 0), 2) FROM appraisals a WHERE a.employee_id = e.id) AS appraisals_avg_overall,
-          (SELECT MAX(a.sign_off_date) FROM appraisals a WHERE a.employee_id = e.id) AS last_appraisal_signoff,
+          (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id AND COALESCE(a.employee_signature, '') <> '') AS appraisals_count,
+          (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id AND COALESCE(a.employee_signature, '') <> '') AS performance_evaluation_forms_count,
+          (SELECT ROUND(COALESCE(AVG(COALESCE(a.overall, 0)), 0), 2) FROM appraisals a WHERE a.employee_id = e.id AND COALESCE(a.employee_signature, '') <> '') AS appraisals_avg_overall,
+          (SELECT MAX(a.sign_off_date) FROM appraisals a WHERE a.employee_id = e.id AND COALESCE(a.employee_signature, '') <> '') AS last_appraisal_signoff,
 
-          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL) AS disciplinary_count,
-          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(TRIM(d.violation_type), '') <> '') AS disciplinary_violation_entries_count,
-          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(TRIM(d.action_taken), '') <> '') AS disciplinary_actions_count,
-          (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL) AS last_disciplinary_date,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(d.employee_signature, '') <> '') AS disciplinary_count,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(d.employee_signature, '') <> '' AND COALESCE(TRIM(d.violation_type), '') <> '') AS disciplinary_violation_entries_count,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(d.employee_signature, '') <> '' AND COALESCE(TRIM(d.action_taken), '') <> '') AS disciplinary_actions_count,
+          (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(d.employee_signature, '') <> '') AS last_disciplinary_date,
 
           (SELECT COUNT(*) FROM feedback_360 f WHERE LOWER(TRIM(COALESCE(f.target_employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS feedback_360_count,
 
-          (SELECT COUNT(*) FROM suggestions s WHERE s.employee_id = e.id) AS suggestions_count,
-          (SELECT MAX(s.created_at) FROM suggestions s WHERE s.employee_id = e.id) AS last_suggestion_date,
+          (SELECT COUNT(*) FROM suggestions s WHERE s.employee_id = e.id AND COALESCE(s.supervisor_signature, '') <> '') AS suggestions_count,
+          (SELECT MAX(s.created_at) FROM suggestions s WHERE s.employee_id = e.id AND COALESCE(s.supervisor_signature, '') <> '') AS last_suggestion_date,
 
-          (SELECT COUNT(*) FROM onboarding o WHERE o.employee_id = e.id) AS onboarding_count,
+          (SELECT COUNT(*) FROM onboarding o WHERE o.employee_id = e.id AND COALESCE(o.employee_signature, '') <> '') AS onboarding_count,
           (SELECT COUNT(*) FROM onboarding o WHERE o.employee_id = e.id AND COALESCE(o.employee_signature, '') <> '') AS onboarding_signed_count,
 
-          (SELECT COUNT(*) FROM property_accountability p WHERE p.employee_id = e.id) AS property_forms_count,
+          (SELECT COUNT(*) FROM property_accountability p WHERE p.employee_id = e.id AND COALESCE(p.received_by_sig, '') <> '') AS property_forms_count,
           (SELECT COUNT(*) FROM property_accountability p WHERE p.employee_id = e.id AND COALESCE(p.received_by_sig, '') <> '') AS property_signed_count,
 
-          (SELECT COUNT(*) FROM exit_interviews ex WHERE LOWER(TRIM(COALESCE(ex.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS exit_interviews_count,
+          (SELECT COUNT(*) FROM exit_interviews ex WHERE LOWER(TRIM(COALESCE(ex.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, ''))) AND COALESCE(ex.employee_sig, '') <> '') AS exit_interviews_count,
           (SELECT COUNT(*) FROM exit_interviews ex WHERE LOWER(TRIM(COALESCE(ex.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, ''))) AND COALESCE(ex.employee_sig, '') <> '') AS exit_interviews_signed_count,
 
           (SELECT COUNT(*) FROM coaching_logs cl WHERE cl.employee_id = e.id) AS coaching_logs_count,
