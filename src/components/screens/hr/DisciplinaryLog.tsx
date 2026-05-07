@@ -18,7 +18,7 @@ interface DisciplinaryLogProps {
 
 export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps) => {
   const [showForm, setShowForm] = useState(false);
-  const [recordFilter, setRecordFilter] = useState<'active' | 'archived' | 'all' | 'acknowledged' | 'pending'>('active');
+  const [recordFilter, setRecordFilter] = useState<'archived' | 'all' | 'acknowledged' | 'pending'>('all');
   const [records, setRecords] = useState<any[]>([]);
   const buildEmptyForm = () => ({
     employee_id: '', violation_type: [] as string[], warning_level: '',
@@ -289,7 +289,6 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
 
       if (!searchMatch) return false;
       if (recordFilter === 'all') return true;
-      if (recordFilter === 'active') return !isArchived;
       if (recordFilter === 'archived') return isArchived;
       if (recordFilter === 'acknowledged') return isAcknowledged;
       return !isAcknowledged;
@@ -664,8 +663,7 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date, empl
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
             <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">All Disciplinary Records</h3>
             <div className="flex w-full sm:w-auto items-center gap-2">
-              <select value={recordFilter} onChange={(e) => setRecordFilter(e.target.value as 'active' | 'archived' | 'all' | 'acknowledged' | 'pending')} className="px-3 py-2 rounded-lg text-sm font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
-                <option value="active">Active</option>
+              <select value={recordFilter} onChange={(e) => setRecordFilter(e.target.value as 'archived' | 'all' | 'acknowledged' | 'pending')} className="px-3 py-2 rounded-lg text-sm font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
                 <option value="archived">Archived</option>
                 <option value="all">All Records</option>
                 <option value="acknowledged">Acknowledged</option>
