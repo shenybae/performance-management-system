@@ -498,8 +498,7 @@ export const VerificationOfReview = () => {
   };
 
   const pendingEmployeeAppraisals = useMemo(() => appraisals.filter((a) => {
-    const isPerformance = String(a.form_type || a.eval_type || '').toLowerCase().includes('performance');
-    return !!a.supervisor_signature && (!isPerformance || !!a.reviewer_signature) && !a.employee_signature;
+    return !a.employee_signature;
   }), [appraisals]);
 
   const pendingEmployeeDiscipline = useMemo(
@@ -1368,23 +1367,38 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Appraisals Pending Your Signature</h3>
             {pendingEmployeeAppraisals.length === 0 && renderEmptyQueueState('No pending appraisal signatures.')}
-            {pendingEmployeeAppraisals.map((a) => renderQueueCard({
-              id: `emp-app-${a.id}`,
-              icon: <FileText size={16} />,
-              iconColorClass: 'text-teal-600 dark:text-teal-400',
-              iconBgClass: 'bg-teal-50 dark:bg-teal-900/30',
-              title: a.form_type || a.eval_type || 'Appraisal',
-              subtitle: `${a.employee_name || 'Employee'} • ${a.sign_off_date || a.created_at?.split('T')[0] || '—'}`,
-              badge: 'Your Signature',
-              badgeColorClass: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300',
-              pills: [
-                { icon: <Building2 size={10} />, text: a.employee_department || a.dept || '—' },
-                { icon: <Calendar size={10} />, text: `${a.eval_period_from || '—'} – ${a.eval_period_to || '—'}` },
-                { icon: <BarChart2 size={10} />, text: `Overall: ${a.overall ?? '—'}` },
-              ],
-              onView: () => setGenericViewModal({ title: `${a.form_type || 'Appraisal'} — ${a.employee_name || 'Employee'}`, type: 'appraisal', record: a }),
-              onSign: () => openGenericSign(`Sign — ${a.form_type || 'Appraisal'} (${a.employee_name || 'Employee'})`, 'appraisalEmployee', 'emp-app', a),
-            }))}
+            {pendingEmployeeAppraisals.map((a) => {
+              const isPerformance = String(a.form_type || a.eval_type || '').toLowerCase().includes('performance');
+              const readyForEmployeeSign = !!a.supervisor_signature && (!isPerformance || !!a.reviewer_signature);
+              return renderQueueCard({
+                id: `emp-app-${a.id}`,
+                icon: <FileText size={16} />,
+                iconColorClass: 'text-teal-600 dark:text-teal-400',
+                iconBgClass: 'bg-teal-50 dark:bg-teal-900/30',
+                title: a.form_type || a.eval_type || 'Appraisal',
+                subtitle: `${a.employee_name || 'Employee'} • ${a.sign_off_date || a.created_at?.split('T')[0] || '—'}`,
+                badge: 'Your Signature',
+                badgeColorClass: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300',
+                pills: [
+                  { icon: <Building2 size={10} />, text: a.employee_department || a.dept || '—' },
+                  { icon: <Calendar size={10} />, text: `${a.eval_period_from || '—'} – ${a.eval_period_to || '—'}` },
+                  { icon: <BarChart2 size={10} />, text: `Overall: ${a.overall ?? '—'}` },
+                ],
+                warningText: !readyForEmployeeSign
+                  ? (isPerformance ? 'Waiting for supervisor and reviewer signatures before you can sign.' : 'Waiting for manager signature before you can sign.')
+                  : undefined,
+                onView: () => setGenericViewModal({ title: `${a.form_type || 'Appraisal'} — ${a.employee_name || 'Employee'}`, type: 'appraisal', record: a }),
+                signDisabled: !readyForEmployeeSign,
+                signTitle: !readyForEmployeeSign ? 'Management signatures required first' : undefined,
+                onSign: () => {
+                  if (readyForEmployeeSign) {
+                    openGenericSign(`Sign — ${a.form_type || 'Appraisal'} (${a.employee_name || 'Employee'})`, 'appraisalEmployee', 'emp-app', a);
+                  } else {
+                    setGenericViewModal({ title: `${a.form_type || 'Appraisal'} — ${a.employee_name || 'Employee'}`, type: 'appraisal', record: a });
+                  }
+                },
+              });
+            })}
           </Card>
           )}
 
