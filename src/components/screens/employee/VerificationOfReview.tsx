@@ -1178,99 +1178,160 @@ export const VerificationOfReview = () => {
     </div>
   );
 
+  const renderEmptyQueueState = (label: string) => (
+    <div className="flex flex-col items-center py-8 text-slate-400 gap-2">
+      <CheckCircle size={32} className="text-emerald-400" />
+      <p className="text-sm">{label}</p>
+    </div>
+  );
+
   const renderGenericViewContent = () => {
     if (!genericViewModal) return null;
     const { type, record: r } = genericViewModal;
-    if (type === 'appraisal') return renderAppraisalPreview(r);
-    if (type === 'discipline') return renderDisciplineReview(r);
-    if (type === 'suggestion') return (
-      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div><span className="font-bold">Employee:</span> {r.employee_name || '—'}</div>
-          <div><span className="font-bold">Department:</span> {r.department || r.employee_department || '—'}</div>
-          <div><span className="font-bold">Date:</span> {r.date || r.created_at?.split('T')[0] || '—'}</div>
-          <div><span className="font-bold">Status:</span> {r.status || 'Pending'}</div>
-        </div>
-        {r.concern && <div><span className="font-bold">Concern / Suggestion:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs">{r.concern}</p></div>}
-        {r.title && <div><span className="font-bold">Title:</span> {r.title}</div>}
-        {r.action_to_be_taken && <div><span className="font-bold">Action to be taken:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs">{r.action_to_be_taken}</p></div>}
+    const F = ({ label, value }: { label: string; value?: string | number | null }) => (
+      <div>
+        <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">{label}</p>
+        <p className="mt-0.5 text-sm text-slate-800 dark:text-slate-100 font-medium">{value ?? '—'}</p>
       </div>
     );
-    if (type === 'onboarding') return (
-      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div><span className="font-bold">Employee:</span> {r.employee_name || '—'}</div>
-          <div><span className="font-bold">Department:</span> {r.department || r.employee_department || '—'}</div>
-          <div><span className="font-bold">Start Date:</span> {r.start_date || '—'}</div>
-          <div><span className="font-bold">Status:</span> {r.status || 'Pending'}</div>
-        </div>
-        {r.notes && <div><span className="font-bold">Notes:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs">{r.notes}</p></div>}
-        <div className="grid sm:grid-cols-2 gap-2 text-xs">
-          <div className={`px-2 py-1 rounded ${r.employee_signature ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Employee: {r.employee_signature ? `Signed (${r.employee_signature_date || '—'})` : 'Pending'}</div>
-          <div className={`px-2 py-1 rounded ${r.hr_signature ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>HR: {r.hr_signature ? `Signed (${r.hr_signature_date || '—'})` : 'Pending'}</div>
-        </div>
+    const TB = ({ label, value }: { label: string; value?: string | null }) => value ? (
+      <div>
+        <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-1">{label}</p>
+        <p className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">{value}</p>
       </div>
-    );
-    if (type === 'exit') return (
-      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div><span className="font-bold">Employee:</span> {r.employee_name || '—'}</div>
-          <div><span className="font-bold">Department:</span> {r.department || r.employee_department || '—'}</div>
-          <div><span className="font-bold">Interview Date:</span> {r.interview_date || '—'}</div>
-          <div><span className="font-bold">Last Day:</span> {r.last_day || '—'}</div>
-        </div>
-        {r.reason_for_leaving && <div><span className="font-bold">Reason for Leaving:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs">{r.reason_for_leaving}</p></div>}
-        {r.comments && <div><span className="font-bold">Comments:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs">{r.comments}</p></div>}
-        <div className="grid sm:grid-cols-2 gap-2 text-xs">
-          <div className={`px-2 py-1 rounded ${r.employee_sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Employee: {r.employee_sig ? 'Signed' : 'Pending'}</div>
-          <div className={`px-2 py-1 rounded ${r.interviewer_sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Interviewer: {r.interviewer_sig ? 'Signed' : 'Pending'}</div>
-        </div>
-      </div>
-    );
-    if (type === 'applicant') return (
-      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div><span className="font-bold">Applicant:</span> {r.name || '—'}</div>
-          <div><span className="font-bold">Position:</span> {r.position || '—'}</div>
-          <div><span className="font-bold">Department:</span> {r.department || r.employee_department || '—'}</div>
-          <div><span className="font-bold">Interview Date:</span> {r.interview_date || '—'}</div>
-          <div><span className="font-bold">Status:</span> {r.status || '—'}</div>
-        </div>
-        {r.notes && <div><span className="font-bold">Notes:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs">{r.notes}</p></div>}
-      </div>
-    );
-    if (type === 'property') return (
-      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div><span className="font-bold">Employee:</span> {r.employee_name || '—'}</div>
-          <div><span className="font-bold">Department:</span> {r.department || r.employee_department || '—'}</div>
-          <div><span className="font-bold">Date Issued:</span> {r.date_issued || r.created_at?.split('T')[0] || '—'}</div>
-        </div>
-        {r.items && <div><span className="font-bold">Items:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs whitespace-pre-line">{r.items}</p></div>}
-        <div className="grid sm:grid-cols-2 gap-2 text-xs">
-          <div className={`px-2 py-1 rounded ${r.turnover_by_sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Turned over by: {r.turnover_by_sig ? 'Signed' : 'Pending'}</div>
-          <div className={`px-2 py-1 rounded ${r.noted_by_sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Noted by: {r.noted_by_sig ? 'Signed' : 'Pending'}</div>
-          <div className={`px-2 py-1 rounded ${r.received_by_sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Received by: {r.received_by_sig ? 'Signed' : 'Pending'}</div>
-          <div className={`px-2 py-1 rounded ${r.audited_by_sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Audited by: {r.audited_by_sig ? 'Signed' : 'Pending'}</div>
-        </div>
-      </div>
-    );
-    if (type === 'requisition') return (
-      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div><span className="font-bold">Job Title:</span> {r.job_title || '—'}</div>
-          <div><span className="font-bold">Department:</span> {r.department || '—'}</div>
-          <div><span className="font-bold">Date Requested:</span> {r.date_requested || r.created_at?.split('T')[0] || '—'}</div>
-          <div><span className="font-bold">Headcount:</span> {r.headcount || '—'}</div>
-          <div><span className="font-bold">Reason:</span> {r.reason || '—'}</div>
-        </div>
-        <div className="grid sm:grid-cols-3 gap-2 text-xs">
-          {[['Supervisor', r.supervisor_approval_sig], ['Dept Head', r.dept_head_approval_sig], ['Cabinet', r.cabinet_approval_sig], ['VP', r.vp_approval_sig], ['President', r.president_approval_sig]].map(([label, sig]) => (
-            <div key={String(label)} className={`px-2 py-1 rounded ${sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
-              {label}: {sig ? 'Approved' : 'Pending'}
-            </div>
+    ) : null;
+    const Sigs = ({ items }: { items: Array<{ label: string; signed: boolean; date?: string }> }) => (
+      <div>
+        <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">Signature Status</p>
+        <div className="flex flex-wrap gap-2">
+          {items.map((s) => (
+            <span key={s.label} className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full font-semibold ${s.signed ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
+              {s.signed ? <CheckCircle size={11} /> : <Clock size={11} />}
+              {s.label}{s.signed && s.date ? ` · ${s.date}` : s.signed ? '' : ' · Pending'}
+            </span>
           ))}
         </div>
+      </div>
+    );
+
+    if (type === 'appraisal') return renderAppraisalPreview(r);
+    if (type === 'discipline') return renderDisciplineReview(r);
+
+    if (type === 'suggestion') return (
+      <div className="space-y-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <F label="Employee" value={r.employee_name} />
+          <F label="Department" value={r.department || r.employee_department} />
+          <F label="Date" value={r.date || r.created_at?.split('T')[0]} />
+          <F label="Status" value={r.status || 'Pending'} />
+        </div>
+        <TB label="Title / Subject" value={r.title} />
+        <TB label="Concern / Suggestion" value={r.concern} />
+        <TB label="Action to be Taken" value={r.action_to_be_taken} />
+        <Sigs items={[
+          { label: 'Employee', signed: !!r.employee_signature, date: r.employee_signature_date },
+          { label: 'Supervisor', signed: !!r.supervisor_signature, date: r.supervisor_signature_date },
+        ]} />
+      </div>
+    );
+
+    if (type === 'onboarding') return (
+      <div className="space-y-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <F label="Employee" value={r.employee_name} />
+          <F label="Department" value={r.department || r.employee_department} />
+          <F label="Start Date" value={r.start_date} />
+          <F label="Status" value={r.status || 'Pending'} />
+          <F label="Position" value={r.position} />
+          <F label="Employment Type" value={r.employment_type} />
+        </div>
+        <TB label="Notes" value={r.notes} />
+        <TB label="Checklist / Instructions" value={r.checklist} />
+        <Sigs items={[
+          { label: 'Employee', signed: !!r.employee_signature, date: r.employee_signature_date },
+          { label: 'HR', signed: !!r.hr_signature, date: r.hr_signature_date },
+        ]} />
+      </div>
+    );
+
+    if (type === 'exit') return (
+      <div className="space-y-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <F label="Employee" value={r.employee_name} />
+          <F label="Department" value={r.department || r.employee_department} />
+          <F label="Position" value={r.position} />
+          <F label="Interview Date" value={r.interview_date} />
+          <F label="Last Day" value={r.last_day} />
+          <F label="Interviewer" value={r.interviewer_name} />
+        </div>
+        <TB label="Reason for Leaving" value={r.reason_for_leaving} />
+        <TB label="What did you like about working here?" value={r.liked_about_work} />
+        <TB label="What could be improved?" value={r.improvements} />
+        <TB label="Additional Comments" value={r.comments} />
+        <Sigs items={[
+          { label: 'Employee', signed: !!r.employee_sig, date: r.employee_sig_date },
+          { label: 'Interviewer', signed: !!r.interviewer_sig, date: r.interviewer_sig_date },
+        ]} />
+      </div>
+    );
+
+    if (type === 'applicant') return (
+      <div className="space-y-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <F label="Applicant Name" value={r.name} />
+          <F label="Position Applied" value={r.position} />
+          <F label="Department" value={r.department || r.employee_department} />
+          <F label="Interview Date" value={r.interview_date} />
+          <F label="Status" value={r.status} />
+          <F label="Source" value={r.source} />
+        </div>
+        <TB label="Notes / Evaluation" value={r.notes} />
+        <TB label="Interviewer Remarks" value={r.interviewer_remarks} />
+        <Sigs items={[
+          { label: 'Interviewer', signed: !!r.interviewer_signature, date: r.interview_date },
+          { label: 'HR Reviewer', signed: !!r.hr_reviewer_signature, date: r.hr_reviewer_date },
+        ]} />
+      </div>
+    );
+
+    if (type === 'property') return (
+      <div className="space-y-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <F label="Employee" value={r.employee_name} />
+          <F label="Department" value={r.department || r.employee_department} />
+          <F label="Date Issued" value={r.date_issued || r.created_at?.split('T')[0]} />
+          <F label="Property Type" value={r.property_type} />
+        </div>
+        <TB label="Items / Description" value={r.items || r.description} />
+        <TB label="Remarks" value={r.remarks} />
+        <Sigs items={[
+          { label: 'Turned Over By', signed: !!r.turnover_by_sig },
+          { label: 'Noted By', signed: !!r.noted_by_sig },
+          { label: 'Received By', signed: !!r.received_by_sig },
+          { label: 'Audited By', signed: !!r.audited_by_sig },
+        ]} />
+      </div>
+    );
+
+    if (type === 'requisition') return (
+      <div className="space-y-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <F label="Job Title" value={r.job_title} />
+          <F label="Department" value={r.department} />
+          <F label="Date Requested" value={r.date_requested || r.created_at?.split('T')[0]} />
+          <F label="Headcount" value={r.headcount} />
+          <F label="Employment Type" value={r.employment_type} />
+          <F label="Reason" value={r.reason} />
+        </div>
+        <TB label="Job Description / Requirements" value={r.job_description || r.requirements} />
+        <TB label="Remarks" value={r.remarks} />
+        <Sigs items={[
+          { label: 'Supervisor', signed: !!r.supervisor_approval_sig },
+          { label: 'Dept Head', signed: !!r.dept_head_approval_sig },
+          { label: 'Cabinet', signed: !!r.cabinet_approval_sig },
+          { label: 'VP', signed: !!r.vp_approval_sig },
+          { label: 'President', signed: !!r.president_approval_sig },
+        ]} />
       </div>
     );
     return null;
@@ -1306,7 +1367,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'emp-appraisals' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Appraisals Pending Your Signature</h3>
-            {pendingEmployeeAppraisals.length === 0 && <p className="text-sm text-slate-400">No pending appraisal signatures.</p>}
+            {pendingEmployeeAppraisals.length === 0 && renderEmptyQueueState('No pending appraisal signatures.')}
             {pendingEmployeeAppraisals.map((a) => renderQueueCard({
               id: `emp-app-${a.id}`,
               icon: <FileText size={16} />,
@@ -1330,7 +1391,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'emp-discipline' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Disciplinary Records Pending Your Signature</h3>
-            {pendingEmployeeDiscipline.length === 0 && <p className="text-sm text-slate-400">No pending disciplinary signatures.</p>}
+            {pendingEmployeeDiscipline.length === 0 && renderEmptyQueueState('No pending disciplinary signatures.')}
             {pendingEmployeeDiscipline.map((d) => {
               const disciplineKey = `emp-disc-${d.id}`;
               const reviewed = !!disciplineReviewedKeys[disciplineKey];
@@ -1361,7 +1422,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'emp-onboarding' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Onboarding Records Pending Your Signature</h3>
-            {pendingEmployeeOnboarding.length === 0 && <p className="text-sm text-slate-400">No pending onboarding signatures.</p>}
+            {pendingEmployeeOnboarding.length === 0 && renderEmptyQueueState('No pending onboarding signatures.')}
             {pendingEmployeeOnboarding.map((o) => renderQueueCard({
               id: `emp-onb-${o.id}`,
               icon: <UserCheck size={16} />,
@@ -1383,7 +1444,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'emp-suggestions' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Suggestions Pending Your Signature</h3>
-            {pendingEmployeeSuggestions.length === 0 && <p className="text-sm text-slate-400">No pending suggestion signatures.</p>}
+            {pendingEmployeeSuggestions.length === 0 && renderEmptyQueueState('No pending suggestion signatures.')}
             {pendingEmployeeSuggestions.map((s) => renderQueueCard({
               id: `emp-sug-${s.id}`,
               icon: <Lightbulb size={16} />,
@@ -1402,7 +1463,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'emp-exit' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Exit Interviews Pending Your Signature</h3>
-            {pendingEmployeeExitInterviews.length === 0 && <p className="text-sm text-slate-400">No pending exit interview signatures.</p>}
+            {pendingEmployeeExitInterviews.length === 0 && renderEmptyQueueState('No pending exit interview signatures.')}
             {pendingEmployeeExitInterviews.map((e) => renderQueueCard({
               id: `emp-exit-${e.id}`,
               icon: <LogOut size={16} />,
@@ -1424,7 +1485,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'emp-property' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Property Accountability Pending Your Signature</h3>
-            {pendingEmployeePropertyTasks.length === 0 && <p className="text-sm text-slate-400">No pending property signatures.</p>}
+            {pendingEmployeePropertyTasks.length === 0 && renderEmptyQueueState('No pending property signatures.')}
             {pendingEmployeePropertyTasks.map((p) => renderQueueCard({
               id: `emp-prop-${p.id}`,
               icon: <Package size={16} />,
@@ -1450,12 +1511,7 @@ export const VerificationOfReview = () => {
               <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Appraisals Needing Management Signature</h3>
               <span className="text-xs font-semibold px-2 py-1 rounded-full bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300">{pendingSupervisorAppraisals.length} pending</span>
             </div>
-            {pendingSupervisorAppraisals.length === 0 && (
-              <div className="flex flex-col items-center py-8 text-slate-400 gap-2">
-                <CheckCircle size={32} className="text-emerald-400" />
-                <p className="text-sm">No pending management signatures.</p>
-              </div>
-            )}
+            {pendingSupervisorAppraisals.length === 0 && renderEmptyQueueState('No pending management signatures.')}
             <div className="space-y-3">
             {pendingSupervisorAppraisals.map((a) => {
               const key = a.queueKey || `sup-app-${a.id}`;
@@ -1605,7 +1661,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'mgmt-discipline' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Disciplinary Records Needing Management Signature</h3>
-            {pendingSupervisorDiscipline.length === 0 && <p className="text-sm text-slate-400">No pending management disciplinary signatures.</p>}
+            {pendingSupervisorDiscipline.length === 0 && renderEmptyQueueState('No pending disciplinary signatures.')}
             {pendingSupervisorDiscipline.map((d) => {
               const disciplineKey = d.queueKey || `sup-disc-${d.id}`;
               const reviewed = !!disciplineReviewedKeys[disciplineKey];
@@ -1640,7 +1696,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'mgmt-suggestions' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Suggestions Needing Management Signature</h3>
-            {pendingSupervisorSuggestions.length === 0 && <p className="text-sm text-slate-400">No pending suggestion signatures.</p>}
+            {pendingSupervisorSuggestions.length === 0 && renderEmptyQueueState('No pending suggestion signatures.')}
             {pendingSupervisorSuggestions.map((s) => renderQueueCard({
               id: `sup-sug-${s.id}`,
               icon: <Lightbulb size={16} />,
@@ -1661,7 +1717,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'mgmt-applicants' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Applicants Needing Interviewer Signature</h3>
-            {pendingManagementApplicants.length === 0 && <p className="text-sm text-slate-400">No pending interviewer signatures.</p>}
+            {pendingManagementApplicants.length === 0 && renderEmptyQueueState('No pending interviewer signatures.')}
             {pendingManagementApplicants.map((a) => renderQueueCard({
               id: `mgmt-app-${a.id}`,
               icon: <Users size={16} />,
@@ -1688,7 +1744,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'mgmt-reqs' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Requisitions Needing Supervisor Signature</h3>
-            {pendingManagementRequisitionStages.length === 0 && <p className="text-sm text-slate-400">No pending requisition signatures.</p>}
+            {pendingManagementRequisitionStages.length === 0 && renderEmptyQueueState('No pending requisition signatures.')}
             {pendingManagementRequisitionStages.map((t) => renderQueueCard({
               id: t.key,
               icon: <ClipboardList size={16} />,
@@ -1708,7 +1764,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'mgmt-property' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Property Accountability Signatures</h3>
-            {pendingManagementPropertyTasks.length === 0 && <p className="text-sm text-slate-400">No pending property signatures.</p>}
+            {pendingManagementPropertyTasks.length === 0 && renderEmptyQueueState('No pending property signatures.')}
             {pendingManagementPropertyTasks.map((t) => renderQueueCard({
               id: t.key,
               icon: <Package size={16} />,
@@ -1727,7 +1783,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'mgmt-exit' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Exit Interviews Needing Interviewer Signature</h3>
-            {pendingManagementExitInterviews.length === 0 && <p className="text-sm text-slate-400">No pending interviewer signatures.</p>}
+            {pendingManagementExitInterviews.length === 0 && renderEmptyQueueState('No pending exit interview signatures.')}
             {pendingManagementExitInterviews.map((e) => renderQueueCard({
               id: `mgmt-exit-${e.id}`,
               icon: <LogOut size={16} />,
@@ -1783,7 +1839,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'hr-onboarding' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Onboarding Records Needing HR Signature</h3>
-            {pendingHrOnboarding.length === 0 && <p className="text-sm text-slate-400">No pending onboarding HR signatures.</p>}
+            {pendingHrOnboarding.length === 0 && renderEmptyQueueState('No pending onboarding signatures.')}
             {pendingHrOnboarding.map((o) => renderQueueCard({
               id: `hr-onb-${o.id}`,
               icon: <UserCheck size={16} />,
@@ -1803,7 +1859,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'hr-applicants' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Applicant Reviews Needing HR Signature</h3>
-            {pendingHrApplicants.length === 0 && <p className="text-sm text-slate-400">No pending applicant HR reviewer signatures.</p>}
+            {pendingHrApplicants.length === 0 && renderEmptyQueueState('No pending applicant reviewer signatures.')}
             {pendingHrApplicants.map((a) => renderQueueCard({
               id: `hr-applicant-${a.id}`,
               icon: <Users size={16} />,
@@ -1830,7 +1886,7 @@ export const VerificationOfReview = () => {
           {activeQueueSection === 'hr-reqs' && (
           <Card>
             <h3 className="text-sm font-bold mb-3">Requisition Approvals Needing HR Signature</h3>
-            {pendingHrRequisitionStages.length === 0 && <p className="text-sm text-slate-400">No pending HR requisition approvals.</p>}
+            {pendingHrRequisitionStages.length === 0 && renderEmptyQueueState('No pending requisition approvals.')}
             {pendingHrRequisitionStages.map((t) => renderQueueCard({
               id: t.key,
               icon: <ClipboardList size={16} />,
