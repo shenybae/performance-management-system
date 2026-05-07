@@ -1264,7 +1264,8 @@ export const VerificationOfReview = () => {
             {pendingSupervisorAppraisals.map((a) => {
               const key = a.queueKey || `sup-app-${a.id}`;
               const isAch = (a.form_type || '').toLowerCase().includes('achievement');
-              const stage = a.queueStage === 'reviewer' ? 'Reviewer' : 'Supervisor';
+              const stageLabel = a.queueStage === 'reviewer' ? 'Reviewer' : a.queueStage === 'manager' ? 'Manager' : 'Supervisor';
+              const stageColor = a.queueStage === 'reviewer' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300';
               const overall = a.overall ?? '—';
               const ratingColor = Number(a.overall) >= 4 ? 'text-emerald-600' : Number(a.overall) >= 3 ? 'text-amber-500' : 'text-red-500';
               return (
@@ -1282,7 +1283,7 @@ export const VerificationOfReview = () => {
                       </div>
                     </div>
                     <div className="flex-shrink-0 flex items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{stage}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${stageColor}`}>{stageLabel}</span>
                     </div>
                   </div>
 
@@ -1303,7 +1304,7 @@ export const VerificationOfReview = () => {
                     </button>
                     <button
                       onClick={() => {
-                        setAppraisalSignModal({ record: a, stage: a.queueStage === 'reviewer' ? 'reviewer' : 'supervisor' });
+                        setAppraisalSignModal({ record: a, stage: a.queueStage === 'reviewer' ? 'reviewer' : 'supervisor' as 'supervisor' | 'reviewer' });
                         setActiveId(key);
                         setSignerPrintTitle(String(user?.full_name || user?.employee_name || user?.username || ''));
                         setSupervisorOverallRating((a?.overall_rating || '') as 'Satisfactory' | 'Unsatisfactory' | '');
