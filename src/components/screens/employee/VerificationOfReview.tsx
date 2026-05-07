@@ -30,6 +30,7 @@ export const VerificationOfReview = () => {
   const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
   const [disciplineReviewRecord, setDisciplineReviewRecord] = useState<any | null>(null);
   const [disciplineReviewedKeys, setDisciplineReviewedKeys] = useState<Record<string, boolean>>({});
+  const [queueReviewedKeys, setQueueReviewedKeys] = useState<Record<string, boolean>>({});
   const [signature, setSignature] = useState('');
   const [remarks, setRemarks] = useState('');
   const [signerPrintTitle, setSignerPrintTitle] = useState('');
@@ -1191,7 +1192,14 @@ export const VerificationOfReview = () => {
     signDisabled?: boolean;
     signTitle?: string;
     onSign: () => void;
-  }) => (
+  }) => {
+    const mustReviewFirst = !!onView;
+    const reviewed = !!queueReviewedKeys[id];
+    const disabledByReview = mustReviewFirst && !reviewed;
+    const effectiveSignDisabled = !!signDisabled || disabledByReview;
+    const effectiveSignTitle = disabledByReview ? 'Review the form first' : signTitle;
+
+    return (
     <div key={id} className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 mb-3 bg-white dark:bg-slate-800/50 hover:border-teal-300 dark:hover:border-teal-700 transition-colors">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -1210,12 +1218,12 @@ export const VerificationOfReview = () => {
             </span>
           )}
           {onView && (
-            <button type="button" onClick={onView}
+            <button type="button" onClick={() => { setQueueReviewedKeys((prev) => ({ ...prev, [id]: true })); onView(); }}
               className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors px-2 py-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
               <Eye size={12} /> View
             </button>
           )}
-          <button type="button" onClick={onSign} disabled={signDisabled} title={signTitle}
+          <button type="button" onClick={onSign} disabled={effectiveSignDisabled} title={effectiveSignTitle}
             className="inline-flex items-center gap-1 text-xs font-bold text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 transition-colors px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/20 hover:bg-teal-100 dark:hover:bg-teal-900/40 disabled:opacity-40 disabled:cursor-not-allowed">
             <PenLine size={12} /> Sign
           </button>
@@ -1237,6 +1245,7 @@ export const VerificationOfReview = () => {
       )}
     </div>
   );
+  };
 
   const renderEmptyQueueState = (label: string) => (
     <div className="flex flex-col items-center py-8 text-slate-400 gap-2">
@@ -1624,11 +1633,21 @@ export const VerificationOfReview = () => {
                   {/* Actions */}
                   <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end gap-2">
                     <button
-                      onClick={() => setGenericViewModal({ title: `${a.form_type || a.eval_type || 'Appraisal'} — ${a.employee_name || 'Employee'}`, type: 'appraisal', record: a })}
+                      onClick={() => {
+                        setQueueReviewedKeys((prev) => ({ ...prev, [key]: true }));
+                        setGenericViewModal({ title: `${a.form_type || a.eval_type || 'Appraisal'} — ${a.employee_name || 'Employee'}`, type: 'appraisal', record: a });
+                      }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                     >
                       <Eye size={13} /> View Form
                     </button>
+                    {(() => {
+                      const reviewed = !!queueReviewedKeys[key];
+                      const disabledByReview = !reviewed;
+                      const disabledByStage = a.queueReady === false;
+                      const signDisabled = disabledByReview || disabledByStage;
+                      const signTitle = disabledByReview ? 'Review the form first' : (disabledByStage ? 'Waiting for supervisor to sign first' : undefined);
+                      return (
                     <button
                       onClick={() => {
                         setAppraisalSignModal({ record: a, stage: a.queueStage === 'reviewer' ? 'reviewer' : a.queueStage === 'manager' ? 'manager' : 'supervisor' });
@@ -1642,11 +1661,13 @@ export const VerificationOfReview = () => {
                         setReviewerComments(String(a?.reviewers_comment || ''));
                       }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 transition-colors"
-                      disabled={a.queueReady === false}
-                      title={a.queueReady === false ? 'Waiting for supervisor to sign first' : undefined}
+                      disabled={signDisabled}
+                      title={signTitle}
                     >
-                      <PenLine size={13} /> {a.queueReady === false ? 'Awaiting Supervisor' : 'Sign'}
+                      <PenLine size={13} /> {disabledByReview ? 'Review First' : (disabledByStage ? 'Awaiting Supervisor' : 'Sign')}
                     </button>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
