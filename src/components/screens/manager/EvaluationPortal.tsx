@@ -114,6 +114,7 @@ interface EvaluationPortalProps {
 }
 
 export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalProps) => {
+  const todayISO = useMemo(() => new Date().toISOString().split('T')[0], []);
   const [view, setView] = useState<'dashboard' | 'achievement' | 'performance' | 'detail'>('dashboard');
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [showArchived, setShowArchived] = useState(false);
@@ -204,6 +205,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   /* ── Form validation helpers ────────────────────────────────────── */
   const isAchievementFormValid = () => {
     if (!achForm.employee_id || !achForm.date || !achForm.review_period_from || !achForm.review_period_to) return false;
+    if (achForm.review_period_from > achForm.date || achForm.review_period_to > achForm.date) return false;
     if (new Date(achForm.review_period_to) < new Date(achForm.review_period_from)) return false;
     const achRatingKeys = ['job_knowledge','productivity','attendance','work_quality','communication','dependability'] as const;
     if (achRatingKeys.some(k => (achForm as any)[k] === 0)) return false;
@@ -212,6 +214,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
 
   const isPerformanceFormValid = () => {
     if (!perfForm.employee_id || !perfForm.eval_period_from || !perfForm.eval_period_to) return false;
+    if (perfForm.eval_period_from > todayISO || perfForm.eval_period_to > todayISO) return false;
     if (new Date(perfForm.eval_period_to) < new Date(perfForm.eval_period_from)) return false;
     const perfRatingKeys = ['work_quality','quantity_of_work','relationship_with_others','work_habits','job_knowledge','attendance','promotability'] as const;
     if (perfRatingKeys.some(k => (perfForm as any)[k] === 0)) return false;
@@ -229,6 +232,10 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
     }
     if (new Date(achForm.review_period_to) < new Date(achForm.review_period_from)) {
       window.notify?.('Review period end date cannot be earlier than start date', 'error');
+      return;
+    }
+    if (achForm.review_period_from > achForm.date || achForm.review_period_to > achForm.date) {
+      window.notify?.('Review period dates cannot be later than the form date', 'error');
       return;
     }
     const achRatingKeys = ['job_knowledge','productivity','attendance','work_quality','communication','dependability'] as const;
@@ -283,6 +290,10 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
     }
     if (new Date(perfForm.eval_period_to) < new Date(perfForm.eval_period_from)) {
       window.notify?.('Evaluation period end date cannot be earlier than start date', 'error');
+      return;
+    }
+    if (perfForm.eval_period_from > todayISO || perfForm.eval_period_to > todayISO) {
+      window.notify?.('Evaluation period dates cannot be later than today (form creation date)', 'error');
       return;
     }
     const perfRatingKeys = ['work_quality','quantity_of_work','relationship_with_others','work_habits','job_knowledge','attendance','promotability'] as const;
@@ -479,13 +490,13 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
               </div>
               <div><label className={lbl}>Employee ID</label><input type="text" value={achForm.employee_id ? `#${achForm.employee_id}` : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
               <div><label className={lbl}>Job Title</label><input type="text" value={achSelectedEmployee ? (achSelectedEmployee.position || (achSelectedEmployee as any).title || '') : ''} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
-              <div><label className={lbl}>Date</label><input type="date" value={achForm.date} onChange={e => setAchForm({ ...achForm, date: e.target.value })} className={inp} required /></div>
+              <div><label className={lbl}>Date</label><input type="date" value={achForm.date} onChange={e => setAchForm({ ...achForm, date: e.target.value })} className={inp} max={todayISO} required /></div>
               <div><label className={lbl}>Department</label><input type="text" value={achSelectedEmployee ? (achSelectedEmployee.dept || '') : managerDept} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
               <div><label className={lbl}>Manager</label><input type="text" value={getManagerNameForEmployee(achSelectedEmployee)} disabled className={inp + ' bg-slate-50 dark:bg-slate-900 text-slate-500'} /></div>
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4">
-              <div><label className={lbl}>Review Period From</label><input type="date" value={achForm.review_period_from} onChange={e => setAchForm({ ...achForm, review_period_from: e.target.value })} className={inp} required /></div>
-              <div><label className={lbl}>Review Period To</label><input type="date" value={achForm.review_period_to} onChange={e => setAchForm({ ...achForm, review_period_to: e.target.value })} className={inp} min={achForm.review_period_from || undefined} required /></div>
+              <div><label className={lbl}>Review Period From</label><input type="date" value={achForm.review_period_from} onChange={e => setAchForm({ ...achForm, review_period_from: e.target.value })} className={inp} max={achForm.date || todayISO} required /></div>
+              <div><label className={lbl}>Review Period To</label><input type="date" value={achForm.review_period_to} onChange={e => setAchForm({ ...achForm, review_period_to: e.target.value })} className={inp} min={achForm.review_period_from || undefined} max={achForm.date || todayISO} required /></div>
             </div>
           </div>
 
@@ -624,8 +635,8 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div><label className={lbl}>Evaluation Period From</label><input type="date" value={perfForm.eval_period_from} onChange={e => setPerfForm({ ...perfForm, eval_period_from: e.target.value })} className={inp} required /></div>
-            <div><label className={lbl}>Evaluation Period To</label><input type="date" value={perfForm.eval_period_to} onChange={e => setPerfForm({ ...perfForm, eval_period_to: e.target.value })} className={inp} min={perfForm.eval_period_from || undefined} required /></div>
+            <div><label className={lbl}>Evaluation Period From</label><input type="date" value={perfForm.eval_period_from} onChange={e => setPerfForm({ ...perfForm, eval_period_from: e.target.value })} className={inp} max={todayISO} required /></div>
+            <div><label className={lbl}>Evaluation Period To</label><input type="date" value={perfForm.eval_period_to} onChange={e => setPerfForm({ ...perfForm, eval_period_to: e.target.value })} className={inp} min={perfForm.eval_period_from || undefined} max={todayISO} required /></div>
             <div>
               <label className={lbl}>Type of Evaluation</label>
               <select value={perfForm.eval_type} onChange={e => setPerfForm({ ...perfForm, eval_type: e.target.value })} className={inp}>
