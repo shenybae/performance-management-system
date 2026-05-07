@@ -6407,8 +6407,8 @@ ${relevantGoalIdsSql}
       const normalizedRole = normalizeUserRole(role);
       const includeArchived = String(req.query.include_archived || '0') === '1';
       const archivedFilter = includeArchived
-        ? " AND (COALESCE(a.is_archived, 0) = 1 OR NULLIF(TRIM(COALESCE(a.archived_at::text, '')), '') IS NOT NULL OR NULLIF(TRIM(COALESCE(a.deleted_at::text, '')), '') IS NOT NULL)"
-        : " AND COALESCE(a.is_archived, 0) = 0 AND NULLIF(TRIM(COALESCE(a.archived_at::text, '')), '') IS NULL AND NULLIF(TRIM(COALESCE(a.deleted_at::text, '')), '') IS NULL";
+        ? " AND NULLIF(TRIM(COALESCE(a.deleted_at::text, '')), '') IS NOT NULL"
+        : " AND NULLIF(TRIM(COALESCE(a.deleted_at::text, '')), '') IS NULL";
       const queryEmployeeId = normalizeEmployeeId(req.query.employee_id);
       const actorCtx = await getActorOrgContext(Number(actor.id || 0));
 
