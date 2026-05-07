@@ -6498,7 +6498,15 @@ ${relevantGoalIdsSql}
 
       if (role === 'Employee') {
         if (actorCtx.isSupervisor) {
-          const supervisorDept = normalizeDept(actorCtx.dept);
+          let supervisorDept = normalizeDept(actorCtx.dept);
+          if (!supervisorDept) {
+            const actorEmployeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
+            if (actorEmployeeId) {
+              const deptRows: any = await query('SELECT dept FROM employees WHERE id = ? LIMIT 1', [actorEmployeeId]);
+              const deptRow = Array.isArray(deptRows) ? deptRows[0] : deptRows;
+              supervisorDept = normalizeDept(deptRow?.dept || '');
+            }
+          }
           if (!supervisorDept) return res.json([]);
 
           if (queryEmployeeId) {
