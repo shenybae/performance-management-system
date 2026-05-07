@@ -546,9 +546,11 @@ export const VerificationOfReview = () => {
         : (!assignedSupervisor || assignedSupervisor === me);
 
       if (!a.supervisor_signature && canSignSupervisorSlot) {
-        tasks.push({ ...a, queueStage: isPerformance ? 'supervisor' : 'manager', queueKey: `sup-app-sup-${a.id}` });
-      } else if (isPerformance && !!a.supervisor_signature && !a.reviewer_signature && (!assignedReviewer || assignedReviewer === me)) {
-        tasks.push({ ...a, queueStage: 'reviewer', queueKey: `sup-app-rev-${a.id}` });
+        tasks.push({ ...a, queueStage: isPerformance ? 'supervisor' : 'manager', queueKey: `sup-app-sup-${a.id}`, queueReady: true });
+      }
+      // Reviewer slot: always show when not yet reviewed; ready only after supervisor has signed
+      if (isPerformance && !a.reviewer_signature && (!assignedReviewer || assignedReviewer === me)) {
+        tasks.push({ ...a, queueStage: 'reviewer', queueKey: `sup-app-rev-${a.id}`, queueReady: !!a.supervisor_signature });
       }
 
       return tasks;
@@ -632,17 +634,15 @@ export const VerificationOfReview = () => {
 
   const pendingHrAppraisals = useMemo(() => appraisals.filter((a) => {
     const isPerformance = String(a.form_type || a.eval_type || '').toLowerCase().includes('performance');
-    const isReady = isPerformance && !!a.supervisor_signature && !!a.reviewer_signature && !!a.employee_signature && !a.hr_signature;
-    if (!isReady) return false;
-
-    // Type-safe comparison: both coerced to Number to avoid string vs number mismatch
-    if (a.hr_owner_user_id) {
-      return Number(a.hr_owner_user_id) === Number(user?.id || 0);
-    }
-
-    // No owner assigned — show to all HR users in same department
+    if (!isPerformance || !!a.hr_signature) return false;
+    // Show to assigned HR user (or any dept HR if unassigned)
+    if (a.hr_owner_user_id) return Number(a.hr_owner_user_id) === Number(user?.id || 0);
     return sameDept(a);
-  }), [appraisals, user?.id, queueDept]);
+  }).map((a) => ({
+    ...a,
+    // queueReady: all prior signatures must be present before HR can sign
+    queueReady: !!a.supervisor_signature && !!a.reviewer_signature && !!a.employee_signature,
+  })), [appraisals, user?.id, queueDept]);
 
   const doneHrAppraisals = useMemo(
     () => appraisals.filter((a) => !!a.hr_signature),
@@ -669,7 +669,6 @@ export const VerificationOfReview = () => {
       // If HR ownership is set, only show to assigned HR user
       if (a.hr_owner_user_id) {
         return Number(a.hr_owner_user_id) === Number(user?.id || 0);
-        return a.hr_owner_user_id === user?.id;
       }
       return true;
     }),
@@ -1643,8 +1642,10 @@ export const VerificationOfReview = () => {
                         setReviewerComments(String(a?.reviewers_comment || ''));
                       }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 transition-colors"
+                      disabled={a.queueReady === false}
+                      title={a.queueReady === false ? 'Waiting for supervisor to sign first' : undefined}
                     >
-                      <PenLine size={13} /> Sign
+                      <PenLine size={13} /> {a.queueReady === false ? 'Awaiting Supervisor' : 'Sign'}
                     </button>
                   </div>
                 </div>
@@ -1830,14 +1831,21 @@ export const VerificationOfReview = () => {
             <h3 className="text-sm font-bold mb-3">Performance Appraisals Needing HR Signature</h3>
             {pendingHrAppraisals.length === 0 && <p className="text-sm text-slate-400">No pending HR signatures assigned to you.</p>}
             {pendingHrAppraisals.map((a) => {
-              const canSign = !a.hr_owner_user_id || a.hr_owner_user_id === user?.id;
+              const canSign = !!a.queueReady;
+              const statusText = !a.supervisor_signature
+                ? 'Waiting for supervisor signature'
+                : !a.reviewer_signature
+                  ? 'Waiting for reviewer signature'
+                  : !a.employee_signature
+                    ? 'Waiting for employee signature'
+                    : 'All prior signatures complete. Awaiting HR signature.';
               return renderQueueCard({
                 id: `hr-app-${a.id}`,
                 icon: <FileText size={16} />,
                 iconColorClass: 'text-teal-600 dark:text-teal-400',
                 iconBgClass: 'bg-teal-50 dark:bg-teal-900/30',
                 title: `${a.form_type || a.eval_type || 'Performance Evaluation'} — ${a.employee_name || 'Employee'}`,
-                subtitle: 'All prior signatures complete. Awaiting HR signature.',
+                subtitle: statusText,
                 badge: 'HR',
                 badgeColorClass: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
                 pills: [
@@ -1847,7 +1855,7 @@ export const VerificationOfReview = () => {
                 ],
                 onView: () => setGenericViewModal({ title: `${a.form_type || 'Appraisal'} — ${a.employee_name || 'Employee'}`, type: 'appraisal', record: a }),
                 signDisabled: !canSign,
-                signTitle: !canSign ? 'Assigned to another HR user' : undefined,
+                signTitle: !canSign ? statusText : undefined,
                 onSign: () => { if (canSign) openGenericSign(`Sign — ${a.form_type || 'Appraisal'} (${a.employee_name || 'Employee'})`, 'appraisalHr', 'hr-app', a); },
               });
             })}
