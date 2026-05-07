@@ -348,12 +348,12 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
       ? [['Job Knowledge', rec.job_knowledge], ['Work Quality', rec.work_quality], ['Attendance', rec.attendance], ['Productivity', rec.productivity], ['Communication', rec.communication], ['Dependability', rec.dependability]]
       : [['Quality of Work', rec.work_quality], ['Quantity of Work', rec.quantity_of_work], ['Relationship w/ Others', rec.relationship_with_others], ['Work Habits', rec.work_habits], ['Job Knowledge', rec.job_knowledge], ['Attendance', rec.attendance], ['Promotability', rec.promotability_score || rec.promotability]];
     const sigCell = (label: string, name: string, sig: string, date: string) =>
-      '<td style="text-align:center;padding:0 10px;min-width:120px;">'
-      + '<div style="font-size:9px;font-weight:bold;text-transform:uppercase;color:#64748b;letter-spacing:1px;">' + label + '</div>'
-      + (name ? '<div style="font-size:9px;color:#475569;margin-bottom:2px;">' + name + '</div>' : '')
-      + '<div style="border:1px solid #cbd5e1;border-radius:4px;height:52px;display:flex;align-items:center;justify-content:center;background:#fff;margin:4px 0;">'
-      + (sig ? '<img src="' + sig + '" style="max-height:46px;max-width:110px;object-fit:contain;"/>' : '<span style="font-size:9px;color:#94a3b8;">Not signed</span>')
-      + '</div><div style="font-size:9px;color:#64748b;">' + (date || '—') + '</div></td>';
+      '<div class="sig-card">'
+      + '<div class="sig-label">' + label + '</div>'
+      + '<div class="sig-name">' + (name || '&nbsp;') + '</div>'
+      + '<div class="sig-box">'
+      + (sig ? '<img src="' + sig + '" style="max-height:46px;max-width:100%;object-fit:contain;display:block;margin:0 auto;"/>' : '<span style="font-size:9px;color:#94a3b8;">Not signed</span>')
+      + '</div><div class="sig-date">' + (date || '—') + '</div></div>';
     const sigsHtml = isAch
       ? sigCell('Manager', rec.supervisor_print_name || '', rec.supervisor_signature || '', rec.supervisor_signature_date || '')
         + sigCell('Employee', rec.employee_name || '', rec.employee_signature || '', rec.employee_signature_date || '')
@@ -361,15 +361,21 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
         + sigCell('Reviewer', rec.reviewer_print_name || '', rec.reviewer_signature || '', rec.reviewer_signature_date || '')
         + sigCell('Employee', rec.employee_print_name || rec.employee_name || '', rec.employee_signature || '', rec.employee_signature_date || '')
         + sigCell('HR Admin', rec.hr_print_name || '', rec.hr_signature || '', rec.hr_signature_date || '');
-    const css = '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11px;color:#1e293b;padding:24px 32px}'
+    const css = '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11px;line-height:1.35;color:#1e293b;padding:24px 32px}'
       + 'h2{font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#0f766e;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin:14px 0 8px}'
-      + '.sec{border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;margin-bottom:12px}'
-      + '.fl{font-size:9px;font-weight:bold;text-transform:uppercase;color:#64748b}.fv{font-size:11px}'
+      + '.sec{border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;margin-bottom:12px;page-break-inside:avoid}'
+      + '.fl{font-size:9px;font-weight:bold;text-transform:uppercase;color:#64748b}.fv{font-size:11px;overflow-wrap:anywhere}'
       + '.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px}'
       + '.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}'
       + '.rr{display:flex;align-items:center;padding:3px 6px;border-bottom:1px solid #f1f5f9}'
-      + '.cb{background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:5px 8px;font-size:10px;color:#334155;margin-top:3px;white-space:pre-wrap}'
-      + '@media print{body{padding:12px 20px}}';
+      + '.cb{background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:5px 8px;font-size:10px;color:#334155;margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}'
+      + '.sig-wrap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:start}'
+      + '.sig-card{text-align:center;min-width:0;page-break-inside:avoid}'
+      + '.sig-label{font-size:9px;font-weight:bold;text-transform:uppercase;color:#64748b;letter-spacing:1px}'
+      + '.sig-name{font-size:9px;color:#475569;min-height:20px;line-height:1.2;overflow-wrap:anywhere;word-break:break-word;padding:0 2px}'
+      + '.sig-box{border:1px solid #cbd5e1;border-radius:4px;height:52px;display:flex;align-items:center;justify-content:center;background:#fff;margin:4px 0;padding:2px;overflow:hidden}'
+      + '.sig-date{font-size:9px;color:#64748b;line-height:1.2}'
+      + '@media print{body{padding:12px 20px}.sig-wrap{grid-template-columns:repeat(4,minmax(0,1fr))}}';
     const pFrom = rec.eval_period_from || rec.review_period_from || '—';
     const pTo = rec.eval_period_to || rec.review_period_to || '—';
     const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>' + formType + '</title><style>' + css + '</style></head><body>'
@@ -409,7 +415,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
             + (rec.reviewers_comment ? '<div class="fl" style="margin-top:4px">Comments</div><div class="cb">' + rec.reviewers_comment + '</div>' : '') + '</div>'
           : '')
       + (!isAch && rec.employee_acknowledgement ? '<div class="sec"><h2 style="margin-top:0">Employee Acknowledgement</h2><div class="cb">' + rec.employee_acknowledgement + '</div></div>' : '')
-      + '<div class="sec"><h2 style="margin-top:0">Signatures</h2><table style="width:100%;border-collapse:collapse"><tr>' + sigsHtml + '</tr></table></div>'
+      + '<div class="sec"><h2 style="margin-top:0">Signatures</h2><div class="sig-wrap">' + sigsHtml + '</div></div>'
       + '<div style="margin-top:16px;text-align:center;font-size:9px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;">Printed on ' + new Date().toLocaleDateString() + ' &nbsp;&middot;&nbsp; Performance Management System</div>'
       + '</body></html>';
     const win = window.open('', '_blank');
