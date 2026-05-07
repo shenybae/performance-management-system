@@ -18,7 +18,7 @@ interface DisciplinaryLogProps {
 
 export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps) => {
   const [showForm, setShowForm] = useState(false);
-  const [recordFilter, setRecordFilter] = useState<'archived' | 'all' | 'acknowledged' | 'pending'>('all');
+  const [recordFilter, setRecordFilter] = useState<'archived' | 'all' | 'acknowledged' | 'pending'>('pending');
   const [records, setRecords] = useState<any[]>([]);
   const buildEmptyForm = () => ({
     employee_id: '', violation_type: [] as string[], warning_level: '',
