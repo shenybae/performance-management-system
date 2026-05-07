@@ -309,14 +309,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
 
   const isUnderperforming = (row: (typeof employeePerformanceSignals)[number]) => {
     if (!hasMinimumSignal(row)) return false;
-    const hasNoEvalForms = Number(row.employee.performance_evaluation_forms_count || row.employee.appraisals_count || 0) === 0;
-    return (
-      row.severeRisk ||
-      row.hasLowProofRating ||
-      row.performanceScore < PERFORMING_THRESHOLD ||
-      (row.completionRate < 40 && Number(row.employee.goal_revisions_count || 0) >= 2) ||
-      (hasNoEvalForms && row.performanceScore < PERFORMING_THRESHOLD)
-    );
+    return row.performanceScore < PERFORMING_THRESHOLD;
   };
 
   const underperformingEmployees = useMemo(() => {
@@ -351,9 +344,9 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
       return { allowed: false, reason: 'Insufficient metrics signal. Complete goals/forms first.' };
     }
     if (isUnderperforming(selectedPerformanceSignal)) {
-      return { allowed: true, reason: `Eligible: score < ${PERFORMING_THRESHOLD} or high-risk indicators detected.` };
+      return { allowed: true, reason: `Eligible: score < ${PERFORMING_THRESHOLD}.` };
     }
-    return { allowed: false, reason: `Not eligible: PIP is for score < ${PERFORMING_THRESHOLD} or high-risk indicators.` };
+    return { allowed: false, reason: `Not eligible: PIP is only for score < ${PERFORMING_THRESHOLD}.` };
   }, [selectedPerformanceSignal]);
 
   const selectedIdpEligibility = useMemo(() => {
@@ -364,9 +357,9 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
       return { allowed: false, reason: 'Insufficient metrics signal. Complete goals/forms first.' };
     }
     if (isUnderperforming(selectedPerformanceSignal)) {
-      return { allowed: false, reason: `Not eligible: underperforming employees should start with PIP (score < ${PERFORMING_THRESHOLD} or high-risk indicators).` };
+      return { allowed: false, reason: `Not eligible: underperforming employees should start with PIP (score < ${PERFORMING_THRESHOLD}).` };
     }
-    return { allowed: true, reason: `Eligible: score >= ${PERFORMING_THRESHOLD} with no high-risk trigger.` };
+    return { allowed: true, reason: `Eligible: score >= ${PERFORMING_THRESHOLD}.` };
   }, [selectedPerformanceSignal]);
 
   const createPIPFromMetrics = async (employee: EmployeePerformanceSnapshot) => {
@@ -483,8 +476,8 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
           <span className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 font-bold text-slate-600 dark:text-slate-300">How scoring works</span>
           <span className="text-slate-500">Score is out of 100 and combines goals, proof ratings, appraisals, disciplinary signals, revisions, and forms.</span>
-          <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 font-bold text-emerald-700 dark:text-emerald-300">Performing: score ≥ 75 + healthy goal/form signals</span>
-          <span className="inline-flex items-center rounded-full bg-red-50 dark:bg-red-900/20 px-2 py-0.5 font-bold text-red-700 dark:text-red-300">Underperforming: low score or strong risk signals</span>
+          <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 font-bold text-emerald-700 dark:text-emerald-300">Performing: score ≥ {PERFORMING_THRESHOLD}</span>
+          <span className="inline-flex items-center rounded-full bg-red-50 dark:bg-red-900/20 px-2 py-0.5 font-bold text-red-700 dark:text-red-300">Underperforming: score &lt; {PERFORMING_THRESHOLD}</span>
         </div>
       </Card>
 
@@ -769,7 +762,7 @@ export const EmployeeMetricsDashboard = (_props: EmployeeMetricsDashboardProps) 
                 </div>
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/30 text-[11px] text-slate-500">
                   <p><span className="font-bold">Performance Score:</span> calculated from goals, revisions, ratings, disciplinary signals, and forms.</p>
-                  <p className="mt-1"><span className="font-bold">Auto Threshold:</span> PIP when score &lt; {PERFORMING_THRESHOLD} (or risk-triggered), IDP when score ≥ {PERFORMING_THRESHOLD} and no high-risk trigger.</p>
+                  <p className="mt-1"><span className="font-bold">Auto Threshold:</span> PIP when score &lt; {PERFORMING_THRESHOLD}, IDP when score ≥ {PERFORMING_THRESHOLD}.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
