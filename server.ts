@@ -3873,8 +3873,11 @@ async function startServer() {
           if (!supervisorDept) return res.status(403).json({ error: 'Forbidden' });
           const allowed = await canActorAccessEmployeeByDept(supervisorDept, appraisalEmpId);
           if (!allowed) return res.status(403).json({ error: 'Forbidden' });
-        } else if (!actor.employee_id || normalizeEmployeeId(actor.employee_id) !== appraisalEmpId) {
-          return res.status(403).json({ error: 'Forbidden' });
+        } else {
+          const actorEmployeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
+          if (!actorEmployeeId || actorEmployeeId !== appraisalEmpId) {
+            return res.status(403).json({ error: 'Forbidden' });
+          }
         }
       } else {
         return res.status(403).json({ error: 'Forbidden' });
@@ -3931,6 +3934,30 @@ async function startServer() {
 
       vals.push(req.params.id);
       await query(`UPDATE appraisals SET ${sets.join(', ')} WHERE id = ?`, vals);
+
+      const wasReadyForEmployee = isPerformanceEval
+        ? !!(appraisal.supervisor_signature && appraisal.reviewer_signature && !appraisal.employee_signature)
+        : !!(appraisal.supervisor_signature && !appraisal.employee_signature);
+      const isReadyForEmployee = isPerformanceEval
+        ? !!(merged.supervisor_signature && merged.reviewer_signature && !merged.employee_signature)
+        : !!(merged.supervisor_signature && !merged.employee_signature);
+
+      if (!wasReadyForEmployee && isReadyForEmployee) {
+        try {
+          const eUsers: any = await query("SELECT id FROM users WHERE employee_id = ?", [appraisalEmpId]);
+          const eUser = Array.isArray(eUsers) ? eUsers[0] : eUsers;
+          if (eUser?.id) {
+            await createNotification({
+              user_id: eUser.id,
+              type: 'info',
+              message: `Your ${merged.form_type || 'performance'} evaluation is ready — please sign in Signature Queue`,
+              source: 'appraisal_sign',
+              employee_id: appraisalEmpId,
+            });
+          }
+        } catch {}
+      }
+
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -6496,7 +6523,7 @@ ${relevantGoalIdsSql}
           return res.json(rows);
         }
 
-        const employeeId = normalizeEmployeeId(actor.employee_id);
+        const employeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
         if (!employeeId) return res.json([]);
         const rows = await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?${archivedFilter}`, [employeeId]);
         return res.json(rows);
