@@ -6,7 +6,6 @@ import { Card } from '../../common/Card';
 import { Modal } from '../../common/Modal';
 import { SectionHeader } from '../../common/SectionHeader';
 import { PIPManager } from './PIPManager';
-import { GoalScopePlanManager } from './GoalScopePlanManager';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { CircularProgress } from '../../common/CircularProgress';
 import { ProofAttachment } from '../../common/ProofAttachment';
@@ -191,7 +190,6 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
   const [editProgress, setEditProgress] = useState(0);
   const [editStatus, setEditStatus] = useState('');
   const [underperfTopTab, setUnderperfTopTab] = useState<'summary'|'table'|'plans'>('summary');
-  const [plansNavigator, setPlansNavigator] = useState<'employee' | 'scope'>('employee');
   const [underperfView, setUnderperfView] = useState<'employee'|'team'|'department'>('employee');
   const [underperfScopeFilter, setUnderperfScopeFilter] = useState<'all'|'Department'|'Team'|'Individual'>('all');
   const [underperfQuickFilter, setUnderperfQuickFilter] = useState<'all'|'overdue'|'highPriority'|'stalled'>('all');
@@ -900,8 +898,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
     setShowUnderperforming(true);
   };
 
-  const openUnderperformingPlans = (navigator: 'employee' | 'scope') => {
-    setPlansNavigator(navigator);
+  const openUnderperformingPlans = () => {
     setUnderperfTopTab('plans');
     setShowUnderperforming(true);
   };
@@ -2534,26 +2531,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
 
         {underperfTopTab === 'plans' && (
           <div className="space-y-5">
-            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 w-fit">
-              <button
-                onClick={() => setPlansNavigator('employee')}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${plansNavigator === 'employee' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-              >
-                Employee Plans (IDP & PIP)
-              </button>
-              <button
-                onClick={() => setPlansNavigator('scope')}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${plansNavigator === 'scope' ? 'bg-white dark:bg-slate-900 text-cyan-700 dark:text-cyan-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-              >
-                Team / Department Plans
-              </button>
-            </div>
-
-            {plansNavigator === 'employee' ? (
-              <PIPManager employees={employees} />
-            ) : (
-              <GoalScopePlanManager />
-            )}
+            <PIPManager employees={employees} />
           </div>
         )}
 
@@ -2629,8 +2607,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                     <p className="text-[10px] text-red-500 font-bold">{underperfAggregations.departments[0]?.under || 0} underperforming goals</p>
                   </div>
                   <div className="flex gap-1.5 pt-1">
-                    <button onClick={() => openUnderperformingPlans('employee')} className="flex-1 text-[10px] font-bold px-2 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Employee Plans</button>
-                    <button onClick={() => openUnderperformingPlans('scope')} className="flex-1 text-[10px] font-bold px-2 py-1.5 rounded-lg bg-cyan-50 dark:bg-cyan-900/25 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100 dark:hover:bg-cyan-900/40 transition-colors">Scope Plans</button>
+                    <button onClick={() => openUnderperformingPlans()} className="flex-1 text-[10px] font-bold px-2 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Employee Plans</button>
                   </div>
                 </div>
               </Card>
@@ -2681,7 +2658,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             <td className="py-3 px-3"><span className="text-sm font-black text-red-500">{e.under}</span><span className="text-[10px] text-slate-400 ml-1">({e.pctUnder}%)</span></td>
                             <td className="py-3 px-3 text-xs font-bold text-slate-500">{e.avgProgress}%</td>
                             <td className="py-3 px-3 text-xs text-slate-500">{top ? top.replace(/_/g, ' ') : '—'}</td>
-                            <td className="py-3 px-3 text-right"><button onClick={() => openUnderperformingPlans('employee')} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button></td>
+                            <td className="py-3 px-3 text-right"><button onClick={() => openUnderperformingPlans()} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button></td>
                           </tr>
                         );
                       })}
@@ -2715,7 +2692,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             <td className="py-3 px-3"><span className="text-sm font-black text-red-500">{t.under}</span><span className="text-[10px] text-slate-400 ml-1">({t.pctUnder}%)</span></td>
                             <td className="py-3 px-3 text-xs font-bold text-slate-500">{t.avgProgress}%</td>
                             <td className="py-3 px-3 text-xs text-slate-500">{top ? top.replace(/_/g, ' ') : '—'}</td>
-                            <td className="py-3 px-3 text-right"><button onClick={() => openUnderperformingPlans('scope')} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button></td>
+                            <td className="py-3 px-3 text-right"><button onClick={() => openUnderperformingPlans()} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button></td>
                           </tr>
                         );
                       })}
@@ -2754,7 +2731,7 @@ export const OKRPlanner = ({ employees }: OKRPlannerProps) => {
                             <td className="py-3 px-3"><span className="text-sm font-black text-red-500">{d.under}</span><span className="text-[10px] text-slate-400 ml-1">({d.pctUnder}%)</span></td>
                             <td className="py-3 px-3 text-xs font-bold text-slate-500">{d.avgProgress}%</td>
                             <td className="py-3 px-3 text-xs text-slate-500">{top ? top.replace(/_/g, ' ') : '—'}</td>
-                            <td className="py-3 px-3 text-right"><button onClick={() => openUnderperformingPlans('scope')} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button></td>
+                            <td className="py-3 px-3 text-right"><button onClick={() => openUnderperformingPlans()} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/25 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors">Open Plans</button></td>
                           </tr>
                         );
                       })}
