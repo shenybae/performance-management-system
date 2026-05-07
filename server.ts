@@ -6407,8 +6407,8 @@ ${relevantGoalIdsSql}
       const normalizedRole = normalizeUserRole(role);
       const includeArchived = String(req.query.include_archived || '0') === '1';
       const archivedFilter = includeArchived
-        ? ' AND (COALESCE(a.is_archived, 0) = 1 OR a.archived_at IS NOT NULL OR a.deleted_at IS NOT NULL)'
-        : ' AND COALESCE(a.is_archived, 0) = 0 AND a.archived_at IS NULL AND a.deleted_at IS NULL';
+        ? " AND (COALESCE(a.is_archived, 0) = 1 OR NULLIF(TRIM(COALESCE(a.archived_at::text, '')), '') IS NOT NULL OR NULLIF(TRIM(COALESCE(a.deleted_at::text, '')), '') IS NOT NULL)"
+        : " AND COALESCE(a.is_archived, 0) = 0 AND NULLIF(TRIM(COALESCE(a.archived_at::text, '')), '') IS NULL AND NULLIF(TRIM(COALESCE(a.deleted_at::text, '')), '') IS NULL";
       const queryEmployeeId = normalizeEmployeeId(req.query.employee_id);
       const actorCtx = await getActorOrgContext(Number(actor.id || 0));
 
@@ -6440,15 +6440,37 @@ ${relevantGoalIdsSql}
 
       if (role === 'Manager') {
         const managedIds = await getManagedEmployeeIds(actor.id);
+        const managerDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
         if (queryEmployeeId) {
-          if (!managedIds.includes(queryEmployeeId)) return res.status(403).json({ error: 'Forbidden' });
-          const rows = await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?${archivedFilter}`, [queryEmployeeId]);
+          const allowedByManagerMap = managedIds.includes(queryEmployeeId);
+          const allowedByDept = managerDept ? await canActorAccessEmployeeByDept(managerDept, queryEmployeeId) : false;
+          if (!allowedByManagerMap && !allowedByDept) return res.status(403).json({ error: 'Forbidden' });
+
+          const rows = allowedByManagerMap
+            ? await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?${archivedFilter}`, [queryEmployeeId])
+            : await query(
+                `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ? AND LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
+                [queryEmployeeId, managerDept]
+              );
           return res.json(rows);
         }
 
-        if (managedIds.length === 0) return res.json([]);
+        if (managedIds.length === 0) {
+          if (!managerDept) return res.json([]);
+          const rows = await query(
+            `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
+            [managerDept]
+          );
+          return res.json(rows);
+        }
+
         const placeholders = managedIds.map(() => '?').join(',');
-        const rows = await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id IN (${placeholders})${archivedFilter}`, managedIds);
+        const rows = managerDept
+          ? await query(
+              `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE (a.employee_id IN (${placeholders}) OR LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?)))${archivedFilter}`,
+              [...managedIds, managerDept]
+            )
+          : await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id IN (${placeholders})${archivedFilter}`, managedIds);
         return res.json(rows);
       }
 
