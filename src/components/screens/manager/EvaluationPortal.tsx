@@ -945,7 +945,15 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                       </tr>
                     );
                   })}
-                  {appraisals.length === 0 && <tr><td colSpan={8} className="py-8 text-center text-slate-400">No appraisals recorded yet.</td></tr>}
+                  {appraisals.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="py-8 text-center text-slate-400">
+                        {showArchived
+                          ? 'No archived appraisals found.'
+                          : 'No active appraisals. Click "Show Archived" to view archived records.'}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
