@@ -6650,13 +6650,12 @@ ${relevantGoalIdsSql}
            LEFT JOIN employees e ON e.id = u.employee_id
            WHERE (
              LOWER(TRIM(COALESCE(u.full_name, ''))) = LOWER(TRIM(?))
-             OR LOWER(TRIM(COALESCE(u.employee_name, ''))) = LOWER(TRIM(?))
              OR LOWER(TRIM(COALESCE(e.name, ''))) = LOWER(TRIM(?))
              OR LOWER(TRIM(COALESCE(u.username, ''))) = LOWER(TRIM(?))
            )
            AND LOWER(TRIM(COALESCE(u.dept, ''))) = LOWER(TRIM(?))
            LIMIT 1`,
-          [supervisorName, supervisorName, supervisorName, supervisorName, employeeDept]
+          [supervisorName, supervisorName, supervisorName, employeeDept]
         );
         supervisorUserId = Number((Array.isArray(supUserRows) ? supUserRows[0] : supUserRows)?.id || 0) || null;
       }
@@ -6698,7 +6697,7 @@ ${relevantGoalIdsSql}
             `SELECT u.id
              FROM users u
              INNER JOIN employees e ON e.id = ?
-             WHERE LOWER(TRIM(COALESCE(u.full_name, u.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))
+             WHERE LOWER(TRIM(COALESCE(u.full_name, u.username, ''))) = LOWER(TRIM(COALESCE(e.name, '')))
              ORDER BY u.id ASC
              LIMIT 1`,
             [targetEmployeeId]
@@ -6877,7 +6876,7 @@ ${relevantGoalIdsSql}
               `SELECT u.id
                FROM users u
                INNER JOIN employees e ON e.id = ?
-               WHERE LOWER(TRIM(COALESCE(u.full_name, u.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))
+               WHERE LOWER(TRIM(COALESCE(u.full_name, u.username, ''))) = LOWER(TRIM(COALESCE(e.name, '')))
                ORDER BY u.id ASC
                LIMIT 1`,
               [targetEmpId]
