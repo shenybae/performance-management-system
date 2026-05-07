@@ -18,8 +18,7 @@ interface DisciplinaryLogProps {
 
 export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps) => {
   const [showForm, setShowForm] = useState(false);
-  const [recordArchiveFilter, setRecordArchiveFilter] = useState<'active' | 'archived' | 'all'>('active');
-  const [recordStatusFilter, setRecordStatusFilter] = useState<'all' | 'acknowledged' | 'pending'>('all');
+  const [recordFilter, setRecordFilter] = useState<'active' | 'archived' | 'all' | 'acknowledged' | 'pending'>('active');
   const [records, setRecords] = useState<any[]>([]);
   const buildEmptyForm = () => ({
     employee_id: '', violation_type: [] as string[], warning_level: '',
@@ -117,9 +116,14 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
 
   const fetchRecords = async () => {
     try {
-      const res = await fetch('/api/discipline_records?include_archived=1', { headers: getAuthHeaders() });
-      const data = await res.json();
-      setRecords(Array.isArray(data) ? data : []);
+      const [activeRes, archivedRes] = await Promise.all([
+        fetch('/api/discipline_records?include_archived=0', { headers: getAuthHeaders() }),
+        fetch('/api/discipline_records?include_archived=1', { headers: getAuthHeaders() }),
+      ]);
+      const [activeData, archivedData] = await Promise.all([activeRes.json(), archivedRes.json()]);
+      const merged = [...(Array.isArray(activeData) ? activeData : []), ...(Array.isArray(archivedData) ? archivedData : [])];
+      const deduped = merged.filter((row, index, arr) => arr.findIndex((item) => Number(item?.id) === Number(row?.id)) === index);
+      setRecords(deduped);
     } catch { setRecords([]); }
   };
 
@@ -274,18 +278,6 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
       const isArchived = !!(r.is_archived || String(r.deleted_at || '').trim());
       const isAcknowledged = !!r.preparer_signature && !!r.supervisor_signature && !!r.employee_signature;
 
-      const archiveMatch = recordArchiveFilter === 'all'
-        ? true
-        : recordArchiveFilter === 'archived'
-          ? isArchived
-          : !isArchived;
-
-      const statusMatch = recordStatusFilter === 'all'
-        ? true
-        : recordStatusFilter === 'acknowledged'
-          ? isAcknowledged
-          : !isAcknowledged;
-
       const searchMatch = !q || (
         (r.employee_name || '').toLowerCase().includes(q) ||
         (r.violation_type || '').toLowerCase().includes(q) ||
@@ -295,9 +287,14 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
         (r.action_taken || '').toLowerCase().includes(q)
       );
 
-      return archiveMatch && statusMatch && searchMatch;
+      if (!searchMatch) return false;
+      if (recordFilter === 'all') return true;
+      if (recordFilter === 'active') return !isArchived;
+      if (recordFilter === 'archived') return isArchived;
+      if (recordFilter === 'acknowledged') return isAcknowledged;
+      return !isAcknowledged;
     });
-  }, [records, search, recordArchiveFilter, recordStatusFilter]);
+  }, [records, search, recordFilter]);
 
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [viewRecord, setViewRecord] = useState<any | null>(null);
@@ -667,13 +664,10 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date, empl
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
             <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">All Disciplinary Records</h3>
             <div className="flex w-full sm:w-auto items-center gap-2">
-              <select value={recordArchiveFilter} onChange={(e) => setRecordArchiveFilter(e.target.value as 'active' | 'archived' | 'all')} className="px-3 py-2 rounded-lg text-sm font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
+              <select value={recordFilter} onChange={(e) => setRecordFilter(e.target.value as 'active' | 'archived' | 'all' | 'acknowledged' | 'pending')} className="px-3 py-2 rounded-lg text-sm font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
                 <option value="active">Active</option>
                 <option value="archived">Archived</option>
                 <option value="all">All Records</option>
-              </select>
-              <select value={recordStatusFilter} onChange={(e) => setRecordStatusFilter(e.target.value as 'all' | 'acknowledged' | 'pending')} className="px-3 py-2 rounded-lg text-sm font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
-                <option value="all">All Statuses</option>
                 <option value="acknowledged">Acknowledged</option>
                 <option value="pending">Pending</option>
               </select>

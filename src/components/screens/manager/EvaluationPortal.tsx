@@ -117,8 +117,7 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   const todayISO = useMemo(() => new Date().toISOString().split('T')[0], []);
   const [view, setView] = useState<'dashboard' | 'achievement' | 'performance' | 'detail'>('dashboard');
   const [appraisals, setAppraisals] = useState<any[]>([]);
-  const [appraisalArchiveFilter, setAppraisalArchiveFilter] = useState<'active' | 'archived' | 'all'>('active');
-  const [appraisalStatusFilter, setAppraisalStatusFilter] = useState<'all' | 'verified' | 'pending'>('all');
+  const [appraisalFilter, setAppraisalFilter] = useState<'active' | 'archived' | 'all' | 'verified' | 'pending'>('active');
   const [detailRecord, setDetailRecord] = useState<any>(null);
 
   /* ── Achievement Measure form state ─────────────────────────────── */
@@ -197,9 +196,14 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
 
   const fetchAppraisals = async () => {
     try {
-      const res = await fetch('/api/appraisals?include_archived=1', { headers: getAuthHeaders() });
-      const data = await res.json();
-      setAppraisals(Array.isArray(data) ? data : []);
+      const [activeRes, archivedRes] = await Promise.all([
+        fetch('/api/appraisals?include_archived=0', { headers: getAuthHeaders() }),
+        fetch('/api/appraisals?include_archived=1', { headers: getAuthHeaders() }),
+      ]);
+      const [activeData, archivedData] = await Promise.all([activeRes.json(), archivedRes.json()]);
+      const merged = [...(Array.isArray(activeData) ? activeData : []), ...(Array.isArray(archivedData) ? archivedData : [])];
+      const deduped = merged.filter((row, index, arr) => arr.findIndex((item) => Number(item?.id) === Number(row?.id)) === index);
+      setAppraisals(deduped);
     } catch { setAppraisals([]); }
   };
 
@@ -212,21 +216,13 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
         ? !!(a.supervisor_signature && a.reviewer_signature && a.employee_signature && a.hr_signature)
         : !!(a.supervisor_signature && a.employee_signature);
 
-      const archiveMatch = appraisalArchiveFilter === 'all'
-        ? true
-        : appraisalArchiveFilter === 'archived'
-          ? isArchived
-          : !isArchived;
-
-      const statusMatch = appraisalStatusFilter === 'all'
-        ? true
-        : appraisalStatusFilter === 'verified'
-          ? isVerified
-          : !isVerified;
-
-      return archiveMatch && statusMatch;
+      if (appraisalFilter === 'all') return true;
+      if (appraisalFilter === 'active') return !isArchived;
+      if (appraisalFilter === 'archived') return isArchived;
+      if (appraisalFilter === 'verified') return isVerified;
+      return !isVerified;
     });
-  }, [appraisals, appraisalArchiveFilter, appraisalStatusFilter]);
+  }, [appraisals, appraisalFilter]);
 
   /* ── Form validation helpers ────────────────────────────────────── */
   const isAchievementFormValid = () => {
@@ -923,13 +919,10 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-sm font-bold text-slate-500 dark:text-slate-300 uppercase">Appraisal Records</h3>
               <div className="flex flex-wrap items-center gap-2">
-                <select value={appraisalArchiveFilter} onChange={(e) => setAppraisalArchiveFilter(e.target.value as 'active' | 'archived' | 'all')} className="px-3 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+                <select value={appraisalFilter} onChange={(e) => setAppraisalFilter(e.target.value as 'active' | 'archived' | 'all' | 'verified' | 'pending')} className="px-3 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
                   <option value="active">Active</option>
                   <option value="archived">Archived</option>
                   <option value="all">All Records</option>
-                </select>
-                <select value={appraisalStatusFilter} onChange={(e) => setAppraisalStatusFilter(e.target.value as 'all' | 'verified' | 'pending')} className="px-3 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
-                  <option value="all">All Statuses</option>
                   <option value="verified">Verified</option>
                   <option value="pending">Pending</option>
                 </select>
