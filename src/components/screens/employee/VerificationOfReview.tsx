@@ -539,10 +539,10 @@ export const VerificationOfReview = () => {
       const assignedReviewer = Number(a.reviewer_user_id || 0);
       const me = Number(user?.id || 0);
 
-      // Supervisor slot: for Performance forms, show to any dept-matched management signer
-      // (supervisor_user_id may have been set to the manager's ID by old records — don't enforce it)
+      // Supervisor slot: for Performance forms, prefer explicit assigned supervisor.
+      // If no assignment exists (older records), allow department supervisors only.
       const canSignSupervisorSlot = isPerformance
-        ? true  // any management signer in same dept can sign the supervisor slot
+        ? (assignedSupervisor ? assignedSupervisor === me : isSupervisor)
         : (!assignedSupervisor || assignedSupervisor === me);
 
       if (!a.supervisor_signature && canSignSupervisorSlot) {
@@ -555,7 +555,7 @@ export const VerificationOfReview = () => {
 
       return tasks;
     }),
-    [appraisals, queueDept, user?.id]
+    [appraisals, queueDept, user?.id, isSupervisor]
   );
   const doneSupervisorAppraisals = useMemo(
     () => appraisals.filter((a) => {

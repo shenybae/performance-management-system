@@ -2186,6 +2186,24 @@ async function startServer() {
     return Number(row?.id || 0) || null;
   }
 
+  async function resolveDeptSupervisorUserId(dept: any) {
+    const deptNorm = normalizeDept(dept);
+    if (!deptNorm) return null;
+    const rows: any = await query(
+      `SELECT id
+       FROM users
+       WHERE LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?))
+         AND LOWER(TRIM(COALESCE(role, ''))) = 'employee'
+         AND LOWER(TRIM(COALESCE(position, ''))) LIKE '%supervisor%'
+         AND deleted_at IS NULL
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [deptNorm]
+    );
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    return Number(row?.id || 0) || null;
+  }
+
   async function resolveUserFullName(userId: number | null): Promise<string | null> {
     if (!userId) return null;
     const rows: any = await query(
@@ -3820,18 +3838,24 @@ async function startServer() {
 
       const formType = (b.form_type || '').toString().toLowerCase();
       const isPerformanceEval = formType.includes('performance');
-      // Performance: creator is the Reviewer (manager reviewing the employee)
-      // Achievement: creator is the Supervisor/Manager (signs the supervisor slot)
-      const supervisorUserId = isPerformanceEval ? null : (Number(actor.id || 0) || null);
-      const reviewerUserId = isPerformanceEval ? (Number(actor.id || 0) || null) : null;
       const employeeRows: any = await query('SELECT dept FROM employees WHERE id = ? LIMIT 1', [employeeId]);
       const employeeRow = Array.isArray(employeeRows) ? employeeRows[0] : employeeRows;
-      const hrOwnerUserId = await resolveDeptHrOwnerUserId(employeeRow?.dept || b.employee_department || actorCtx.dept);
+      const targetDept = employeeRow?.dept || b.employee_department || actorCtx.dept;
+
+      // Performance: supervisor must be the department supervisor, reviewer is creator (manager).
+      // Achievement: creator signs as supervisor/manager.
+      const deptSupervisorUserId = await resolveDeptSupervisorUserId(targetDept);
+      // Performance: creator is the Reviewer (manager reviewing the employee)
+      // Achievement: creator is the Supervisor/Manager (signs the supervisor slot)
+      const supervisorUserId = isPerformanceEval ? (deptSupervisorUserId || null) : (Number(actor.id || 0) || null);
+      const reviewerUserId = isPerformanceEval ? (Number(actor.id || 0) || null) : null;
+      const hrOwnerUserId = await resolveDeptHrOwnerUserId(targetDept);
 
       // Auto-resolve print names from user IDs if not provided in payload
       const creatorName = String(actor.full_name || actor.username || actor.email || '').trim() || null;
+      const deptSupervisorName = supervisorUserId ? await resolveUserFullName(supervisorUserId) : null;
       const hrOwnerName = hrOwnerUserId ? await resolveUserFullName(hrOwnerUserId) : null;
-      const resolvedSupervisorName = b.supervisor_print_name || (isPerformanceEval ? null : creatorName);
+      const resolvedSupervisorName = b.supervisor_print_name || (isPerformanceEval ? deptSupervisorName : creatorName);
       const resolvedReviewerName = b.reviewer_print_name || (isPerformanceEval ? creatorName : null);
       const resolvedHrName = b.hr_print_name || hrOwnerName;
       const requiredSignatures = isPerformanceEval
