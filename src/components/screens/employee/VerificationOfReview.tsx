@@ -44,7 +44,6 @@ export const VerificationOfReview = () => {
   const [applicantSignerName, setApplicantSignerName] = useState('');
   const [applicantSignerTitle, setApplicantSignerTitle] = useState('');
   const [applicantSignerDate, setApplicantSignerDate] = useState(new Date().toISOString().split('T')[0]);
-  const [appraisalViewModal, setAppraisalViewModal] = useState<any | null>(null);
   const [appraisalSignModal, setAppraisalSignModal] = useState<{ record: any; stage: 'supervisor' | 'manager' | 'reviewer' } | null>(null);
   const [genericViewModal, setGenericViewModal] = useState<{ title: string; type: string; record: any } | null>(null);
   const [genericSignModal, setGenericSignModal] = useState<{ title: string; signType: 'simple' | 'remarks' | 'appraisalEmployee' | 'appraisalHr' | 'applicantInterviewer' | 'applicantHr'; actionId: string; record: any } | null>(null);
@@ -1009,19 +1008,47 @@ export const VerificationOfReview = () => {
     </div>
   );
 
-  const renderAppraisalPreview = (a: any) => (
-    <div className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3 text-xs text-slate-700 dark:text-slate-300 space-y-1">
-      <div><span className="font-bold">Form:</span> {a.form_type || a.eval_type || 'Appraisal'}</div>
-      <div><span className="font-bold">Employee:</span> {a.employee_name || '—'}</div>
-      <div><span className="font-bold">Period:</span> {a.eval_period_from || '—'} to {a.eval_period_to || '—'}</div>
-      <div><span className="font-bold">Overall:</span> {a.overall ?? '—'}</div>
-      {(a.supervisors_overall_comment || a.reviewers_comment || a.additional_comments) && (
-        <div className="pt-1 border-t border-slate-200 dark:border-slate-700">
-          <span className="font-bold">Notes:</span> {a.supervisors_overall_comment || a.reviewers_comment || a.additional_comments}
+  const renderAppraisalPreview = (a: any) => {
+    const isAch = (a.form_type || '').toLowerCase().includes('achievement');
+    const deptValue = a.employee_department || a.dept || a.department || user?.dept || user?.department || '—';
+    const ratingRows: [string, number][] = isAch
+      ? [['Job Knowledge', a.job_knowledge], ['Work Quality', a.work_quality], ['Attendance', a.attendance], ['Productivity', a.productivity], ['Communication', a.communication], ['Dependability', a.dependability]]
+      : [['Quality of Work', a.work_quality], ['Quantity of Work', a.quantity_of_work], ['Relationship w/ Others', a.relationship_with_others], ['Work Habits', a.work_habits], ['Job Knowledge', a.job_knowledge], ['Attendance', a.attendance], ['Promotability', a.promotability_score ?? a.promotability]];
+    const ratingLabel = (v: number) => (['', 'Poor', 'Fair', 'Satisfactory', 'Good', 'Excellent'][v] || '');
+    return (
+      <div className="space-y-4 text-sm">
+        <div className="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800 rounded-lg p-3">
+          <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Employee</p><p className="font-semibold text-slate-700 dark:text-slate-200">{a.employee_name || '—'}</p></div>
+          <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Department</p><p className="text-slate-600 dark:text-slate-300">{deptValue}</p></div>
+          <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Period</p><p className="text-slate-600 dark:text-slate-300">{a.eval_period_from || a.review_period_from || '—'} – {a.eval_period_to || a.review_period_to || '—'}</p></div>
+          <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Overall Score</p><p className="font-bold text-teal-600 dark:text-teal-400 text-base">{a.overall ?? '—'}</p></div>
         </div>
-      )}
-    </div>
-  );
+        <div>
+          <p className="text-[10px] font-bold uppercase text-slate-400 mb-2">Performance Ratings</p>
+          <div className="space-y-1.5">
+            {ratingRows.map(([label, val]) => (
+              <div key={label} className="flex items-center gap-2">
+                <span className="text-xs text-slate-600 dark:text-slate-300 w-36 shrink-0">{label}</span>
+                <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-teal-500 rounded-full" style={{ width: `${((Number(val) || 0) / 5) * 100}%` }} />
+                </div>
+                <span className="text-xs font-bold text-teal-700 dark:text-teal-300 w-8 text-right">{val || 0}/5</span>
+                <span className="text-[10px] text-slate-400 w-20 text-right">{ratingLabel(Number(val) || 0)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {(a.employee_goals || a.additional_comments || a.supervisors_overall_comment || a.reviewers_comment) && (
+          <div className="space-y-2">
+            {a.employee_goals && <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Employee Goals</p><p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded p-2 whitespace-pre-line">{a.employee_goals}</p></div>}
+            {a.additional_comments && <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Additional Comments</p><p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded p-2 whitespace-pre-line">{a.additional_comments}</p></div>}
+            {a.supervisors_overall_comment && <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Supervisor Comments</p><p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded p-2 whitespace-pre-line">{a.supervisors_overall_comment}</p></div>}
+            {a.reviewers_comment && <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Reviewer Comments</p><p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded p-2 whitespace-pre-line">{a.reviewers_comment}</p></div>}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const getDisciplineSignProgress = (d: any) => {
     const done = [d?.preparer_signature, d?.supervisor_signature, d?.employee_signature]
@@ -1563,7 +1590,7 @@ export const VerificationOfReview = () => {
                   {/* Actions */}
                   <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end gap-2">
                     <button
-                      onClick={() => setAppraisalViewModal(a)}
+                      onClick={() => setGenericViewModal({ title: `${a.form_type || a.eval_type || 'Appraisal'} — ${a.employee_name || 'Employee'}`, type: 'appraisal', record: a })}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                     >
                       <Eye size={13} /> View Form
@@ -1595,61 +1622,6 @@ export const VerificationOfReview = () => {
             )}
           </Card>
           )}
-
-          {/* View Form Modal */}
-          <Modal
-            open={!!appraisalViewModal}
-            title={appraisalViewModal ? `${appraisalViewModal.form_type || appraisalViewModal.eval_type || 'Appraisal'} — ${appraisalViewModal.employee_name || 'Employee'}` : ''}
-            onClose={() => setAppraisalViewModal(null)}
-            maxWidthClassName="max-w-xl"
-          >
-            {appraisalViewModal && (() => {
-              const a = appraisalViewModal;
-              const isAch = (a.form_type || '').toLowerCase().includes('achievement');
-              const ratingRows: [string, number][] = isAch
-                ? [['Job Knowledge', a.job_knowledge], ['Work Quality', a.work_quality], ['Attendance', a.attendance], ['Productivity', a.productivity], ['Communication', a.communication], ['Dependability', a.dependability]]
-                : [['Quality of Work', a.work_quality], ['Quantity of Work', a.quantity_of_work], ['Relationship w/ Others', a.relationship_with_others], ['Work Habits', a.work_habits], ['Job Knowledge', a.job_knowledge], ['Attendance', a.attendance], ['Promotability', a.promotability_score ?? a.promotability]];
-              const ratingLabel = (v: number) => (['', 'Poor', 'Fair', 'Satisfactory', 'Good', 'Excellent'][v] || '');
-              return (
-                <div className="space-y-4 text-sm">
-                  {/* Info */}
-                  <div className="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800 rounded-lg p-3">
-                    <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Employee</p><p className="font-semibold text-slate-700 dark:text-slate-200">{a.employee_name || '—'}</p></div>
-                    <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Department</p><p className="text-slate-600 dark:text-slate-300">{a.employee_department || a.dept || '—'}</p></div>
-                    <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Period</p><p className="text-slate-600 dark:text-slate-300">{a.eval_period_from || a.review_period_from || '—'} – {a.eval_period_to || a.review_period_to || '—'}</p></div>
-                    <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Overall Score</p><p className="font-bold text-teal-600 dark:text-teal-400 text-base">{a.overall ?? '—'}</p></div>
-                  </div>
-                  {/* Ratings */}
-                  <div>
-                    <p className="text-[10px] font-bold uppercase text-slate-400 mb-2">Performance Ratings</p>
-                    <div className="space-y-1.5">
-                      {ratingRows.map(([label, val]) => (
-                        <div key={label} className="flex items-center gap-2">
-                          <span className="text-xs text-slate-600 dark:text-slate-300 w-36 shrink-0">{label}</span>
-                          <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                            <div className="h-full bg-teal-500 rounded-full" style={{ width: `${((Number(val) || 0) / 5) * 100}%` }} />
-                          </div>
-                          <span className="text-xs font-bold text-teal-700 dark:text-teal-300 w-8 text-right">{val || 0}/5</span>
-                          <span className="text-[10px] text-slate-400 w-20 text-right">{ratingLabel(Number(val) || 0)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Comments */}
-                  {(a.additional_comments || a.employee_goals || a.supervisors_overall_comment) && (
-                    <div className="space-y-2">
-                      {a.employee_goals && <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Employee Goals</p><p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded p-2">{a.employee_goals}</p></div>}
-                      {a.additional_comments && <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Additional Comments</p><p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded p-2">{a.additional_comments}</p></div>}
-                      {a.supervisors_overall_comment && <div><p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Supervisor Comments</p><p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded p-2">{a.supervisors_overall_comment}</p></div>}
-                    </div>
-                  )}
-                  <div className="flex justify-end pt-1">
-                    <button onClick={() => setAppraisalViewModal(null)} className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm font-bold text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">Close</button>
-                  </div>
-                </div>
-              );
-            })()}
-          </Modal>
 
           {/* Sign Modal */}
           <Modal
