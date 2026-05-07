@@ -3860,8 +3860,12 @@ async function startServer() {
           }
         }
       } else if (role === 'Manager') {
-        const allowed = await canManagerAccessEmployee(actor.id, appraisalEmpId);
-        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+        const allowedByManagerMap = await canManagerAccessEmployee(actor.id, appraisalEmpId);
+        if (!allowedByManagerMap) {
+          const managerDept = normalizeDept(actorCtx.dept || actor.dept || actor.department);
+          const allowedByDept = managerDept ? await canActorAccessEmployeeByDept(managerDept, appraisalEmpId) : false;
+          if (!allowedByDept) return res.status(403).json({ error: 'Forbidden' });
+        }
       } else if (role === 'Employee') {
         if (actorCtx.isSupervisor) {
           const supervisorDept = normalizeDept(actorCtx.dept);
