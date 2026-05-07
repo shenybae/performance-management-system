@@ -2186,6 +2186,43 @@ async function startServer() {
     return Number(row?.id || 0) || null;
   }
 
+  async function resolveUserFullName(userId: number | null): Promise<string | null> {
+    if (!userId) return null;
+    const rows: any = await query(
+      `SELECT COALESCE(full_name, username, email) as name FROM users WHERE id = ? LIMIT 1`,
+      [userId]
+    );
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    return String(row?.name || '').trim() || null;
+  }
+
+  // Enrich appraisal records: fill blank print_name fields from linked user IDs
+  async function enrichAppraisalNames(records: any[]): Promise<any[]> {
+    if (!records || records.length === 0) return records;
+    const userIds = new Set<number>();
+    for (const r of records) {
+      if (!r.supervisor_print_name && r.supervisor_user_id) userIds.add(Number(r.supervisor_user_id));
+      if (!r.reviewer_print_name && r.reviewer_user_id) userIds.add(Number(r.reviewer_user_id));
+      if (!r.hr_print_name && r.hr_owner_user_id) userIds.add(Number(r.hr_owner_user_id));
+    }
+    if (userIds.size === 0) return records;
+    const ids = Array.from(userIds);
+    const placeholders = ids.map(() => '?').join(',');
+    const userRows: any = await query(
+      `SELECT id, COALESCE(full_name, username, email) as name FROM users WHERE id IN (${placeholders})`,
+      ids
+    );
+    const nameMap: Record<number, string> = {};
+    const arr = Array.isArray(userRows) ? userRows : (userRows ? [userRows] : []);
+    for (const u of arr) nameMap[Number(u.id)] = String(u.name || '').trim();
+    return records.map((r) => ({
+      ...r,
+      supervisor_print_name: r.supervisor_print_name || (r.supervisor_user_id ? nameMap[Number(r.supervisor_user_id)] || null : null),
+      reviewer_print_name: r.reviewer_print_name || (r.reviewer_user_id ? nameMap[Number(r.reviewer_user_id)] || null : null),
+      hr_print_name: r.hr_print_name || (r.hr_owner_user_id ? nameMap[Number(r.hr_owner_user_id)] || null : null),
+    }));
+  }
+
   async function isLeaderOf(leaderUserId: number, memberEmployeeId: number | null) {
     if (!leaderUserId || !memberEmployeeId) return false;
     try {
@@ -3790,6 +3827,13 @@ async function startServer() {
       const employeeRows: any = await query('SELECT dept FROM employees WHERE id = ? LIMIT 1', [employeeId]);
       const employeeRow = Array.isArray(employeeRows) ? employeeRows[0] : employeeRows;
       const hrOwnerUserId = await resolveDeptHrOwnerUserId(employeeRow?.dept || b.employee_department || actorCtx.dept);
+
+      // Auto-resolve print names from user IDs if not provided in payload
+      const creatorName = String(actor.full_name || actor.username || actor.email || '').trim() || null;
+      const hrOwnerName = hrOwnerUserId ? await resolveUserFullName(hrOwnerUserId) : null;
+      const resolvedSupervisorName = b.supervisor_print_name || (isPerformanceEval ? null : creatorName);
+      const resolvedReviewerName = b.reviewer_print_name || (isPerformanceEval ? creatorName : null);
+      const resolvedHrName = b.hr_print_name || hrOwnerName;
       const requiredSignatures = isPerformanceEval
         ? ['supervisor_signature', 'reviewer_signature', 'employee_signature', 'hr_signature']
         : ['supervisor_signature', 'employee_signature'];
@@ -3820,7 +3864,7 @@ async function startServer() {
           b.hr_signature || null, b.hr_signature_date || null,
           b.overall_rating || null, b.recommendation || null, b.reviewer_agree || null, b.revised_rating || null,
           b.status || null, b.employee_department || null, b.employee_title || null, b.probationary_period || null,
-          b.supervisor_print_name || null, b.reviewer_print_name || null, b.hr_print_name || null, b.employee_print_name || null,
+          resolvedSupervisorName, resolvedReviewerName, resolvedHrName, b.employee_print_name || null,
           supervisorUserId, reviewerUserId, hrOwnerUserId,
           b.job_knowledge_comment || null, b.work_quality_comment || null, b.attendance_comment || null, b.productivity_comment || null, b.communication_comment || null, b.dependability_comment || null]);
 
@@ -6439,6 +6483,11 @@ ${relevantGoalIdsSql}
         : " AND NULLIF(TRIM(COALESCE(a.deleted_at::text, '')), '') IS NULL";
       const queryEmployeeId = normalizeEmployeeId(req.query.employee_id);
       const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      // Helper: enrich and send — fills blank print_name fields from linked user IDs
+      const sendRows = async (rawRows: any) => {
+        const arr = Array.isArray(rawRows) ? rawRows as any[] : (rawRows ? [rawRows] : []);
+        return res.json(await enrichAppraisalNames(arr));
+      };
 
       if (isPrivilegedRole(role)) {
         const hrDept = normalizedRole === 'HR' ? normalizeDept(actorCtx.dept) : '';
@@ -6450,20 +6499,20 @@ ${relevantGoalIdsSql}
               `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ? AND LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
               [queryEmployeeId, hrDept]
             );
-            return res.json(rows);
+            return sendRows(rows);
           }
 
           const rows = await query(
             `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
             [hrDept]
           );
-          return res.json(rows);
+          return sendRows(rows);
         }
 
         const rows = queryEmployeeId
           ? await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?${archivedFilter}`, [queryEmployeeId])
           : await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE 1=1${archivedFilter}`);
-        return res.json(rows);
+        return sendRows(rows);
       }
 
       if (role === 'Manager') {
@@ -6480,7 +6529,7 @@ ${relevantGoalIdsSql}
                 `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ? AND LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
                 [queryEmployeeId, managerDept]
               );
-          return res.json(rows);
+          return sendRows(rows);
         }
 
         if (managedIds.length === 0) {
@@ -6489,7 +6538,7 @@ ${relevantGoalIdsSql}
             `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
             [managerDept]
           );
-          return res.json(rows);
+          return sendRows(rows);
         }
 
         const placeholders = managedIds.map(() => '?').join(',');
@@ -6499,7 +6548,7 @@ ${relevantGoalIdsSql}
               [...managedIds, managerDept]
             )
           : await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id IN (${placeholders})${archivedFilter}`, managedIds);
-        return res.json(rows);
+        return sendRows(rows);
       }
 
       if (role === 'Employee') {
@@ -6522,20 +6571,20 @@ ${relevantGoalIdsSql}
               `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ? AND LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
               [queryEmployeeId, supervisorDept]
             );
-            return res.json(rows);
+            return sendRows(rows);
           }
 
           const rows = await query(
             `SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE LOWER(TRIM(COALESCE(e.dept, ''))) = LOWER(TRIM(?))${archivedFilter}`,
             [supervisorDept]
           );
-          return res.json(rows);
+          return sendRows(rows);
         }
 
         const employeeId = normalizeEmployeeId(actor.employee_id) || normalizeEmployeeId(actorCtx.employeeId);
         if (!employeeId) return res.json([]);
         const rows = await query(`SELECT a.*, e.name as employee_name FROM appraisals a LEFT JOIN employees e ON a.employee_id = e.id WHERE a.employee_id = ?${archivedFilter}`, [employeeId]);
-        return res.json(rows);
+        return sendRows(rows);
       }
 
       return res.status(403).json({ error: 'Forbidden' });
