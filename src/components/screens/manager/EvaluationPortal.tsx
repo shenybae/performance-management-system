@@ -4,7 +4,7 @@ import { Employee } from '../../../types';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
-import { Star, FileText, X, Download, ArrowLeft, Eye, CheckCircle, Archive } from 'lucide-react';
+import { Star, FileText, X, Download, ArrowLeft, Eye, CheckCircle, Archive, Search } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
 import { appConfirm } from '../../../utils/appDialog';
@@ -117,7 +117,8 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
   const todayISO = useMemo(() => new Date().toISOString().split('T')[0], []);
   const [view, setView] = useState<'dashboard' | 'achievement' | 'performance' | 'detail'>('dashboard');
   const [appraisals, setAppraisals] = useState<any[]>([]);
-  const [appraisalFilter, setAppraisalFilter] = useState<'archived' | 'all' | 'verified' | 'pending'>('all');
+  const [appraisalFilter, setAppraisalFilter] = useState<'archived' | 'all' | 'verified' | 'pending'>('pending');
+  const [appraisalSearch, setAppraisalSearch] = useState('');
   const [detailRecord, setDetailRecord] = useState<any>(null);
 
   /* ── Achievement Measure form state ─────────────────────────────── */
@@ -215,13 +216,24 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
       const isVerified = isPerformanceEval
         ? !!(a.supervisor_signature && a.reviewer_signature && a.employee_signature && a.hr_signature)
         : !!(a.supervisor_signature && a.employee_signature);
+      const q = appraisalSearch.trim().toLowerCase();
+      const periodText = `${a.eval_period_from || a.review_period_from || ''} ${a.eval_period_to || a.review_period_to || ''}`.toLowerCase();
+      const searchMatch = !q || [
+        a.employee_name || `#${a.employee_id || ''}`,
+        a.form_type || a.eval_type || '',
+        periodText,
+        String(a.job_knowledge || ''),
+        String(a.productivity || ''),
+        String(a.overall || ''),
+      ].some((value) => String(value || '').toLowerCase().includes(q));
 
+      if (!searchMatch) return false;
       if (appraisalFilter === 'all') return true;
       if (appraisalFilter === 'archived') return isArchived;
       if (appraisalFilter === 'verified') return isVerified;
       return !isVerified;
     });
-  }, [appraisals, appraisalFilter]);
+  }, [appraisals, appraisalFilter, appraisalSearch]);
 
   /* ── Form validation helpers ────────────────────────────────────── */
   const isAchievementFormValid = () => {
@@ -924,6 +936,16 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
                   <option value="verified">Verified</option>
                   <option value="pending">Pending</option>
                 </select>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                  <input
+                    type="text"
+                    placeholder="Search records..."
+                    value={appraisalSearch}
+                    onChange={(e) => setAppraisalSearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-green/50 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  />
+                </div>
               </div>
             </div>
             <div className="overflow-x-auto">
