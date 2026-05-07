@@ -2219,9 +2219,9 @@ async function startServer() {
     if (!records || records.length === 0) return records;
     const userIds = new Set<number>();
     for (const r of records) {
-      if (!r.supervisor_print_name && r.supervisor_user_id) userIds.add(Number(r.supervisor_user_id));
-      if (!r.reviewer_print_name && r.reviewer_user_id) userIds.add(Number(r.reviewer_user_id));
-      if (!r.hr_print_name && r.hr_owner_user_id) userIds.add(Number(r.hr_owner_user_id));
+      if (r.supervisor_user_id) userIds.add(Number(r.supervisor_user_id));
+      if (r.reviewer_user_id) userIds.add(Number(r.reviewer_user_id));
+      if (r.hr_owner_user_id) userIds.add(Number(r.hr_owner_user_id));
     }
     if (userIds.size === 0) return records;
     const ids = Array.from(userIds);
@@ -2235,10 +2235,48 @@ async function startServer() {
     for (const u of arr) nameMap[Number(u.id)] = String(u.name || '').trim();
     return records.map((r) => ({
       ...r,
-      supervisor_print_name: r.supervisor_print_name || (r.supervisor_user_id ? nameMap[Number(r.supervisor_user_id)] || null : null),
-      reviewer_print_name: r.reviewer_print_name || (r.reviewer_user_id ? nameMap[Number(r.reviewer_user_id)] || null : null),
-      hr_print_name: r.hr_print_name || (r.hr_owner_user_id ? nameMap[Number(r.hr_owner_user_id)] || null : null),
+      supervisor_print_name: r.supervisor_user_id ? (nameMap[Number(r.supervisor_user_id)] || r.supervisor_print_name || null) : (r.supervisor_print_name || null),
+      reviewer_print_name: r.reviewer_user_id ? (nameMap[Number(r.reviewer_user_id)] || r.reviewer_print_name || null) : (r.reviewer_print_name || null),
+      hr_print_name: r.hr_owner_user_id ? (nameMap[Number(r.hr_owner_user_id)] || r.hr_print_name || null) : (r.hr_print_name || null),
     }));
+  }
+
+  async function backfillPendingPerformanceSupervisorAssignments() {
+    const rows: any = await query(
+      `SELECT a.id,
+              a.employee_department,
+              e.dept AS employee_dept,
+              a.supervisor_user_id,
+              a.reviewer_user_id,
+              a.supervisor_print_name,
+              a.reviewer_print_name,
+              a.supervisor_signature
+       FROM appraisals a
+       LEFT JOIN employees e ON e.id = a.employee_id
+       WHERE LOWER(TRIM(COALESCE(a.form_type, ''))) LIKE '%performance%'
+         AND COALESCE(TRIM(COALESCE(a.supervisor_signature, '')), '') = ''
+         AND (
+           a.supervisor_user_id IS NULL
+           OR a.supervisor_user_id = a.reviewer_user_id
+           OR LOWER(TRIM(COALESCE(a.supervisor_print_name, ''))) = LOWER(TRIM(COALESCE(a.reviewer_print_name, '')))
+         )`
+    );
+
+    const candidates = Array.isArray(rows) ? rows : (rows ? [rows] : []);
+    for (const rec of candidates) {
+      const dept = rec.employee_department || rec.employee_dept;
+      const supervisorId = await resolveDeptSupervisorUserId(dept);
+      if (!supervisorId) continue;
+      if (Number(rec.reviewer_user_id || 0) === Number(supervisorId)) continue;
+
+      const supervisorName = await resolveUserFullName(supervisorId);
+      await query(
+        `UPDATE appraisals
+         SET supervisor_user_id = ?, supervisor_print_name = ?
+         WHERE id = ?`,
+        [supervisorId, supervisorName, rec.id]
+      );
+    }
   }
 
   async function isLeaderOf(leaderUserId: number, memberEmployeeId: number | null) {
@@ -3855,7 +3893,9 @@ async function startServer() {
       const creatorName = String(actor.full_name || actor.username || actor.email || '').trim() || null;
       const deptSupervisorName = supervisorUserId ? await resolveUserFullName(supervisorUserId) : null;
       const hrOwnerName = hrOwnerUserId ? await resolveUserFullName(hrOwnerUserId) : null;
-      const resolvedSupervisorName = b.supervisor_print_name || (isPerformanceEval ? deptSupervisorName : creatorName);
+      const resolvedSupervisorName = isPerformanceEval
+        ? (deptSupervisorName || null)
+        : (b.supervisor_print_name || creatorName);
       const resolvedReviewerName = b.reviewer_print_name || (isPerformanceEval ? creatorName : null);
       const resolvedHrName = b.hr_print_name || hrOwnerName;
       const requiredSignatures = isPerformanceEval
@@ -6507,6 +6547,7 @@ ${relevantGoalIdsSql}
         : " AND NULLIF(TRIM(COALESCE(a.deleted_at::text, '')), '') IS NULL";
       const queryEmployeeId = normalizeEmployeeId(req.query.employee_id);
       const actorCtx = await getActorOrgContext(Number(actor.id || 0));
+      await backfillPendingPerformanceSupervisorAssignments();
       // Helper: enrich and send — fills blank print_name fields from linked user IDs
       const sendRows = async (rawRows: any) => {
         const arr = Array.isArray(rawRows) ? rawRows as any[] : (rawRows ? [rawRows] : []);
