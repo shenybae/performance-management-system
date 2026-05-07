@@ -3996,7 +3996,7 @@ async function startServer() {
       const sets: string[] = [];
       const vals: any[] = [];
       const employeeUpdatable = ['employee_signature','employee_signature_date','employee_acknowledgement','employee_print_name'];
-      const supervisorUpdatable = ['supervisor_signature','supervisor_signature_date','supervisor_print_name','supervisors_overall_comment'];
+      const supervisorUpdatable = ['supervisor_signature','supervisor_signature_date','supervisor_print_name','supervisors_overall_comment','overall_rating','recommendation'];
       const hrUpdatable = ['hr_signature','hr_signature_date','hr_print_name'];
       const managerHrUpdatable = ['supervisor_signature','supervisor_signature_date','reviewer_signature','reviewer_signature_date',
         'employee_signature','employee_signature_date','verified','promotability_status',
