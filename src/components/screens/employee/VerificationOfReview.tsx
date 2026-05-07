@@ -4,7 +4,7 @@ import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { Modal } from '../../common/Modal';
 import { SignatureUpload } from '../../common/SignatureUpload';
-import { CheckCircle, FileCheck, ShieldAlert, Eye, PenLine, User, Calendar, BarChart2, FileText, Clock, Building2 } from 'lucide-react';
+import { CheckCircle, FileCheck, ShieldAlert, Eye, PenLine, User, Calendar, BarChart2, FileText, Clock, Building2, AlertTriangle, Lightbulb, UserCheck, Package, LogOut, ClipboardList, Briefcase, Users } from 'lucide-react';
 import { getAuthHeaders } from '../../../utils/csv';
 
 export const VerificationOfReview = () => {
@@ -46,6 +46,8 @@ export const VerificationOfReview = () => {
   const [applicantSignerDate, setApplicantSignerDate] = useState(new Date().toISOString().split('T')[0]);
   const [appraisalViewModal, setAppraisalViewModal] = useState<any | null>(null);
   const [appraisalSignModal, setAppraisalSignModal] = useState<{ record: any; stage: 'supervisor' | 'manager' | 'reviewer' } | null>(null);
+  const [genericViewModal, setGenericViewModal] = useState<{ title: string; type: string; record: any } | null>(null);
+  const [genericSignModal, setGenericSignModal] = useState<{ title: string; signType: 'simple' | 'remarks' | 'appraisalEmployee' | 'appraisalHr' | 'applicantInterviewer' | 'applicantHr'; actionId: string; record: any } | null>(null);
 
   const resetQueueSignerState = () => {
     setActiveId(null);
@@ -63,6 +65,7 @@ export const VerificationOfReview = () => {
     setApplicantSignerName('');
     setApplicantSignerTitle('');
     setApplicantSignerDate(new Date().toISOString().split('T')[0]);
+    setGenericSignModal(null);
   };
 
   useEffect(() => {
@@ -1067,6 +1070,212 @@ export const VerificationOfReview = () => {
     setDisciplineReviewedKeys((prev) => ({ ...prev, [key]: true }));
   };
 
+  const openGenericSign = (
+    title: string,
+    signType: 'simple' | 'remarks' | 'appraisalEmployee' | 'appraisalHr' | 'applicantInterviewer' | 'applicantHr',
+    actionId: string,
+    record: any,
+    signerName?: string,
+    applicantName?: string,
+    applicantTitle?: string,
+    applicantDate?: string,
+  ) => {
+    resetQueueSignerState();
+    setSignerPrintTitle(signerName ?? String(user?.full_name || user?.employee_name || user?.username || ''));
+    if (applicantName !== undefined) setApplicantSignerName(applicantName);
+    if (applicantTitle !== undefined) setApplicantSignerTitle(applicantTitle);
+    if (applicantDate !== undefined) setApplicantSignerDate(applicantDate);
+    setGenericSignModal({ title, signType, actionId, record });
+  };
+
+  const getGenericSignAction = (actionId: string, record: any): (() => void) => {
+    const close = () => setGenericSignModal(null);
+    switch (actionId) {
+      case 'emp-app': return () => signEmployeeAppraisal(record.id).then(close);
+      case 'emp-disc': return () => signEmployeeDiscipline(record.id).then(close);
+      case 'emp-onb': return () => signOnboarding(record.id, 'employee_signature').then(close);
+      case 'emp-sug': return () => signEmployeeSuggestion(record.id).then(close);
+      case 'emp-exit': return () => signExitInterview(record.id, 'employee_sig').then(close);
+      case 'emp-prop': return () => signProperty(record.id, 'received_by_sig').then(close);
+      case 'hr-app': return () => signHrAppraisal(record.id).then(close);
+      case 'hr-onb': return () => signOnboarding(record.id, 'hr_signature').then(close);
+      case 'hr-applicant': return () => signApplicant(record.id, 'hr_reviewer_signature', { name: applicantSignerName.trim(), date: applicantSignerDate }).then(close);
+      case 'hr-req': return () => signRequisitionStage(record.id, record.stage).then(close);
+      case 'mgmt-disc-prep': return () => signPreparerDiscipline(record.id).then(close);
+      case 'mgmt-disc-sup': return () => signSupervisorDiscipline(record.id).then(close);
+      case 'mgmt-sug': return () => signSupervisorSuggestion(record).then(close);
+      case 'mgmt-app': return () => signApplicant(record.id, 'interviewer_signature', { name: applicantSignerName.trim(), title: applicantSignerTitle.trim(), date: applicantSignerDate }).then(close);
+      case 'mgmt-req': return () => signRequisitionStage(record.id, record.stage).then(close);
+      case 'mgmt-prop': return () => signProperty(record.id, record.field).then(close);
+      case 'mgmt-exit': return () => signExitInterview(record.id, 'interviewer_sig').then(close);
+      default: return () => {};
+    }
+  };
+
+  const renderQueueCard = ({
+    id, icon, iconColorClass, iconBgClass, title, subtitle,
+    badge, badgeColorClass, pills, warningText,
+    onView, signDisabled, signTitle, onSign,
+  }: {
+    id: string;
+    icon: React.ReactNode;
+    iconColorClass: string;
+    iconBgClass: string;
+    title: string;
+    subtitle: string;
+    badge?: string;
+    badgeColorClass?: string;
+    pills?: Array<{ icon?: React.ReactNode; text: string }>;
+    warningText?: string;
+    onView?: () => void;
+    signDisabled?: boolean;
+    signTitle?: string;
+    onSign: () => void;
+  }) => (
+    <div key={id} className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 mb-3 bg-white dark:bg-slate-800/50 hover:border-teal-300 dark:hover:border-teal-700 transition-colors">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`w-9 h-9 rounded-full ${iconBgClass} flex items-center justify-center flex-shrink-0`}>
+            <span className={iconColorClass}>{icon}</span>
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-sm text-slate-800 dark:text-slate-100">{title}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{subtitle}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {badge && (
+            <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${badgeColorClass || 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+              {badge}
+            </span>
+          )}
+          {onView && (
+            <button type="button" onClick={onView}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors px-2 py-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
+              <Eye size={12} /> View
+            </button>
+          )}
+          <button type="button" onClick={onSign} disabled={signDisabled} title={signTitle}
+            className="inline-flex items-center gap-1 text-xs font-bold text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 transition-colors px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/20 hover:bg-teal-100 dark:hover:bg-teal-900/40 disabled:opacity-40 disabled:cursor-not-allowed">
+            <PenLine size={12} /> Sign
+          </button>
+        </div>
+      </div>
+      {pills && pills.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {pills.map((p, i) => (
+            <span key={i} className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-md px-2 py-0.5">
+              {p.icon}<span>{p.text}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {warningText && (
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-md px-2 py-1">
+          <AlertTriangle size={11} />{warningText}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderGenericViewContent = () => {
+    if (!genericViewModal) return null;
+    const { type, record: r } = genericViewModal;
+    if (type === 'appraisal') return renderAppraisalPreview(r);
+    if (type === 'discipline') return renderDisciplineReview(r);
+    if (type === 'suggestion') return (
+      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div><span className="font-bold">Employee:</span> {r.employee_name || '—'}</div>
+          <div><span className="font-bold">Department:</span> {r.department || r.employee_department || '—'}</div>
+          <div><span className="font-bold">Date:</span> {r.date || r.created_at?.split('T')[0] || '—'}</div>
+          <div><span className="font-bold">Status:</span> {r.status || 'Pending'}</div>
+        </div>
+        {r.concern && <div><span className="font-bold">Concern / Suggestion:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs">{r.concern}</p></div>}
+        {r.title && <div><span className="font-bold">Title:</span> {r.title}</div>}
+        {r.action_to_be_taken && <div><span className="font-bold">Action to be taken:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs">{r.action_to_be_taken}</p></div>}
+      </div>
+    );
+    if (type === 'onboarding') return (
+      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div><span className="font-bold">Employee:</span> {r.employee_name || '—'}</div>
+          <div><span className="font-bold">Department:</span> {r.department || r.employee_department || '—'}</div>
+          <div><span className="font-bold">Start Date:</span> {r.start_date || '—'}</div>
+          <div><span className="font-bold">Status:</span> {r.status || 'Pending'}</div>
+        </div>
+        {r.notes && <div><span className="font-bold">Notes:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs">{r.notes}</p></div>}
+        <div className="grid sm:grid-cols-2 gap-2 text-xs">
+          <div className={`px-2 py-1 rounded ${r.employee_signature ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Employee: {r.employee_signature ? `Signed (${r.employee_signature_date || '—'})` : 'Pending'}</div>
+          <div className={`px-2 py-1 rounded ${r.hr_signature ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>HR: {r.hr_signature ? `Signed (${r.hr_signature_date || '—'})` : 'Pending'}</div>
+        </div>
+      </div>
+    );
+    if (type === 'exit') return (
+      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div><span className="font-bold">Employee:</span> {r.employee_name || '—'}</div>
+          <div><span className="font-bold">Department:</span> {r.department || r.employee_department || '—'}</div>
+          <div><span className="font-bold">Interview Date:</span> {r.interview_date || '—'}</div>
+          <div><span className="font-bold">Last Day:</span> {r.last_day || '—'}</div>
+        </div>
+        {r.reason_for_leaving && <div><span className="font-bold">Reason for Leaving:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs">{r.reason_for_leaving}</p></div>}
+        {r.comments && <div><span className="font-bold">Comments:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs">{r.comments}</p></div>}
+        <div className="grid sm:grid-cols-2 gap-2 text-xs">
+          <div className={`px-2 py-1 rounded ${r.employee_sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Employee: {r.employee_sig ? 'Signed' : 'Pending'}</div>
+          <div className={`px-2 py-1 rounded ${r.interviewer_sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Interviewer: {r.interviewer_sig ? 'Signed' : 'Pending'}</div>
+        </div>
+      </div>
+    );
+    if (type === 'applicant') return (
+      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div><span className="font-bold">Applicant:</span> {r.name || '—'}</div>
+          <div><span className="font-bold">Position:</span> {r.position || '—'}</div>
+          <div><span className="font-bold">Department:</span> {r.department || r.employee_department || '—'}</div>
+          <div><span className="font-bold">Interview Date:</span> {r.interview_date || '—'}</div>
+          <div><span className="font-bold">Status:</span> {r.status || '—'}</div>
+        </div>
+        {r.notes && <div><span className="font-bold">Notes:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs">{r.notes}</p></div>}
+      </div>
+    );
+    if (type === 'property') return (
+      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div><span className="font-bold">Employee:</span> {r.employee_name || '—'}</div>
+          <div><span className="font-bold">Department:</span> {r.department || r.employee_department || '—'}</div>
+          <div><span className="font-bold">Date Issued:</span> {r.date_issued || r.created_at?.split('T')[0] || '—'}</div>
+        </div>
+        {r.items && <div><span className="font-bold">Items:</span><p className="mt-1 bg-slate-50 dark:bg-slate-800 rounded p-2 text-xs whitespace-pre-line">{r.items}</p></div>}
+        <div className="grid sm:grid-cols-2 gap-2 text-xs">
+          <div className={`px-2 py-1 rounded ${r.turnover_by_sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Turned over by: {r.turnover_by_sig ? 'Signed' : 'Pending'}</div>
+          <div className={`px-2 py-1 rounded ${r.noted_by_sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Noted by: {r.noted_by_sig ? 'Signed' : 'Pending'}</div>
+          <div className={`px-2 py-1 rounded ${r.received_by_sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Received by: {r.received_by_sig ? 'Signed' : 'Pending'}</div>
+          <div className={`px-2 py-1 rounded ${r.audited_by_sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>Audited by: {r.audited_by_sig ? 'Signed' : 'Pending'}</div>
+        </div>
+      </div>
+    );
+    if (type === 'requisition') return (
+      <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div><span className="font-bold">Job Title:</span> {r.job_title || '—'}</div>
+          <div><span className="font-bold">Department:</span> {r.department || '—'}</div>
+          <div><span className="font-bold">Date Requested:</span> {r.date_requested || r.created_at?.split('T')[0] || '—'}</div>
+          <div><span className="font-bold">Headcount:</span> {r.headcount || '—'}</div>
+          <div><span className="font-bold">Reason:</span> {r.reason || '—'}</div>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-2 text-xs">
+          {[['Supervisor', r.supervisor_approval_sig], ['Dept Head', r.dept_head_approval_sig], ['Cabinet', r.cabinet_approval_sig], ['VP', r.vp_approval_sig], ['President', r.president_approval_sig]].map(([label, sig]) => (
+            <div key={String(label)} className={`px-2 py-1 rounded ${sig ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+              {label}: {sig ? 'Approved' : 'Pending'}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+    return null;
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <SectionHeader title="Signature Queue" subtitle={roleSubtitle} />
@@ -1098,30 +1307,23 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Appraisals Pending Your Signature</h3>
             {pendingEmployeeAppraisals.length === 0 && <p className="text-sm text-slate-400">No pending appraisal signatures.</p>}
-            {pendingEmployeeAppraisals.map((a) => (
-              <div key={`emp-app-${a.id}`} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{a.form_type || a.eval_type || 'Appraisal'}</p>
-                    <p className="text-xs text-slate-500">{a.employee_name || 'Employee'} • {a.sign_off_date || a.created_at?.split('T')[0] || '—'}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => setActivePreviewId(activePreviewId === `emp-app-${a.id}` ? null : `emp-app-${a.id}`)}>View Form</button>
-                    <button
-                      className="text-sm font-bold text-teal-deep"
-                      onClick={() => {
-                        setActiveId(`emp-app-${a.id}`);
-                        setSignerPrintTitle(String(user?.full_name || user?.employee_name || user?.username || ''));
-                      }}
-                    >
-                      Sign
-                    </button>
-                  </div>
-                </div>
-                {activePreviewId === `emp-app-${a.id}` && renderAppraisalPreview(a)}
-                {activeId === `emp-app-${a.id}` && renderAppraisalSignBox(() => signEmployeeAppraisal(a.id), 'employee')}
-              </div>
-            ))}
+            {pendingEmployeeAppraisals.map((a) => renderQueueCard({
+              id: `emp-app-${a.id}`,
+              icon: <FileText size={16} />,
+              iconColorClass: 'text-teal-600 dark:text-teal-400',
+              iconBgClass: 'bg-teal-50 dark:bg-teal-900/30',
+              title: a.form_type || a.eval_type || 'Appraisal',
+              subtitle: `${a.employee_name || 'Employee'} • ${a.sign_off_date || a.created_at?.split('T')[0] || '—'}`,
+              badge: 'Your Signature',
+              badgeColorClass: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300',
+              pills: [
+                { icon: <Building2 size={10} />, text: a.employee_department || a.dept || '—' },
+                { icon: <Calendar size={10} />, text: `${a.eval_period_from || '—'} – ${a.eval_period_to || '—'}` },
+                { icon: <BarChart2 size={10} />, text: `Overall: ${a.overall ?? '—'}` },
+              ],
+              onView: () => setGenericViewModal({ title: `${a.form_type || 'Appraisal'} — ${a.employee_name || 'Employee'}`, type: 'appraisal', record: a }),
+              onSign: () => openGenericSign(`Sign — ${a.form_type || 'Appraisal'} (${a.employee_name || 'Employee'})`, 'appraisalEmployee', 'emp-app', a),
+            }))}
           </Card>
           )}
 
@@ -1129,41 +1331,30 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Disciplinary Records Pending Your Signature</h3>
             {pendingEmployeeDiscipline.length === 0 && <p className="text-sm text-slate-400">No pending disciplinary signatures.</p>}
-            {pendingEmployeeDiscipline.map((d) => (
-              <div key={`emp-disc-${d.id}`} className="border rounded-lg p-3 mb-2">
-                {(() => {
-                  const disciplineKey = `emp-disc-${d.id}`;
-                  const reviewed = !!disciplineReviewedKeys[disciplineKey];
-                  const readyForEmployeeSign = !!d.preparer_signature && !!d.supervisor_signature;
-                  return (
-                <>
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{d.warning_level || 'Warning'} - {d.violation_type || 'Disciplinary Action'}</p>
-                    <p className="text-xs text-slate-500">{d.employee_name || 'Employee'} • {d.date_of_warning || '—'}</p>
-                    <p className="text-[11px] text-teal-700 dark:text-teal-300 font-semibold mt-0.5">Progress: {getDisciplineSignProgress(d).done}/{getDisciplineSignProgress(d).total} signed</p>
-                    {!readyForEmployeeSign && (
-                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">Waiting for preparer and supervisor signatures before you can sign.</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => openDisciplineReview(disciplineKey, d)}>Review</button>
-                    <button
-                      className="text-sm font-bold text-teal-deep disabled:text-slate-400 disabled:cursor-not-allowed"
-                      disabled={!reviewed || !readyForEmployeeSign}
-                      title={!reviewed ? 'Review the form first' : !readyForEmployeeSign ? 'Awaiting preparer and supervisor signatures' : 'Sign this disciplinary record'}
-                      onClick={() => setActiveId(disciplineKey)}
-                    >
-                      Sign
-                    </button>
-                  </div>
-                </div>
-                {activeId === disciplineKey && renderSignBox(() => signEmployeeDiscipline(d.id), true)}
-                </>
-                  );
-                })()}
-              </div>
-            ))}
+            {pendingEmployeeDiscipline.map((d) => {
+              const disciplineKey = `emp-disc-${d.id}`;
+              const reviewed = !!disciplineReviewedKeys[disciplineKey];
+              const readyForEmployeeSign = !!d.preparer_signature && !!d.supervisor_signature;
+              const prog = getDisciplineSignProgress(d);
+              return renderQueueCard({
+                id: disciplineKey,
+                icon: <AlertTriangle size={16} />,
+                iconColorClass: 'text-red-500 dark:text-red-400',
+                iconBgClass: 'bg-red-50 dark:bg-red-900/20',
+                title: `${d.warning_level || 'Warning'} — ${d.violation_type || 'Disciplinary Action'}`,
+                subtitle: `${d.employee_name || 'Employee'} • ${d.date_of_warning || '—'}`,
+                badge: 'Your Signature',
+                badgeColorClass: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300',
+                pills: [
+                  { icon: <Clock size={10} />, text: `${prog.done}/${prog.total} signed` },
+                ],
+                warningText: !readyForEmployeeSign ? 'Waiting for preparer and supervisor signatures before you can sign.' : !reviewed ? 'Please review the form first before signing.' : undefined,
+                onView: () => { openDisciplineReview(disciplineKey, d); },
+                signDisabled: !reviewed || !readyForEmployeeSign,
+                signTitle: !reviewed ? 'Review the form first' : !readyForEmployeeSign ? 'Awaiting preparer and supervisor signatures' : undefined,
+                onSign: () => { if (reviewed && readyForEmployeeSign) openGenericSign(`Sign — Disciplinary (${d.employee_name || 'Employee'})`, 'remarks', 'emp-disc', d); else openDisciplineReview(disciplineKey, d); },
+              });
+            })}
           </Card>
           )}
 
@@ -1171,18 +1362,21 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Onboarding Records Pending Your Signature</h3>
             {pendingEmployeeOnboarding.length === 0 && <p className="text-sm text-slate-400">No pending onboarding signatures.</p>}
-            {pendingEmployeeOnboarding.map((o) => (
-              <div key={`emp-onb-${o.id}`} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{o.employee_name || 'Employee'} - Onboarding</p>
-                    <p className="text-xs text-slate-500">Status: {o.status || 'Pending'}</p>
-                  </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-onb-${o.id}`)}>Sign</button>
-                </div>
-                {activeId === `emp-onb-${o.id}` && renderSignBox(() => signOnboarding(o.id, 'employee_signature'))}
-              </div>
-            ))}
+            {pendingEmployeeOnboarding.map((o) => renderQueueCard({
+              id: `emp-onb-${o.id}`,
+              icon: <UserCheck size={16} />,
+              iconColorClass: 'text-blue-600 dark:text-blue-400',
+              iconBgClass: 'bg-blue-50 dark:bg-blue-900/20',
+              title: `Onboarding — ${o.employee_name || 'Employee'}`,
+              subtitle: `Status: ${o.status || 'Pending'} • ${o.start_date || '—'}`,
+              badge: 'Your Signature',
+              badgeColorClass: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300',
+              pills: [
+                { icon: <Building2 size={10} />, text: o.department || o.employee_department || '—' },
+              ],
+              onView: () => setGenericViewModal({ title: `Onboarding — ${o.employee_name || 'Employee'}`, type: 'onboarding', record: o }),
+              onSign: () => openGenericSign(`Sign — Onboarding (${o.employee_name || 'Employee'})`, 'simple', 'emp-onb', o),
+            }))}
           </Card>
           )}
 
@@ -1190,18 +1384,18 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Suggestions Pending Your Signature</h3>
             {pendingEmployeeSuggestions.length === 0 && <p className="text-sm text-slate-400">No pending suggestion signatures.</p>}
-            {pendingEmployeeSuggestions.map((s) => (
-              <div key={`emp-sug-${s.id}`} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{s.employee_name || 'Employee'} - Suggestion</p>
-                    <p className="text-xs text-slate-500 truncate">{s.title || s.concern || 'Untitled suggestion'}</p>
-                  </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-sug-${s.id}`)}>Sign</button>
-                </div>
-                {activeId === `emp-sug-${s.id}` && renderSignBox(() => signEmployeeSuggestion(s.id))}
-              </div>
-            ))}
+            {pendingEmployeeSuggestions.map((s) => renderQueueCard({
+              id: `emp-sug-${s.id}`,
+              icon: <Lightbulb size={16} />,
+              iconColorClass: 'text-yellow-600 dark:text-yellow-400',
+              iconBgClass: 'bg-yellow-50 dark:bg-yellow-900/20',
+              title: s.title || s.concern?.slice(0, 50) || 'Suggestion',
+              subtitle: `${s.employee_name || 'Employee'} • ${s.date || s.created_at?.split('T')[0] || '—'}`,
+              badge: 'Your Signature',
+              badgeColorClass: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300',
+              onView: () => setGenericViewModal({ title: `Suggestion — ${s.employee_name || 'Employee'}`, type: 'suggestion', record: s }),
+              onSign: () => openGenericSign(`Sign — Suggestion (${s.employee_name || 'Employee'})`, 'simple', 'emp-sug', s),
+            }))}
           </Card>
           )}
 
@@ -1209,18 +1403,21 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Exit Interviews Pending Your Signature</h3>
             {pendingEmployeeExitInterviews.length === 0 && <p className="text-sm text-slate-400">No pending exit interview signatures.</p>}
-            {pendingEmployeeExitInterviews.map((e) => (
-              <div key={`emp-exit-${e.id}`} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{e.employee_name || 'Employee'} - Exit Interview</p>
-                    <p className="text-xs text-slate-500">{e.interview_date || '—'}</p>
-                  </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-exit-${e.id}`)}>Sign</button>
-                </div>
-                {activeId === `emp-exit-${e.id}` && renderSignBox(() => signExitInterview(e.id, 'employee_sig'))}
-              </div>
-            ))}
+            {pendingEmployeeExitInterviews.map((e) => renderQueueCard({
+              id: `emp-exit-${e.id}`,
+              icon: <LogOut size={16} />,
+              iconColorClass: 'text-slate-600 dark:text-slate-400',
+              iconBgClass: 'bg-slate-100 dark:bg-slate-700',
+              title: `Exit Interview — ${e.employee_name || 'Employee'}`,
+              subtitle: `Interview date: ${e.interview_date || '—'}`,
+              badge: 'Your Signature',
+              badgeColorClass: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300',
+              pills: [
+                { icon: <Building2 size={10} />, text: e.department || e.employee_department || '—' },
+              ],
+              onView: () => setGenericViewModal({ title: `Exit Interview — ${e.employee_name || 'Employee'}`, type: 'exit', record: e }),
+              onSign: () => openGenericSign(`Sign — Exit Interview (${e.employee_name || 'Employee'})`, 'simple', 'emp-exit', e),
+            }))}
           </Card>
           )}
 
@@ -1228,18 +1425,18 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Property Accountability Pending Your Signature</h3>
             {pendingEmployeePropertyTasks.length === 0 && <p className="text-sm text-slate-400">No pending property signatures.</p>}
-            {pendingEmployeePropertyTasks.map((p) => (
-              <div key={`emp-prop-${p.id}`} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{p.employee_name || 'Employee'} - Received by signature</p>
-                    <p className="text-xs text-slate-500">Property accountability</p>
-                  </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`emp-prop-${p.id}`)}>Sign</button>
-                </div>
-                {activeId === `emp-prop-${p.id}` && renderSignBox(() => signProperty(p.id, 'received_by_sig'))}
-              </div>
-            ))}
+            {pendingEmployeePropertyTasks.map((p) => renderQueueCard({
+              id: `emp-prop-${p.id}`,
+              icon: <Package size={16} />,
+              iconColorClass: 'text-orange-600 dark:text-orange-400',
+              iconBgClass: 'bg-orange-50 dark:bg-orange-900/20',
+              title: `Property Accountability — ${p.employee_name || 'Employee'}`,
+              subtitle: 'Received by signature required',
+              badge: 'Your Signature',
+              badgeColorClass: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300',
+              onView: () => setGenericViewModal({ title: `Property — ${p.employee_name || 'Employee'}`, type: 'property', record: p }),
+              onSign: () => openGenericSign(`Sign — Property Accountability (${p.employee_name || 'Employee'})`, 'simple', 'emp-prop', p),
+            }))}
           </Card>
           )}
         </div>
@@ -1409,41 +1606,33 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Disciplinary Records Needing Management Signature</h3>
             {pendingSupervisorDiscipline.length === 0 && <p className="text-sm text-slate-400">No pending management disciplinary signatures.</p>}
-            {pendingSupervisorDiscipline.map((d) => (
-              <div key={d.queueKey || `sup-disc-${d.id}`} className="border rounded-lg p-3 mb-2">
-                {(() => {
-                  const disciplineKey = d.queueKey || `sup-disc-${d.id}`;
-                  const reviewed = !!disciplineReviewedKeys[disciplineKey];
-                  const readyForSign = d.queueStage === 'preparer' ? true : !!d.queueReady;
-                  return (
-                <>
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{d.employee_name || 'Employee'} - {d.warning_level || 'Warning'}</p>
-                    <p className="text-xs text-slate-500">{d.violation_type || 'Disciplinary Action'} • Stage: {d.queueStage === 'preparer' ? 'Preparer' : 'Supervisor'}</p>
-                    <p className="text-[11px] text-teal-700 dark:text-teal-300 font-semibold mt-0.5">Progress: {getDisciplineSignProgress(d).done}/{getDisciplineSignProgress(d).total} signed</p>
-                    {!readyForSign && (
-                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">Waiting for preparer signature before supervisor can sign.</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => openDisciplineReview(disciplineKey, d)}>Review</button>
-                    <button
-                      className="text-sm font-bold text-teal-deep disabled:text-slate-400 disabled:cursor-not-allowed"
-                      disabled={!reviewed || !readyForSign}
-                      title={!reviewed ? 'Review the form first' : !readyForSign ? 'Awaiting preparer signature' : 'Sign this disciplinary record'}
-                      onClick={() => setActiveId(disciplineKey)}
-                    >
-                      Sign
-                    </button>
-                  </div>
-                </div>
-                {activeId === disciplineKey && renderSignBox(() => d.queueStage === 'preparer' ? signPreparerDiscipline(d.id) : signSupervisorDiscipline(d.id))}
-                </>
-                  );
-                })()}
-              </div>
-            ))}
+            {pendingSupervisorDiscipline.map((d) => {
+              const disciplineKey = d.queueKey || `sup-disc-${d.id}`;
+              const reviewed = !!disciplineReviewedKeys[disciplineKey];
+              const readyForSign = d.queueStage === 'preparer' ? true : !!d.queueReady;
+              const prog = getDisciplineSignProgress(d);
+              const stageLabel = d.queueStage === 'preparer' ? 'Preparer' : 'Supervisor';
+              const actionId = d.queueStage === 'preparer' ? 'mgmt-disc-prep' : 'mgmt-disc-sup';
+              return renderQueueCard({
+                id: disciplineKey,
+                icon: <AlertTriangle size={16} />,
+                iconColorClass: 'text-red-500 dark:text-red-400',
+                iconBgClass: 'bg-red-50 dark:bg-red-900/20',
+                title: `${d.employee_name || 'Employee'} — ${d.warning_level || 'Warning'}`,
+                subtitle: `${d.violation_type || 'Disciplinary Action'} • ${d.date_of_warning || '—'}`,
+                badge: stageLabel,
+                badgeColorClass: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+                pills: [
+                  { icon: <Clock size={10} />, text: `${prog.done}/${prog.total} signed` },
+                  { icon: <Building2 size={10} />, text: d.employee_department || d.dept || '—' },
+                ],
+                warningText: !readyForSign ? 'Waiting for preparer signature before supervisor can sign.' : !reviewed ? 'Please review the form first before signing.' : undefined,
+                onView: () => openDisciplineReview(disciplineKey, d),
+                signDisabled: !reviewed || !readyForSign,
+                signTitle: !reviewed ? 'Review the form first' : !readyForSign ? 'Awaiting preparer signature' : undefined,
+                onSign: () => { if (reviewed && readyForSign) openGenericSign(`Sign — Disciplinary (${d.employee_name || 'Employee'}) [${stageLabel}]`, 'simple', actionId, d); else openDisciplineReview(disciplineKey, d); },
+              });
+            })}
             <p className="mt-2 text-xs text-emerald-600">Finished: {doneSupervisorDiscipline.length}</p>
           </Card>
           )}
@@ -1452,18 +1641,19 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Suggestions Needing Management Signature</h3>
             {pendingSupervisorSuggestions.length === 0 && <p className="text-sm text-slate-400">No pending suggestion signatures.</p>}
-            {pendingSupervisorSuggestions.map((s) => (
-              <div key={`sup-sug-${s.id}`} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{s.employee_name || 'Employee'} - Suggestion</p>
-                    <p className="text-xs text-slate-500 truncate">{s.title || s.concern || 'Untitled suggestion'}</p>
-                  </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`sup-sug-${s.id}`)}>Sign</button>
-                </div>
-                {activeId === `sup-sug-${s.id}` && renderSignBox(() => signSupervisorSuggestion(s))}
-              </div>
-            ))}
+            {pendingSupervisorSuggestions.map((s) => renderQueueCard({
+              id: `sup-sug-${s.id}`,
+              icon: <Lightbulb size={16} />,
+              iconColorClass: 'text-yellow-600 dark:text-yellow-400',
+              iconBgClass: 'bg-yellow-50 dark:bg-yellow-900/20',
+              title: s.title || s.concern?.slice(0, 50) || 'Suggestion',
+              subtitle: `${s.employee_name || 'Employee'} • ${s.date || s.created_at?.split('T')[0] || '—'}`,
+              badge: 'Management',
+              badgeColorClass: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+              pills: [{ icon: <Building2 size={10} />, text: s.department || s.employee_department || '—' }],
+              onView: () => setGenericViewModal({ title: `Suggestion — ${s.employee_name || 'Employee'}`, type: 'suggestion', record: s }),
+              onSign: () => openGenericSign(`Sign — Suggestion (${s.employee_name || 'Employee'})`, 'simple', 'mgmt-sug', s),
+            }))}
             <p className="mt-2 text-xs text-emerald-600">Finished: {doneSupervisorSuggestions.length}</p>
           </Card>
           )}
@@ -1472,33 +1662,26 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Applicants Needing Interviewer Signature</h3>
             {pendingManagementApplicants.length === 0 && <p className="text-sm text-slate-400">No pending interviewer signatures.</p>}
-            {pendingManagementApplicants.map((a) => (
-              <div key={`mgmt-app-${a.id}`} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{a.name || 'Applicant'} - {a.position || 'Position'}</p>
-                    <p className="text-xs text-slate-500">Interview appraisal</p>
-                  </div>
-                  <button
-                    className="text-sm font-bold text-teal-deep"
-                    onClick={() => {
-                      setActiveId(`mgmt-app-${a.id}`);
-                      setReviewConfirmed(false);
-                      setApplicantSignerName(String(a?.interviewer_name || user?.full_name || user?.employee_name || user?.username || ''));
-                      setApplicantSignerTitle(String(a?.interviewer_title || user?.position || ''));
-                      setApplicantSignerDate(String(a?.interview_date || new Date().toISOString().split('T')[0]));
-                    }}
-                  >
-                    Sign
-                  </button>
-                </div>
-                {activeId === `mgmt-app-${a.id}` && renderApplicantSignBox(() => signApplicant(a.id, 'interviewer_signature', {
-                  name: applicantSignerName.trim(),
-                  title: applicantSignerTitle.trim(),
-                  date: applicantSignerDate,
-                }), 'interviewer')}
-              </div>
-            ))}
+            {pendingManagementApplicants.map((a) => renderQueueCard({
+              id: `mgmt-app-${a.id}`,
+              icon: <Users size={16} />,
+              iconColorClass: 'text-indigo-600 dark:text-indigo-400',
+              iconBgClass: 'bg-indigo-50 dark:bg-indigo-900/20',
+              title: `${a.name || 'Applicant'} — ${a.position || 'Position'}`,
+              subtitle: `Interview appraisal • ${a.interview_date || '—'}`,
+              badge: 'Interviewer',
+              badgeColorClass: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',
+              pills: [{ icon: <Building2 size={10} />, text: a.department || a.employee_department || '—' }],
+              onView: () => setGenericViewModal({ title: `Applicant — ${a.name || 'Applicant'}`, type: 'applicant', record: a }),
+              onSign: () => openGenericSign(
+                `Sign — Applicant Interview (${a.name || 'Applicant'})`,
+                'applicantInterviewer', 'mgmt-app', a,
+                undefined,
+                String(a?.interviewer_name || user?.full_name || user?.employee_name || ''),
+                String(a?.interviewer_title || user?.position || ''),
+                String(a?.interview_date || new Date().toISOString().split('T')[0]),
+              ),
+            }))}
           </Card>
           )}
 
@@ -1506,18 +1689,19 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Requisitions Needing Supervisor Signature</h3>
             {pendingManagementRequisitionStages.length === 0 && <p className="text-sm text-slate-400">No pending requisition signatures.</p>}
-            {pendingManagementRequisitionStages.map((t) => (
-              <div key={t.key} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{t.job_title || 'Requisition'} - {t.title}</p>
-                    <p className="text-xs text-slate-500">Department: {t.department || '—'}</p>
-                  </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(t.key)}>Sign</button>
-                </div>
-                {activeId === t.key && renderSignBox(() => signRequisitionStage(t.id, t.stage))}
-              </div>
-            ))}
+            {pendingManagementRequisitionStages.map((t) => renderQueueCard({
+              id: t.key,
+              icon: <ClipboardList size={16} />,
+              iconColorClass: 'text-cyan-600 dark:text-cyan-400',
+              iconBgClass: 'bg-cyan-50 dark:bg-cyan-900/20',
+              title: t.job_title || 'Requisition',
+              subtitle: t.title,
+              badge: 'Supervisor',
+              badgeColorClass: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+              pills: [{ icon: <Building2 size={10} />, text: t.department || '—' }],
+              onView: () => setGenericViewModal({ title: `Requisition — ${t.job_title || 'Requisition'}`, type: 'requisition', record: t }),
+              onSign: () => openGenericSign(`Sign — Requisition (${t.job_title || 'Requisition'})`, 'simple', 'mgmt-req', t),
+            }))}
           </Card>
           )}
 
@@ -1525,18 +1709,18 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Property Accountability Signatures</h3>
             {pendingManagementPropertyTasks.length === 0 && <p className="text-sm text-slate-400">No pending property signatures.</p>}
-            {pendingManagementPropertyTasks.map((t) => (
-              <div key={t.key} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{t.employee_name || 'Employee'} - {t.title}</p>
-                    <p className="text-xs text-slate-500">Property accountability</p>
-                  </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(t.key)}>Sign</button>
-                </div>
-                {activeId === t.key && renderSignBox(() => signProperty(t.id, t.field))}
-              </div>
-            ))}
+            {pendingManagementPropertyTasks.map((t) => renderQueueCard({
+              id: t.key,
+              icon: <Package size={16} />,
+              iconColorClass: 'text-orange-600 dark:text-orange-400',
+              iconBgClass: 'bg-orange-50 dark:bg-orange-900/20',
+              title: `Property — ${t.employee_name || 'Employee'}`,
+              subtitle: t.title,
+              badge: 'Management',
+              badgeColorClass: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+              onView: () => setGenericViewModal({ title: `Property — ${t.employee_name || 'Employee'}`, type: 'property', record: t }),
+              onSign: () => openGenericSign(`Sign — Property Accountability (${t.employee_name || 'Employee'})`, 'simple', 'mgmt-prop', t),
+            }))}
           </Card>
           )}
 
@@ -1544,18 +1728,19 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Exit Interviews Needing Interviewer Signature</h3>
             {pendingManagementExitInterviews.length === 0 && <p className="text-sm text-slate-400">No pending interviewer signatures.</p>}
-            {pendingManagementExitInterviews.map((e) => (
-              <div key={`mgmt-exit-${e.id}`} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{e.employee_name || 'Employee'} - Exit Interview</p>
-                    <p className="text-xs text-slate-500">{e.department || '—'}</p>
-                  </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`mgmt-exit-${e.id}`)}>Sign</button>
-                </div>
-                {activeId === `mgmt-exit-${e.id}` && renderSignBox(() => signExitInterview(e.id, 'interviewer_sig'))}
-              </div>
-            ))}
+            {pendingManagementExitInterviews.map((e) => renderQueueCard({
+              id: `mgmt-exit-${e.id}`,
+              icon: <LogOut size={16} />,
+              iconColorClass: 'text-slate-600 dark:text-slate-400',
+              iconBgClass: 'bg-slate-100 dark:bg-slate-700',
+              title: `Exit Interview — ${e.employee_name || 'Employee'}`,
+              subtitle: `Interview date: ${e.interview_date || '—'}`,
+              badge: 'Interviewer',
+              badgeColorClass: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+              pills: [{ icon: <Building2 size={10} />, text: e.department || e.employee_department || '—' }],
+              onView: () => setGenericViewModal({ title: `Exit Interview — ${e.employee_name || 'Employee'}`, type: 'exit', record: e }),
+              onSign: () => openGenericSign(`Sign — Exit Interview (${e.employee_name || 'Employee'})`, 'simple', 'mgmt-exit', e),
+            }))}
           </Card>
           )}
         </div>
@@ -1568,35 +1753,27 @@ export const VerificationOfReview = () => {
             <h3 className="text-sm font-bold mb-3">Performance Appraisals Needing HR Signature</h3>
             {pendingHrAppraisals.length === 0 && <p className="text-sm text-slate-400">No pending HR signatures assigned to you.</p>}
             {pendingHrAppraisals.map((a) => {
-              const isAssignedToOther = a.hr_owner_user_id && a.hr_owner_user_id !== user?.id;
-              const canSign = !isAssignedToOther || a.hr_owner_user_id === user?.id;
-              return (
-              <div key={`hr-app-${a.id}`} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex-1">
-                    <p className="font-semibold">{a.employee_name || 'Employee'} - {a.form_type || a.eval_type || 'Performance Evaluation'}</p>
-                    <p className="text-xs text-slate-500">All previous signatures complete. Awaiting HR signature.</p>
-                    {a.hr_owner_user_id && <p className="text-xs text-orange-600 font-semibold mt-1">🔒 Assigned to specific HR user (ID: {a.hr_owner_user_id})</p>}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button className="text-xs font-bold text-slate-500 hover:text-teal-deep" onClick={() => setActivePreviewId(activePreviewId === `hr-app-${a.id}` ? null : `hr-app-${a.id}`)}>View Form</button>
-                    <button 
-                      disabled={!canSign} 
-                      className="text-sm font-bold text-teal-deep disabled:text-slate-400 disabled:cursor-not-allowed" 
-                      onClick={() => {
-                        setActiveId(`hr-app-${a.id}`);
-                        setSignerPrintTitle(String(user?.full_name || user?.employee_name || user?.username || ''));
-                      }}
-                      title={!canSign ? 'Assigned to another HR user' : 'Sign this appraisal'}
-                    >
-                      Sign
-                    </button>
-                  </div>
-                </div>
-                {activePreviewId === `hr-app-${a.id}` && renderAppraisalPreview(a)}
-                {activeId === `hr-app-${a.id}` && renderAppraisalSignBox(() => signHrAppraisal(a.id), 'hr')}
-              </div>
-            )})}
+              const canSign = !a.hr_owner_user_id || a.hr_owner_user_id === user?.id;
+              return renderQueueCard({
+                id: `hr-app-${a.id}`,
+                icon: <FileText size={16} />,
+                iconColorClass: 'text-teal-600 dark:text-teal-400',
+                iconBgClass: 'bg-teal-50 dark:bg-teal-900/30',
+                title: `${a.form_type || a.eval_type || 'Performance Evaluation'} — ${a.employee_name || 'Employee'}`,
+                subtitle: 'All prior signatures complete. Awaiting HR signature.',
+                badge: 'HR',
+                badgeColorClass: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+                pills: [
+                  { icon: <Building2 size={10} />, text: a.employee_department || a.dept || '—' },
+                  { icon: <Calendar size={10} />, text: `${a.eval_period_from || '—'} – ${a.eval_period_to || '—'}` },
+                  { icon: <BarChart2 size={10} />, text: `Overall: ${a.overall ?? '—'}` },
+                ],
+                onView: () => setGenericViewModal({ title: `${a.form_type || 'Appraisal'} — ${a.employee_name || 'Employee'}`, type: 'appraisal', record: a }),
+                signDisabled: !canSign,
+                signTitle: !canSign ? 'Assigned to another HR user' : undefined,
+                onSign: () => { if (canSign) openGenericSign(`Sign — ${a.form_type || 'Appraisal'} (${a.employee_name || 'Employee'})`, 'appraisalHr', 'hr-app', a); },
+              });
+            })}
             <div className="mt-3 flex items-center gap-2 text-emerald-600 text-sm font-semibold">
               <CheckCircle size={14} /> Finished: {doneHrAppraisals.length}
             </div>
@@ -1607,18 +1784,19 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Onboarding Records Needing HR Signature</h3>
             {pendingHrOnboarding.length === 0 && <p className="text-sm text-slate-400">No pending onboarding HR signatures.</p>}
-            {pendingHrOnboarding.map((o) => (
-              <div key={`hr-onb-${o.id}`} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{o.employee_name || 'Employee'} - Onboarding</p>
-                    <p className="text-xs text-slate-500">Status: {o.status || 'Pending'}</p>
-                  </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(`hr-onb-${o.id}`)}>Sign</button>
-                </div>
-                {activeId === `hr-onb-${o.id}` && renderSignBox(() => signOnboarding(o.id, 'hr_signature'))}
-              </div>
-            ))}
+            {pendingHrOnboarding.map((o) => renderQueueCard({
+              id: `hr-onb-${o.id}`,
+              icon: <UserCheck size={16} />,
+              iconColorClass: 'text-blue-600 dark:text-blue-400',
+              iconBgClass: 'bg-blue-50 dark:bg-blue-900/20',
+              title: `Onboarding — ${o.employee_name || 'Employee'}`,
+              subtitle: `Status: ${o.status || 'Pending'} • ${o.start_date || '—'}`,
+              badge: 'HR',
+              badgeColorClass: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+              pills: [{ icon: <Building2 size={10} />, text: o.department || o.employee_department || '—' }],
+              onView: () => setGenericViewModal({ title: `Onboarding — ${o.employee_name || 'Employee'}`, type: 'onboarding', record: o }),
+              onSign: () => openGenericSign(`Sign — Onboarding HR (${o.employee_name || 'Employee'})`, 'simple', 'hr-onb', o),
+            }))}
           </Card>
           )}
 
@@ -1626,32 +1804,26 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Applicant Reviews Needing HR Signature</h3>
             {pendingHrApplicants.length === 0 && <p className="text-sm text-slate-400">No pending applicant HR reviewer signatures.</p>}
-            {pendingHrApplicants.map((a) => (
-              <div key={`hr-applicant-${a.id}`} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{a.name || 'Applicant'} - {a.position || 'Position'}</p>
-                    <p className="text-xs text-slate-500">HR reviewer signature needed</p>
-                  </div>
-                  <button
-                    className="text-sm font-bold text-teal-deep"
-                    onClick={() => {
-                      setActiveId(`hr-applicant-${a.id}`);
-                      setReviewConfirmed(false);
-                      setApplicantSignerName(String(a?.hr_reviewer_name || user?.full_name || user?.employee_name || user?.username || ''));
-                      setApplicantSignerTitle('');
-                      setApplicantSignerDate(String(a?.hr_reviewer_date || new Date().toISOString().split('T')[0]));
-                    }}
-                  >
-                    Sign
-                  </button>
-                </div>
-                {activeId === `hr-applicant-${a.id}` && renderApplicantSignBox(() => signApplicant(a.id, 'hr_reviewer_signature', {
-                  name: applicantSignerName.trim(),
-                  date: applicantSignerDate,
-                }), 'hr')}
-              </div>
-            ))}
+            {pendingHrApplicants.map((a) => renderQueueCard({
+              id: `hr-applicant-${a.id}`,
+              icon: <Users size={16} />,
+              iconColorClass: 'text-indigo-600 dark:text-indigo-400',
+              iconBgClass: 'bg-indigo-50 dark:bg-indigo-900/20',
+              title: `${a.name || 'Applicant'} — ${a.position || 'Position'}`,
+              subtitle: 'HR reviewer signature needed',
+              badge: 'HR Reviewer',
+              badgeColorClass: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+              pills: [{ icon: <Building2 size={10} />, text: a.department || a.employee_department || '—' }],
+              onView: () => setGenericViewModal({ title: `Applicant — ${a.name || 'Applicant'}`, type: 'applicant', record: a }),
+              onSign: () => openGenericSign(
+                `Sign — HR Review (${a.name || 'Applicant'})`,
+                'applicantHr', 'hr-applicant', a,
+                undefined,
+                String(a?.hr_reviewer_name || user?.full_name || user?.employee_name || ''),
+                '',
+                String(a?.hr_reviewer_date || new Date().toISOString().split('T')[0]),
+              ),
+            }))}
           </Card>
           )}
 
@@ -1659,18 +1831,19 @@ export const VerificationOfReview = () => {
           <Card>
             <h3 className="text-sm font-bold mb-3">Requisition Approvals Needing HR Signature</h3>
             {pendingHrRequisitionStages.length === 0 && <p className="text-sm text-slate-400">No pending HR requisition approvals.</p>}
-            {pendingHrRequisitionStages.map((t) => (
-              <div key={t.key} className="border rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{t.job_title || 'Requisition'} - {t.title}</p>
-                    <p className="text-xs text-slate-500">Department: {t.department || '—'}</p>
-                  </div>
-                  <button className="text-sm font-bold text-teal-deep" onClick={() => setActiveId(t.key)}>Sign</button>
-                </div>
-                {activeId === t.key && renderSignBox(() => signRequisitionStage(t.id, t.stage))}
-              </div>
-            ))}
+            {pendingHrRequisitionStages.map((t) => renderQueueCard({
+              id: t.key,
+              icon: <ClipboardList size={16} />,
+              iconColorClass: 'text-cyan-600 dark:text-cyan-400',
+              iconBgClass: 'bg-cyan-50 dark:bg-cyan-900/20',
+              title: t.job_title || 'Requisition',
+              subtitle: t.title,
+              badge: 'HR Approval',
+              badgeColorClass: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+              pills: [{ icon: <Building2 size={10} />, text: t.department || '—' }],
+              onView: () => setGenericViewModal({ title: `Requisition — ${t.job_title || 'Requisition'}`, type: 'requisition', record: t }),
+              onSign: () => openGenericSign(`Sign — Requisition (${t.job_title || 'Requisition'})`, 'simple', 'hr-req', t),
+            }))}
           </Card>
           )}
         </div>
@@ -1692,6 +1865,42 @@ export const VerificationOfReview = () => {
         maxWidthClassName="max-w-3xl"
       >
         {disciplineReviewRecord && renderDisciplineReview(disciplineReviewRecord)}
+      </Modal>
+
+      {/* Generic View Modal */}
+      <Modal
+        open={!!genericViewModal}
+        title={genericViewModal?.title || 'Record Details'}
+        onClose={() => setGenericViewModal(null)}
+        maxWidthClassName="max-w-2xl"
+      >
+        {genericViewModal && renderGenericViewContent()}
+      </Modal>
+
+      {/* Generic Sign Modal */}
+      <Modal
+        open={!!genericSignModal}
+        title={genericSignModal?.title || 'Sign Record'}
+        onClose={() => { resetQueueSignerState(); setGenericSignModal(null); }}
+        maxWidthClassName="max-w-lg"
+      >
+        {genericSignModal && (() => {
+          const { signType, record, actionId } = genericSignModal;
+          const action = getGenericSignAction(actionId, record);
+          return (
+            <div>
+              <div className="mb-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                <ShieldAlert size={14} className="mt-0.5 flex-shrink-0" />
+                By signing, you confirm you have reviewed this form. Your digital signature will be recorded.
+              </div>
+              {signType === 'appraisalEmployee' && renderAppraisalSignBox(action, 'employee')}
+              {signType === 'appraisalHr' && renderAppraisalSignBox(action, 'hr')}
+              {signType === 'applicantInterviewer' && renderApplicantSignBox(action, 'interviewer')}
+              {signType === 'applicantHr' && renderApplicantSignBox(action, 'hr')}
+              {(signType === 'simple' || signType === 'remarks') && renderSignBox(action, signType === 'remarks')}
+            </div>
+          );
+        })()}
       </Modal>
 
       <div className="mt-4 text-xs text-slate-500">
