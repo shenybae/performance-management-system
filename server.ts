@@ -6661,13 +6661,20 @@ ${relevantGoalIdsSql}
       }
 
       const preparerUserId = Number(actor.id || 0) || null;
+      const normalizedActorRole = normalizeUserRole(role);
+      const fixedApproverName = normalizedActorRole === 'Manager'
+        ? String(actor.full_name || actor.username || approved_by_name || '').trim()
+        : String(approved_by_name || '').trim();
+      const fixedApproverTitle = normalizedActorRole === 'Manager'
+        ? String(actor.position || role || approved_by_title || '').trim()
+        : String(approved_by_title || '').trim();
 
       await query(
         `INSERT INTO discipline_records (
           employee_id, violation_type, warning_level, date_of_warning,
           violation_date, violation_time, violation_place,
           employer_statement, employee_statement, action_taken,
-          supervisor, approved_by_name, approved_by_title, approved_by_date,
+          supervisor, fixedApproverName, fixedApproverTitle, approved_by_date,
           copy_distribution,
           prev_first_date, prev_first_type, prev_second_date, prev_second_type, prev_third_date, prev_third_type,
           employee_signature, employee_signature_date,

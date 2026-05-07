@@ -59,6 +59,7 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
   );
 
   const currentManagerName = String(currentUser?.full_name || currentUser?.username || '').trim();
+  const currentManagerTitle = String(currentUser?.position || currentUser?.role || 'Manager').trim();
 
   const findDepartmentSupervisorName = (deptRaw: string) => {
     const deptNorm = String(deptRaw || '').trim().toLowerCase();
@@ -97,6 +98,22 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
     setForm((prev) => (prev.supervisor === derivedSupervisorName ? prev : { ...prev, supervisor: derivedSupervisorName }));
   }, [showForm, derivedSupervisorName]);
 
+  useEffect(() => {
+    if (!showForm) return;
+    setForm((prev) => ({
+      ...prev,
+      approved_by_name: currentManagerName || prev.approved_by_name,
+      approved_by_title: currentManagerTitle || prev.approved_by_title,
+      approved_by_date: prev.approved_by_date || todayISO,
+    }));
+  }, [showForm, currentManagerName, currentManagerTitle, todayISO]);
+
+  const compactText = (value: any, max = 56) => {
+    const text = String(value || '').trim();
+    if (!text) return '—';
+    return text.length > max ? `${text.slice(0, max)}...` : text;
+  };
+
   const fetchRecords = async () => {
     try {
       const res = await fetch(`/api/discipline_records?include_archived=${showArchived ? '1' : '0'}`, { headers: getAuthHeaders() });
@@ -120,8 +137,8 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
       employer_statement: trimText(form.employer_statement),
       employee_statement: trimText(form.employee_statement),
       action_taken: trimText(form.action_taken),
-      approved_by_name: trimText(form.approved_by_name),
-      approved_by_title: trimText(form.approved_by_title),
+      approved_by_name: trimText(currentManagerName || form.approved_by_name),
+      approved_by_title: trimText(currentManagerTitle || form.approved_by_title),
       approved_by_date: trimText(form.approved_by_date),
       supervisor: trimText(form.supervisor),
       prev_first_date: trimText(form.prev_first_date),
@@ -477,11 +494,17 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date, empl
                 <div className="grid grid-cols-3 gap-4 mt-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Approved By (Name)</label>
-                    <input type="text" value={form.approved_by_name} onChange={e => setForm({ ...form, approved_by_name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" maxLength={120} required />
+                    <div className="relative">
+                      <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input type="text" value={form.approved_by_name} readOnly disabled className="w-full pl-9 pr-3 p-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-300" maxLength={120} />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Title</label>
-                    <input type="text" value={form.approved_by_title} onChange={e => setForm({ ...form, approved_by_title: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm text-slate-900 dark:text-slate-100" maxLength={120} required />
+                    <div className="relative">
+                      <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input type="text" value={form.approved_by_title} readOnly disabled className="w-full pl-9 pr-3 p-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-300" maxLength={120} />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
@@ -697,12 +720,12 @@ ${sigBlockHtml(d.employee_signature, 'Employee', d.employee_signature_date, empl
                         {sigStatus.label}
                       </span>
                     </td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-300 break-words">{d.violation_type || '—'}</td>
+                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-300"><span className="block leading-snug" title={d.violation_type || '—'}>{compactText(d.violation_type, 48)}</span></td>
                     <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{d.violation_date || '—'}</td>
                     <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 break-words">{d.violation_place || '—'}</td>
                     <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 break-words">{d.supervisor || '—'}</td>
-                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400 break-words">{d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : '—'}</td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-300 break-words">{d.action_taken || '—'}</td>
+                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400"><span className="block leading-snug" title={d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : '—'}>{compactText(d.approved_by_name ? `${d.approved_by_name}${d.approved_by_title ? `, ${d.approved_by_title}` : ''}` : '—', 42)}</span></td>
+                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-300"><span className="block leading-snug" title={d.action_taken || '—'}>{compactText(d.action_taken, 72)}</span></td>
                     <td className="py-3 pr-2">
                       <div className="flex items-center justify-center gap-1">
                         <button
