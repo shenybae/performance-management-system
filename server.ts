@@ -279,7 +279,7 @@ async function generateUniqueAccountEmail(seed: string) {
   while (true) {
     const localPart = suffix === 1 ? base : `${base}${suffix}`;
     const candidate = `${localPart}@${ALLOWED_ACCOUNT_EMAIL_DOMAIN}`;
-    const existing = await query('SELECT id FROM users WHERE LOWER(COALESCE(email, \''\')) = LOWER(?) LIMIT 1', [candidate]) as any[];
+    const existing = await query("SELECT id FROM users WHERE LOWER(COALESCE(email, '')) = LOWER(?) LIMIT 1", [candidate]) as any[];
     if (!Array.isArray(existing) || existing.length === 0) return candidate;
     suffix += 1;
   }
