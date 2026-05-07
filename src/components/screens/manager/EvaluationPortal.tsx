@@ -230,8 +230,8 @@ export const EvaluationPortal = ({ employees, currentUser }: EvaluationPortalPro
       if (!searchMatch) return false;
       if (appraisalFilter === 'all') return true;
       if (appraisalFilter === 'archived') return isArchived;
-      if (appraisalFilter === 'verified') return isVerified;
-      return !isVerified;
+      if (appraisalFilter === 'verified') return isVerified && !isArchived;
+      return !isVerified && !isArchived;
     });
   }, [appraisals, appraisalFilter, appraisalSearch]);
 

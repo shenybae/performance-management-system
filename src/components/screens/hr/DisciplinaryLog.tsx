@@ -290,8 +290,8 @@ export const DisciplinaryLog = ({ employees, currentUser }: DisciplinaryLogProps
       if (!searchMatch) return false;
       if (recordFilter === 'all') return true;
       if (recordFilter === 'archived') return isArchived;
-      if (recordFilter === 'acknowledged') return isAcknowledged;
-      return !isAcknowledged;
+      if (recordFilter === 'acknowledged') return isAcknowledged && !isArchived;
+      return !isAcknowledged && !isArchived;
     });
   }, [records, search, recordFilter]);
 
