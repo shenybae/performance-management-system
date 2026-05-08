@@ -1550,28 +1550,105 @@ export const VerificationOfReview = () => {
 
     if (type === 'applicant') return (
       <ViewShell>
+        {(() => {
+          const applicantDept = r.department || r.employee_department || user?.dept || '';
+          const criteriaRows = [
+            { label: 'Job Skills', value: r.job_skills },
+            { label: 'Communication Skills', value: r.communication_skills },
+            { label: 'Interview Impression', value: r.interview_impression },
+            { label: 'Previous Qualifications', value: r.previous_qualifications },
+            { label: 'Teamwork', value: r.teamwork },
+            { label: 'Department Fit', value: r.dept_fit },
+            { label: 'Asset Value', value: r.asset_value },
+          ];
+          const interviewQuestions = [
+            { label: '1. Relevant experience and qualifications', value: r.q_experience },
+            { label: '2. Why interested in this position', value: r.q_why_interested },
+            { label: '3. Key strengths', value: r.q_strengths },
+            { label: '4. Weaknesses and how they are managed', value: r.q_weakness },
+            { label: '5. Handling conflict in the workplace', value: r.q_conflict },
+            { label: '6. Career goals in the next 3-5 years', value: r.q_goals },
+            { label: '7. Team collaboration approach', value: r.q_teamwork },
+            { label: '8. Performance under pressure', value: r.q_pressure },
+            { label: '9. Potential contribution to the organization', value: r.q_contribution },
+            { label: '10. Applicant questions', value: r.q_questions },
+          ].filter((item) => String(item.value || '').trim().length > 0);
+
+          return (
+            <>
         <HeroCard
           eyebrow="Applicant Review"
           title={`${r.name || 'Applicant'} — ${r.position || 'Position'}`}
-          meta={`${r.department || r.employee_department || 'No department'}${r.interview_date ? ` • Interview: ${r.interview_date}` : ''}`}
+          meta={`${applicantDept || 'No department'}${r.interview_date ? ` • Interview: ${r.interview_date}` : ''}`}
           badge={r.status || 'Pending'}
         />
         <SectionCard title="Applicant Information">
           <div className="grid sm:grid-cols-2 gap-4">
             <F label="Applicant Name" value={r.name} />
             <F label="Position Applied" value={r.position} />
-            <F label="Department" value={r.department || r.employee_department} />
+            <F label="Department" value={applicantDept} />
             <F label="Interview Date" value={r.interview_date} />
-            <F label="Status" value={r.status} />
-            <F label="Source" value={r.source} />
+            <F label="Status" value={r.status || 'Pending'} />
+            <F label="Recommendation" value={r.recommendation || r.status} />
+            <F label="Overall Rating" value={r.overall_rating || r.score} />
+            <F label="Interviewer" value={r.interviewer_name} />
+            <F label="Interviewer Title" value={r.interviewer_title} />
+            <F label="Manager Reviewer" value={r.hr_reviewer_name} />
           </div>
         </SectionCard>
-        <SectionCard><TB label="Notes / Evaluation" value={r.notes} /></SectionCard>
-        <SectionCard><TB label="Interviewer Remarks" value={r.interviewer_remarks} /></SectionCard>
-        <SectionCard><Sigs items={[
-          { label: 'HR Interviewer', signed: !!r.interviewer_signature, date: r.interview_date },
-          { label: 'Manager Reviewer', signed: !!r.hr_reviewer_signature, date: r.hr_reviewer_date },
-        ]} /></SectionCard>
+
+        {interviewQuestions.length > 0 && (
+          <SectionCard title="Part I - Interview Questions and Responses">
+            <div className="space-y-3">
+              {interviewQuestions.map((item) => (
+                <TB key={item.label} label={item.label} value={item.value} />
+              ))}
+            </div>
+          </SectionCard>
+        )}
+
+        <SectionCard title="Part II - Evaluation Criteria (1-5)">
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {criteriaRows.map((item) => (
+              <div key={item.label} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+                <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">{item.label}</p>
+                <p className="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">{item.value || '—'}</p>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Part III - Final Assessment">
+          <div className="space-y-3">
+            <TB label="Additional Comments" value={r.additional_comments} />
+            <TB label="Notes / Evaluation" value={r.notes} />
+            <TB label="Interviewer Remarks" value={r.interviewer_remarks} />
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Part IV - Signature Details">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+              <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">HR Interviewer</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">Printed Name: {r.interviewer_name || '—'}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Date: {r.interview_date || '—'}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+              <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Manager Reviewer</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">Printed Name: {r.hr_reviewer_name || '—'}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Date: {r.hr_reviewer_date || '—'}</p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <Sigs items={[
+              { label: 'HR Interviewer', signed: !!r.interviewer_signature, date: r.interview_date },
+              { label: 'Manager Reviewer', signed: !!r.hr_reviewer_signature, date: r.hr_reviewer_date },
+            ]} />
+          </div>
+        </SectionCard>
+            </>
+          );
+        })()}
       </ViewShell>
     );
 
