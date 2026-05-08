@@ -430,9 +430,9 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
                 </h4>
                 <div className="grid grid-cols-3 gap-4">
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Full Name *</label>
-                    <input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} /></div>
+                    <input type="text" required value={form.name} readOnly className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 rounded-lg text-sm text-slate-700 dark:text-slate-200" maxLength={120} /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Position / Job Title</label>
-                    <input type="text" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required /></div>
+                    <input type="text" value={form.position} readOnly className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 rounded-lg text-sm text-slate-700 dark:text-slate-200" maxLength={120} required /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department</label>
                     <input
                       type="text"
@@ -442,7 +442,7 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
                       placeholder="Department is scoped"
                     /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Hire Date</label>
-                    <input type="date" value={form.hire_date} onChange={e => setForm({ ...form, hire_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" max={todayISO} required /></div>
+                    <input type="date" value={form.hire_date} readOnly className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 rounded-lg text-sm text-slate-700 dark:text-slate-200" max={todayISO} required /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Base Salary</label>
                     <input type="number" min="0.01" step="0.01" value={form.salary_base} onChange={e => setForm({ ...form, salary_base: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="50000" required /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">SSN / ID Number</label>
