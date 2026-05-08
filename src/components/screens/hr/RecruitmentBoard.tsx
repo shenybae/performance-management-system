@@ -1670,6 +1670,60 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                 <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Desired Start Date</p>
                 <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.start_date || '—'}</p>
               </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Position Type</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.position_type || '—'}</p>
+              </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Reason for Type</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.type_reason || '—'}</p>
+              </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Months per Year</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.months_per_year || '—'}</p>
+              </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Hours per Week</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.hours_per_week || '—'}</p>
+              </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Office Assignment</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.office_assignment || '—'}</p>
+              </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Classification</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.classification || '—'}</p>
+              </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Hiring Range</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.hiring_range || '—'}</p>
+              </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Hourly Rate</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.hourly_rate || '—'}</p>
+              </div>
+            </div>
+
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+              <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Recruitment Sources</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Web / Online</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewRequisition.recruitment_web || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Newspapers</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewRequisition.recruitment_newspapers || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Listserv</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewRequisition.recruitment_listserv || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Other</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewRequisition.recruitment_other || '—'}</p>
+                </div>
+              </div>
             </div>
 
             <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
