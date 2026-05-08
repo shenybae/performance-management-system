@@ -36,6 +36,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   const [requisitions, setRequisitions] = useState<any[]>([]);
   const [supervisorOptions, setSupervisorOptions] = useState<Array<{ value: string; label: string; avatarUrl?: string | null }>>([]);
   const [approvalOpenId, setApprovalOpenId] = useState<number | null>(null);
+  const [approvalSigners, setApprovalSigners] = useState<any>({});
   const [reqForm, setReqForm] = useState({
     job_title: '', department: scopedDept, supervisor: '', hiring_contact: '',
     position_status: '', months_per_year: '' as any, hours_per_week: '' as any,
@@ -430,10 +431,12 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     return signed ? 'Approved' : 'Pending Approval';
   };
 
-  const openApprovals = (r: any) => {
+  const openApprovals = async (r: any) => {
     setActiveForm('none');
     setApprovalOpenId(r.id);
-    setApprovalForm({
+    setApprovalSigners({});
+
+    const initialForm = {
       supervisor_approval: r.supervisor_approval || '',
       supervisor_approval_date: r.supervisor_approval_date || '',
       supervisor_approval_sig: r.supervisor_approval_sig || '',
@@ -450,7 +453,38 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       president_approval_date: r.president_approval_date || '',
       president_approval_sig: r.president_approval_sig || '',
       comments: r.comments || '',
-    });
+    };
+
+    if (r.department) {
+      try {
+        const res = await fetch(`/api/requisitions/signers/${encodeURIComponent(r.department)}`, {
+          headers: getAuthHeaders(),
+        });
+        if (res.ok) {
+          const signers = await res.json();
+          setApprovalSigners(signers);
+          if (signers.supervisor?.full_name && !initialForm.supervisor_approval) {
+            initialForm.supervisor_approval = signers.supervisor.full_name;
+          }
+          if (signers.dept_head?.full_name && !initialForm.dept_head_approval) {
+            initialForm.dept_head_approval = signers.dept_head.full_name;
+          }
+          if (signers.cabinet?.full_name && !initialForm.cabinet_approval) {
+            initialForm.cabinet_approval = signers.cabinet.full_name;
+          }
+          if (signers.vp?.full_name && !initialForm.vp_approval) {
+            initialForm.vp_approval = signers.vp.full_name;
+          }
+          if (signers.president?.full_name && !initialForm.president_approval) {
+            initialForm.president_approval = signers.president.full_name;
+          }
+        }
+      } catch (e) {
+        // ignore fetch errors; use existing names
+      }
+    }
+
+    setApprovalForm(initialForm);
   };
 
   const saveApprovals = async () => {
@@ -1042,7 +1076,13 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                   <td className="py-3 text-xs text-slate-500">{r.start_date || 'TBD'}</td>
                   <td className="py-3 flex items-center gap-2">
                     <button
-                      onClick={() => approvalOpenId === r.id ? setApprovalOpenId(null) : openApprovals(r)}
+                      onClick={async () => {
+                        if (approvalOpenId === r.id) {
+                          setApprovalOpenId(null);
+                        } else {
+                          await openApprovals(r);
+                        }
+                      }}
                       className={`text-xs font-bold px-2 py-1 rounded-md ${approvalOpenId === r.id ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200' : 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300'}`}
                     >
                       {approvalOpenId === r.id ? 'Close' : 'Approvals'}
@@ -1069,41 +1109,62 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
               </div>
 
               <div className="space-y-3">
-                {approvalRows.map(row => (
-                  <div key={row.label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
-                    <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">{row.label}</p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Printed Name</label>
-                        <input
-                          type="text"
-                          value={(approvalForm as any)[row.nameKey]}
-                          onChange={e => setApprovalForm({ ...approvalForm, [row.nameKey]: e.target.value })}
-                          placeholder="Full name"
-                          maxLength={120}
-                          className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
-                        />
+                {approvalRows.map((row) => {
+                  const signerKey = 
+                    row.nameKey === 'supervisor_approval' ? 'supervisor' :
+                    row.nameKey === 'dept_head_approval' ? 'dept_head' :
+                    row.nameKey === 'cabinet_approval' ? 'cabinet' :
+                    row.nameKey === 'vp_approval' ? 'vp' :
+                    row.nameKey === 'president_approval' ? 'president' : null;
+                  
+                  const signer = signerKey && approvalSigners?.[signerKey];
+
+                  return (
+                    <div key={row.label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">{row.label}</p>
+                        {signer && (
+                          <span title={`Assigned: ${signer.full_name} (${signer.email})`} className="text-[10px] px-2 py-1 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded font-bold">
+                            ✓ Assigned
+                          </span>
+                        )}
                       </div>
-                      <div>
-                        <SignatureUpload
-                          label="Signature"
-                          value={(approvalForm as any)[row.sigKey]}
-                          onChange={dataUrl => setApprovalForm({ ...approvalForm, [row.sigKey]: dataUrl })}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
-                        <input
-                          type="date"
-                          value={(approvalForm as any)[row.dateKey]}
-                          onChange={e => setApprovalForm({ ...approvalForm, [row.dateKey]: e.target.value })}
-                          max={todayISO}
-                          className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
-                        />
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Printed Name</label>
+                          <input
+                            type="text"
+                            value={(approvalForm as any)[row.nameKey]}
+                            onChange={e => setApprovalForm({ ...approvalForm, [row.nameKey]: e.target.value })}
+                            placeholder="Full name"
+                            maxLength={120}
+                            className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+                          />
+                          {signer && (
+                            <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-1">Department-scoped: {signer.full_name}</p>
+                          )}
+                        </div>
+                        <div>
+                          <SignatureUpload
+                            label="Signature"
+                            value={(approvalForm as any)[row.sigKey]}
+                            onChange={dataUrl => setApprovalForm({ ...approvalForm, [row.sigKey]: dataUrl })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
+                          <input
+                            type="date"
+                            value={(approvalForm as any)[row.dateKey]}
+                            onChange={e => setApprovalForm({ ...approvalForm, [row.dateKey]: e.target.value })}
+                            max={todayISO}
+                            className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Comments</label>

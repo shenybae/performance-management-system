@@ -7700,6 +7700,45 @@ ${relevantGoalIdsSql}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
+
+  app.get("/api/requisitions/signers/:department", authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      if (!isPrivilegedRole(actor.role) && actor.role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+
+      const dept = String(req.params.department || '').trim();
+      if (!dept) return res.status(400).json({ error: 'Department is required' });
+
+      const signerPositions = [
+        { position: 'Supervisor', key: 'supervisor' },
+        { position: 'Department Head', key: 'dept_head' },
+        { position: 'Cabinet Member', key: 'cabinet' },
+        { position: 'VP for Business and Finance', key: 'vp' },
+        { position: 'President', key: 'president' },
+      ];
+
+      const signers: any = {};
+
+      for (const { position, key } of signerPositions) {
+        const rows = await query(
+          `SELECT id, full_name, email
+           FROM users
+           WHERE deleted_at IS NULL
+             AND LOWER(TRIM(COALESCE(role, ''))) = 'hr'
+             AND LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?))
+             AND LOWER(TRIM(COALESCE(position, ''))) = LOWER(TRIM(?))
+           LIMIT 1`,
+          [dept, position]
+        ) as any[];
+
+        const signer = Array.isArray(rows) ? rows[0] : rows;
+        signers[key] = signer ? { id: signer.id, full_name: signer.full_name, email: signer.email } : null;
+      }
+
+      res.json(signers);
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
+  });
+
   app.put("/api/requisitions/:id/approvals", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
