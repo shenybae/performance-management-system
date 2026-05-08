@@ -7584,17 +7584,38 @@ ${relevantGoalIdsSql}
       try { hrReviewerUserId = await resolveUserIdByFullName(String(hr_reviewer_name || '')); } catch (e) { hrReviewerUserId = null; }
       let hrOwnerUserId: number | null = null;
       try { hrOwnerUserId = await resolveDeptHrOwnerUserId(dept_fit || null); } catch (e) { hrOwnerUserId = null; }
-      await query(`INSERT INTO applicants (name, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
-        interview_impression, dept_fit, previous_qualifications,
-        q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
-        additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
-        hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, hr_reviewer_user_id, hr_owner_user_id, recommendation)
-        VALUES (${Array(33).fill('?').join(', ')})`,
-        [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
-        interview_impression, dept_fit, previous_qualifications,
-        q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
-        additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
-        hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, hrReviewerUserId || null, hrOwnerUserId || null, recommendation]);
+      try {
+        await query(`INSERT INTO applicants (name, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
+          interview_impression, dept_fit, previous_qualifications,
+          q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
+          additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
+          hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, hr_reviewer_user_id, hr_owner_user_id, recommendation)
+          VALUES (${Array(33).fill('?').join(', ')})`,
+          [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
+          interview_impression, dept_fit, previous_qualifications,
+          q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
+          additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
+          hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, hrReviewerUserId || null, hrOwnerUserId || null, recommendation]);
+      } catch (fullInsertErr) {
+        // Backward-compatible fallback for environments where newer applicant columns are not present yet.
+        try {
+          await query(`INSERT INTO applicants (name, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
+            interview_impression, dept_fit, previous_qualifications,
+            q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
+            additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
+            hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, recommendation)
+            VALUES (${Array(31).fill('?').join(', ')})`,
+            [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
+            interview_impression, dept_fit, previous_qualifications,
+            q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
+            additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
+            hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, recommendation]);
+        } catch (midInsertErr) {
+          await query(`INSERT INTO applicants (name, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating]);
+        }
+      }
 
       try { await recordAudit((req as any).user || null, 'create', 'applicants', null, null, req.body); } catch (e) {}
       res.json({ success: true });
@@ -7611,16 +7632,31 @@ ${relevantGoalIdsSql}
       let beforeApp: any = null;
       try { const br: any = await query('SELECT * FROM applicants WHERE id = ?', [req.params.id]); beforeApp = Array.isArray(br) ? br[0] : br; } catch (e) { beforeApp = null; }
 
-      await query(`UPDATE applicants SET name=?, position=?, score=?, status=?, job_skills=?, asset_value=?, communication_skills=?, teamwork=?, overall_rating=?,
-        interview_impression=?, dept_fit=?, previous_qualifications=?,
-        q_experience=?, q_why_interested=?, q_strengths=?, q_weakness=?, q_conflict=?, q_goals=?, q_teamwork=?, q_pressure=?, q_contribution=?, q_questions=?,
-        additional_comments=?, interviewer_name=?, interviewer_title=?, interview_date=?, interviewer_signature=?,
-        hr_reviewer_name=?, hr_reviewer_signature=?, hr_reviewer_date=?, recommendation=? WHERE id=?`,
-        [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
-        interview_impression, dept_fit, previous_qualifications,
-        q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
-        additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
-        hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, recommendation, req.params.id]);
+      try {
+        await query(`UPDATE applicants SET name=?, position=?, score=?, status=?, job_skills=?, asset_value=?, communication_skills=?, teamwork=?, overall_rating=?,
+          interview_impression=?, dept_fit=?, previous_qualifications=?,
+          q_experience=?, q_why_interested=?, q_strengths=?, q_weakness=?, q_conflict=?, q_goals=?, q_teamwork=?, q_pressure=?, q_contribution=?, q_questions=?,
+          additional_comments=?, interviewer_name=?, interviewer_title=?, interview_date=?, interviewer_signature=?,
+          hr_reviewer_name=?, hr_reviewer_signature=?, hr_reviewer_date=?, recommendation=? WHERE id=?`,
+          [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
+          interview_impression, dept_fit, previous_qualifications,
+          q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
+          additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
+          hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, recommendation, req.params.id]);
+      } catch (fullUpdateErr) {
+        try {
+          await query(`UPDATE applicants SET name=?, position=?, score=?, status=?, job_skills=?, asset_value=?, communication_skills=?, teamwork=?, overall_rating=?,
+            interview_impression=?, dept_fit=?, previous_qualifications=?,
+            additional_comments=?, interviewer_name=?, interviewer_title=?, interview_date=?, interviewer_signature=? WHERE id=?`,
+            [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
+            interview_impression, dept_fit, previous_qualifications,
+            additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
+            req.params.id]);
+        } catch (midUpdateErr) {
+          await query(`UPDATE applicants SET name=?, position=?, score=?, status=?, job_skills=?, asset_value=?, communication_skills=?, teamwork=?, overall_rating=? WHERE id=?`,
+            [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating, req.params.id]);
+        }
+      }
       // record after state
       try { const ar: any = await query('SELECT * FROM applicants WHERE id = ?', [req.params.id]); const afterApp = Array.isArray(ar) ? ar[0] : ar; await recordAudit((req as any).user || null, 'update', 'applicants', req.params.id, beforeApp, afterApp); } catch (e) {}
       res.json({ success: true });
