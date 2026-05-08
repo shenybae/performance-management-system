@@ -23,6 +23,7 @@ export const VerificationOfReview = () => {
   const [applicants, setApplicants] = useState<any[]>([]);
   const [requisitions, setRequisitions] = useState<any[]>([]);
   const [requisitionSignersByDept, setRequisitionSignersByDept] = useState<Record<string, any>>({});
+  const [applicantSignersByDept, setApplicantSignersByDept] = useState<Record<string, any>>({});
   const [propertyRecords, setPropertyRecords] = useState<any[]>([]);
   const [exitInterviews, setExitInterviews] = useState<any[]>([]);
 
@@ -296,6 +297,45 @@ export const VerificationOfReview = () => {
       cancelled = true;
     };
   }, [requisitions, requisitionSignersByDept]);
+
+  useEffect(() => {
+    const departments = [...new Set(
+      applicants
+        .map((record) => resolveApplicantDepartment(record))
+        .map((dept) => String(dept || '').trim())
+        .filter(Boolean)
+    )].filter((dept) => !applicantSignersByDept[normalizeText(dept)]);
+
+    if (departments.length === 0) return;
+
+    let cancelled = false;
+
+    Promise.all(
+      departments.map(async (dept) => {
+        try {
+          const res = await fetch(`/api/applicants/signers/${encodeURIComponent(dept)}`, { headers: getAuthHeaders() });
+          if (!res.ok) return [normalizeText(dept), null] as const;
+          const data = await res.json();
+          return [normalizeText(dept), data] as const;
+        } catch {
+          return [normalizeText(dept), null] as const;
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      setApplicantSignersByDept((prev) => {
+        const next = { ...prev };
+        entries.forEach(([deptKey, signers]) => {
+          if (deptKey && signers) next[deptKey] = signers;
+        });
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applicants, requisitions, applicantSignersByDept, user?.dept, user?.department]);
 
   const fetchPropertyRecords = async () => {
     try {
@@ -1589,6 +1629,10 @@ export const VerificationOfReview = () => {
       <ViewShell>
         {(() => {
           const applicantDept = resolveApplicantDepartment(r);
+          const applicantDeptKey = normalizeText(applicantDept);
+          const scopedApplicantSigners = applicantSignersByDept[applicantDeptKey] || null;
+          const scopedHrName = String(scopedApplicantSigners?.hr_admin?.full_name || '').trim();
+          const scopedManagerName = String(scopedApplicantSigners?.manager?.full_name || '').trim();
           const criteriaRows = [
             { label: 'Job Skills', value: r.job_skills },
             { label: 'Communication Skills', value: r.communication_skills },
@@ -1667,12 +1711,14 @@ export const VerificationOfReview = () => {
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
               <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">HR Interviewer</p>
-              <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">Printed Name: {r.interviewer_name || '—'}</p>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 break-words">Required Signer: {scopedHrName || '—'} (Department Scoped)</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">Printed Name: {r.interviewer_name || scopedHrName || '—'}</p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Date: {r.interview_date || '—'}</p>
             </div>
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
               <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Manager Reviewer</p>
-              <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">Printed Name: {r.hr_reviewer_name || '—'}</p>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 break-words">Required Signer: {scopedManagerName || '—'} (Department Scoped)</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">Printed Name: {r.hr_reviewer_name || scopedManagerName || '—'}</p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Date: {r.hr_reviewer_date || '—'}</p>
             </div>
           </div>
