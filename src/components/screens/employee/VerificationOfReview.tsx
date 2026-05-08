@@ -1325,13 +1325,13 @@ export const VerificationOfReview = () => {
     const F = ({ label, value }: { label: string; value?: string | number | null }) => (
       <div>
         <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">{label}</p>
-        <p className="mt-0.5 text-sm text-slate-800 dark:text-slate-100 font-medium">{value ?? '—'}</p>
+        <p className="mt-1 text-sm text-slate-800 dark:text-slate-100 font-medium break-words whitespace-pre-wrap leading-relaxed">{value ?? '—'}</p>
       </div>
     );
     const TB = ({ label, value }: { label: string; value?: string | null }) => value ? (
       <div>
         <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-1">{label}</p>
-        <p className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">{value}</p>
+        <p className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap break-words overflow-x-hidden">{value}</p>
       </div>
     ) : null;
     const Sigs = ({ items }: { items: Array<{ label: string; signed: boolean; date?: string }> }) => (
@@ -1448,26 +1448,49 @@ export const VerificationOfReview = () => {
     );
 
     if (type === 'requisition') return (
-      <div className="space-y-5">
-        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          <F label="Job Title" value={r.job_title} />
-          <F label="Department / Office" value={r.department} />
-          <F label="Supervisor" value={r.supervisor} />
-          <F label="Hiring Contact" value={r.hiring_contact} />
-          <F label="Position Status" value={r.position_status} />
-          <F label="Desired Start Date" value={r.start_date || r.date_requested || r.created_at?.split('T')[0]} />
-          <F label="Months per Year" value={r.months_per_year} />
-          <F label="Hours per Week" value={r.hours_per_week} />
-          <F label="Office Assignment" value={r.office_assignment} />
-          <F label="Position Type" value={r.position_type} />
-          <F label="Classification" value={r.classification} />
-          <F label="Hiring Range / Hourly Rate" value={r.hiring_range || r.hourly_rate} />
+      <div className="space-y-5 overflow-x-hidden">
+        <div className="rounded-2xl border border-teal-100 dark:border-teal-900/40 bg-gradient-to-br from-teal-50 via-white to-cyan-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">Staff Requisition</p>
+              <h3 className="mt-1 text-xl font-black text-slate-900 dark:text-slate-100 break-words">{r.job_title || 'Untitled Requisition'}</h3>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 break-words">{r.department || 'No department'}{r.supervisor ? ` • Supervisor: ${r.supervisor}` : ''}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center rounded-full bg-white/90 dark:bg-slate-800 px-3 py-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                Start: {r.start_date || r.date_requested || r.created_at?.split('T')[0] || '—'}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-teal-600 px-3 py-1 text-[11px] font-bold text-white">
+                {r.position_status || 'Pending'}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <TB label="Reason / Justification" value={r.type_reason || r.reason} />
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5">
+          <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-3">Position Information</p>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <F label="Job Title" value={r.job_title} />
+            <F label="Department / Office" value={r.department} />
+            <F label="Supervisor" value={r.supervisor} />
+            <F label="Hiring Contact" value={r.hiring_contact} />
+            <F label="Position Status" value={r.position_status} />
+            <F label="Desired Start Date" value={r.start_date || r.date_requested || r.created_at?.split('T')[0]} />
+            <F label="Months per Year" value={r.months_per_year} />
+            <F label="Hours per Week" value={r.hours_per_week} />
+            <F label="Office Assignment" value={r.office_assignment} />
+            <F label="Position Type" value={r.position_type} />
+            <F label="Classification" value={r.classification} />
+            <F label="Hiring Range / Hourly Rate" value={r.hiring_range || r.hourly_rate} />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5">
+          <TB label="Reason / Justification" value={r.type_reason || r.reason} />
+        </div>
 
         {(r.recruitment_web || r.recruitment_newspapers || r.recruitment_listserv || r.recruitment_other) && (
-          <div className="space-y-3">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5 space-y-3 overflow-x-hidden">
             <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Recruitment Plan</p>
             <div className="grid sm:grid-cols-2 gap-4">
               <F label="Web Sites" value={r.recruitment_web} />
@@ -1478,9 +1501,11 @@ export const VerificationOfReview = () => {
           </div>
         )}
 
-        <TB label="Comments" value={r.comments || r.remarks} />
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5">
+          <TB label="Comments" value={r.comments || r.remarks} />
+        </div>
 
-        <div>
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5">
           <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">Approval Details</p>
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {[
@@ -1490,9 +1515,9 @@ export const VerificationOfReview = () => {
               { label: 'VP for Business and Finance', name: r.vp_approval, signed: !!r.vp_approval_sig, date: r.vp_approval_date },
               { label: 'President', name: r.president_approval, signed: !!r.president_approval_sig, date: r.president_approval_date },
             ].map((entry) => (
-              <div key={entry.label} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/60">
+              <div key={entry.label} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/60 shadow-sm">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">{entry.label}</p>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{entry.name || '—'}</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 break-words">{entry.name || '—'}</p>
                 <p className={`mt-2 text-xs font-semibold ${entry.signed ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {entry.signed ? `Signed${entry.date ? ` · ${entry.date}` : ''}` : 'Pending'}
                 </p>
@@ -1501,13 +1526,15 @@ export const VerificationOfReview = () => {
           </div>
         </div>
 
-        <Sigs items={[
-          { label: 'Supervisor', signed: !!r.supervisor_approval_sig, date: r.supervisor_approval_date },
-          { label: 'Dept Head', signed: !!r.dept_head_approval_sig, date: r.dept_head_approval_date },
-          { label: 'Cabinet', signed: !!r.cabinet_approval_sig, date: r.cabinet_approval_date },
-          { label: 'VP', signed: !!r.vp_approval_sig, date: r.vp_approval_date },
-          { label: 'President', signed: !!r.president_approval_sig, date: r.president_approval_date },
-        ]} />
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5">
+          <Sigs items={[
+            { label: 'Supervisor', signed: !!r.supervisor_approval_sig, date: r.supervisor_approval_date },
+            { label: 'Dept Head', signed: !!r.dept_head_approval_sig, date: r.dept_head_approval_date },
+            { label: 'Cabinet', signed: !!r.cabinet_approval_sig, date: r.cabinet_approval_date },
+            { label: 'VP', signed: !!r.vp_approval_sig, date: r.vp_approval_date },
+            { label: 'President', signed: !!r.president_approval_sig, date: r.president_approval_date },
+          ]} />
+        </div>
       </div>
     );
     return null;
