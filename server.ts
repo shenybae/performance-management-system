@@ -7641,8 +7641,19 @@ ${relevantGoalIdsSql}
   app.get("/api/requisitions", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
-      const isSupervisorEmployee = actor.role === 'Employee' &&
-        String(actor.position || '').toLowerCase().includes('supervisor');
+
+      // position/dept are not in the JWT — look them up for Employee-role users
+      let actorPosition = String(actor.position || '').toLowerCase();
+      let actorDept = String(actor.dept || '').trim();
+      if (actor.role === 'Employee' && actor.employee_id) {
+        const empRow = await query('SELECT position, dept FROM employees WHERE id = ? LIMIT 1', [actor.employee_id]) as any[];
+        if (empRow[0]) { actorPosition = String(empRow[0].position || '').toLowerCase(); actorDept = String(empRow[0].dept || '').trim(); }
+      } else if (actor.role === 'Employee') {
+        const uRow = await query('SELECT position, dept FROM users WHERE id = ? LIMIT 1', [actor.id]) as any[];
+        if (uRow[0]) { actorPosition = String(uRow[0].position || '').toLowerCase(); actorDept = String(uRow[0].dept || '').trim(); }
+      }
+
+      const isSupervisorEmployee = actor.role === 'Employee' && actorPosition.includes('supervisor');
       if (!isPrivilegedRole(actor.role) && actor.role !== 'Manager' && !isSupervisorEmployee)
         return res.status(403).json({ error: 'Forbidden' });
 
@@ -7663,7 +7674,7 @@ ${relevantGoalIdsSql}
            FROM requisitions r
            WHERE LOWER(TRIM(COALESCE(r.department, ''))) = LOWER(TRIM(?))
            ORDER BY r.created_at DESC`,
-          [String(actor.dept || '').trim()]
+          [actorDept]
         );
       } else {
         rows = await query(
@@ -7741,8 +7752,18 @@ ${relevantGoalIdsSql}
   app.get("/api/requisitions/signers/:department", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
-      const isSupervisorEmployee = actor.role === 'Employee' &&
-        String(actor.position || '').toLowerCase().includes('supervisor');
+
+      // position/dept are not in the JWT — look them up for Employee-role users
+      let actorPosition = String(actor.position || '').toLowerCase();
+      if (actor.role === 'Employee' && actor.employee_id) {
+        const empRow = await query('SELECT position FROM employees WHERE id = ? LIMIT 1', [actor.employee_id]) as any[];
+        if (empRow[0]) actorPosition = String(empRow[0].position || '').toLowerCase();
+      } else if (actor.role === 'Employee') {
+        const uRow = await query('SELECT position FROM users WHERE id = ? LIMIT 1', [actor.id]) as any[];
+        if (uRow[0]) actorPosition = String(uRow[0].position || '').toLowerCase();
+      }
+
+      const isSupervisorEmployee = actor.role === 'Employee' && actorPosition.includes('supervisor');
       if (!isPrivilegedRole(actor.role) && actor.role !== 'Manager' && !isSupervisorEmployee)
         return res.status(403).json({ error: 'Forbidden' });
 
