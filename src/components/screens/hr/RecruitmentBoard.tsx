@@ -117,6 +117,60 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       .sort((a: any, b: any) => a.label.localeCompare(b.label));
   }, [reqForm.department, supervisorOptions]);
 
+  const departmentOptions = useMemo(() => {
+    const fromEmployees = (Array.isArray(employees) ? employees : []).map((e: any) => String(e?.dept || '').trim()).filter(Boolean);
+    const fromUsers = (Array.isArray(users) ? users : []).map((u: any) => String(u?.dept || '').trim()).filter(Boolean);
+    const fromRequisitions = (Array.isArray(requisitions) ? requisitions : []).map((r: any) => String(r?.department || '').trim()).filter(Boolean);
+    const merged = Array.from(new Set([...fromEmployees, ...fromUsers, ...fromRequisitions]));
+    return merged
+      .sort((a, b) => a.localeCompare(b))
+      .map((dept) => ({ value: dept, label: dept }));
+  }, [employees, requisitions, users]);
+
+  const departmentJobTitleOptions = useMemo(() => {
+    const dept = trimText(reqForm.department, 100);
+    if (!dept) return [] as Array<{ value: string; label: string }>;
+
+    const employeeTitles = (Array.isArray(employees) ? employees : [])
+      .filter((e: any) => sameDept(e?.dept, dept))
+      .map((e: any) => String(e?.position || e?.title || '').trim())
+      .filter(Boolean);
+
+    const userTitles = (Array.isArray(users) ? users : [])
+      .filter((u: any) => sameDept(u?.dept, dept))
+      .map((u: any) => String(u?.position || '').trim())
+      .filter(Boolean);
+
+    const requisitionTitles = (Array.isArray(requisitions) ? requisitions : [])
+      .filter((r: any) => sameDept(r?.department, dept))
+      .map((r: any) => String(r?.job_title || '').trim())
+      .filter(Boolean);
+
+    return Array.from(new Set([...employeeTitles, ...userTitles, ...requisitionTitles]))
+      .sort((a, b) => a.localeCompare(b))
+      .map((title) => ({ value: title, label: title }));
+  }, [employees, reqForm.department, requisitions, users]);
+
+  useEffect(() => {
+    if (!reqForm.department) {
+      if (reqForm.supervisor || reqForm.job_title) {
+        setReqForm((prev) => ({ ...prev, supervisor: '', job_title: '' }));
+      }
+      return;
+    }
+
+    const supervisorStillValid = !reqForm.supervisor || departmentSupervisorOptions.some((opt) => String(opt.value) === String(reqForm.supervisor));
+    const jobTitleStillValid = !reqForm.job_title || departmentJobTitleOptions.some((opt) => String(opt.value) === String(reqForm.job_title));
+
+    if (!supervisorStillValid || !jobTitleStillValid) {
+      setReqForm((prev) => ({
+        ...prev,
+        supervisor: supervisorStillValid ? prev.supervisor : '',
+        job_title: jobTitleStillValid ? prev.job_title : '',
+      }));
+    }
+  }, [departmentJobTitleOptions, departmentSupervisorOptions, reqForm.department, reqForm.job_title, reqForm.supervisor]);
+
   const sanitizeRequisitionForm = () => ({
     ...reqForm,
     job_title: trimText(reqForm.job_title, 120),
@@ -631,15 +685,43 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
             <form className="space-y-4" onSubmit={e => { e.preventDefault(); submitRequisition(); }}>
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Job Title</label><input type="text" value={reqForm.job_title} onChange={e => setReqForm({ ...reqForm, job_title: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" placeholder="e.g. Office Coordinator I" maxLength={120} required /></div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department / Office</label><SearchableSelect options={['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => ({ value: d, label: d }))} value={reqForm.department} onChange={v => setReqForm({ ...reqForm, department: String(v) })} placeholder="Select department..." allowEmpty emptyLabel="Select department..." searchable dropdownVariant="pills-horizontal" className="w-full" /></div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Job Title</label>
+                  <SearchableSelect
+                    options={departmentJobTitleOptions}
+                    value={reqForm.job_title}
+                    onChange={v => setReqForm({ ...reqForm, job_title: String(v || '') })}
+                    placeholder={reqForm.department ? 'Select job title...' : 'Select department first'}
+                    allowEmpty
+                    emptyLabel={reqForm.department ? 'Select job title...' : 'Select department first'}
+                    searchable
+                    dropdownVariant="pills-horizontal"
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department / Office</label>
+                  <SearchableSelect
+                    options={departmentOptions}
+                    value={reqForm.department}
+                    onChange={v => setReqForm({ ...reqForm, department: String(v || '') })}
+                    placeholder="Select department..."
+                    allowEmpty
+                    emptyLabel="Select department..."
+                    searchable
+                    dropdownVariant="pills-horizontal"
+                    className="w-full"
+                  />
+                </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Supervisor</label>
                   <SearchableSelect
-                      options={departmentSupervisorOptions}
+                    options={departmentSupervisorOptions}
                     value={reqForm.supervisor}
-                    onChange={v => setReqForm({ ...reqForm, supervisor: String(v) })}
-                    placeholder="Select supervisor..."
+                    onChange={v => setReqForm({ ...reqForm, supervisor: String(v || '') })}
+                    placeholder={reqForm.department ? 'Select supervisor...' : 'Select department first'}
+                    allowEmpty
+                    emptyLabel={reqForm.department ? 'Select supervisor...' : 'Select department first'}
                     dropdownVariant="pills-horizontal"
                     searchable
                   />
