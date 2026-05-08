@@ -2077,6 +2077,18 @@ async function initDb() {
       }
     } catch (e) { console.error('goals.department backfill error:', e); }
 
+    // Retire legacy Department Head HR accounts globally.
+    // Department Head signer should resolve to the department's HR Admin account.
+    try {
+      await query(
+        `UPDATE users
+         SET deleted_at = COALESCE(deleted_at, NOW())
+         WHERE LOWER(TRIM(COALESCE(role, ''))) = 'hr'
+           AND LOWER(TRIM(COALESCE(position, ''))) = LOWER(TRIM(?))`,
+        ['Department Head']
+      );
+    } catch (e) { console.error('legacy department head cleanup error:', e); }
+
     console.log(`Database Initialized Successfully in ${usePostgres ? 'PostgreSQL' : 'SQLite'} mode`);
   } catch (err) {
     console.error("Database initialization failed:", err);

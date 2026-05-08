@@ -15,6 +15,11 @@ interface LinkedPeopleProps {
 
 const normalize = (value?: string | null) => (value || '').toString().trim().toLowerCase();
 const sameDept = (a?: string | null, b?: string | null) => normalize(a) === normalize(b) && normalize(a) !== '';
+const isLegacyDepartmentHeadAccount = (person: any) => {
+  const role = normalize(person?.role);
+  const position = normalize(person?.position);
+  return role === 'hr' && position === 'department head';
+};
 
 const personLabel = (person: any) => {
   const primary = (person?.full_name || person?.name || person?.employee_name || person?.email || person?.username || '').toString().trim();
@@ -75,7 +80,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
           profile_picture: user.profile_picture || linkedEmployee?.profile_picture || null,
         };
       })
-      .filter(Boolean);
+      .filter((person: any) => !!person && !isLegacyDepartmentHeadAccount(person));
 
     const seenEmployeeIds = new Set<number>();
     merged.forEach((person: any) => {
@@ -102,7 +107,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
   }, [employeeById, employees, users]);
 
   const hrAdmins = useMemo(
-    () => mergedPeople.filter((u: any) => normalize(u?.role) === 'hr'),
+    () => mergedPeople.filter((u: any) => normalize(u?.role) === 'hr' && !isLegacyDepartmentHeadAccount(u)),
     [mergedPeople]
   );
 
@@ -129,7 +134,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
   );
 
   const activeDeptHrAdmins = useMemo(
-    () => (activeDept ? activeEmployees.filter((u: any) => normalize(u?.role) === 'hr') : []),
+    () => (activeDept ? activeEmployees.filter((u: any) => normalize(u?.role) === 'hr' && !isLegacyDepartmentHeadAccount(u)) : []),
     [activeDept, activeEmployees]
   );
 
@@ -392,7 +397,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
         <div className="flex flex-wrap gap-2">
           {departmentOptions.map((dept) => {
             const deptEmployees = mergedPeople.filter((person: any) => sameDept(person.dept, dept));
-            const deptHrAdmins = deptEmployees.filter((person: any) => normalize(person?.role) === 'hr');
+            const deptHrAdmins = deptEmployees.filter((person: any) => normalize(person?.role) === 'hr' && !isLegacyDepartmentHeadAccount(person));
             const deptManagers = deptEmployees.filter((person) => roleLabel(person) === 'Manager');
             const deptSupervisors = deptEmployees.filter((person) => roleLabel(person) === 'Supervisor');
             const deptLinkedCount = deptEmployees.filter((person) => Number((person as any).manager_id || 0) > 0).length;

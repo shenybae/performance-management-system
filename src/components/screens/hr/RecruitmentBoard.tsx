@@ -39,6 +39,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   const [approvalOpenId, setApprovalOpenId] = useState<number | null>(null);
   const [viewRequisition, setViewRequisition] = useState<any | null>(null);
   const [approvalSigners, setApprovalSigners] = useState<any>({});
+  const [viewSigners, setViewSigners] = useState<any>({});
   const [reqForm, setReqForm] = useState({
     job_title: '', department: scopedDept, supervisor: '', hiring_contact: '',
     position_status: '', months_per_year: '' as any, hours_per_week: '' as any,
@@ -434,6 +435,27 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   };
 
   const hasSignature = (value: any) => typeof value === 'string' && value.trim().length > 0;
+
+  const fetchDeptSigners = async (department: string) => {
+    const dept = String(department || '').trim();
+    if (!dept) return {};
+    const res = await fetch(`/api/requisitions/signers/${encodeURIComponent(dept)}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) return {};
+    return await res.json();
+  };
+
+  const openViewForm = async (r: any) => {
+    setViewRequisition(r);
+    setViewSigners({});
+    try {
+      const signers = await fetchDeptSigners(String(r?.department || ''));
+      setViewSigners(signers || {});
+    } catch {
+      setViewSigners({});
+    }
+  };
 
   const openApprovals = async (r: any) => {
     setActiveForm('none');
@@ -1097,7 +1119,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                       {approvalOpenId === r.id ? 'Close' : 'Approvals'}
                     </button>
                     <button 
-                      onClick={() => setViewRequisition(r)} 
+                      onClick={() => openViewForm(r)} 
                       title="View Form"
                       className="text-blue-500 hover:text-blue-700"
                     >
@@ -1209,7 +1231,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       <Modal
         open={!!viewRequisition}
         title={`Requisition Form${viewRequisition?.job_title ? ` - ${viewRequisition.job_title}` : ''}`}
-        onClose={() => setViewRequisition(null)}
+        onClose={() => { setViewRequisition(null); setViewSigners({}); }}
         maxWidthClassName="max-w-6xl"
       >
         {viewRequisition && (
@@ -1259,15 +1281,15 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
               <p className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Approvals</p>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {[
-                  { label: 'Supervisor', name: viewRequisition.supervisor_approval, date: viewRequisition.supervisor_approval_date, sig: viewRequisition.supervisor_approval_sig },
-                  { label: 'Department Head', name: viewRequisition.dept_head_approval, date: viewRequisition.dept_head_approval_date, sig: viewRequisition.dept_head_approval_sig },
-                  { label: 'Cabinet Member', name: viewRequisition.cabinet_approval, date: viewRequisition.cabinet_approval_date, sig: viewRequisition.cabinet_approval_sig },
-                  { label: 'VP for Business and Finance', name: viewRequisition.vp_approval, date: viewRequisition.vp_approval_date, sig: viewRequisition.vp_approval_sig },
-                  { label: 'President', name: viewRequisition.president_approval, date: viewRequisition.president_approval_date, sig: viewRequisition.president_approval_sig },
+                  { key: 'supervisor', label: 'Supervisor', name: viewRequisition.supervisor_approval, date: viewRequisition.supervisor_approval_date, sig: viewRequisition.supervisor_approval_sig },
+                  { key: 'dept_head', label: 'Department Head', name: viewRequisition.dept_head_approval, date: viewRequisition.dept_head_approval_date, sig: viewRequisition.dept_head_approval_sig },
+                  { key: 'cabinet', label: 'Cabinet Member', name: viewRequisition.cabinet_approval, date: viewRequisition.cabinet_approval_date, sig: viewRequisition.cabinet_approval_sig },
+                  { key: 'vp', label: 'VP for Business and Finance', name: viewRequisition.vp_approval, date: viewRequisition.vp_approval_date, sig: viewRequisition.vp_approval_sig },
+                  { key: 'president', label: 'President', name: viewRequisition.president_approval, date: viewRequisition.president_approval_date, sig: viewRequisition.president_approval_sig },
                 ].map((entry) => (
                   <div key={entry.label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
                     <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{entry.label}</p>
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2">{entry.name || '—'}</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2">{entry.name || viewSigners?.[entry.key]?.full_name || '—'}</p>
                     <div className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 h-16 flex items-center justify-center overflow-hidden mb-2">
                       {hasSignature(entry.sig) ? (
                         <img src={entry.sig} alt={`${entry.label} signature`} className="max-h-14 w-auto object-contain" />
