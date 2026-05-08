@@ -64,7 +64,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   };
   const [approvalForm, setApprovalForm] = useState(emptyApprovalForm);
   const emptyAppForm = {
-    name: '', position: '', job_skills: '', asset_value: '',
+    first_name: '', last_name: '', name: '', position: '', job_skills: '', asset_value: '',
     communication_skills: '', interview_impression: '',
     teamwork: '', dept_fit: '', previous_qualifications: '',
     overall_rating: 0, status: '',
@@ -98,6 +98,13 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   };
 
   const trimText = (value: any, maxLen: number) => String(value || '').trim().slice(0, maxLen);
+  const splitFullName = (value: any) => {
+    const full = String(value || '').trim().replace(/\s+/g, ' ');
+    if (!full) return { first_name: '', last_name: '' };
+    const parts = full.split(' ');
+    if (parts.length === 1) return { first_name: parts[0], last_name: '' };
+    return { first_name: parts[0], last_name: parts.slice(1).join(' ') };
+  };
 
   useEffect(() => {
     const merged = [
@@ -192,6 +199,30 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       .map((title) => ({ value: title, label: title }));
   }, [employees, reqForm.department, requisitions, users]);
 
+  const applicantPositionOptions = useMemo(() => {
+    const dept = trimText(scopedDept, 100);
+    if (!dept) return [] as Array<{ value: string; label: string }>;
+
+    const employeeTitles = (Array.isArray(employees) ? employees : [])
+      .filter((e: any) => sameDept(e?.dept, dept))
+      .map((e: any) => String(e?.position || e?.title || '').trim())
+      .filter(Boolean);
+
+    const userTitles = (Array.isArray(users) ? users : [])
+      .filter((u: any) => sameDept(u?.dept, dept))
+      .map((u: any) => String(u?.position || '').trim())
+      .filter(Boolean);
+
+    const requisitionTitles = (Array.isArray(requisitions) ? requisitions : [])
+      .filter((r: any) => sameDept(r?.department, dept))
+      .map((r: any) => String(r?.job_title || '').trim())
+      .filter(Boolean);
+
+    return Array.from(new Set([...employeeTitles, ...userTitles, ...requisitionTitles]))
+      .sort((a, b) => a.localeCompare(b))
+      .map((title) => ({ value: title, label: title }));
+  }, [employees, requisitions, scopedDept, users]);
+
   useEffect(() => {
     if (!reqForm.department) {
       if (reqForm.supervisor || reqForm.job_title) {
@@ -236,7 +267,9 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
 
   const sanitizeApplicantForm = () => ({
     ...appForm,
-    name: trimText(appForm.name, 120),
+    first_name: trimText((appForm as any).first_name, 80),
+    last_name: trimText((appForm as any).last_name, 80),
+    name: trimText(`${trimText((appForm as any).first_name, 80)} ${trimText((appForm as any).last_name, 80)}`.trim(), 120),
     position: trimText(appForm.position, 120),
     job_skills: trimText(appForm.job_skills, 2),
     asset_value: trimText(appForm.asset_value, 2),
@@ -329,7 +362,8 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
 
   const submitAppraisal = async () => {
     const cleaned = sanitizeApplicantForm();
-    if (!cleaned.name || !cleaned.position) { window.notify?.('Please enter applicant name and position', 'error'); return; }
+    if (!cleaned.first_name || !cleaned.last_name) { window.notify?.('Please enter applicant first name and last name', 'error'); return; }
+    if (!cleaned.position) { window.notify?.('Please select the position applied for', 'error'); return; }
     if (!cleaned.interview_date) { window.notify?.('Please enter interview date', 'error'); return; }
     if (!cleaned.q_experience || cleaned.q_experience.length < 10) { window.notify?.('Please provide response for question 1 (minimum 10 characters)', 'error'); return; }
     if (!cleaned.q_why_interested || cleaned.q_why_interested.length < 10) { window.notify?.('Please provide response for question 2 (minimum 10 characters)', 'error'); return; }
@@ -375,7 +409,10 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   };
 
   const startEditApplicant = (app: any) => {
+    const parsedName = splitFullName(app.name || '');
     setAppForm({
+      first_name: parsedName.first_name,
+      last_name: parsedName.last_name,
       name: app.name || '', position: app.position || '',
       job_skills: app.job_skills || '', asset_value: app.asset_value || '',
       communication_skills: app.communication_skills || '', interview_impression: app.interview_impression || '',
@@ -941,9 +978,39 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
             <p className="text-xs text-slate-400 dark:text-slate-500 mb-4 border-b dark:border-slate-800 pb-3">To be completed by each person interviewing an applicant for employment</p>
             <form className="space-y-4" onSubmit={e => { e.preventDefault(); submitAppraisal(); }}>
               {/* Applicant Info */}
-              <div className="grid grid-cols-3 gap-4">
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Applicant Name</label><input type="text" value={appForm.name} onChange={e => setAppForm({ ...appForm, name: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required /></div>
-                <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Position Applied For</label><input type="text" value={appForm.position} onChange={e => setAppForm({ ...appForm, position: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required /></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">First Name</label>
+                  <input
+                    type="text"
+                    value={(appForm as any).first_name || ''}
+                    onChange={e => setAppForm({ ...appForm, first_name: e.target.value })}
+                    className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+                    maxLength={80}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Last Name</label>
+                  <input
+                    type="text"
+                    value={(appForm as any).last_name || ''}
+                    onChange={e => setAppForm({ ...appForm, last_name: e.target.value })}
+                    className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+                    maxLength={80}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Position Applied For <span className="normal-case text-[10px] text-slate-400">({scopedDept || 'Department not set'})</span></label>
+                  <SearchableSelect
+                    options={applicantPositionOptions}
+                    value={appForm.position}
+                    onChange={(value) => setAppForm({ ...appForm, position: String(value || '') })}
+                    placeholder={applicantPositionOptions.length ? 'Select position' : 'No positions found for this department'}
+                    className="text-sm"
+                  />
+                </div>
                 <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Interview Date</label><input type="date" value={appForm.interview_date} onChange={e => setAppForm({ ...appForm, interview_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" max={todayISO} required /></div>
               </div>
 
