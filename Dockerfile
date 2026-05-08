@@ -27,6 +27,7 @@ WORKDIR /app
 
 # Set production env (can be overridden by runtime envs)
 ENV NODE_ENV=production
+ENV RUN_APPROVAL_SIGNERS=true
 
 # Copy node_modules from builder (includes tsx)
 COPY --from=builder /app/node_modules ./node_modules
