@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
-import { SearchableSelect } from '../../common/SearchableSelect';
 import { UserPlus, CheckCircle, Package, FileText, ChevronDown, ChevronUp, Download, Eye, Archive } from 'lucide-react';
 import { SignatureUpload } from '../../common/SignatureUpload';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
@@ -63,19 +62,25 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
 
   const trimText = (value: string) => value.trim();
 
-  const departmentManagerOptions = useMemo(() => {
+  const departmentManager = useMemo(() => {
     const dept = trimText(form.dept);
-    if (!dept) return [];
-    return (Array.isArray(users) ? users : [])
+    if (!dept) return null;
+    const managers = (Array.isArray(users) ? users : [])
       .filter((user: any) => sameDept(user?.dept, dept))
-      .filter((user: any) => ['hr', 'manager'].includes(normalize(user?.role)) || normalize(user?.position).includes('supervisor'))
+      .filter((user: any) => normalize(user?.role) === 'manager')
       .map((user: any) => ({
-        value: String(user.id),
+        id: String(user.id),
         label: `${user.full_name || user.employee_name || user.username || user.email || 'User'}${user.position ? ` — ${user.position}` : ''}`,
-        avatarUrl: user.profile_picture || null,
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
+    return managers[0] || null;
   }, [form.dept, users]);
+
+  useEffect(() => {
+    const nextManagerId = String(departmentManager?.id || '');
+    if (form.manager_id === nextManagerId) return;
+    setForm((prev) => ({ ...prev, manager_id: nextManagerId }));
+  }, [departmentManager, form.manager_id]);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -146,6 +151,11 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
 
     if (!cleaned.name || !cleaned.position || !cleaned.dept || !cleaned.hire_date) {
       window.notify?.('Name, position, department, and hire date are required', 'error');
+      return;
+    }
+
+    if (!cleaned.manager_id) {
+      window.notify?.('No department manager found for this scoped department', 'error');
       return;
     }
 
@@ -432,15 +442,12 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">SSN / ID Number</label>
                     <input type="text" value={form.ssn} onChange={e => setForm({ ...form, ssn: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={64} required /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Reporting Manager</label>
-                    <SearchableSelect
-                      options={departmentManagerOptions}
-                      value={form.manager_id}
-                      onChange={v => setForm({ ...form, manager_id: String(v) })}
-                      placeholder={form.dept ? 'Select manager / HR / supervisor...' : 'Select department first'}
-                      allowEmpty
-                      emptyLabel="No reporting link"
-                      searchable
-                      dropdownVariant="pills-horizontal"
+                    <input
+                      type="text"
+                      value={departmentManager?.label || 'No department manager found'}
+                      readOnly
+                      className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 rounded-lg text-sm text-slate-700 dark:text-slate-200"
+                      placeholder="Department manager is scoped"
                     /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Emergency Contact Name</label>
                     <input type="text" value={form.emergency_contact} onChange={e => setForm({ ...form, emergency_contact: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required /></div>
