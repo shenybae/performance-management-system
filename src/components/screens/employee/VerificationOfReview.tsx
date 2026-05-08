@@ -604,16 +604,62 @@ export const VerificationOfReview = () => {
     [applicants, queueDept]
   );
 
+  const getNextPendingPropertyField = (record: any) => {
+    if (!record?.turnover_by_sig) return 'turnover_by_sig';
+    if (!record?.noted_by_sig) return 'noted_by_sig';
+    if (!record?.audited_by_sig) return 'audited_by_sig';
+    return null;
+  };
+
+  const getPropertyPendingSummary = (record: any) => {
+    const pending = [
+      !record?.turnover_by_sig ? 'Turned over by' : null,
+      !record?.noted_by_sig ? 'Noted by' : null,
+      !record?.audited_by_sig ? 'Audited by' : null,
+    ].filter(Boolean) as string[];
+    return pending;
+  };
+
+  const getNextPendingRequisitionStage = (record: any, scope: 'management' | 'hr') => {
+    if (scope === 'management') {
+      return !record?.supervisor_approval_sig ? 'supervisor' : null;
+    }
+    if (!record?.dept_head_approval_sig) return 'dept_head';
+    if (!record?.cabinet_approval_sig) return 'cabinet';
+    if (!record?.vp_approval_sig) return 'vp';
+    if (!record?.president_approval_sig) return 'president';
+    return null;
+  };
+
+  const getRequisitionPendingSummary = (record: any, scope: 'management' | 'hr') => {
+    if (scope === 'management') {
+      return !record?.supervisor_approval_sig ? ['Supervisor approval signature'] : [];
+    }
+    return [
+      !record?.dept_head_approval_sig ? 'Department head approval signature' : null,
+      !record?.cabinet_approval_sig ? 'Cabinet approval signature' : null,
+      !record?.vp_approval_sig ? 'VP approval signature' : null,
+      !record?.president_approval_sig ? 'President approval signature' : null,
+    ].filter(Boolean) as string[];
+  };
+
   const pendingManagementPropertyTasks = useMemo(
     () => propertyRecords
       .filter((p) => sameDept(p))
-      .flatMap((p) => {
-        const tasks: any[] = [];
-        if (!p.turnover_by_sig) tasks.push({ key: `prop-turn-${p.id}`, id: p.id, field: 'turnover_by_sig', title: 'Turned over by signature', employee_name: p.employee_name });
-        if (!p.noted_by_sig) tasks.push({ key: `prop-note-${p.id}`, id: p.id, field: 'noted_by_sig', title: 'Noted by signature', employee_name: p.employee_name });
-        if (!p.audited_by_sig) tasks.push({ key: `prop-audit-${p.id}`, id: p.id, field: 'audited_by_sig', title: 'Audited by signature', employee_name: p.employee_name });
-        return tasks;
-      }),
+      .map((p) => {
+        const nextField = getNextPendingPropertyField(p);
+        const pendingSteps = getPropertyPendingSummary(p);
+        if (!nextField || pendingSteps.length === 0) return null;
+        return {
+          ...p,
+          key: `prop-${p.id}`,
+          id: p.id,
+          field: nextField,
+          pendingSteps,
+          title: pendingSteps.join(' • '),
+        };
+      })
+      .filter(Boolean),
     [propertyRecords, queueDept]
   );
 
@@ -625,11 +671,22 @@ export const VerificationOfReview = () => {
   const pendingManagementRequisitionStages = useMemo(
     () => requisitions
       .filter((r) => sameDept(r))
-      .flatMap((r) => {
-        const tasks: any[] = [];
-        if (!r.supervisor_approval_sig) tasks.push({ key: `req-sup-${r.id}`, id: r.id, stage: 'supervisor', title: 'Supervisor approval signature', job_title: r.job_title, department: r.department });
-        return tasks;
-      }),
+      .map((r) => {
+        const nextStage = getNextPendingRequisitionStage(r, 'management');
+        const pendingSteps = getRequisitionPendingSummary(r, 'management');
+        if (!nextStage || pendingSteps.length === 0) return null;
+        return {
+          ...r,
+          key: `req-sup-${r.id}`,
+          id: r.id,
+          stage: nextStage,
+          pendingSteps,
+          title: pendingSteps.join(' • '),
+          job_title: r.job_title,
+          department: r.department,
+        };
+      })
+      .filter(Boolean),
     [requisitions, queueDept]
   );
 
@@ -679,18 +736,26 @@ export const VerificationOfReview = () => {
   const pendingHrRequisitionStages = useMemo(
     () => requisitions
       .filter((r) => sameDept(r))
-      .flatMap((r) => {
-        const tasks: any[] = [];
-        // Filter based on HR ownership if set
+      .map((r) => {
         const hasOwner = r.hr_owner_user_id;
         const isAssignedToMe = !hasOwner || r.hr_owner_user_id === user?.id;
-        
-        if (!r.dept_head_approval_sig && isAssignedToMe) tasks.push({ key: `req-dept-${r.id}`, id: r.id, stage: 'dept_head', title: 'Department head approval signature', job_title: r.job_title, department: r.department, hr_owner: r.hr_owner_user_id });
-        if (!r.cabinet_approval_sig && isAssignedToMe) tasks.push({ key: `req-cab-${r.id}`, id: r.id, stage: 'cabinet', title: 'Cabinet approval signature', job_title: r.job_title, department: r.department, hr_owner: r.hr_owner_user_id });
-        if (!r.vp_approval_sig && isAssignedToMe) tasks.push({ key: `req-vp-${r.id}`, id: r.id, stage: 'vp', title: 'VP approval signature', job_title: r.job_title, department: r.department, hr_owner: r.hr_owner_user_id });
-        if (!r.president_approval_sig && isAssignedToMe) tasks.push({ key: `req-prez-${r.id}`, id: r.id, stage: 'president', title: 'President approval signature', job_title: r.job_title, department: r.department, hr_owner: r.hr_owner_user_id });
-        return tasks;
-      }),
+        if (!isAssignedToMe) return null;
+        const nextStage = getNextPendingRequisitionStage(r, 'hr');
+        const pendingSteps = getRequisitionPendingSummary(r, 'hr');
+        if (!nextStage || pendingSteps.length === 0) return null;
+        return {
+          ...r,
+          key: `req-hr-${r.id}`,
+          id: r.id,
+          stage: nextStage,
+          pendingSteps,
+          title: pendingSteps.join(' • '),
+          job_title: r.job_title,
+          department: r.department,
+          hr_owner: r.hr_owner_user_id,
+        };
+      })
+      .filter(Boolean),
     [requisitions, queueDept, user?.id]
   );
 
