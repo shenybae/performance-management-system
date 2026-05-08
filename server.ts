@@ -7721,23 +7721,52 @@ ${relevantGoalIdsSql}
       const dept = String(req.params.department || '').trim();
       if (!dept) return res.status(400).json({ error: 'Department is required' });
 
+      const signers: any = {};
+
+      const supervisorRows = await query(
+        `SELECT u.id,
+                COALESCE(NULLIF(TRIM(u.full_name), ''), NULLIF(TRIM(e.name), ''), NULLIF(TRIM(u.username), ''), NULLIF(TRIM(u.email), '')) AS full_name,
+                u.email
+         FROM users u
+         LEFT JOIN employees e ON e.id = u.employee_id
+         WHERE u.deleted_at IS NULL
+           AND LOWER(TRIM(COALESCE(u.dept, ''))) = LOWER(TRIM(?))
+           AND (
+             LOWER(TRIM(COALESCE(u.position, ''))) = 'supervisor'
+             OR LOWER(TRIM(COALESCE(u.position, ''))) LIKE '%supervisor%'
+             OR LOWER(TRIM(COALESCE(u.role, ''))) = 'supervisor'
+           )
+         ORDER BY
+           CASE
+             WHEN LOWER(TRIM(COALESCE(u.position, ''))) = 'supervisor' THEN 0
+             WHEN LOWER(TRIM(COALESCE(u.position, ''))) LIKE '%supervisor%' THEN 1
+             ELSE 2
+           END,
+           u.created_at ASC,
+           u.id ASC
+         LIMIT 1`,
+        [dept]
+      ) as any[];
+      const supervisor = Array.isArray(supervisorRows) ? supervisorRows[0] : supervisorRows;
+      signers['supervisor'] = supervisor ? { id: supervisor.id, full_name: supervisor.full_name, email: supervisor.email } : null;
+
       const signerPositions = [
-        { position: 'Supervisor', key: 'supervisor' },
         { position: 'Cabinet Member', key: 'cabinet' },
         { position: 'VP for Business and Finance', key: 'vp' },
         { position: 'President', key: 'president' },
       ];
 
-      const signers: any = {};
-
       for (const { position, key } of signerPositions) {
         const rows = await query(
-          `SELECT id, full_name, email
-           FROM users
-           WHERE deleted_at IS NULL
-             AND LOWER(TRIM(COALESCE(role, ''))) = 'hr'
-             AND LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?))
-             AND LOWER(TRIM(COALESCE(position, ''))) = LOWER(TRIM(?))
+          `SELECT u.id,
+                  COALESCE(NULLIF(TRIM(u.full_name), ''), NULLIF(TRIM(e.name), ''), NULLIF(TRIM(u.username), ''), NULLIF(TRIM(u.email), '')) AS full_name,
+                  u.email
+           FROM users u
+           LEFT JOIN employees e ON e.id = u.employee_id
+           WHERE u.deleted_at IS NULL
+             AND LOWER(TRIM(COALESCE(u.role, ''))) = 'hr'
+             AND LOWER(TRIM(COALESCE(u.dept, ''))) = LOWER(TRIM(?))
+             AND LOWER(TRIM(COALESCE(u.position, ''))) = LOWER(TRIM(?))
            LIMIT 1`,
           [dept, position]
         ) as any[];
@@ -7747,20 +7776,23 @@ ${relevantGoalIdsSql}
       }
 
       const deptHrRows = await query(
-        `SELECT id, full_name, email
-         FROM users
-         WHERE deleted_at IS NULL
-           AND LOWER(TRIM(COALESCE(role, ''))) = 'hr'
-           AND LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?))
+        `SELECT u.id,
+                COALESCE(NULLIF(TRIM(u.full_name), ''), NULLIF(TRIM(e.name), ''), NULLIF(TRIM(u.username), ''), NULLIF(TRIM(u.email), '')) AS full_name,
+                u.email
+         FROM users u
+         LEFT JOIN employees e ON e.id = u.employee_id
+         WHERE u.deleted_at IS NULL
+           AND LOWER(TRIM(COALESCE(u.role, ''))) = 'hr'
+           AND LOWER(TRIM(COALESCE(u.dept, ''))) = LOWER(TRIM(?))
          ORDER BY
            CASE
-             WHEN LOWER(TRIM(COALESCE(position, ''))) = 'hr admin' THEN 0
-             WHEN LOWER(TRIM(COALESCE(position, ''))) LIKE '%hr%' THEN 1
-             WHEN LOWER(TRIM(COALESCE(position, ''))) IN ('cabinet member', 'vp for business and finance', 'president') THEN 9
+             WHEN LOWER(TRIM(COALESCE(u.position, ''))) = 'hr admin' THEN 0
+             WHEN LOWER(TRIM(COALESCE(u.position, ''))) LIKE '%hr%' THEN 1
+             WHEN LOWER(TRIM(COALESCE(u.position, ''))) IN ('cabinet member', 'vp for business and finance', 'president') THEN 9
              ELSE 5
            END,
-           created_at ASC,
-           id ASC
+           u.created_at ASC,
+           u.id ASC
          LIMIT 1`,
         [dept]
       ) as any[];
