@@ -206,25 +206,22 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     const dept = trimText(scopedDept, 100);
     if (!dept) return [] as Array<{ value: string; label: string }>;
 
-    const employeeTitles = (Array.isArray(employees) ? employees : [])
-      .filter((e: any) => sameDept(e?.dept, dept))
-      .map((e: any) => String(e?.position || e?.title || '').trim())
-      .filter(Boolean);
-
-    const userTitles = (Array.isArray(users) ? users : [])
-      .filter((u: any) => sameDept(u?.dept, dept))
-      .map((u: any) => String(u?.position || '').trim())
-      .filter(Boolean);
-
     const requisitionTitles = (Array.isArray(requisitions) ? requisitions : [])
+      .filter((r: any) => !r?.deleted_at)
       .filter((r: any) => sameDept(r?.department, dept))
+      .filter((r: any) => requisitionApprovalStatus(r) === 'Approved')
       .map((r: any) => String(r?.job_title || '').trim())
       .filter(Boolean);
 
-    return Array.from(new Set([...employeeTitles, ...userTitles, ...requisitionTitles]))
+    return Array.from(new Set(requisitionTitles))
       .sort((a, b) => a.localeCompare(b))
       .map((title) => ({ value: title, label: title }));
-  }, [employees, requisitions, scopedDept, users]);
+  }, [requisitions, scopedDept]);
+
+  const approvedApplicantPositionSet = useMemo(
+    () => new Set(applicantPositionOptions.map((opt) => normalize(String(opt.value || '')))),
+    [applicantPositionOptions]
+  );
 
   useEffect(() => {
     if (!reqForm.department) {
@@ -368,7 +365,15 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     const cleaned = sanitizeApplicantForm();
     if (!cleaned.department) { window.notify?.('Department scope is required. Please sign in again.', 'error'); return; }
     if (!cleaned.first_name || !cleaned.last_name) { window.notify?.('Please enter applicant first name and last name', 'error'); return; }
+    if (approvedApplicantPositionSet.size === 0) {
+      window.notify?.('No approved open requisitions found for this department. Please complete requisition approvals first.', 'error');
+      return;
+    }
     if (!cleaned.position) { window.notify?.('Please select the position applied for', 'error'); return; }
+    if (!approvedApplicantPositionSet.has(normalize(cleaned.position))) {
+      window.notify?.('Position must match an approved open requisition in your department.', 'error');
+      return;
+    }
     if (!cleaned.interview_date) { window.notify?.('Please enter interview date', 'error'); return; }
     if (!cleaned.q_experience || cleaned.q_experience.length < 10) { window.notify?.('Please provide response for question 1 (minimum 10 characters)', 'error'); return; }
     if (!cleaned.q_why_interested || cleaned.q_why_interested.length < 10) { window.notify?.('Please provide response for question 2 (minimum 10 characters)', 'error'); return; }
@@ -1075,7 +1080,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                     list="applicant-position-options"
                     value={appForm.position}
                     onChange={e => setAppForm({ ...appForm, position: e.target.value })}
-                    placeholder={applicantPositionOptions.length ? 'Select or type position' : 'Type position'}
+                    placeholder={applicantPositionOptions.length ? 'Select approved open requisition' : 'No approved open requisitions in this department'}
                     className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
                     maxLength={120}
                     required
