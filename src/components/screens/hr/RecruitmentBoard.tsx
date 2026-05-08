@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
+import { Modal } from '../../common/Modal';
 import { Plus, X, Users, FileText, Download, Pencil, Eye, Archive } from 'lucide-react';
 import { SignatureUpload } from '../../common/SignatureUpload';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -36,6 +37,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   const [requisitions, setRequisitions] = useState<any[]>([]);
   const [supervisorOptions, setSupervisorOptions] = useState<Array<{ value: string; label: string; avatarUrl?: string | null }>>([]);
   const [approvalOpenId, setApprovalOpenId] = useState<number | null>(null);
+  const [viewRequisition, setViewRequisition] = useState<any | null>(null);
   const [approvalSigners, setApprovalSigners] = useState<any>({});
   const [reqForm, setReqForm] = useState({
     job_title: '', department: scopedDept, supervisor: '', hiring_contact: '',
@@ -430,6 +432,8 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       && hasSig(r?.president_approval_sig);
     return signed ? 'Approved' : 'Pending Approval';
   };
+
+  const hasSignature = (value: any) => typeof value === 'string' && value.trim().length > 0;
 
   const openApprovals = async (r: any) => {
     setActiveForm('none');
@@ -1093,10 +1097,9 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                       {approvalOpenId === r.id ? 'Close' : 'Approvals'}
                     </button>
                     <button 
-                      onClick={() => exportRequisitionPDF(r, false)} 
-                      title={requisitionApprovalStatus(r) === 'Approved' ? "View" : "All signatures required"}
-                      disabled={requisitionApprovalStatus(r) !== 'Approved'}
-                      className={`${requisitionApprovalStatus(r) === 'Approved' ? 'text-blue-500 hover:text-blue-700' : 'text-slate-300 cursor-not-allowed'}`}
+                      onClick={() => setViewRequisition(r)} 
+                      title="View Form"
+                      className="text-blue-500 hover:text-blue-700"
                     >
                       <Eye size={14} />
                     </button>
@@ -1202,6 +1205,101 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
           )}
         </Card>
       )}
+
+      <Modal
+        open={!!viewRequisition}
+        title={`Requisition Form${viewRequisition?.job_title ? ` - ${viewRequisition.job_title}` : ''}`}
+        onClose={() => setViewRequisition(null)}
+        maxWidthClassName="max-w-6xl"
+      >
+        {viewRequisition && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {viewRequisition.department || 'No Department'} {viewRequisition.start_date ? `• Start: ${viewRequisition.start_date}` : ''}
+              </p>
+              <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase ${requisitionApprovalStatus(viewRequisition) === 'Approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                {requisitionApprovalStatus(viewRequisition)}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Job Title</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.job_title || '—'}</p>
+              </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Department / Office</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.department || '—'}</p>
+              </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Supervisor</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.supervisor || '—'}</p>
+              </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Hiring Contact</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.hiring_contact || '—'}</p>
+              </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Position Status</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.position_status || '—'}</p>
+              </div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Desired Start Date</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.start_date || '—'}</p>
+              </div>
+            </div>
+
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+              <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Comments</p>
+              <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{viewRequisition.comments || '—'}</p>
+            </div>
+
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+              <p className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Approvals</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {[
+                  { label: 'Supervisor', name: viewRequisition.supervisor_approval, date: viewRequisition.supervisor_approval_date, sig: viewRequisition.supervisor_approval_sig },
+                  { label: 'Department Head', name: viewRequisition.dept_head_approval, date: viewRequisition.dept_head_approval_date, sig: viewRequisition.dept_head_approval_sig },
+                  { label: 'Cabinet Member', name: viewRequisition.cabinet_approval, date: viewRequisition.cabinet_approval_date, sig: viewRequisition.cabinet_approval_sig },
+                  { label: 'VP for Business and Finance', name: viewRequisition.vp_approval, date: viewRequisition.vp_approval_date, sig: viewRequisition.vp_approval_sig },
+                  { label: 'President', name: viewRequisition.president_approval, date: viewRequisition.president_approval_date, sig: viewRequisition.president_approval_sig },
+                ].map((entry) => (
+                  <div key={entry.label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
+                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{entry.label}</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2">{entry.name || '—'}</p>
+                    <div className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 h-16 flex items-center justify-center overflow-hidden mb-2">
+                      {hasSignature(entry.sig) ? (
+                        <img src={entry.sig} alt={`${entry.label} signature`} className="max-h-14 w-auto object-contain" />
+                      ) : (
+                        <span className="text-[11px] text-slate-400">No signature</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Date: {entry.date || '—'}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setViewRequisition(null)}
+                className="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => exportRequisitionPDF(viewRequisition)}
+                disabled={requisitionApprovalStatus(viewRequisition) !== 'Approved'}
+                title={requisitionApprovalStatus(viewRequisition) === 'Approved' ? 'Export PDF' : 'All signatures required'}
+                className={`px-4 py-2 rounded-lg text-sm font-bold ${requisitionApprovalStatus(viewRequisition) === 'Approved' ? 'bg-teal-deep text-white hover:bg-teal-green' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`}
+              >
+                Export PDF
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </motion.div>
   );
 };
