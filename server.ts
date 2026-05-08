@@ -2890,10 +2890,15 @@ async function startServer() {
         vals.push(canStoreOrgMeta ? (String(dept || '').trim() || null) : null);
       }
       if (role !== undefined && !canStoreOrgMeta) {
-        sets.push('position = ?');
-        vals.push(null);
-        sets.push('dept = ?');
-        vals.push(null);
+        // Avoid duplicate column assignments when position/dept were already provided in payload.
+        if (position === undefined) {
+          sets.push('position = ?');
+          vals.push(null);
+        }
+        if (dept === undefined) {
+          sets.push('dept = ?');
+          vals.push(null);
+        }
       }
 
       if (phone !== undefined) {
