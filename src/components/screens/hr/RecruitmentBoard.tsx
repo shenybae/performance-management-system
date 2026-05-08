@@ -298,7 +298,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     q_questions: trimText(appForm.q_questions, 1000),
     additional_comments: trimText(appForm.additional_comments, 2000),
     interviewer_name: trimText(appForm.interviewer_name, 120),
-    interviewer_title: trimText(appForm.interviewer_title, 120),
+    interviewer_title: trimText(appForm.interviewer_title || 'Interviewer', 120),
     hr_reviewer_name: trimText(appForm.hr_reviewer_name, 120),
     recommendation: trimText(appForm.recommendation || appForm.status, 40),
     status: trimText(appForm.status || appForm.recommendation, 40),
@@ -871,7 +871,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       <div class="sig-grid">
         <div class="sig-card">
           <div class="sig-role">HR Interviewer</div>
-          <div class="sig-title">${a.interviewer_title || '—'}</div>
+          <div class="sig-title">${a.interviewer_title || 'Interviewer'}</div>
           ${sigBlockHtml(a.interviewer_signature || null, '', a.interview_date || '', a.interviewer_name || '', 0)}
         </div>
         <div class="sig-card">
@@ -1525,7 +1525,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                 </div>
                 <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-2.5">
                   <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Interviewer Title</p>
-                  <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-words">{viewApplicant.interviewer_title || '—'}</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-words">{viewApplicant.interviewer_title || 'Interviewer'}</p>
                 </div>
               </div>
             </div>

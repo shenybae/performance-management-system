@@ -1629,7 +1629,7 @@ export const VerificationOfReview = () => {
             <F label="Recommendation" value={r.recommendation || r.status} />
             <F label="Overall Rating" value={r.overall_rating || r.score} />
             <F label="Interviewer" value={r.interviewer_name} />
-            <F label="Interviewer Title" value={r.interviewer_title} />
+            <F label="Interviewer Title" value={r.interviewer_title || 'Interviewer'} />
             <F label="Manager Reviewer" value={r.hr_reviewer_name} />
           </div>
         </SectionCard>
@@ -2314,7 +2314,7 @@ export const VerificationOfReview = () => {
                 'applicantHr', 'hr-applicant', a,
                 undefined,
                 String(a?.interviewer_name || user?.full_name || user?.employee_name || ''),
-                String(a?.interviewer_title || user?.position || ''),
+                String(a?.interviewer_title || 'Interviewer'),
                 String(a?.interview_date || new Date().toISOString().split('T')[0]),
               ),
             }))}
