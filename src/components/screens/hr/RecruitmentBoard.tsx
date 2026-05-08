@@ -860,6 +860,28 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   const statusCounts = applicants.reduce((acc: any, curr) => { acc[curr.status] = (acc[curr.status] || 0) + 1; return acc; }, {});
   const chartData = Object.keys(statusCounts).map(key => ({ status: key, count: statusCounts[key] }));
 
+  const applicantViewDeptSigners = useMemo(() => {
+    const dept = trimText(
+      (viewApplicant as any)?.department
+      || (viewApplicant as any)?.employee_department
+      || scopedDept,
+      100,
+    );
+
+    const inDeptUsers = (Array.isArray(users) ? users : []).filter((u: any) => sameDept(u?.dept, dept));
+    const displayName = (u: any) => String(u?.full_name || u?.employee_name || u?.name || u?.username || u?.email || '').trim();
+
+    const hrAdmin = inDeptUsers.find((u: any) => normalize(u?.role) === 'hr' && normalize(u?.position) === 'hr admin')
+      || inDeptUsers.find((u: any) => normalize(u?.role) === 'hr');
+    const manager = inDeptUsers.find((u: any) => normalize(u?.role) === 'manager');
+
+    return {
+      dept,
+      hrAdminName: displayName(hrAdmin) || '—',
+      managerName: displayName(manager) || '—',
+    };
+  }, [viewApplicant, scopedDept, users]);
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <div className="flex justify-between items-end mb-4">
@@ -1413,8 +1435,8 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
                   <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Interviewer Signature</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Required Signer: HR Admin (Department Scoped)</p>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2 break-words">Printed Name: {viewApplicant.interviewer_name || '—'}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Required Signer: {applicantViewDeptSigners.hrAdminName} (HR Admin • Department Scoped)</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2 break-words">Printed Name: {viewApplicant.interviewer_name || applicantViewDeptSigners.hrAdminName || '—'}</p>
                   <div className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 h-16 flex items-center justify-center overflow-hidden mb-2">
                     {hasSignature(viewApplicant.interviewer_signature) ? (
                       <img src={viewApplicant.interviewer_signature} alt="Interviewer signature" className="max-h-14 w-auto object-contain" />
@@ -1426,8 +1448,8 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                 </div>
                 <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
                   <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Reviewer Signature</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Required Signer: Manager (Department Scoped)</p>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2 break-words">Printed Name: {viewApplicant.hr_reviewer_name || '—'}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Required Signer: {applicantViewDeptSigners.managerName} (Manager • Department Scoped)</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2 break-words">Printed Name: {viewApplicant.hr_reviewer_name || applicantViewDeptSigners.managerName || '—'}</p>
                   <div className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 h-16 flex items-center justify-center overflow-hidden mb-2">
                     {hasSignature(viewApplicant.hr_reviewer_signature) ? (
                       <img src={viewApplicant.hr_reviewer_signature} alt="HR reviewer signature" className="max-h-14 w-auto object-contain" />
