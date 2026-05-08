@@ -530,6 +530,11 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   const activeApprovalReq = approvalOpenId ? requisitions.find(r => Number(r.id) === Number(approvalOpenId)) : null;
 
   const exportRequisitionPDF = async (r: any, shouldPrint = true) => {
+    const approvalStatus = requisitionApprovalStatus(r);
+    if (approvalStatus !== 'Approved') {
+      window.notify?.('All signatures are required before export. Please collect all approvals.', 'error');
+      return;
+    }
     if (shouldPrint && !(await appConfirm('Export this requisition as PDF?', { title: 'Export Requisition PDF', confirmText: 'Export', icon: 'export' }))) return;
     const row = (label: string, value: string) => value ? `
       <tr>
@@ -1087,8 +1092,22 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                     >
                       {approvalOpenId === r.id ? 'Close' : 'Approvals'}
                     </button>
-                    <button onClick={() => exportRequisitionPDF(r, false)} title="View" className="text-blue-500 hover:text-blue-700"><Eye size={14} /></button>
-                    <button onClick={() => exportRequisitionPDF(r)} title="Export PDF" className="text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300"><FileText size={14} /></button>
+                    <button 
+                      onClick={() => exportRequisitionPDF(r, false)} 
+                      title={requisitionApprovalStatus(r) === 'Approved' ? "View" : "All signatures required"}
+                      disabled={requisitionApprovalStatus(r) !== 'Approved'}
+                      className={`${requisitionApprovalStatus(r) === 'Approved' ? 'text-blue-500 hover:text-blue-700' : 'text-slate-300 cursor-not-allowed'}`}
+                    >
+                      <Eye size={14} />
+                    </button>
+                    <button 
+                      onClick={() => exportRequisitionPDF(r)} 
+                      title={requisitionApprovalStatus(r) === 'Approved' ? "Export PDF" : "All signatures required"}
+                      disabled={requisitionApprovalStatus(r) !== 'Approved'}
+                      className={`${requisitionApprovalStatus(r) === 'Approved' ? 'text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300' : 'text-slate-300 cursor-not-allowed'}`}
+                    >
+                      <FileText size={14} />
+                    </button>
                     <button onClick={() => deleteRequisition(r.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                   </td>
                 </tr>
@@ -1118,46 +1137,43 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                     row.nameKey === 'president_approval' ? 'president' : null;
                   
                   const signer = signerKey && approvalSigners?.[signerKey];
+                  const signerName = (approvalForm as any)[row.nameKey] || signer?.full_name || '';
 
                   return (
-                    <div key={row.label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">{row.label}</p>
-                        {signer && (
-                          <span title={`Assigned: ${signer.full_name} (${signer.email})`} className="text-[10px] px-2 py-1 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded font-bold">
-                            ✓ Assigned
-                          </span>
+                    <div key={row.label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800/70">
+                      <div className="mb-4">
+                        <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1">{row.label}</p>
+                        {signerName && (
+                          <p className="text-sm font-bold text-teal-700 dark:text-teal-300">{signerName}</p>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Printed Name</label>
-                          <input
-                            type="text"
-                            value={(approvalForm as any)[row.nameKey]}
-                            onChange={e => setApprovalForm({ ...approvalForm, [row.nameKey]: e.target.value })}
-                            placeholder="Full name"
-                            maxLength={120}
-                            className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
-                          />
-                          {signer && (
-                            <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-1">Department-scoped: {signer.full_name}</p>
-                          )}
-                        </div>
-                        <div>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Signature</label>
                           <SignatureUpload
-                            label="Signature"
+                            label=""
                             value={(approvalForm as any)[row.sigKey]}
                             onChange={dataUrl => setApprovalForm({ ...approvalForm, [row.sigKey]: dataUrl })}
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Date</label>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Date Signed</label>
                           <input
                             type="date"
                             value={(approvalForm as any)[row.dateKey]}
                             onChange={e => setApprovalForm({ ...approvalForm, [row.dateKey]: e.target.value })}
                             max={todayISO}
+                            className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Printed Name</label>
+                          <input
+                            type="text"
+                            value={(approvalForm as any)[row.nameKey]}
+                            onChange={e => setApprovalForm({ ...approvalForm, [row.nameKey]: e.target.value })}
+                            placeholder={signer?.full_name || "Full name"}
+                            maxLength={120}
                             className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
                           />
                         </div>

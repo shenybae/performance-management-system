@@ -74,7 +74,6 @@ async function getDepartments() {
   }
 
   const signerSpecs = [
-    { key: 'depthead', title: 'Department Head' },
     { key: 'cabinet', title: 'Cabinet Member' },
     { key: 'vpfinance', title: 'VP for Business and Finance' },
     { key: 'president', title: 'President' },

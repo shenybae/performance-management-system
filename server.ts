@@ -7711,7 +7711,6 @@ ${relevantGoalIdsSql}
 
       const signerPositions = [
         { position: 'Supervisor', key: 'supervisor' },
-        { position: 'Department Head', key: 'dept_head' },
         { position: 'Cabinet Member', key: 'cabinet' },
         { position: 'VP for Business and Finance', key: 'vp' },
         { position: 'President', key: 'president' },
@@ -7734,6 +7733,20 @@ ${relevantGoalIdsSql}
         const signer = Array.isArray(rows) ? rows[0] : rows;
         signers[key] = signer ? { id: signer.id, full_name: signer.full_name, email: signer.email } : null;
       }
+
+      const deptHrRows = await query(
+        `SELECT id, full_name, email
+         FROM users
+         WHERE deleted_at IS NULL
+           AND LOWER(TRIM(COALESCE(role, ''))) = 'hr'
+           AND LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?))
+         ORDER BY created_at ASC, id ASC
+         LIMIT 1`,
+        [dept]
+      ) as any[];
+
+      const deptHr = Array.isArray(deptHrRows) ? deptHrRows[0] : deptHrRows;
+      signers['dept_head'] = deptHr ? { id: deptHr.id, full_name: deptHr.full_name, email: deptHr.email } : null;
 
       res.json(signers);
     } catch (err) { res.status(500).json({ error: "Database error" }); }
