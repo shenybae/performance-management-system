@@ -23,10 +23,11 @@ const personLabel = (person: any) => {
 };
 
 const roleLabel = (person: any) => {
-  const role = normalize(person?.role || person?.position || '');
-  if (role.includes('hr')) return 'HR Admin';
-  if (role.includes('supervisor')) return 'Supervisor';
-  if (role.includes('manager')) return 'Manager';
+  const role = normalize(person?.role);
+  const position = normalize(person?.position);
+  if (role.includes('hr') || position.includes('hr')) return 'HR Admin';
+  if (position.includes('supervisor') || role.includes('supervisor')) return 'Supervisor';
+  if (position.includes('manager') || role.includes('manager')) return 'Manager';
   return 'Employee';
 };
 
@@ -214,6 +215,43 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
     () => sortedEmployees.map((person) => ({ value: person.id, label: personLabel(person), avatarUrl: (person as any).profile_picture || null })),
     [sortedEmployees]
   );
+
+  const selectedRoleType = selectedEmployee ? roleLabel(selectedEmployee) : '';
+
+  const reportToOptions = useMemo(
+    () => {
+      const policyTargetRole = selectedRoleType === 'Supervisor'
+        ? 'Manager'
+        : selectedRoleType === 'Employee'
+          ? 'Supervisor'
+          : null;
+
+      if (!policyTargetRole) return [] as Array<{ value: number; label: string; avatarUrl: string | null }>;
+
+      return sortedEmployees
+        .filter((person) => roleLabel(person) === policyTargetRole)
+        .map((person) => ({ value: person.id, label: personLabel(person), avatarUrl: (person as any).profile_picture || null }));
+    },
+    [selectedRoleType, sortedEmployees]
+  );
+
+  useEffect(() => {
+    if (!linkedToId) return;
+    const stillAllowed = reportToOptions.some((opt) => Number(opt.value) === Number(linkedToId));
+    if (!stillAllowed) setLinkedToId('');
+  }, [linkedToId, reportToOptions]);
+
+  const reportToLabel = selectedRoleType === 'Supervisor'
+    ? 'Which manager should they report to?'
+    : selectedRoleType === 'Employee'
+      ? 'Which supervisor should they report to?'
+      : 'Who should they report to?';
+
+  const reportToPlaceholder = selectedRoleType === 'Supervisor'
+    ? `Choose a manager in ${activeDeptLabel}...`
+    : selectedRoleType === 'Employee'
+      ? `Choose a supervisor in ${activeDeptLabel}...`
+      : `No report-to target needed for ${selectedRoleType || 'this role'}...`;
 
   const activeDeptManager = useMemo(
     () => activeEmployees.find((person) => roleLabel(person) === 'Manager') || null,
@@ -469,12 +507,12 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
                 </div>
 
                 <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">Who should they report to?</label>
+                  <label className="block text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">{reportToLabel}</label>
                   <SearchableSelect
-                    options={selectOptions.filter((opt) => Number(opt.value) !== Number(selectedEmployeeId))}
+                    options={reportToOptions.filter((opt) => Number(opt.value) !== Number(selectedEmployeeId))}
                     value={linkedToId || ''}
                     onChange={(value) => setLinkedToId(value ? Number(value) : '')}
-                    placeholder={`Choose someone in ${activeDeptLabel}...`}
+                    placeholder={reportToPlaceholder}
                     searchable
                     allowEmpty
                     emptyLabel="No link"
@@ -484,7 +522,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
                 </div>
 
                 <p className="rounded-xl bg-teal-green/10 dark:bg-teal-green/15 px-3 py-2 text-xs text-teal-deep dark:text-teal-green">
-                  This screen only shows and changes links inside {activeDeptLabel}. HR users are shown above, and only people in this department are link targets.
+                  This screen only shows and changes links inside {activeDeptLabel}. Employees link to supervisors, supervisors link to managers, and all targets stay department-scoped.
                 </p>
 
                 <div className="flex flex-wrap gap-3 pt-2">
