@@ -741,7 +741,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
 
   const exportApplicantAppraisalPDF = async (a: any, shouldPrint = true) => {
     if (!isApplicantFullySigned(a)) {
-      window.notify?.('Applicant appraisal PDF is available after interviewer and HR reviewer signatures are complete.', 'error');
+      window.notify?.('Applicant appraisal PDF is available after HR interviewer and manager reviewer signatures are complete.', 'error');
       return;
     }
     if (shouldPrint && !(await appConfirm('Export this applicant appraisal as PDF?', { title: 'Export Applicant Appraisal PDF', confirmText: 'Export', icon: 'export' }))) return;
@@ -828,12 +828,12 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 4px 4px;padding:10px;">
       <div class="sig-grid">
         <div class="sig-card">
-          <div class="sig-role">Interviewer</div>
+          <div class="sig-role">HR Interviewer</div>
           <div class="sig-title">${a.interviewer_title || '—'}</div>
           ${sigBlockHtml(a.interviewer_signature || null, '', a.interview_date || '', a.interviewer_name || '', 0)}
         </div>
         <div class="sig-card">
-          <div class="sig-role">HR Admin Reviewer</div>
+          <div class="sig-role">Manager Reviewer</div>
           <div class="sig-title">—</div>
           ${sigBlockHtml(a.hr_reviewer_signature || null, '', a.hr_reviewer_date || '', a.hr_reviewer_name || '', 0)}
         </div>
@@ -1413,7 +1413,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
                   <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Interviewer Signature</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Required Signer: Interviewer (Manager/Leader/Supervisor)</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Required Signer: HR Admin (Department Scoped)</p>
                   <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2 break-words">Printed Name: {viewApplicant.interviewer_name || '—'}</p>
                   <div className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 h-16 flex items-center justify-center overflow-hidden mb-2">
                     {hasSignature(viewApplicant.interviewer_signature) ? (
@@ -1425,8 +1425,8 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">Date: {viewApplicant.interview_date || '—'}</p>
                 </div>
                 <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
-                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">HR Reviewer Signature</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Required Signer: HR Admin Reviewer</p>
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Reviewer Signature</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Required Signer: Manager (Department Scoped)</p>
                   <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2 break-words">Printed Name: {viewApplicant.hr_reviewer_name || '—'}</p>
                   <div className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 h-16 flex items-center justify-center overflow-hidden mb-2">
                     {hasSignature(viewApplicant.hr_reviewer_signature) ? (
@@ -1445,7 +1445,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
               <button
                 onClick={() => exportApplicantAppraisalPDF(viewApplicant)}
                 disabled={!isApplicantFullySigned(viewApplicant)}
-                title={isApplicantFullySigned(viewApplicant) ? 'Export PDF' : 'Interviewer and HR signatures are required'}
+                title={isApplicantFullySigned(viewApplicant) ? 'Export PDF' : 'HR interviewer and manager reviewer signatures are required'}
                 className={`px-4 py-2 rounded-lg text-sm font-bold ${isApplicantFullySigned(viewApplicant) ? 'bg-teal-deep text-white hover:bg-teal-green' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`}
               >
                 Export PDF

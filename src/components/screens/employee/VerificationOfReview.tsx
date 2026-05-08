@@ -714,7 +714,7 @@ export const VerificationOfReview = () => {
   );
 
   const pendingManagementApplicants = useMemo(
-    () => applicants.filter((a) => !a.interviewer_signature && sameDept(a)),
+    () => applicants.filter((a) => !a.hr_reviewer_signature && sameDept(a)),
     [applicants, queueDept]
   );
 
@@ -813,7 +813,7 @@ export const VerificationOfReview = () => {
 
   const pendingHrApplicants = useMemo(
     () => applicants.filter((a) => {
-      if (a.hr_reviewer_signature) return false;
+      if (a.interviewer_signature) return false;
       if (!sameDept(a)) return false;
       // If HR ownership is set, only show to assigned HR user
       if (a.hr_owner_user_id) {
@@ -1314,12 +1314,12 @@ export const VerificationOfReview = () => {
       case 'emp-prop': return () => signProperty(record.id, 'received_by_sig').then(close);
       case 'hr-app': return () => signHrAppraisal(record.id).then(close);
       case 'hr-onb': return () => signOnboarding(record.id, 'hr_signature').then(close);
-      case 'hr-applicant': return () => signApplicant(record.id, 'hr_reviewer_signature', { name: applicantSignerName.trim(), date: applicantSignerDate }).then(close);
+      case 'hr-applicant': return () => signApplicant(record.id, 'interviewer_signature', { name: applicantSignerName.trim(), title: applicantSignerTitle.trim(), date: applicantSignerDate }).then(close);
       case 'hr-req': return () => signRequisitionStage(record.id, record.stage).then(close);
       case 'mgmt-disc-prep': return () => signPreparerDiscipline(record.id).then(close);
       case 'mgmt-disc-sup': return () => signSupervisorDiscipline(record.id).then(close);
       case 'mgmt-sug': return () => signSupervisorSuggestion(record).then(close);
-      case 'mgmt-app': return () => signApplicant(record.id, 'interviewer_signature', { name: applicantSignerName.trim(), title: applicantSignerTitle.trim(), date: applicantSignerDate }).then(close);
+      case 'mgmt-app': return () => signApplicant(record.id, 'hr_reviewer_signature', { name: applicantSignerName.trim(), date: applicantSignerDate }).then(close);
       case 'mgmt-req': return () => signRequisitionStage(record.id, record.stage).then(close);
       case 'mgmt-prop': return () => signProperty(record.id, record.field).then(close);
       case 'mgmt-exit': return () => signExitInterview(record.id, 'interviewer_sig').then(close);
@@ -1569,8 +1569,8 @@ export const VerificationOfReview = () => {
         <SectionCard><TB label="Notes / Evaluation" value={r.notes} /></SectionCard>
         <SectionCard><TB label="Interviewer Remarks" value={r.interviewer_remarks} /></SectionCard>
         <SectionCard><Sigs items={[
-          { label: 'Interviewer', signed: !!r.interviewer_signature, date: r.interview_date },
-          { label: 'HR Reviewer', signed: !!r.hr_reviewer_signature, date: r.hr_reviewer_date },
+          { label: 'HR Interviewer', signed: !!r.interviewer_signature, date: r.interview_date },
+          { label: 'Manager Reviewer', signed: !!r.hr_reviewer_signature, date: r.hr_reviewer_date },
         ]} /></SectionCard>
       </ViewShell>
     );
@@ -2033,26 +2033,26 @@ export const VerificationOfReview = () => {
 
           {activeQueueSection === 'mgmt-applicants' && (
           <Card>
-            <h3 className="text-sm font-bold mb-3">Applicants Needing Interviewer Signature</h3>
-            {pendingManagementApplicants.length === 0 && renderEmptyQueueState('No pending interviewer signatures.')}
+            <h3 className="text-sm font-bold mb-3">Applicants Needing Manager Reviewer Signature</h3>
+            {pendingManagementApplicants.length === 0 && renderEmptyQueueState('No pending manager reviewer signatures.')}
             {pendingManagementApplicants.map((a) => renderQueueCard({
               id: `mgmt-app-${a.id}`,
               icon: <Users size={16} />,
               iconColorClass: 'text-indigo-600 dark:text-indigo-400',
               iconBgClass: 'bg-indigo-50 dark:bg-indigo-900/20',
               title: `${a.name || 'Applicant'} — ${a.position || 'Position'}`,
-              subtitle: `Interview appraisal • ${a.interview_date || '—'}`,
-              badge: 'Interviewer',
+              subtitle: `Manager reviewer signature needed • ${a.interview_date || '—'}`,
+              badge: 'Manager Reviewer',
               badgeColorClass: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',
               pills: [{ icon: <Building2 size={10} />, text: a.department || a.employee_department || '—' }],
               onView: () => setGenericViewModal({ title: `Applicant — ${a.name || 'Applicant'}`, type: 'applicant', record: a }),
               onSign: () => openGenericSign(
-                `Sign — Applicant Interview (${a.name || 'Applicant'})`,
+                `Sign — Applicant Manager Review (${a.name || 'Applicant'})`,
                 'applicantInterviewer', 'mgmt-app', a,
                 undefined,
-                String(a?.interviewer_name || user?.full_name || user?.employee_name || ''),
-                String(a?.interviewer_title || user?.position || ''),
-                String(a?.interview_date || new Date().toISOString().split('T')[0]),
+                String(a?.hr_reviewer_name || user?.full_name || user?.employee_name || ''),
+                '',
+                String(a?.hr_reviewer_date || new Date().toISOString().split('T')[0]),
               ),
             }))}
           </Card>
@@ -2182,26 +2182,26 @@ export const VerificationOfReview = () => {
 
           {activeQueueSection === 'hr-applicants' && (
           <Card>
-            <h3 className="text-sm font-bold mb-3">Applicant Reviews Needing HR Signature</h3>
-            {pendingHrApplicants.length === 0 && renderEmptyQueueState('No pending applicant reviewer signatures.')}
+            <h3 className="text-sm font-bold mb-3">Applicant Reviews Needing HR Interviewer Signature</h3>
+            {pendingHrApplicants.length === 0 && renderEmptyQueueState('No pending HR interviewer signatures.')}
             {pendingHrApplicants.map((a) => renderQueueCard({
               id: `hr-applicant-${a.id}`,
               icon: <Users size={16} />,
               iconColorClass: 'text-indigo-600 dark:text-indigo-400',
               iconBgClass: 'bg-indigo-50 dark:bg-indigo-900/20',
               title: `${a.name || 'Applicant'} — ${a.position || 'Position'}`,
-              subtitle: 'HR reviewer signature needed',
-              badge: 'HR Reviewer',
+              subtitle: 'HR interviewer signature needed',
+              badge: 'HR Interviewer',
               badgeColorClass: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
               pills: [{ icon: <Building2 size={10} />, text: a.department || a.employee_department || '—' }],
               onView: () => setGenericViewModal({ title: `Applicant — ${a.name || 'Applicant'}`, type: 'applicant', record: a }),
               onSign: () => openGenericSign(
-                `Sign — HR Review (${a.name || 'Applicant'})`,
+                `Sign — HR Interview (${a.name || 'Applicant'})`,
                 'applicantHr', 'hr-applicant', a,
                 undefined,
-                String(a?.hr_reviewer_name || user?.full_name || user?.employee_name || ''),
-                '',
-                String(a?.hr_reviewer_date || new Date().toISOString().split('T')[0]),
+                String(a?.interviewer_name || user?.full_name || user?.employee_name || ''),
+                String(a?.interviewer_title || user?.position || ''),
+                String(a?.interview_date || new Date().toISOString().split('T')[0]),
               ),
             }))}
           </Card>

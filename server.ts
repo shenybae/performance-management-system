@@ -9210,9 +9210,24 @@ ${relevantGoalIdsSql}
         return res.status(400).json({ error: 'Invalid signature field' });
       }
 
-      const canInterviewer = (actor.role === 'Manager' || actor.role === 'Leader' || actor.role === 'HR' || (actor.role === 'Employee' && actorCtx.isSupervisor)) && field === 'interviewer_signature';
-      const canHrReview = actor.role === 'HR' && field === 'hr_reviewer_signature';
-      if (!canInterviewer && !canHrReview) return res.status(403).json({ error: 'Forbidden' });
+      const applicantRows: any = await query('SELECT * FROM applicants WHERE id = ? LIMIT 1', [req.params.id]);
+      const applicant = Array.isArray(applicantRows) ? applicantRows[0] : applicantRows;
+      if (!applicant) return res.status(404).json({ error: 'Applicant not found' });
+
+      const actorDept = normalizeDept(actorCtx.dept || actor.dept || actor.department || null);
+      const applicantDept = normalizeDept(
+        applicant.department || applicant.dept || applicant.employee_department || applicant.position_dept || null
+      );
+      if (applicantDept && actorDept && applicantDept !== actorDept) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      // New flow:
+      // - interviewer_signature is signed by HR Admin (HR role)
+      // - hr_reviewer_signature is signed by Manager role
+      const canHrInterviewer = actor.role === 'HR' && field === 'interviewer_signature';
+      const canManagerReviewer = actor.role === 'Manager' && field === 'hr_reviewer_signature';
+      if (!canHrInterviewer && !canManagerReviewer) return res.status(403).json({ error: 'Forbidden' });
 
       if (field === 'interviewer_signature') {
         await query('UPDATE applicants SET interviewer_signature = ?, interviewer_name = COALESCE(?, interviewer_name), interviewer_title = COALESCE(?, interviewer_title), interview_date = COALESCE(?, interview_date) WHERE id = ?',
