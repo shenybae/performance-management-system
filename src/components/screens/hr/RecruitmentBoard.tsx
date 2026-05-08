@@ -1003,13 +1003,21 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Position Applied For <span className="normal-case text-[10px] text-slate-400">({scopedDept || 'Department not set'})</span></label>
-                  <SearchableSelect
-                    options={applicantPositionOptions}
+                  <input
+                    type="text"
+                    list="applicant-position-options"
                     value={appForm.position}
-                    onChange={(value) => setAppForm({ ...appForm, position: String(value || '') })}
-                    placeholder={applicantPositionOptions.length ? 'Select position' : 'No positions found for this department'}
-                    className="text-sm"
+                    onChange={e => setAppForm({ ...appForm, position: e.target.value })}
+                    placeholder={applicantPositionOptions.length ? 'Select or type position' : 'Type position'}
+                    className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+                    maxLength={120}
+                    required
                   />
+                  <datalist id="applicant-position-options">
+                    {applicantPositionOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value} />
+                    ))}
+                  </datalist>
                 </div>
                 <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Interview Date</label><input type="date" value={appForm.interview_date} onChange={e => setAppForm({ ...appForm, interview_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" max={todayISO} required /></div>
               </div>
