@@ -117,12 +117,18 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
   const startOnboardFromApplicant = (applicant: any) => {
     const applicantDept = String(applicant?.department || applicant?.employee_department || '').trim();
     const resolvedDept = scopedDept || applicantDept;
+    const rawHireDate = applicant?.hired_at || applicant?.hire_date || applicant?.updated_at || applicant?.created_at || '';
+    const normalizedHireDate = String(rawHireDate || '').trim();
+    const derivedHireDate = normalizedHireDate
+      ? normalizedHireDate.split('T')[0]
+      : todayISO;
     setActiveOnboard(applicant);
     setForm({
       ...buildEmptyForm(),
       name: applicant.name,
       position: applicant.position || '',
       dept: resolvedDept,
+      hire_date: derivedHireDate,
     });
     setShowManualForm(true);
   };
