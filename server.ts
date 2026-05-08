@@ -7641,25 +7641,50 @@ ${relevantGoalIdsSql}
   app.get("/api/requisitions", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
-      if (!isPrivilegedRole(actor.role) && actor.role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+      const isSupervisorEmployee = actor.role === 'Employee' &&
+        String(actor.position || '').toLowerCase().includes('supervisor');
+      if (!isPrivilegedRole(actor.role) && actor.role !== 'Manager' && !isSupervisorEmployee)
+        return res.status(403).json({ error: 'Forbidden' });
 
-      const rows = await query(
-        `SELECT r.*,
-                CASE
-                  WHEN COALESCE(TRIM(r.supervisor_approval_sig), '') <> ''
-                   AND COALESCE(TRIM(r.dept_head_approval_sig), '') <> ''
-                   AND COALESCE(TRIM(r.cabinet_approval_sig), '') <> ''
-                   AND COALESCE(TRIM(r.vp_approval_sig), '') <> ''
-                   AND COALESCE(TRIM(r.president_approval_sig), '') <> ''
-                  THEN 'Approved'
-                  ELSE 'Pending Approval'
-                END AS approval_status
-         FROM requisitions r
-         ORDER BY r.created_at DESC`
-      );
+      let rows;
+      if (isSupervisorEmployee && !isPrivilegedRole(actor.role) && actor.role !== 'Manager') {
+        // Supervisors only see requisitions from their own department
+        rows = await query(
+          `SELECT r.*,
+                  CASE
+                    WHEN COALESCE(TRIM(r.supervisor_approval_sig), '') <> ''
+                     AND COALESCE(TRIM(r.dept_head_approval_sig), '') <> ''
+                     AND COALESCE(TRIM(r.cabinet_approval_sig), '') <> ''
+                     AND COALESCE(TRIM(r.vp_approval_sig), '') <> ''
+                     AND COALESCE(TRIM(r.president_approval_sig), '') <> ''
+                    THEN 'Approved'
+                    ELSE 'Pending Approval'
+                  END AS approval_status
+           FROM requisitions r
+           WHERE LOWER(TRIM(COALESCE(r.department, ''))) = LOWER(TRIM(?))
+           ORDER BY r.created_at DESC`,
+          [String(actor.dept || '').trim()]
+        );
+      } else {
+        rows = await query(
+          `SELECT r.*,
+                  CASE
+                    WHEN COALESCE(TRIM(r.supervisor_approval_sig), '') <> ''
+                     AND COALESCE(TRIM(r.dept_head_approval_sig), '') <> ''
+                     AND COALESCE(TRIM(r.cabinet_approval_sig), '') <> ''
+                     AND COALESCE(TRIM(r.vp_approval_sig), '') <> ''
+                     AND COALESCE(TRIM(r.president_approval_sig), '') <> ''
+                    THEN 'Approved'
+                    ELSE 'Pending Approval'
+                  END AS approval_status
+           FROM requisitions r
+           ORDER BY r.created_at DESC`
+        );
+      }
       res.json(rows);
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
+
   app.post("/api/requisitions", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
@@ -7716,7 +7741,10 @@ ${relevantGoalIdsSql}
   app.get("/api/requisitions/signers/:department", authenticateToken, async (req, res) => {
     try {
       const actor = (req as any).user || {};
-      if (!isPrivilegedRole(actor.role) && actor.role !== 'Manager') return res.status(403).json({ error: 'Forbidden' });
+      const isSupervisorEmployee = actor.role === 'Employee' &&
+        String(actor.position || '').toLowerCase().includes('supervisor');
+      if (!isPrivilegedRole(actor.role) && actor.role !== 'Manager' && !isSupervisorEmployee)
+        return res.status(403).json({ error: 'Forbidden' });
 
       const dept = String(req.params.department || '').trim();
       if (!dept) return res.status(400).json({ error: 'Department is required' });
