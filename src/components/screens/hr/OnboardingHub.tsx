@@ -20,6 +20,16 @@ const normalize = (value?: string | null) => (value || '').toString().trim().toL
 const sameDept = (a?: string | null, b?: string | null) => normalize(a) === normalize(b) && normalize(a) !== '';
 
 export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProps) => {
+  const currentUser = (() => {
+    try {
+      const raw = localStorage.getItem('talentflow_user') || localStorage.getItem('user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const scopedDept = String(currentUser?.dept || '').trim();
+
   const [hiredApplicants, setHiredApplicants] = useState<any[]>([]);
   const [onboardingRecords, setOnboardingRecords] = useState<any[]>([]);
   const [showManualForm, setShowManualForm] = useState(false);
@@ -28,7 +38,7 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
 
   // Manual employee creation form
   const buildEmptyForm = () => ({
-    name: '', position: '', dept: '', hire_date: '',
+    name: '', position: '', dept: scopedDept, hire_date: '',
     salary_base: '', ssn: '', manager_id: '',
     emergency_contact: '', emergency_phone: '', address: '',
     // Property issuance
@@ -100,11 +110,14 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
   };
 
   const startOnboardFromApplicant = (applicant: any) => {
+    const applicantDept = String(applicant?.department || applicant?.employee_department || '').trim();
+    const resolvedDept = scopedDept || applicantDept;
     setActiveOnboard(applicant);
     setForm({
       ...buildEmptyForm(),
       name: applicant.name,
       position: applicant.position || '',
+      dept: resolvedDept,
     });
     setShowManualForm(true);
   };
@@ -114,7 +127,7 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
       ...form,
       name: trimText(form.name),
       position: trimText(form.position),
-      dept: trimText(form.dept),
+      dept: trimText(scopedDept || form.dept),
       hire_date: trimText(form.hire_date),
       salary_base: trimText(form.salary_base),
       ssn: trimText(form.ssn),
@@ -405,16 +418,12 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Position / Job Title</label>
                     <input type="text" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} required /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department</label>
-                    <SearchableSelect
-                      options={['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => ({ value: d, label: d }))}
-                      value={form.dept}
-                      onChange={v => setForm({ ...form, dept: String(v) })}
-                      placeholder="Select department..."
-                      allowEmpty
-                      emptyLabel="Select department..."
-                      searchable
-                      dropdownVariant="pills-horizontal"
-                      className="w-full"
+                    <input
+                      type="text"
+                      value={form.dept || scopedDept || ''}
+                      readOnly
+                      className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 rounded-lg text-sm text-slate-700 dark:text-slate-200"
+                      placeholder="Department is scoped"
                     /></div>
                   <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Hire Date</label>
                     <input type="date" value={form.hire_date} onChange={e => setForm({ ...form, hire_date: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" max={todayISO} required /></div>
