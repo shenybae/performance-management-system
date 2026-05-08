@@ -1042,8 +1042,8 @@ export const VerificationOfReview = () => {
         <input
           type="text"
           value={applicantSignerName}
-          onChange={(e) => setApplicantSignerName(e.target.value)}
-          className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+          readOnly
+          className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/60 rounded-lg text-sm dark:text-slate-100"
           placeholder="Printed Name"
           maxLength={120}
         />
@@ -1051,8 +1051,8 @@ export const VerificationOfReview = () => {
           <input
             type="text"
             value={applicantSignerTitle}
-            onChange={(e) => setApplicantSignerTitle(e.target.value)}
-            className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+            readOnly
+            className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/60 rounded-lg text-sm dark:text-slate-100"
             placeholder="Title"
             maxLength={120}
           />
@@ -1060,8 +1060,8 @@ export const VerificationOfReview = () => {
         <input
           type="date"
           value={applicantSignerDate}
-          onChange={(e) => setApplicantSignerDate(e.target.value)}
-          className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+          readOnly
+          className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/60 rounded-lg text-sm dark:text-slate-100"
           max={new Date().toISOString().split('T')[0]}
         />
       </div>
@@ -2211,7 +2211,7 @@ export const VerificationOfReview = () => {
                 'applicantInterviewer', 'mgmt-app', a,
                 undefined,
                 String(a?.hr_reviewer_name || user?.full_name || user?.employee_name || ''),
-                '',
+                String(a?.hr_reviewer_title || 'Manager Reviewer'),
                 String(a?.hr_reviewer_date || new Date().toISOString().split('T')[0]),
               ),
             }))}
