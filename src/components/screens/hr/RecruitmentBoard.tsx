@@ -127,21 +127,42 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       .sort((a: any, b: any) => a.label.localeCompare(b.label));
   }, [reqForm.department, supervisorOptions]);
 
-  const departmentOptions = useMemo(() => {
-    const fromEmployees = (Array.isArray(employees) ? employees : []).map((e: any) => String(e?.dept || '').trim()).filter(Boolean);
-    const fromUsers = (Array.isArray(users) ? users : []).map((u: any) => String(u?.dept || '').trim()).filter(Boolean);
-    const fromRequisitions = (Array.isArray(requisitions) ? requisitions : []).map((r: any) => String(r?.department || '').trim()).filter(Boolean);
-    const merged = Array.from(new Set([...fromEmployees, ...fromUsers, ...fromRequisitions]));
-    const scoped = scopedDept ? merged.filter((dept) => sameDept(dept, scopedDept)) : merged;
-    return scoped
-      .sort((a, b) => a.localeCompare(b))
-      .map((dept) => ({ value: dept, label: dept }));
-  }, [employees, requisitions, scopedDept, users]);
+  const scopedSupervisorValue = useMemo(() => {
+    if (!scopedDept) return '';
+    const inDept = supervisorOptions
+      .filter((option: any) => sameDept(option.dept, scopedDept))
+      .sort((a: any, b: any) => a.label.localeCompare(b.label));
+    if (inDept.length === 0) return '';
+
+    const preferredSupervisor = inDept.find((option: any) => normalize(option.position).includes('supervisor'));
+    const preferredManager = inDept.find((option: any) => normalize(option.role) === 'manager');
+    return String((preferredSupervisor || preferredManager || inDept[0]).value || '').trim();
+  }, [scopedDept, supervisorOptions]);
 
   useEffect(() => {
     if (!scopedDept) return;
-    setReqForm((prev) => (sameDept(prev.department, scopedDept) ? prev : { ...prev, department: scopedDept, supervisor: '', job_title: '' }));
-  }, [scopedDept]);
+    setReqForm((prev) => {
+      const nextDepartment = scopedDept;
+      const shouldResetJobTitle = !sameDept(prev.department, nextDepartment);
+      const nextJobTitle = shouldResetJobTitle ? '' : prev.job_title;
+      const nextSupervisor = scopedSupervisorValue;
+
+      if (
+        prev.department === nextDepartment &&
+        prev.supervisor === nextSupervisor &&
+        prev.job_title === nextJobTitle
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        department: nextDepartment,
+        supervisor: nextSupervisor,
+        job_title: nextJobTitle,
+      };
+    });
+  }, [scopedDept, scopedSupervisorValue]);
 
   const departmentJobTitleOptions = useMemo(() => {
     const dept = trimText(reqForm.department, 100);
@@ -717,30 +738,22 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Department / Office</label>
-                  <SearchableSelect
-                    options={departmentOptions}
-                    value={reqForm.department}
-                    onChange={v => setReqForm({ ...reqForm, department: String(v || '') })}
-                    placeholder={scopedDept ? scopedDept : 'Select department...'}
-                    allowEmpty
-                    emptyLabel={scopedDept ? scopedDept : 'Select department...'}
-                    searchable
-                    dropdownVariant="pills-horizontal"
-                    className="w-full"
-                    disabled={!!scopedDept}
+                  <input
+                    type="text"
+                    value={reqForm.department || scopedDept || ''}
+                    readOnly
+                    className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 rounded-lg text-sm text-slate-700 dark:text-slate-200"
+                    placeholder="Department is scoped"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Supervisor</label>
-                  <SearchableSelect
-                    options={departmentSupervisorOptions}
-                    value={reqForm.supervisor}
-                    onChange={v => setReqForm({ ...reqForm, supervisor: String(v || '') })}
-                    placeholder={reqForm.department ? 'Select supervisor...' : 'Select department first'}
-                    allowEmpty
-                    emptyLabel={reqForm.department ? 'Select supervisor...' : 'Select department first'}
-                    dropdownVariant="pills-horizontal"
-                    searchable
+                  <input
+                    type="text"
+                    value={reqForm.supervisor || ''}
+                    readOnly
+                    className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 rounded-lg text-sm text-slate-700 dark:text-slate-200"
+                    placeholder={reqForm.department ? 'No supervisor found for this department' : 'Department is scoped'}
                   />
                 </div>
                 <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Hiring Contact (if other than supervisor)</label><input type="text" value={reqForm.hiring_contact} onChange={e => setReqForm({ ...reqForm, hiring_contact: e.target.value })} className="w-full p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100" maxLength={120} /></div>
