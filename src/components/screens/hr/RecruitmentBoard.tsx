@@ -43,6 +43,8 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   const [viewSigners, setViewSigners] = useState<any>({});
   const [requisitionSearch, setRequisitionSearch] = useState('');
   const [requisitionStatusFilter, setRequisitionStatusFilter] = useState<'all' | 'approved' | 'pending' | 'archived'>('all');
+  const [applicantSearch, setApplicantSearch] = useState('');
+  const [applicantStatusFilter, setApplicantStatusFilter] = useState<'pending' | 'archived' | 'signed'>('signed');
   const [reqForm, setReqForm] = useState({
     job_title: '', department: scopedDept, supervisor: '', hiring_contact: '',
     position_status: '', months_per_year: '' as any, hours_per_week: '' as any,
@@ -521,6 +523,24 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       return statusMatches && searchMatches;
     });
   }, [requisitions, requisitionSearch, requisitionStatusFilter]);
+
+  const filteredApplicants = useMemo(() => {
+    const q = applicantSearch.trim().toLowerCase();
+    return applicants.filter((a) => {
+      const archived = !!a?.deleted_at;
+      const signed = isApplicantFullySigned(a);
+      const statusMatches = applicantStatusFilter === 'archived'
+        ? archived
+        : applicantStatusFilter === 'signed'
+          ? (!archived && signed)
+          : (!archived && !signed);
+
+      const searchMatches = !q || [a?.name, a?.position, a?.status, resolveApplicantDepartment(a)]
+        .some((v) => String(v || '').toLowerCase().includes(q));
+
+      return statusMatches && searchMatches;
+    });
+  }, [applicants, applicantSearch, applicantStatusFilter]);
 
   const inferredApplicantDeptByPosition = useMemo(() => {
     const scoreRequisition = (r: any) => {
@@ -1252,9 +1272,29 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
           </Card>
         </div>
         <Card>
-          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">Applicants ({applicants.length})</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">Applicants ({filteredApplicants.length})</h3>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={applicantSearch}
+                onChange={(e) => setApplicantSearch(e.target.value)}
+                placeholder="Search applicant, position..."
+                className="w-full sm:w-56 p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+              />
+              <select
+                value={applicantStatusFilter}
+                onChange={(e) => setApplicantStatusFilter(e.target.value as 'pending' | 'archived' | 'signed')}
+                className="p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+              >
+                <option value="pending">Pending</option>
+                <option value="archived">Archived</option>
+                <option value="signed">Signed</option>
+              </select>
+            </div>
+          </div>
           <div className="space-y-4 overflow-y-auto h-64 pr-2 custom-scrollbar">
-            {applicants.map(app => (
+            {filteredApplicants.map(app => (
               <div key={app.id} className="p-3 border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                 <div className="flex justify-between items-start mb-1">
                   <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{app.name}</span>
@@ -1280,7 +1320,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                 </div>
               </div>
             ))}
-            {applicants.length === 0 && <p className="text-xs text-slate-400 text-center py-8">No applicants yet</p>}
+            {filteredApplicants.length === 0 && <p className="text-xs text-slate-400 text-center py-8">No applicants match the selected filters.</p>}
           </div>
         </Card>
       </div>
