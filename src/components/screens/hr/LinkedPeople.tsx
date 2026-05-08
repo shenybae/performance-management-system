@@ -523,7 +523,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
                 </div>
 
                 <p className="rounded-xl bg-teal-green/10 dark:bg-teal-green/15 px-3 py-2 text-xs text-teal-deep dark:text-teal-green">
-                  This screen only shows and changes links inside {activeDeptLabel}. Link targets are department-scoped by role: Employee -> Supervisor/Manager/HR, Supervisor -> Manager/HR, Manager -> HR.
+                  This screen only shows and changes links inside {activeDeptLabel}. Link targets are department-scoped by role: Employee -&gt; Supervisor/Manager/HR, Supervisor -&gt; Manager/HR, Manager -&gt; HR.
                 </p>
 
                 <div className="flex flex-wrap gap-3 pt-2">
