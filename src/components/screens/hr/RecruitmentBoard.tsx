@@ -297,7 +297,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     q_contribution: trimText(appForm.q_contribution, 1000),
     q_questions: trimText(appForm.q_questions, 1000),
     additional_comments: trimText(appForm.additional_comments, 2000),
-    interviewer_name: trimText(appForm.interviewer_name, 120),
+    interviewer_name: trimText(appForm.interviewer_name || currentUser?.full_name || currentUser?.employee_name || 'Interviewer', 120),
     interviewer_title: trimText(appForm.interviewer_title || 'Interviewer', 120),
     hr_reviewer_name: trimText(appForm.hr_reviewer_name, 120),
     recommendation: trimText(appForm.recommendation || appForm.status, 40),
@@ -1524,8 +1524,9 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                   <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-words">{viewApplicant.additional_comments || '—'}</p>
                 </div>
                 <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-2.5">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Interviewer Title</p>
-                  <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-words">{viewApplicant.interviewer_title || 'Interviewer'}</p>
+                  <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Interviewer Name</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-words">{viewApplicant.interviewer_name || applicantViewDeptSigners.hrAdminName || 'Interviewer'}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Title: {viewApplicant.interviewer_title || 'Interviewer'}</p>
                 </div>
               </div>
             </div>
