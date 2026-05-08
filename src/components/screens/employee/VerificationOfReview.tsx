@@ -1334,6 +1334,33 @@ export const VerificationOfReview = () => {
         <p className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap break-words overflow-x-hidden">{value}</p>
       </div>
     ) : null;
+    const ViewShell = ({ children }: { children: React.ReactNode }) => (
+      <div className="space-y-5 overflow-x-hidden">{children}</div>
+    );
+    const HeroCard = ({ eyebrow, title, meta, badge }: { eyebrow: string; title: string; meta?: string; badge?: string }) => (
+      <div className="rounded-2xl border border-teal-100 dark:border-teal-900/40 bg-gradient-to-br from-teal-50 via-white to-cyan-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">{eyebrow}</p>
+            <h3 className="mt-1 text-xl font-black text-slate-900 dark:text-slate-100 break-words">{title}</h3>
+            {meta && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 break-words">{meta}</p>}
+          </div>
+          {badge && (
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center rounded-full bg-teal-600 px-3 py-1 text-[11px] font-bold text-white">
+                {badge}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+    const SectionCard = ({ title, children }: { title?: string; children: React.ReactNode }) => (
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5 overflow-x-hidden">
+        {title && <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-3">{title}</p>}
+        {children}
+      </div>
+    );
     const Sigs = ({ items }: { items: Array<{ label: string; signed: boolean; date?: string }> }) => (
       <div>
         <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">Signature Status</p>
@@ -1352,123 +1379,149 @@ export const VerificationOfReview = () => {
     if (type === 'discipline') return renderDisciplineReview(r);
 
     if (type === 'suggestion') return (
-      <div className="space-y-4">
-        <div className="grid sm:grid-cols-2 gap-4">
-          <F label="Employee" value={r.employee_name} />
-          <F label="Department" value={r.department || r.employee_department} />
-          <F label="Date" value={r.date || r.created_at?.split('T')[0]} />
-          <F label="Status" value={r.status || 'Pending'} />
-        </div>
-        <TB label="Title / Subject" value={r.title} />
-        <TB label="Concern / Suggestion" value={r.concern} />
-        <TB label="Action to be Taken" value={r.action_to_be_taken} />
-        <Sigs items={[
+      <ViewShell>
+        <HeroCard
+          eyebrow="Suggestion Form"
+          title={r.title || 'Suggestion'}
+          meta={`${r.employee_name || 'Employee'}${r.department || r.employee_department ? ` • ${r.department || r.employee_department}` : ''}`}
+          badge={r.status || 'Pending'}
+        />
+        <SectionCard title="Suggestion Information">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <F label="Employee" value={r.employee_name} />
+            <F label="Department" value={r.department || r.employee_department} />
+            <F label="Date" value={r.date || r.created_at?.split('T')[0]} />
+            <F label="Status" value={r.status || 'Pending'} />
+          </div>
+        </SectionCard>
+        <SectionCard><TB label="Title / Subject" value={r.title} /></SectionCard>
+        <SectionCard><TB label="Concern / Suggestion" value={r.concern} /></SectionCard>
+        <SectionCard><TB label="Action to be Taken" value={r.action_to_be_taken} /></SectionCard>
+        <SectionCard><Sigs items={[
           { label: 'Employee', signed: !!r.employee_signature, date: r.employee_signature_date },
           { label: 'Supervisor', signed: !!r.supervisor_signature, date: r.supervisor_signature_date },
-        ]} />
-      </div>
+        ]} /></SectionCard>
+      </ViewShell>
     );
 
     if (type === 'onboarding') return (
-      <div className="space-y-4">
-        <div className="grid sm:grid-cols-2 gap-4">
-          <F label="Employee" value={r.employee_name} />
-          <F label="Department" value={r.department || r.employee_department} />
-          <F label="Start Date" value={r.start_date} />
-          <F label="Status" value={r.status || 'Pending'} />
-          <F label="Position" value={r.position} />
-          <F label="Employment Type" value={r.employment_type} />
-        </div>
-        <TB label="Notes" value={r.notes} />
-        <TB label="Checklist / Instructions" value={r.checklist} />
-        <Sigs items={[
+      <ViewShell>
+        <HeroCard
+          eyebrow="Onboarding Form"
+          title={`Onboarding — ${r.employee_name || 'Employee'}`}
+          meta={`${r.department || r.employee_department || 'No department'}${r.start_date ? ` • Start: ${r.start_date}` : ''}`}
+          badge={r.status || 'Pending'}
+        />
+        <SectionCard title="Employee Information">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <F label="Employee" value={r.employee_name} />
+            <F label="Department" value={r.department || r.employee_department} />
+            <F label="Start Date" value={r.start_date} />
+            <F label="Status" value={r.status || 'Pending'} />
+            <F label="Position" value={r.position} />
+            <F label="Employment Type" value={r.employment_type} />
+          </div>
+        </SectionCard>
+        <SectionCard><TB label="Notes" value={r.notes} /></SectionCard>
+        <SectionCard><TB label="Checklist / Instructions" value={r.checklist} /></SectionCard>
+        <SectionCard><Sigs items={[
           { label: 'Employee', signed: !!r.employee_signature, date: r.employee_signature_date },
           { label: 'HR', signed: !!r.hr_signature, date: r.hr_signature_date },
-        ]} />
-      </div>
+        ]} /></SectionCard>
+      </ViewShell>
     );
 
     if (type === 'exit') return (
-      <div className="space-y-4">
-        <div className="grid sm:grid-cols-2 gap-4">
-          <F label="Employee" value={r.employee_name} />
-          <F label="Department" value={r.department || r.employee_department} />
-          <F label="Position" value={r.position} />
-          <F label="Interview Date" value={r.interview_date} />
-          <F label="Last Day" value={r.last_day} />
-          <F label="Interviewer" value={r.interviewer_name} />
-        </div>
-        <TB label="Reason for Leaving" value={r.reason_for_leaving} />
-        <TB label="What did you like about working here?" value={r.liked_about_work} />
-        <TB label="What could be improved?" value={r.improvements} />
-        <TB label="Additional Comments" value={r.comments} />
-        <Sigs items={[
+      <ViewShell>
+        <HeroCard
+          eyebrow="Exit Interview"
+          title={`Exit Interview — ${r.employee_name || 'Employee'}`}
+          meta={`${r.department || r.employee_department || 'No department'}${r.interview_date ? ` • Interview: ${r.interview_date}` : ''}`}
+        />
+        <SectionCard title="Employee Information">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <F label="Employee" value={r.employee_name} />
+            <F label="Department" value={r.department || r.employee_department} />
+            <F label="Position" value={r.position} />
+            <F label="Interview Date" value={r.interview_date} />
+            <F label="Last Day" value={r.last_day} />
+            <F label="Interviewer" value={r.interviewer_name} />
+          </div>
+        </SectionCard>
+        <SectionCard><TB label="Reason for Leaving" value={r.reason_for_leaving} /></SectionCard>
+        <SectionCard><TB label="What did you like about working here?" value={r.liked_about_work} /></SectionCard>
+        <SectionCard><TB label="What could be improved?" value={r.improvements} /></SectionCard>
+        <SectionCard><TB label="Additional Comments" value={r.comments} /></SectionCard>
+        <SectionCard><Sigs items={[
           { label: 'Employee', signed: !!r.employee_sig, date: r.employee_sig_date },
           { label: 'Interviewer', signed: !!r.interviewer_sig, date: r.interviewer_sig_date },
-        ]} />
-      </div>
+        ]} /></SectionCard>
+      </ViewShell>
     );
 
     if (type === 'applicant') return (
-      <div className="space-y-4">
-        <div className="grid sm:grid-cols-2 gap-4">
-          <F label="Applicant Name" value={r.name} />
-          <F label="Position Applied" value={r.position} />
-          <F label="Department" value={r.department || r.employee_department} />
-          <F label="Interview Date" value={r.interview_date} />
-          <F label="Status" value={r.status} />
-          <F label="Source" value={r.source} />
-        </div>
-        <TB label="Notes / Evaluation" value={r.notes} />
-        <TB label="Interviewer Remarks" value={r.interviewer_remarks} />
-        <Sigs items={[
+      <ViewShell>
+        <HeroCard
+          eyebrow="Applicant Review"
+          title={`${r.name || 'Applicant'} — ${r.position || 'Position'}`}
+          meta={`${r.department || r.employee_department || 'No department'}${r.interview_date ? ` • Interview: ${r.interview_date}` : ''}`}
+          badge={r.status || 'Pending'}
+        />
+        <SectionCard title="Applicant Information">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <F label="Applicant Name" value={r.name} />
+            <F label="Position Applied" value={r.position} />
+            <F label="Department" value={r.department || r.employee_department} />
+            <F label="Interview Date" value={r.interview_date} />
+            <F label="Status" value={r.status} />
+            <F label="Source" value={r.source} />
+          </div>
+        </SectionCard>
+        <SectionCard><TB label="Notes / Evaluation" value={r.notes} /></SectionCard>
+        <SectionCard><TB label="Interviewer Remarks" value={r.interviewer_remarks} /></SectionCard>
+        <SectionCard><Sigs items={[
           { label: 'Interviewer', signed: !!r.interviewer_signature, date: r.interview_date },
           { label: 'HR Reviewer', signed: !!r.hr_reviewer_signature, date: r.hr_reviewer_date },
-        ]} />
-      </div>
+        ]} /></SectionCard>
+      </ViewShell>
     );
 
     if (type === 'property') return (
-      <div className="space-y-4">
-        <div className="grid sm:grid-cols-2 gap-4">
-          <F label="Employee" value={r.employee_name} />
-          <F label="Department" value={r.department || r.employee_department} />
-          <F label="Date Issued" value={r.date_issued || r.created_at?.split('T')[0]} />
-          <F label="Property Type" value={r.property_type} />
-        </div>
-        <TB label="Items / Description" value={r.items || r.description} />
-        <TB label="Remarks" value={r.remarks} />
-        <Sigs items={[
+      <ViewShell>
+        <HeroCard
+          eyebrow="Property Accountability"
+          title={`Property — ${r.employee_name || 'Employee'}`}
+          meta={`${r.department || r.employee_department || 'No department'}${r.date_issued || r.created_at?.split('T')[0] ? ` • Issued: ${r.date_issued || r.created_at?.split('T')[0]}` : ''}`}
+        />
+        <SectionCard title="Property Information">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <F label="Employee" value={r.employee_name} />
+            <F label="Department" value={r.department || r.employee_department} />
+            <F label="Date Issued" value={r.date_issued || r.created_at?.split('T')[0]} />
+            <F label="Property Type" value={r.property_type} />
+          </div>
+        </SectionCard>
+        <SectionCard><TB label="Items / Description" value={r.items || r.description} /></SectionCard>
+        <SectionCard><TB label="Remarks" value={r.remarks} /></SectionCard>
+        <SectionCard><Sigs items={[
           { label: 'Turned Over By', signed: !!r.turnover_by_sig },
           { label: 'Noted By', signed: !!r.noted_by_sig },
           { label: 'Received By', signed: !!r.received_by_sig },
           { label: 'Audited By', signed: !!r.audited_by_sig },
-        ]} />
-      </div>
+        ]} /></SectionCard>
+      </ViewShell>
     );
 
     if (type === 'requisition') return (
-      <div className="space-y-5 overflow-x-hidden">
-        <div className="rounded-2xl border border-teal-100 dark:border-teal-900/40 bg-gradient-to-br from-teal-50 via-white to-cyan-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-4 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">Staff Requisition</p>
-              <h3 className="mt-1 text-xl font-black text-slate-900 dark:text-slate-100 break-words">{r.job_title || 'Untitled Requisition'}</h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 break-words">{r.department || 'No department'}{r.supervisor ? ` • Supervisor: ${r.supervisor}` : ''}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center rounded-full bg-white/90 dark:bg-slate-800 px-3 py-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                Start: {r.start_date || r.date_requested || r.created_at?.split('T')[0] || '—'}
-              </span>
-              <span className="inline-flex items-center rounded-full bg-teal-600 px-3 py-1 text-[11px] font-bold text-white">
-                {r.position_status || 'Pending'}
-              </span>
-            </div>
-          </div>
-        </div>
+      <ViewShell>
+        <HeroCard
+          eyebrow="Staff Requisition"
+          title={r.job_title || 'Untitled Requisition'}
+          meta={`${r.department || 'No department'}${r.supervisor ? ` • Supervisor: ${r.supervisor}` : ''}`}
+          badge={r.position_status || 'Pending'}
+        />
 
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5">
-          <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-3">Position Information</p>
+        <SectionCard title="Position Information">
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
             <F label="Job Title" value={r.job_title} />
             <F label="Department / Office" value={r.department} />
@@ -1483,30 +1536,28 @@ export const VerificationOfReview = () => {
             <F label="Classification" value={r.classification} />
             <F label="Hiring Range / Hourly Rate" value={r.hiring_range || r.hourly_rate} />
           </div>
-        </div>
+        </SectionCard>
 
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5">
+        <SectionCard>
           <TB label="Reason / Justification" value={r.type_reason || r.reason} />
-        </div>
+        </SectionCard>
 
         {(r.recruitment_web || r.recruitment_newspapers || r.recruitment_listserv || r.recruitment_other) && (
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5 space-y-3 overflow-x-hidden">
-            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Recruitment Plan</p>
+          <SectionCard title="Recruitment Plan">
             <div className="grid sm:grid-cols-2 gap-4">
               <F label="Web Sites" value={r.recruitment_web} />
               <F label="Newspapers" value={r.recruitment_newspapers} />
               <F label="List Server" value={r.recruitment_listserv} />
               <F label="Other" value={r.recruitment_other} />
             </div>
-          </div>
+          </SectionCard>
         )}
 
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5">
+        <SectionCard>
           <TB label="Comments" value={r.comments || r.remarks} />
-        </div>
+        </SectionCard>
 
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5">
-          <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">Approval Details</p>
+        <SectionCard title="Approval Details">
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {[
               { label: 'Supervisor', name: r.supervisor_approval, signed: !!r.supervisor_approval_sig, date: r.supervisor_approval_date },
@@ -1524,9 +1575,9 @@ export const VerificationOfReview = () => {
               </div>
             ))}
           </div>
-        </div>
+        </SectionCard>
 
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 sm:p-5">
+        <SectionCard>
           <Sigs items={[
             { label: 'Supervisor', signed: !!r.supervisor_approval_sig, date: r.supervisor_approval_date },
             { label: 'Dept Head', signed: !!r.dept_head_approval_sig, date: r.dept_head_approval_date },
@@ -1534,8 +1585,8 @@ export const VerificationOfReview = () => {
             { label: 'VP', signed: !!r.vp_approval_sig, date: r.vp_approval_date },
             { label: 'President', signed: !!r.president_approval_sig, date: r.president_approval_date },
           ]} />
-        </div>
-      </div>
+        </SectionCard>
+      </ViewShell>
     );
     return null;
   };
