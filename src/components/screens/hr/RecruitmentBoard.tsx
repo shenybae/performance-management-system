@@ -20,6 +20,16 @@ const normalize = (value?: string | null) => (value || '').toString().trim().toL
 const sameDept = (a?: string | null, b?: string | null) => normalize(a) === normalize(b) && normalize(a) !== '';
 
 export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoardProps) => {
+  const currentUser = (() => {
+    try {
+      const raw = localStorage.getItem('talentflow_user') || localStorage.getItem('user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const scopedDept = String(currentUser?.dept || '').trim();
+
   const [activeForm, setActiveForm] = useState<'none' | 'requisition' | 'appraisal'>('none');
   const [editingApplicantId, setEditingApplicantId] = useState<number | null>(null);
   const [applicants, setApplicants] = useState<any[]>([]);
@@ -27,7 +37,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   const [supervisorOptions, setSupervisorOptions] = useState<Array<{ value: string; label: string; avatarUrl?: string | null }>>([]);
   const [approvalOpenId, setApprovalOpenId] = useState<number | null>(null);
   const [reqForm, setReqForm] = useState({
-    job_title: '', department: '', supervisor: '', hiring_contact: '',
+    job_title: '', department: scopedDept, supervisor: '', hiring_contact: '',
     position_status: '', months_per_year: '' as any, hours_per_week: '' as any,
     start_date: '', position_type: '', type_reason: '',
     office_assignment: '',
@@ -122,10 +132,16 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     const fromUsers = (Array.isArray(users) ? users : []).map((u: any) => String(u?.dept || '').trim()).filter(Boolean);
     const fromRequisitions = (Array.isArray(requisitions) ? requisitions : []).map((r: any) => String(r?.department || '').trim()).filter(Boolean);
     const merged = Array.from(new Set([...fromEmployees, ...fromUsers, ...fromRequisitions]));
-    return merged
+    const scoped = scopedDept ? merged.filter((dept) => sameDept(dept, scopedDept)) : merged;
+    return scoped
       .sort((a, b) => a.localeCompare(b))
       .map((dept) => ({ value: dept, label: dept }));
-  }, [employees, requisitions, users]);
+  }, [employees, requisitions, scopedDept, users]);
+
+  useEffect(() => {
+    if (!scopedDept) return;
+    setReqForm((prev) => (sameDept(prev.department, scopedDept) ? prev : { ...prev, department: scopedDept, supervisor: '', job_title: '' }));
+  }, [scopedDept]);
 
   const departmentJobTitleOptions = useMemo(() => {
     const dept = trimText(reqForm.department, 100);
@@ -224,7 +240,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
 
   const resetRequisitionForm = () => {
     setReqForm({
-      job_title: '', department: '', supervisor: '', hiring_contact: '',
+      job_title: '', department: scopedDept, supervisor: '', hiring_contact: '',
       position_status: '', months_per_year: '' as any, hours_per_week: '' as any,
       start_date: '', position_type: '', type_reason: '',
       office_assignment: '',
@@ -705,12 +721,13 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                     options={departmentOptions}
                     value={reqForm.department}
                     onChange={v => setReqForm({ ...reqForm, department: String(v || '') })}
-                    placeholder="Select department..."
+                    placeholder={scopedDept ? scopedDept : 'Select department...'}
                     allowEmpty
-                    emptyLabel="Select department..."
+                    emptyLabel={scopedDept ? scopedDept : 'Select department...'}
                     searchable
                     dropdownVariant="pills-horizontal"
                     className="w-full"
+                    disabled={!!scopedDept}
                   />
                 </div>
                 <div>
