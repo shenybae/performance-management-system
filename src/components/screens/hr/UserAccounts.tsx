@@ -109,7 +109,6 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   const [accountSearchSelection, setAccountSearchSelection] = useState<Array<string | number>>([]);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [activePage, setActivePage] = useState(1);
-  const [archivedPage, setArchivedPage] = useState(1);
 
   const displayRole = (role?: string | null) => role === 'HR' ? 'HR Admin' : (role || '');
 
@@ -276,12 +275,12 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   };
 
   const activePageData = paginate(activeUsers, activePage);
-  const archivedPageData = paginate(archivedUsers, archivedPage);
+  const existingUsers = showArchived ? [...activeUsers, ...archivedUsers] : activeUsers;
+  const existingPageData = paginate(existingUsers, activePage);
 
   useEffect(() => {
     setActivePage(1);
-    setArchivedPage(1);
-  }, [accountSearchSelection]);
+  }, [accountSearchSelection, showArchived]);
 
   useEffect(() => {
     if (!modalOpen || !editingUser?.id) return;
@@ -595,7 +594,6 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                   const next = Number(e.target.value) || 10;
                   setRowsPerPage(next);
                   setActivePage(1);
-                  setArchivedPage(1);
                 }}
                 className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
               >
@@ -604,7 +602,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                 <option value={20}>20</option>
                 <option value={50}>50</option>
               </select>
-              <span className="text-slate-400">{activePageData.start}-{activePageData.end} of {activeUsers.length}</span>
+              <span className="text-slate-400">{existingPageData.start}-{existingPageData.end} of {existingUsers.length}</span>
             </div>
             <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-300">
               <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="w-4 h-4" />
@@ -624,8 +622,10 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                 </tr>
               </thead>
               <tbody>
-                {activePageData.rows.map(u => (
-                  <tr key={u.id} className="border-b border-slate-50 dark:border-slate-800/50">
+                {existingPageData.rows.map(u => {
+                  const isArchivedRow = !!u.deleted_at;
+                  return (
+                  <tr key={u.id} className={`border-b border-slate-50 dark:border-slate-800/50 ${isArchivedRow ? 'opacity-80 italic' : ''}`}>
                     <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-100">
                       <div className="min-w-0 truncate max-w-55" title={u.full_name || u.employee_name || '-'}>{u.full_name || u.employee_name || '-'}</div>
                     </td>
@@ -662,48 +662,68 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                           </button>
                           <button
                             onClick={() => openUserModal(u, 'edit')}
-                            disabled={!canEditUserAccount(u)}
-                            title={canEditUserAccount(u) ? 'Edit user account information' : 'Out of scope: different department'}
+                            disabled={isArchivedRow || !canEditUserAccount(u)}
+                            title={isArchivedRow ? 'Archived accounts are view-only' : (canEditUserAccount(u) ? 'Edit user account information' : 'Out of scope: different department')}
                             className="text-xs text-amber-600 font-bold disabled:text-slate-400 disabled:cursor-not-allowed"
                           >
                             Edit
                           </button>
-                          <button onClick={async () => {
-                            if (!(await appConfirm('Archive this user account?', { title: 'Archive User Account', confirmText: 'Archive' }))) return;
-                            const token = localStorage.getItem('talentflow_token');
-                            try {
-                              const res = await fetch(`/api/users/${u.id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-                              if (res.ok) { (window as any).notify('User archived', 'success'); onRefresh(); } else { const err = await res.json(); (window as any).notify(err.error || 'Failed', 'error'); }
-                            } catch (err) { (window as any).notify('Server error', 'error'); }
-                          }}
-                          title="Archive user"
-                          aria-label="Archive user"
-                          className="inline-flex items-center justify-center p-1.5 rounded-md transition-colors">
-                            <Archive size={14} />
-                          </button>
+                          {isArchivedRow ? (
+                            isHR ? (
+                              <button
+                                onClick={async () => {
+                                  if (!(await appConfirm('Restore user?', { title: 'Restore User Account', confirmText: 'Restore' }))) return;
+                                  const token = localStorage.getItem('talentflow_token');
+                                  try {
+                                    const res = await fetch(`/api/users/${u.id}/restore`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+                                    if (res.ok) { (window as any).notify('User restored', 'success'); onRefresh(); } else { const err = await res.json(); (window as any).notify(err.error || 'Failed', 'error'); }
+                                  } catch (err) { (window as any).notify('Server error', 'error'); }
+                                }}
+                                className="text-xs text-green-600 font-bold"
+                              >
+                                Restore
+                              </button>
+                            ) : (
+                              <span className="text-xs text-slate-400">Archived</span>
+                            )
+                          ) : (
+                            <button onClick={async () => {
+                              if (!(await appConfirm('Archive this user account?', { title: 'Archive User Account', confirmText: 'Archive' }))) return;
+                              const token = localStorage.getItem('talentflow_token');
+                              try {
+                                const res = await fetch(`/api/users/${u.id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+                                if (res.ok) { (window as any).notify('User archived', 'success'); onRefresh(); } else { const err = await res.json(); (window as any).notify(err.error || 'Failed', 'error'); }
+                              } catch (err) { (window as any).notify('Server error', 'error'); }
+                            }}
+                            title="Archive user"
+                            aria-label="Archive user"
+                            className="inline-flex items-center justify-center p-1.5 rounded-md transition-colors">
+                              <Archive size={14} />
+                            </button>
+                          )}
                         </>
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>
           <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300">
-            <span>Page {activePageData.safePage} of {activePageData.total}</span>
+            <span>Page {existingPageData.safePage} of {existingPageData.total}</span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setActivePage((p) => Math.max(1, p - 1))}
-                disabled={activePageData.safePage <= 1}
+                disabled={existingPageData.safePage <= 1}
                 className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 disabled:opacity-40"
               >
                 Prev
               </button>
               <button
                 type="button"
-                onClick={() => setActivePage((p) => Math.min(activePageData.total, p + 1))}
-                disabled={activePageData.safePage >= activePageData.total}
+                onClick={() => setActivePage((p) => Math.min(existingPageData.total, p + 1))}
+                disabled={existingPageData.safePage >= existingPageData.total}
                 className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 disabled:opacity-40"
               >
                 Next
@@ -711,95 +731,6 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
             </div>
           </div>
         </Card>
-        )}
-
-        {showArchived && (
-          <Card>
-            <h3 className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-300 mb-4 tracking-widest">Archived Accounts</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full table-fixed text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 dark:border-slate-800">
-                    <th className="w-[16%] pb-2 px-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Name</th>
-                    <th className="w-[24%] pb-2 px-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</th>
-                    <th className="w-[10%] pb-2 px-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Role</th>
-                    <th className="w-[20%] pb-2 px-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Position / Department</th>
-                    <th className="w-[20%] pb-2 px-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Matched User</th>
-                    <th className="w-[10%] pb-2 px-2 font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {archivedPageData.rows.map(u => (
-                    <tr key={u.id} className={`border-b border-slate-50 dark:border-slate-800/50 opacity-80 italic`}>
-                      <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-100">
-                        <div className="min-w-0 truncate max-w-55" title={u.full_name || u.employee_name || '-'}>{u.full_name || u.employee_name || '-'}</div>
-                      </td>
-                      <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-100">
-                        <div className="min-w-0 truncate" title={u.email || u.username || '-'}>{u.email || u.username || '-'}</div>
-                      </td>
-                      <td className="py-2 px-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                          u.role === 'HR' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 
-                          u.role === 'Manager' ? 'bg-teal-green/10 dark:bg-teal-green/20 text-teal-green' : 
-                          'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200'
-                        }`}>
-                          {displayRole(u.role)}
-                        </span>
-                      </td>
-                      <td className="py-2 px-2 text-slate-600 dark:text-slate-200">
-                        <div className="min-w-0 truncate" title={accountPositionDept(u)}>
-                          {accountPositionDept(u)}
-                        </div>
-                      </td>
-                      <td className="py-2 px-2 text-slate-600 dark:text-slate-200">
-                        <div className="min-w-0 truncate" title={u.full_name || u.email || u.username || 'N/A'}>{u.full_name || u.email || u.username || 'N/A'}</div>
-                      </td>
-                      <td className="py-2 px-2 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => openUserModal(u, 'view')} className="text-xs text-slate-600 dark:text-slate-300 font-bold">View</button>
-                          {isHR ? (
-                            <button onClick={async () => {
-                              if (!(await appConfirm('Restore user?', { title: 'Restore User Account', confirmText: 'Restore' }))) return;
-                              const token = localStorage.getItem('talentflow_token');
-                              try {
-                                const res = await fetch(`/api/users/${u.id}/restore`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-                                if (res.ok) { (window as any).notify('User restored', 'success'); onRefresh(); } else { const err = await res.json(); (window as any).notify(err.error || 'Failed', 'error'); }
-                              } catch (err) { (window as any).notify('Server error', 'error'); }
-                            }} className="text-xs text-green-600 font-bold">Restore</button>
-                          ) : (
-                            <span className="text-xs text-slate-400">Archived</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300">
-              <span>
-                {archivedPageData.start}-{archivedPageData.end} of {archivedUsers.length} archived
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setArchivedPage((p) => Math.max(1, p - 1))}
-                  disabled={archivedPageData.safePage <= 1}
-                  className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 disabled:opacity-40"
-                >
-                  Prev
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setArchivedPage((p) => Math.min(archivedPageData.total, p + 1))}
-                  disabled={archivedPageData.safePage >= archivedPageData.total}
-                  className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </Card>
         )}
       </div>
 
