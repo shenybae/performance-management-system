@@ -307,6 +307,12 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       }
     }
 
+    if (!(await appConfirm('Are you sure you want to submit this requisition?', {
+      title: 'Confirm Requisition Submission',
+      confirmText: 'Submit Requisition',
+      icon: 'warning',
+    }))) return;
+
     try {
       const res = await fetch('/api/requisitions', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(cleaned) });
       if (!res.ok) throw new Error('Failed');
@@ -336,6 +342,16 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       window.notify?.('Please provide overall rating from 1 to 5', 'error');
       return;
     }
+
+    const confirmText = editingApplicantId !== null ? 'Update Appraisal' : 'Save Appraisal';
+    const confirmMessage = editingApplicantId !== null
+      ? 'Are you sure you want to update this appraisal?'
+      : 'Are you sure you want to save this appraisal?';
+    if (!(await appConfirm(confirmMessage, {
+      title: 'Confirm Appraisal Save',
+      confirmText,
+      icon: 'warning',
+    }))) return;
 
     try {
       if (editingApplicantId !== null) {
