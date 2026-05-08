@@ -218,21 +218,22 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
 
   const selectedRoleType = selectedEmployee ? roleLabel(selectedEmployee) : '';
 
+  const allowedReportToRoles = useMemo(() => {
+    if (selectedRoleType === 'Employee') return ['Supervisor', 'Manager', 'HR Admin'];
+    if (selectedRoleType === 'Supervisor') return ['Manager', 'HR Admin'];
+    if (selectedRoleType === 'Manager') return ['HR Admin'];
+    return [] as string[];
+  }, [selectedRoleType]);
+
   const reportToOptions = useMemo(
     () => {
-      const policyTargetRole = selectedRoleType === 'Supervisor'
-        ? 'Manager'
-        : selectedRoleType === 'Employee'
-          ? 'Supervisor'
-          : null;
-
-      if (!policyTargetRole) return [] as Array<{ value: number; label: string; avatarUrl: string | null }>;
+      if (allowedReportToRoles.length === 0) return [] as Array<{ value: number; label: string; avatarUrl: string | null }>;
 
       return sortedEmployees
-        .filter((person) => roleLabel(person) === policyTargetRole)
+        .filter((person) => allowedReportToRoles.includes(roleLabel(person)))
         .map((person) => ({ value: person.id, label: personLabel(person), avatarUrl: (person as any).profile_picture || null }));
     },
-    [selectedRoleType, sortedEmployees]
+    [allowedReportToRoles, sortedEmployees]
   );
 
   useEffect(() => {
@@ -241,17 +242,13 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
     if (!stillAllowed) setLinkedToId('');
   }, [linkedToId, reportToOptions]);
 
-  const reportToLabel = selectedRoleType === 'Supervisor'
-    ? 'Which manager should they report to?'
-    : selectedRoleType === 'Employee'
-      ? 'Which supervisor should they report to?'
-      : 'Who should they report to?';
+  const reportToLabel = allowedReportToRoles.length > 0
+    ? `Who should they report to in ${activeDeptLabel}?`
+    : 'Who should they report to?';
 
-  const reportToPlaceholder = selectedRoleType === 'Supervisor'
-    ? `Choose a manager in ${activeDeptLabel}...`
-    : selectedRoleType === 'Employee'
-      ? `Choose a supervisor in ${activeDeptLabel}...`
-      : `No report-to target needed for ${selectedRoleType || 'this role'}...`;
+  const reportToPlaceholder = allowedReportToRoles.length > 0
+    ? `Choose ${allowedReportToRoles.join(', ')} in ${activeDeptLabel}...`
+    : `No report-to target needed for ${selectedRoleType || 'this role'}...`;
 
   const activeDeptManager = useMemo(
     () => activeEmployees.find((person) => roleLabel(person) === 'Manager') || null,
@@ -311,6 +308,10 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
     const targetManager = managerId ? employeeMap.get(managerId) || null : null;
     if (managerId && !targetManager) {
       window.notify?.(`Choose someone from ${activeDeptLabel}.`, 'error');
+      return;
+    }
+    if (managerId && !reportToOptions.some((opt) => Number(opt.value) === Number(managerId))) {
+      window.notify?.(`Choose a valid ${allowedReportToRoles.join(', ')} target from ${activeDeptLabel}.`, 'error');
       return;
     }
 
@@ -522,7 +523,7 @@ export const LinkedPeople = ({ employees, users, onRefresh }: LinkedPeopleProps)
                 </div>
 
                 <p className="rounded-xl bg-teal-green/10 dark:bg-teal-green/15 px-3 py-2 text-xs text-teal-deep dark:text-teal-green">
-                  This screen only shows and changes links inside {activeDeptLabel}. Employees link to supervisors, supervisors link to managers, and all targets stay department-scoped.
+                  This screen only shows and changes links inside {activeDeptLabel}. Link targets are department-scoped by role: Employee -> Supervisor/Manager/HR, Supervisor -> Manager/HR, Manager -> HR.
                 </p>
 
                 <div className="flex flex-wrap gap-3 pt-2">
