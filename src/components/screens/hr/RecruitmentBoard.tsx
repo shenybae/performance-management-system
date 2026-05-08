@@ -682,14 +682,20 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     if (shouldPrint && !(await appConfirm('Export this requisition as PDF?', { title: 'Export Requisition PDF', confirmText: 'Export', icon: 'export' }))) return;
     const row = (label: string, value: string) => value ? `
       <tr>
-        <td style="padding:6px 10px;font-weight:600;color:#475569;width:180px;white-space:nowrap;vertical-align:top;">${label}</td>
-        <td style="padding:6px 10px;color:#1e293b;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;">${value}</td>
+        <td class="detail-label">${label}</td>
+        <td class="detail-value">${value}</td>
       </tr>` : '';
 
     const section = (title: string, content: string) => `
       <div style="margin-bottom:18px;">
         <div style="background:#0f766e;color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 10px;text-transform:uppercase;border-radius:4px 4px 0 0;">${title}</div>
-        <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 4px 4px;">${content}</table>
+        <table class="detail-table">
+          <colgroup>
+            <col class="col-label" />
+            <col class="col-value" />
+          </colgroup>
+          ${content}
+        </table>
       </div>`;
 
     const sigCard = (label: string, name: string, date: string, sig: string) => `
@@ -814,13 +820,19 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     body { font-family: Arial, sans-serif; font-size: 13px; line-height: 1.35; color: #1e293b; margin: 0; padding: 24px 32px; }
     h1 { font-size: 20px; color: #0f766e; margin: 0 0 2px 0; }
     .subtitle { font-size: 11px; color: #64748b; margin-bottom: 18px; }
-    table { table-layout: fixed; }
+    table { table-layout: auto; }
     td, th { overflow-wrap: anywhere; word-break: break-word; }
+    .detail-table { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 4px 4px; table-layout: auto; }
+    .detail-table .col-label { width: 260px; }
+    .detail-table .detail-label { padding: 8px 12px; font-weight: 700; color: #475569; vertical-align: top; line-height: 1.45; border-right: 1px solid #e2e8f0; background: #f8fafc; }
+    .detail-table .detail-value { padding: 8px 14px; color: #1e293b; vertical-align: top; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+    .detail-table tr + tr .detail-label,
+    .detail-table tr + tr .detail-value { border-top: 1px solid #f1f5f9; }
     .sig-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
     .sig-card { border:1px solid #e2e8f0; border-radius: 6px; padding: 8px; min-width: 0; page-break-inside: avoid; }
     .sig-role { font-size: 10px; font-weight: 700; color: #0f766e; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 2px; }
     .sig-title { font-size: 10px; color: #64748b; margin-bottom: 6px; overflow-wrap: anywhere; word-break: break-word; }
-    table tr:nth-child(even) { background: #f8fafc; }
+    .detail-table tr:nth-child(even) .detail-value { background: #f8fafc; }
     @media print { body { padding: 8px 14px; } button { display: none; } .sig-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   </style>
 </head>
