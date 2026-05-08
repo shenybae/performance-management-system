@@ -1448,23 +1448,65 @@ export const VerificationOfReview = () => {
     );
 
     if (type === 'requisition') return (
-      <div className="space-y-4">
-        <div className="grid sm:grid-cols-2 gap-4">
+      <div className="space-y-5">
+        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
           <F label="Job Title" value={r.job_title} />
-          <F label="Department" value={r.department} />
-          <F label="Date Requested" value={r.date_requested || r.created_at?.split('T')[0]} />
-          <F label="Headcount" value={r.headcount} />
-          <F label="Employment Type" value={r.employment_type} />
-          <F label="Reason" value={r.reason} />
+          <F label="Department / Office" value={r.department} />
+          <F label="Supervisor" value={r.supervisor} />
+          <F label="Hiring Contact" value={r.hiring_contact} />
+          <F label="Position Status" value={r.position_status} />
+          <F label="Desired Start Date" value={r.start_date || r.date_requested || r.created_at?.split('T')[0]} />
+          <F label="Months per Year" value={r.months_per_year} />
+          <F label="Hours per Week" value={r.hours_per_week} />
+          <F label="Office Assignment" value={r.office_assignment} />
+          <F label="Position Type" value={r.position_type} />
+          <F label="Classification" value={r.classification} />
+          <F label="Hiring Range / Hourly Rate" value={r.hiring_range || r.hourly_rate} />
         </div>
-        <TB label="Job Description / Requirements" value={r.job_description || r.requirements} />
-        <TB label="Remarks" value={r.remarks} />
+
+        <TB label="Reason / Justification" value={r.type_reason || r.reason} />
+
+        {(r.recruitment_web || r.recruitment_newspapers || r.recruitment_listserv || r.recruitment_other) && (
+          <div className="space-y-3">
+            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Recruitment Plan</p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <F label="Web Sites" value={r.recruitment_web} />
+              <F label="Newspapers" value={r.recruitment_newspapers} />
+              <F label="List Server" value={r.recruitment_listserv} />
+              <F label="Other" value={r.recruitment_other} />
+            </div>
+          </div>
+        )}
+
+        <TB label="Comments" value={r.comments || r.remarks} />
+
+        <div>
+          <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">Approval Details</p>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {[
+              { label: 'Supervisor', name: r.supervisor_approval, signed: !!r.supervisor_approval_sig, date: r.supervisor_approval_date },
+              { label: 'Department Head', name: r.dept_head_approval, signed: !!r.dept_head_approval_sig, date: r.dept_head_approval_date },
+              { label: 'Cabinet Member', name: r.cabinet_approval, signed: !!r.cabinet_approval_sig, date: r.cabinet_approval_date },
+              { label: 'VP for Business and Finance', name: r.vp_approval, signed: !!r.vp_approval_sig, date: r.vp_approval_date },
+              { label: 'President', name: r.president_approval, signed: !!r.president_approval_sig, date: r.president_approval_date },
+            ].map((entry) => (
+              <div key={entry.label} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/60">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">{entry.label}</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{entry.name || '—'}</p>
+                <p className={`mt-2 text-xs font-semibold ${entry.signed ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {entry.signed ? `Signed${entry.date ? ` · ${entry.date}` : ''}` : 'Pending'}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <Sigs items={[
-          { label: 'Supervisor', signed: !!r.supervisor_approval_sig },
-          { label: 'Dept Head', signed: !!r.dept_head_approval_sig },
-          { label: 'Cabinet', signed: !!r.cabinet_approval_sig },
-          { label: 'VP', signed: !!r.vp_approval_sig },
-          { label: 'President', signed: !!r.president_approval_sig },
+          { label: 'Supervisor', signed: !!r.supervisor_approval_sig, date: r.supervisor_approval_date },
+          { label: 'Dept Head', signed: !!r.dept_head_approval_sig, date: r.dept_head_approval_date },
+          { label: 'Cabinet', signed: !!r.cabinet_approval_sig, date: r.cabinet_approval_date },
+          { label: 'VP', signed: !!r.vp_approval_sig, date: r.vp_approval_date },
+          { label: 'President', signed: !!r.president_approval_sig, date: r.president_approval_date },
         ]} />
       </div>
     );
