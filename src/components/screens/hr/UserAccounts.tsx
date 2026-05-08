@@ -275,7 +275,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
   };
 
   const activePageData = paginate(activeUsers, activePage);
-  const existingUsers = showArchived ? [...activeUsers, ...archivedUsers] : activeUsers;
+  const existingUsers = showArchived ? archivedUsers : activeUsers;
   const existingPageData = paginate(existingUsers, activePage);
 
   useEffect(() => {
@@ -622,7 +622,7 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                 </tr>
               </thead>
               <tbody>
-                {existingPageData.rows.map(u => {
+                {existingPageData.rows.length > 0 ? existingPageData.rows.map(u => {
                   const isArchivedRow = !!u.deleted_at;
                   return (
                   <tr key={u.id} className={`border-b border-slate-50 dark:border-slate-800/50 ${isArchivedRow ? 'opacity-80 italic' : ''}`}>
@@ -705,7 +705,13 @@ export const UserAccounts = ({ employees, users, onRefresh }: UserAccountsProps)
                       </div>
                     </td>
                   </tr>
-                )})}
+                )}) : (
+                  <tr>
+                    <td colSpan={6} className="py-8 px-2 text-center text-sm text-slate-500 dark:text-slate-400">
+                      {showArchived ? 'No archived account info.' : 'No active account info.'}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
