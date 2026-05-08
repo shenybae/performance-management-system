@@ -38,8 +38,11 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   const [supervisorOptions, setSupervisorOptions] = useState<Array<{ value: string; label: string; avatarUrl?: string | null }>>([]);
   const [approvalOpenId, setApprovalOpenId] = useState<number | null>(null);
   const [viewRequisition, setViewRequisition] = useState<any | null>(null);
+  const [viewApplicant, setViewApplicant] = useState<any | null>(null);
   const [approvalSigners, setApprovalSigners] = useState<any>({});
   const [viewSigners, setViewSigners] = useState<any>({});
+  const [requisitionSearch, setRequisitionSearch] = useState('');
+  const [requisitionStatusFilter, setRequisitionStatusFilter] = useState<'all' | 'approved' | 'pending' | 'archived'>('all');
   const [reqForm, setReqForm] = useState({
     job_title: '', department: scopedDept, supervisor: '', hiring_contact: '',
     position_status: '', months_per_year: '' as any, hours_per_week: '' as any,
@@ -473,6 +476,38 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
 
   const hasSignature = (value: any) => typeof value === 'string' && value.trim().length > 0;
 
+  const requisitionSignedCount = (r: any) => [
+    r?.supervisor_approval_sig,
+    r?.dept_head_approval_sig,
+    r?.cabinet_approval_sig,
+    r?.vp_approval_sig,
+    r?.president_approval_sig,
+  ].filter(hasSignature).length;
+
+  const applicantSignedCount = (a: any) => [
+    a?.interviewer_signature,
+    a?.hr_reviewer_signature,
+  ].filter(hasSignature).length;
+
+  const isApplicantFullySigned = (a: any) => applicantSignedCount(a) === 2;
+
+  const filteredRequisitions = useMemo(() => {
+    const q = requisitionSearch.trim().toLowerCase();
+    return requisitions.filter((r) => {
+      const archived = !!r?.deleted_at;
+      const approved = requisitionApprovalStatus(r) === 'Approved';
+      const statusMatches = requisitionStatusFilter === 'all'
+        || (requisitionStatusFilter === 'archived' && archived)
+        || (requisitionStatusFilter === 'approved' && !archived && approved)
+        || (requisitionStatusFilter === 'pending' && !archived && !approved);
+
+      const searchMatches = !q || [r?.job_title, r?.department, r?.supervisor, r?.hiring_contact]
+        .some((v) => String(v || '').toLowerCase().includes(q));
+
+      return statusMatches && searchMatches;
+    });
+  }, [requisitions, requisitionSearch, requisitionStatusFilter]);
+
   const fetchDeptSigners = async (department: string) => {
     const dept = String(department || '').trim();
     if (!dept) return {};
@@ -492,6 +527,10 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     } catch {
       setViewSigners({});
     }
+  };
+
+  const openApplicantView = (app: any) => {
+    setViewApplicant(app);
   };
 
   const openApprovals = async (r: any) => {
@@ -601,8 +640,8 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     if (shouldPrint && !(await appConfirm('Export this requisition as PDF?', { title: 'Export Requisition PDF', confirmText: 'Export', icon: 'export' }))) return;
     const row = (label: string, value: string) => value ? `
       <tr>
-        <td style="padding:6px 10px;font-weight:600;color:#475569;width:220px;white-space:nowrap;">${label}</td>
-        <td style="padding:6px 10px;color:#1e293b;">${value}</td>
+        <td style="padding:6px 10px;font-weight:600;color:#475569;width:180px;white-space:nowrap;vertical-align:top;">${label}</td>
+        <td style="padding:6px 10px;color:#1e293b;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;">${value}</td>
       </tr>` : '';
 
     const section = (title: string, content: string) => `
@@ -701,12 +740,16 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   };
 
   const exportApplicantAppraisalPDF = async (a: any, shouldPrint = true) => {
+    if (!isApplicantFullySigned(a)) {
+      window.notify?.('Applicant appraisal PDF is available after interviewer and HR reviewer signatures are complete.', 'error');
+      return;
+    }
     if (shouldPrint && !(await appConfirm('Export this applicant appraisal as PDF?', { title: 'Export Applicant Appraisal PDF', confirmText: 'Export', icon: 'export' }))) return;
 
     const row = (label: string, value: string) => value ? `
       <tr>
-        <td style="padding:6px 10px;font-weight:600;color:#475569;width:220px;white-space:nowrap;vertical-align:top;">${label}</td>
-        <td style="padding:6px 10px;color:#1e293b;">${value}</td>
+        <td style="padding:6px 10px;font-weight:600;color:#475569;width:180px;white-space:nowrap;vertical-align:top;">${label}</td>
+        <td style="padding:6px 10px;color:#1e293b;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;">${value}</td>
       </tr>` : '';
 
     const section = (title: string, content: string) => `
@@ -1143,14 +1186,24 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                   <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{app.name}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-teal-green">{app.score || app.overall_rating}/5</span>
-                    <button onClick={() => exportApplicantAppraisalPDF(app, false)} title="View Report" className="text-blue-500 hover:text-blue-700"><Eye size={14} /></button>
-                    <button onClick={() => exportApplicantAppraisalPDF(app)} title="Export PDF" className="text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300"><FileText size={14} /></button>
+                    <button onClick={() => openApplicantView(app)} title="View Report" className="text-blue-500 hover:text-blue-700"><Eye size={14} /></button>
+                    <button
+                      onClick={() => exportApplicantAppraisalPDF(app)}
+                      title={isApplicantFullySigned(app) ? 'Export PDF' : 'Available when interviewer and HR signatures are complete'}
+                      disabled={!isApplicantFullySigned(app)}
+                      className={`${isApplicantFullySigned(app) ? 'text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300' : 'text-slate-300 cursor-not-allowed'}`}
+                    ><FileText size={14} /></button>
                     <button onClick={() => startEditApplicant(app)} title="Edit" className="text-teal-500 hover:text-teal-700"><Pencil size={12} /></button>
                     <button onClick={() => deleteApplicant(app.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                   </div>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">{app.position}</p>
-                <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mt-1">{app.status}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">{app.status}</p>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${isApplicantFullySigned(app) ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                    {applicantSignedCount(app)}/2 signed
+                  </span>
+                </div>
               </div>
             ))}
             {applicants.length === 0 && <p className="text-xs text-slate-400 text-center py-8">No applicants yet</p>}
@@ -1160,17 +1213,39 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
 
       {requisitions.length > 0 && (
         <Card>
-          <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase mb-4">Open Requisitions ({requisitions.length})</h3>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">Open Requisitions ({filteredRequisitions.length})</h3>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={requisitionSearch}
+                onChange={(e) => setRequisitionSearch(e.target.value)}
+                placeholder="Search job title, department, supervisor..."
+                className="w-full sm:w-72 p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+              />
+              <select
+                value={requisitionStatusFilter}
+                onChange={(e) => setRequisitionStatusFilter(e.target.value as 'all' | 'approved' | 'pending' | 'archived')}
+                className="p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
+              >
+                <option value="all">All</option>
+                <option value="approved">Approved</option>
+                <option value="pending">Pending</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead><tr className="border-b border-slate-100 dark:border-slate-800">
                 <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase">Job Title</th>
                 <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase">Department</th>
                 <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase">Approval</th>
+                <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase">Signed</th>
                 <th className="pb-2 text-[10px] font-bold text-slate-400 uppercase">Start Date</th>
                 <th className="pb-2"></th>
               </tr></thead>
-              <tbody>{requisitions.map(r => (
+              <tbody>{filteredRequisitions.map(r => (
                 <tr key={r.id} className="border-b border-slate-50 dark:border-slate-800/50">
                   <td className="py-3 font-medium text-slate-700 dark:text-slate-200">{r.job_title}</td>
                   <td className="py-3 text-slate-500 dark:text-slate-400">{r.department}</td>
@@ -1178,6 +1253,10 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                     <span className={`inline-flex items-center px-2 py-1 rounded-full font-bold uppercase tracking-wide ${requisitionApprovalStatus(r) === 'Approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
                       {requisitionApprovalStatus(r)}
                     </span>
+                  </td>
+                  <td className="py-3 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="font-bold text-slate-700 dark:text-slate-200">{requisitionSignedCount(r)}/5</span>
+                    <span className="ml-1">signed</span>
                   </td>
                   <td className="py-3 text-xs text-slate-500">{r.start_date || 'TBD'}</td>
                   <td className="py-3 flex items-center gap-2">
@@ -1214,6 +1293,9 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
               ))}</tbody>
             </table>
           </div>
+          {filteredRequisitions.length === 0 && (
+            <p className="text-xs text-slate-400 text-center py-6">No requisitions match the current filters.</p>
+          )}
 
           {activeApprovalReq && (
             <div className="mt-4 border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-900/30">
@@ -1304,6 +1386,75 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       )}
 
       <Modal
+        open={!!viewApplicant}
+        title={`Applicant Appraisal${viewApplicant?.name ? ` - ${viewApplicant.name}` : ''}`}
+        onClose={() => setViewApplicant(null)}
+        maxWidthClassName="max-w-5xl"
+      >
+        {viewApplicant && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400">{viewApplicant.position || 'No position'} {viewApplicant.interview_date ? `• Interview: ${viewApplicant.interview_date}` : ''}</p>
+              <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase ${isApplicantFullySigned(viewApplicant) ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                {applicantSignedCount(viewApplicant)}/2 signed
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Applicant Name</p><p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewApplicant.name || '—'}</p></div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Position Applied For</p><p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewApplicant.position || '—'}</p></div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Status</p><p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewApplicant.status || '—'}</p></div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Recommendation</p><p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewApplicant.recommendation || viewApplicant.status || '—'}</p></div>
+            </div>
+
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+              <p className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Signatures</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Interviewer Signature</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Required Signer: Interviewer (Manager/Leader/Supervisor)</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2 break-words">Printed Name: {viewApplicant.interviewer_name || '—'}</p>
+                  <div className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 h-16 flex items-center justify-center overflow-hidden mb-2">
+                    {hasSignature(viewApplicant.interviewer_signature) ? (
+                      <img src={viewApplicant.interviewer_signature} alt="Interviewer signature" className="max-h-14 w-auto object-contain" />
+                    ) : (
+                      <span className="text-[11px] text-slate-400">No signature</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Date: {viewApplicant.interview_date || '—'}</p>
+                </div>
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">HR Reviewer Signature</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Required Signer: HR Admin Reviewer</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2 break-words">Printed Name: {viewApplicant.hr_reviewer_name || '—'}</p>
+                  <div className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 h-16 flex items-center justify-center overflow-hidden mb-2">
+                    {hasSignature(viewApplicant.hr_reviewer_signature) ? (
+                      <img src={viewApplicant.hr_reviewer_signature} alt="HR reviewer signature" className="max-h-14 w-auto object-contain" />
+                    ) : (
+                      <span className="text-[11px] text-slate-400">No signature</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Date: {viewApplicant.hr_reviewer_date || '—'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setViewApplicant(null)} className="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold">Close</button>
+              <button
+                onClick={() => exportApplicantAppraisalPDF(viewApplicant)}
+                disabled={!isApplicantFullySigned(viewApplicant)}
+                title={isApplicantFullySigned(viewApplicant) ? 'Export PDF' : 'Interviewer and HR signatures are required'}
+                className={`px-4 py-2 rounded-lg text-sm font-bold ${isApplicantFullySigned(viewApplicant) ? 'bg-teal-deep text-white hover:bg-teal-green' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`}
+              >
+                Export PDF
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
         open={!!viewRequisition}
         title={`Requisition Form${viewRequisition?.job_title ? ` - ${viewRequisition.job_title}` : ''}`}
         onClose={() => { setViewRequisition(null); setViewSigners({}); }}
@@ -1364,7 +1515,8 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                 ].map((entry) => (
                   <div key={entry.label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800/70">
                     <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{entry.label}</p>
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2">{entry.name || viewSigners?.[entry.key]?.full_name || '—'}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Required Signer: {viewSigners?.[entry.key]?.full_name || '—'}</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2 break-words">Printed Name: {entry.name || '—'}</p>
                     <div className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 h-16 flex items-center justify-center overflow-hidden mb-2">
                       {hasSignature(entry.sig) ? (
                         <img src={entry.sig} alt={`${entry.label} signature`} className="max-h-14 w-auto object-contain" />

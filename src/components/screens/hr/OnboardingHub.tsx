@@ -70,20 +70,33 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
-    // Fetch hired applicants (status = Hired but not yet onboarded)
     try {
-      const res = await fetch('/api/applicants', { headers: getAuthHeaders() });
-      const data = await res.json();
-      const hired = (Array.isArray(data) ? data : []).filter((a: any) => a.status === 'Hired');
-      setHiredApplicants(hired);
-    } catch { setHiredApplicants([]); }
+      const [appRes, onboardRes] = await Promise.all([
+        fetch('/api/applicants', { headers: getAuthHeaders() }),
+        fetch('/api/onboarding', { headers: getAuthHeaders() }),
+      ]);
+      const appData = await appRes.json();
+      const onboardingData = await onboardRes.json();
+      const onboarding = Array.isArray(onboardingData) ? onboardingData : [];
+      setOnboardingRecords(onboarding);
 
-    // Fetch onboarding records
-    try {
-      const res = await fetch('/api/onboarding', { headers: getAuthHeaders() });
-      const data = await res.json();
-      setOnboardingRecords(Array.isArray(data) ? data : []);
-    } catch { setOnboardingRecords([]); }
+      const initializedApplicantIds = new Set(
+        onboarding
+          .map((record: any) => Number(record?.applicant_id || 0))
+          .filter((id: number) => Number.isFinite(id) && id > 0)
+      );
+
+      const signedAndHired = (Array.isArray(appData) ? appData : []).filter((a: any) => {
+        const hired = String(a?.status || '').toLowerCase() === 'hired';
+        const signed = !!String(a?.interviewer_signature || '').trim() && !!String(a?.hr_reviewer_signature || '').trim();
+        const initialized = initializedApplicantIds.has(Number(a?.id || 0));
+        return hired && signed && !initialized;
+      });
+      setHiredApplicants(signedAndHired);
+    } catch {
+      setHiredApplicants([]);
+      setOnboardingRecords([]);
+    }
   };
 
   const startOnboardFromApplicant = (applicant: any) => {
@@ -315,7 +328,7 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-4">
         {[
-          { label: 'Hired & Waiting', value: hiredApplicants.length, color: 'text-amber-500' },
+          { label: 'Hired & Signed Waiting', value: hiredApplicants.length, color: 'text-amber-500' },
           { label: 'Onboarded Total', value: completedCount, color: 'text-emerald-600' },
           { label: 'Probationary', value: probationaryEmps.length, color: 'text-blue-500' },
           { label: 'Total Employees', value: employees.length, color: 'text-teal-green' },
@@ -345,7 +358,7 @@ export const OnboardingHub = ({ employees, users, onRefresh }: OnboardingHubProp
                       </div>
                       <div>
                         <p className="font-bold text-slate-700 dark:text-slate-200 text-sm">{app.name}</p>
-                        <p className="text-[10px] text-slate-400">Score: {app.score || app.overall_rating}/5</p>
+                        <p className="text-[10px] text-slate-400">Score: {app.score || app.overall_rating}/5 • 2/2 Signed</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
