@@ -42,7 +42,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   const [approvalSigners, setApprovalSigners] = useState<any>({});
   const [viewSigners, setViewSigners] = useState<any>({});
   const [requisitionSearch, setRequisitionSearch] = useState('');
-  const [requisitionStatusFilter, setRequisitionStatusFilter] = useState<'all' | 'approved' | 'pending' | 'archived'>('all');
+  const [requisitionStatusFilter, setRequisitionStatusFilter] = useState<'approved' | 'pending' | 'archived'>('approved');
   const [applicantSearch, setApplicantSearch] = useState('');
   const [applicantStatusFilter, setApplicantStatusFilter] = useState<'pending' | 'archived' | 'signed'>('signed');
   const [reqForm, setReqForm] = useState({
@@ -512,8 +512,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     return requisitions.filter((r) => {
       const archived = !!r?.deleted_at;
       const approved = requisitionApprovalStatus(r) === 'Approved';
-      const statusMatches = requisitionStatusFilter === 'all'
-        || (requisitionStatusFilter === 'archived' && archived)
+      const statusMatches = (requisitionStatusFilter === 'archived' && archived)
         || (requisitionStatusFilter === 'approved' && !archived && approved)
         || (requisitionStatusFilter === 'pending' && !archived && !approved);
 
@@ -1339,10 +1338,9 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
               />
               <select
                 value={requisitionStatusFilter}
-                onChange={(e) => setRequisitionStatusFilter(e.target.value as 'all' | 'approved' | 'pending' | 'archived')}
+                onChange={(e) => setRequisitionStatusFilter(e.target.value as 'approved' | 'pending' | 'archived')}
                 className="p-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-sm dark:text-slate-100"
               >
-                <option value="all">All</option>
                 <option value="approved">Approved</option>
                 <option value="pending">Pending</option>
                 <option value="archived">Archived</option>
