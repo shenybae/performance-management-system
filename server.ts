@@ -4390,17 +4390,18 @@ ${scoredGoalIdsSql}
           (SELECT COUNT(*) FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = e.id AND COALESCE(g.scope, 'Individual') = 'Department') AS department_goal_count,
           (SELECT COUNT(*) FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = e.id AND NOT EXISTS (SELECT 1 FROM goal_member_tasks t WHERE t.goal_id = ga.goal_id AND t.member_employee_id = e.id AND t.deleted_at IS NULL AND t.proof_review_rating IS NOT NULL)) AS assigned_unrated_goals_count,
 
-          (SELECT COUNT(*) FROM pip_plans p WHERE p.employee_id = e.id) AS pip_count,
-          (SELECT COUNT(*) FROM development_plans d WHERE d.employee_id = e.id) AS idp_count,
+          (SELECT COUNT(*) FROM pip_plans p WHERE p.employee_id = e.id AND p.deleted_at IS NULL) AS pip_count,
+          (SELECT COUNT(*) FROM development_plans d WHERE d.employee_id = e.id AND d.deleted_at IS NULL) AS idp_count,
 
-          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id) AS recovery_tasks_total,
-          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS recovery_tasks_open,
-          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND COALESCE(t.status, 'Not Started') = 'Completed') AS recovery_tasks_completed,
+          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.deleted_at IS NULL) AS recovery_tasks_total,
+          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.deleted_at IS NULL AND COALESCE(t.status, 'Not Started') NOT IN ('Completed', 'Cancelled')) AS recovery_tasks_open,
+          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.deleted_at IS NULL AND COALESCE(t.status, 'Not Started') = 'Completed') AS recovery_tasks_completed,
           (SELECT COUNT(*) FROM (
             SELECT t.id
             FROM goal_member_tasks t
             LEFT JOIN users ur ON ur.id = t.proof_reviewed_by
             WHERE t.member_employee_id = e.id
+              AND t.deleted_at IS NULL
               AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved'
               AND LOWER(TRIM(COALESCE(t.proof_reviewed_role, ur.role, ''))) = 'manager'
             UNION ALL
@@ -4410,91 +4411,92 @@ ${scoredGoalIdsSql}
             WHERE g.id IN (
 ${relevantGoalIdsSql}
             )
+              AND g.deleted_at IS NULL
               AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Approved'
               AND LOWER(TRIM(COALESCE(g.proof_reviewed_role, ur.role, ''))) = 'manager'
           ) proof_approved_rows) AS proofs_approved,
           (SELECT COUNT(*) FROM (
             SELECT t.id
             FROM goal_member_tasks t
-            WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Rejected'
+            WHERE t.member_employee_id = e.id AND t.deleted_at IS NULL AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Rejected'
             UNION ALL
             SELECT g.id
             FROM goals g
             WHERE g.id IN (
 ${relevantGoalIdsSql}
-            ) AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Rejected'
+            ) AND g.deleted_at IS NULL AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Rejected'
           ) proof_rejected_rows) AS proofs_rejected,
           (SELECT COUNT(*) FROM (
             SELECT t.id
             FROM goal_member_tasks t
-            WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision'
+            WHERE t.member_employee_id = e.id AND t.deleted_at IS NULL AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision'
             UNION ALL
             SELECT g.id
             FROM goals g
             WHERE g.id IN (
 ${relevantGoalIdsSql}
-            ) AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Needs Revision'
+            ) AND g.deleted_at IS NULL AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Needs Revision'
           ) proof_revision_rows) AS proofs_needs_revision,
           (SELECT COUNT(*) FROM (
             SELECT t.id
             FROM goal_member_tasks t
-            WHERE t.member_employee_id = e.id AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision'
+            WHERE t.member_employee_id = e.id AND t.deleted_at IS NULL AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision'
             UNION ALL
             SELECT g.id
             FROM goals g
             WHERE g.id IN (
 ${relevantGoalIdsSql}
-            ) AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Needs Revision'
+            ) AND g.deleted_at IS NULL AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Needs Revision'
           ) goal_revision_rows) AS goal_revisions_count,
-          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_ratings_count,
-          (SELECT ROUND(COALESCE(AVG(t.proof_review_rating), 0), 2) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL) AS member_proof_rating_avg,
+          (SELECT COUNT(*) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.deleted_at IS NULL AND t.proof_review_rating IS NOT NULL) AS member_proof_ratings_count,
+          (SELECT ROUND(COALESCE(AVG(t.proof_review_rating), 0), 2) FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.deleted_at IS NULL AND t.proof_review_rating IS NOT NULL) AS member_proof_rating_avg,
           (SELECT COUNT(*) FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id))) AS leader_proof_ratings_count,
           (SELECT ROUND(COALESCE(AVG(g.proof_review_rating), 0), 2) FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id))) AS leader_proof_rating_avg,
           (SELECT COUNT(*) FROM (
-            SELECT t.proof_review_rating AS rating FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL
+            SELECT t.proof_review_rating AS rating FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.deleted_at IS NULL AND t.proof_review_rating IS NOT NULL
             UNION ALL
             SELECT g.proof_review_rating AS rating FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id))
           ) proof_ratings) AS proof_ratings_count,
           (SELECT ROUND(COALESCE(AVG(proof_ratings.rating), 0), 2) FROM (
-            SELECT t.proof_review_rating AS rating FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.proof_review_rating IS NOT NULL
+            SELECT t.proof_review_rating AS rating FROM goal_member_tasks t WHERE t.member_employee_id = e.id AND t.deleted_at IS NULL AND t.proof_review_rating IS NOT NULL
             UNION ALL
             SELECT g.proof_review_rating AS rating FROM goals g WHERE g.deleted_at IS NULL AND g.proof_review_rating IS NOT NULL AND (g.employee_id = e.id OR g.leader_id IN (SELECT u.id FROM users u WHERE u.employee_id = e.id))
           ) proof_ratings) AS proof_rating_avg,
 
-          (SELECT COUNT(*) FROM self_assessments s WHERE s.employee_id = e.id) AS self_assessments_count,
-          (SELECT MAX(s.created_at) FROM self_assessments s WHERE s.employee_id = e.id) AS last_self_assessment_at,
+          (SELECT COUNT(*) FROM self_assessments s WHERE s.employee_id = e.id AND s.deleted_at IS NULL) AS self_assessments_count,
+          (SELECT MAX(s.created_at) FROM self_assessments s WHERE s.employee_id = e.id AND s.deleted_at IS NULL) AS last_self_assessment_at,
 
-          (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id AND COALESCE(a.verified, 0) = 1) AS appraisals_count,
-          (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id AND COALESCE(a.verified, 0) = 1) AS performance_evaluation_forms_count,
-          (SELECT ROUND(COALESCE(AVG(COALESCE(a.overall, 0)), 0), 2) FROM appraisals a WHERE a.employee_id = e.id AND COALESCE(a.verified, 0) = 1) AS appraisals_avg_overall,
-          (SELECT MAX(a.sign_off_date) FROM appraisals a WHERE a.employee_id = e.id AND COALESCE(a.verified, 0) = 1) AS last_appraisal_signoff,
+          (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id AND a.deleted_at IS NULL AND COALESCE(a.verified, 0) = 1) AS appraisals_count,
+          (SELECT COUNT(*) FROM appraisals a WHERE a.employee_id = e.id AND a.deleted_at IS NULL AND COALESCE(a.verified, 0) = 1) AS performance_evaluation_forms_count,
+          (SELECT ROUND(COALESCE(AVG(COALESCE(a.overall, 0)), 0), 2) FROM appraisals a WHERE a.employee_id = e.id AND a.deleted_at IS NULL AND COALESCE(a.verified, 0) = 1) AS appraisals_avg_overall,
+          (SELECT MAX(a.sign_off_date) FROM appraisals a WHERE a.employee_id = e.id AND a.deleted_at IS NULL AND COALESCE(a.verified, 0) = 1) AS last_appraisal_signoff,
 
-          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND ((COALESCE(d.preparer_signature, '') <> '' AND COALESCE(d.supervisor_signature, '') <> '' AND COALESCE(d.employee_signature, '') <> '') OR COALESCE(d.is_acknowledged, 0) = 1 OR d.acknowledged_at IS NOT NULL)) AS disciplinary_count,
-          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND ((COALESCE(d.preparer_signature, '') <> '' AND COALESCE(d.supervisor_signature, '') <> '' AND COALESCE(d.employee_signature, '') <> '') OR COALESCE(d.is_acknowledged, 0) = 1 OR d.acknowledged_at IS NOT NULL) AND COALESCE(TRIM(d.violation_type), '') <> '') AS disciplinary_violation_entries_count,
-          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND ((COALESCE(d.preparer_signature, '') <> '' AND COALESCE(d.supervisor_signature, '') <> '' AND COALESCE(d.employee_signature, '') <> '') OR COALESCE(d.is_acknowledged, 0) = 1 OR d.acknowledged_at IS NOT NULL) AND COALESCE(TRIM(d.action_taken), '') <> '') AS disciplinary_actions_count,
-          (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND ((COALESCE(d.preparer_signature, '') <> '' AND COALESCE(d.supervisor_signature, '') <> '' AND COALESCE(d.employee_signature, '') <> '') OR COALESCE(d.is_acknowledged, 0) = 1 OR d.acknowledged_at IS NOT NULL)) AS last_disciplinary_date,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(d.is_archived, 0) = 0 AND d.archived_at IS NULL AND ((COALESCE(d.preparer_signature, '') <> '' AND COALESCE(d.supervisor_signature, '') <> '' AND COALESCE(d.employee_signature, '') <> '') OR COALESCE(d.is_acknowledged, 0) = 1 OR d.acknowledged_at IS NOT NULL)) AS disciplinary_count,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(d.is_archived, 0) = 0 AND d.archived_at IS NULL AND ((COALESCE(d.preparer_signature, '') <> '' AND COALESCE(d.supervisor_signature, '') <> '' AND COALESCE(d.employee_signature, '') <> '') OR COALESCE(d.is_acknowledged, 0) = 1 OR d.acknowledged_at IS NOT NULL) AND COALESCE(TRIM(d.violation_type), '') <> '') AS disciplinary_violation_entries_count,
+          (SELECT COUNT(*) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(d.is_archived, 0) = 0 AND d.archived_at IS NULL AND ((COALESCE(d.preparer_signature, '') <> '' AND COALESCE(d.supervisor_signature, '') <> '' AND COALESCE(d.employee_signature, '') <> '') OR COALESCE(d.is_acknowledged, 0) = 1 OR d.acknowledged_at IS NOT NULL) AND COALESCE(TRIM(d.action_taken), '') <> '') AS disciplinary_actions_count,
+          (SELECT MAX(d.date_of_warning) FROM discipline_records d WHERE d.employee_id = e.id AND d.deleted_at IS NULL AND COALESCE(d.is_archived, 0) = 0 AND d.archived_at IS NULL AND ((COALESCE(d.preparer_signature, '') <> '' AND COALESCE(d.supervisor_signature, '') <> '' AND COALESCE(d.employee_signature, '') <> '') OR COALESCE(d.is_acknowledged, 0) = 1 OR d.acknowledged_at IS NOT NULL)) AS last_disciplinary_date,
 
-          (SELECT COUNT(*) FROM feedback_360 f WHERE LOWER(TRIM(COALESCE(f.target_employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS feedback_360_count,
+          (SELECT COUNT(*) FROM feedback_360 f WHERE f.deleted_at IS NULL AND LOWER(TRIM(COALESCE(f.target_employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, '')))) AS feedback_360_count,
 
-          (SELECT COUNT(*) FROM suggestions s WHERE s.employee_id = e.id AND COALESCE(s.employee_signature, '') <> '' AND COALESCE(s.supervisor_signature, '') <> '') AS suggestions_count,
-          (SELECT MAX(s.created_at) FROM suggestions s WHERE s.employee_id = e.id AND COALESCE(s.employee_signature, '') <> '' AND COALESCE(s.supervisor_signature, '') <> '') AS last_suggestion_date,
+          (SELECT COUNT(*) FROM suggestions s WHERE s.employee_id = e.id AND s.deleted_at IS NULL AND COALESCE(s.employee_signature, '') <> '' AND COALESCE(s.supervisor_signature, '') <> '') AS suggestions_count,
+          (SELECT MAX(s.created_at) FROM suggestions s WHERE s.employee_id = e.id AND s.deleted_at IS NULL AND COALESCE(s.employee_signature, '') <> '' AND COALESCE(s.supervisor_signature, '') <> '') AS last_suggestion_date,
 
-          (SELECT COUNT(*) FROM onboarding o WHERE o.employee_id = e.id AND COALESCE(o.employee_signature, '') <> '' AND COALESCE(o.hr_signature, '') <> '') AS onboarding_count,
-          (SELECT COUNT(*) FROM onboarding o WHERE o.employee_id = e.id AND COALESCE(o.employee_signature, '') <> '' AND COALESCE(o.hr_signature, '') <> '') AS onboarding_signed_count,
+          (SELECT COUNT(*) FROM onboarding o WHERE o.employee_id = e.id AND o.deleted_at IS NULL AND COALESCE(o.employee_signature, '') <> '' AND COALESCE(o.hr_signature, '') <> '') AS onboarding_count,
+          (SELECT COUNT(*) FROM onboarding o WHERE o.employee_id = e.id AND o.deleted_at IS NULL AND COALESCE(o.employee_signature, '') <> '' AND COALESCE(o.hr_signature, '') <> '') AS onboarding_signed_count,
 
-          (SELECT COUNT(*) FROM property_accountability p WHERE p.employee_id = e.id AND COALESCE(p.turnover_by_sig, '') <> '' AND COALESCE(p.noted_by_sig, '') <> '' AND COALESCE(p.received_by_sig, '') <> '' AND COALESCE(p.audited_by_sig, '') <> '') AS property_forms_count,
-          (SELECT COUNT(*) FROM property_accountability p WHERE p.employee_id = e.id AND COALESCE(p.turnover_by_sig, '') <> '' AND COALESCE(p.noted_by_sig, '') <> '' AND COALESCE(p.received_by_sig, '') <> '' AND COALESCE(p.audited_by_sig, '') <> '') AS property_signed_count,
+          (SELECT COUNT(*) FROM property_accountability p WHERE p.employee_id = e.id AND p.deleted_at IS NULL AND COALESCE(p.turnover_by_sig, '') <> '' AND COALESCE(p.noted_by_sig, '') <> '' AND COALESCE(p.received_by_sig, '') <> '' AND COALESCE(p.audited_by_sig, '') <> '') AS property_forms_count,
+          (SELECT COUNT(*) FROM property_accountability p WHERE p.employee_id = e.id AND p.deleted_at IS NULL AND COALESCE(p.turnover_by_sig, '') <> '' AND COALESCE(p.noted_by_sig, '') <> '' AND COALESCE(p.received_by_sig, '') <> '' AND COALESCE(p.audited_by_sig, '') <> '') AS property_signed_count,
 
-          (SELECT COUNT(*) FROM exit_interviews ex WHERE LOWER(TRIM(COALESCE(ex.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, ''))) AND COALESCE(ex.employee_sig, '') <> '' AND COALESCE(ex.interviewer_sig, '') <> '') AS exit_interviews_count,
-          (SELECT COUNT(*) FROM exit_interviews ex WHERE LOWER(TRIM(COALESCE(ex.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, ''))) AND COALESCE(ex.employee_sig, '') <> '' AND COALESCE(ex.interviewer_sig, '') <> '') AS exit_interviews_signed_count,
+          (SELECT COUNT(*) FROM exit_interviews ex WHERE ex.deleted_at IS NULL AND LOWER(TRIM(COALESCE(ex.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, ''))) AND COALESCE(ex.employee_sig, '') <> '' AND COALESCE(ex.interviewer_sig, '') <> '') AS exit_interviews_count,
+          (SELECT COUNT(*) FROM exit_interviews ex WHERE ex.deleted_at IS NULL AND LOWER(TRIM(COALESCE(ex.employee_name, ''))) = LOWER(TRIM(COALESCE(e.name, ''))) AND COALESCE(ex.employee_sig, '') <> '' AND COALESCE(ex.interviewer_sig, '') <> '') AS exit_interviews_signed_count,
 
-          (SELECT COUNT(*) FROM coaching_logs cl WHERE cl.employee_id = e.id) AS coaching_logs_count,
-          (SELECT MAX(cl.created_at) FROM coaching_logs cl WHERE cl.employee_id = e.id) AS last_coaching_log_at,
+          (SELECT COUNT(*) FROM coaching_logs cl WHERE cl.employee_id = e.id AND cl.deleted_at IS NULL) AS coaching_logs_count,
+          (SELECT MAX(cl.created_at) FROM coaching_logs cl WHERE cl.employee_id = e.id AND cl.deleted_at IS NULL) AS last_coaching_log_at,
 
-          (SELECT COUNT(*) FROM goal_improvement_plans gip LEFT JOIN goals g ON g.id = gip.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(COALESCE(e.dept, ''))) AND COALESCE(g.scope, 'Individual') = 'Team') AS team_improvement_plans,
-          (SELECT COUNT(*) FROM goal_development_plans gdp LEFT JOIN goals g ON g.id = gdp.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(COALESCE(e.dept, ''))) AND COALESCE(g.scope, 'Individual') = 'Team') AS team_development_plans,
-          (SELECT COUNT(*) FROM goal_improvement_plans gip LEFT JOIN goals g ON g.id = gip.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(COALESCE(e.dept, ''))) AND COALESCE(g.scope, 'Individual') = 'Department') AS department_improvement_plans,
-          (SELECT COUNT(*) FROM goal_development_plans gdp LEFT JOIN goals g ON g.id = gdp.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(COALESCE(e.dept, ''))) AND COALESCE(g.scope, 'Individual') = 'Department') AS department_development_plans
+          (SELECT COUNT(*) FROM goal_improvement_plans gip LEFT JOIN goals g ON g.id = gip.goal_id WHERE gip.deleted_at IS NULL AND g.deleted_at IS NULL AND LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(COALESCE(e.dept, ''))) AND COALESCE(g.scope, 'Individual') = 'Team') AS team_improvement_plans,
+          (SELECT COUNT(*) FROM goal_development_plans gdp LEFT JOIN goals g ON g.id = gdp.goal_id WHERE gdp.deleted_at IS NULL AND g.deleted_at IS NULL AND LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(COALESCE(e.dept, ''))) AND COALESCE(g.scope, 'Individual') = 'Team') AS team_development_plans,
+          (SELECT COUNT(*) FROM goal_improvement_plans gip LEFT JOIN goals g ON g.id = gip.goal_id WHERE gip.deleted_at IS NULL AND g.deleted_at IS NULL AND LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(COALESCE(e.dept, ''))) AND COALESCE(g.scope, 'Individual') = 'Department') AS department_improvement_plans,
+          (SELECT COUNT(*) FROM goal_development_plans gdp LEFT JOIN goals g ON g.id = gdp.goal_id WHERE gdp.deleted_at IS NULL AND g.deleted_at IS NULL AND LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(COALESCE(e.dept, ''))) AND COALESCE(g.scope, 'Individual') = 'Department') AS department_development_plans
 
         FROM employees e
         ${whereSql}
@@ -4787,29 +4789,29 @@ ${relevantGoalIdsSql}
           const goalsOverdue = await safeCount(`SELECT COUNT(*) AS c FROM goals g WHERE g.id IN (${relevantGoalIdsSql}) AND g.target_date IS NOT NULL AND g.target_date < ${todaySql} AND COALESCE(g.status, 'Not Started') <> 'Cancelled' AND COALESCE(g.status, 'Not Started') <> 'Completed'`, [employeeId, employeeId, employeeId]);
           const goalsAvgProgress = await safeNumber(`SELECT ROUND(COALESCE(AVG(g.progress), 0), 1) AS avg_p FROM goals g WHERE g.id IN (${scoredGoalIdsSql})`, [employeeId, employeeId, employeeId, employeeId]);
           const assignedUnratedGoalsCount = await safeCount(`SELECT COUNT(*) AS c FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = ? AND NOT EXISTS (SELECT 1 FROM goal_member_tasks t WHERE t.goal_id = ga.goal_id AND t.member_employee_id = ? AND t.deleted_at IS NULL AND t.proof_review_rating IS NOT NULL)`, [employeeId, employeeId]);
-          const appraisalsCount = await safeCount('SELECT COUNT(*) AS c FROM appraisals WHERE employee_id = ? AND COALESCE(verified, 0) = 1', [employeeId]);
-          const appraisalsAvg = await safeNumber('SELECT ROUND(COALESCE(AVG(COALESCE(overall, 0)), 0), 2) AS avg_overall FROM appraisals WHERE employee_id = ? AND COALESCE(verified, 0) = 1', [employeeId]);
-          const disciplinaryCount = await safeCount("SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ? AND deleted_at IS NULL AND ((COALESCE(preparer_signature, '') <> '' AND COALESCE(supervisor_signature, '') <> '' AND COALESCE(employee_signature, '') <> '') OR COALESCE(is_acknowledged, 0) = 1 OR acknowledged_at IS NOT NULL)", [employeeId]);
-          const disciplinaryViolationEntriesCount = await safeCount("SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ? AND deleted_at IS NULL AND ((COALESCE(preparer_signature, '') <> '' AND COALESCE(supervisor_signature, '') <> '' AND COALESCE(employee_signature, '') <> '') OR COALESCE(is_acknowledged, 0) = 1 OR acknowledged_at IS NOT NULL) AND COALESCE(TRIM(violation_type), '') <> ''", [employeeId]);
-          const disciplinaryActionsCount = await safeCount("SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ? AND deleted_at IS NULL AND ((COALESCE(preparer_signature, '') <> '' AND COALESCE(supervisor_signature, '') <> '' AND COALESCE(employee_signature, '') <> '') OR COALESCE(is_acknowledged, 0) = 1 OR acknowledged_at IS NOT NULL) AND COALESCE(TRIM(action_taken), '') <> ''", [employeeId]);
-          const selfAssessmentsCount = await safeCount('SELECT COUNT(*) AS c FROM self_assessments WHERE employee_id = ?', [employeeId]);
-          const feedbackCount = await safeCount("SELECT COUNT(*) AS c FROM feedback_360 WHERE LOWER(TRIM(COALESCE(target_employee_name, ''))) = LOWER(TRIM(?))", [employeeName]);
-          const suggestionsCount = await safeCount("SELECT COUNT(*) AS c FROM suggestions WHERE employee_id = ? AND COALESCE(employee_signature, '') <> '' AND COALESCE(supervisor_signature, '') <> ''", [employeeId]);
-          const onboardingCount = await safeCount("SELECT COUNT(*) AS c FROM onboarding WHERE employee_id = ? AND COALESCE(employee_signature, '') <> '' AND COALESCE(hr_signature, '') <> ''", [employeeId]);
-          const onboardingSignedCount = await safeCount("SELECT COUNT(*) AS c FROM onboarding WHERE employee_id = ? AND COALESCE(employee_signature, '') <> '' AND COALESCE(hr_signature, '') <> ''", [employeeId]);
-          const propertyFormsCount = await safeCount("SELECT COUNT(*) AS c FROM property_accountability WHERE employee_id = ? AND COALESCE(turnover_by_sig, '') <> '' AND COALESCE(noted_by_sig, '') <> '' AND COALESCE(received_by_sig, '') <> '' AND COALESCE(audited_by_sig, '') <> ''", [employeeId]);
-          const propertySignedCount = await safeCount("SELECT COUNT(*) AS c FROM property_accountability WHERE employee_id = ? AND COALESCE(turnover_by_sig, '') <> '' AND COALESCE(noted_by_sig, '') <> '' AND COALESCE(received_by_sig, '') <> '' AND COALESCE(audited_by_sig, '') <> ''", [employeeId]);
-          const exitInterviewsCount = await safeCount("SELECT COUNT(*) AS c FROM exit_interviews WHERE LOWER(TRIM(COALESCE(employee_name, ''))) = LOWER(TRIM(?)) AND COALESCE(employee_sig, '') <> '' AND COALESCE(interviewer_sig, '') <> ''", [employeeName]);
-          const exitInterviewsSignedCount = await safeCount("SELECT COUNT(*) AS c FROM exit_interviews WHERE LOWER(TRIM(COALESCE(employee_name, ''))) = LOWER(TRIM(?)) AND COALESCE(employee_sig, '') <> '' AND COALESCE(interviewer_sig, '') <> ''", [employeeName]);
-          const coachingLogsCount = await safeCount('SELECT COUNT(*) AS c FROM coaching_logs WHERE employee_id = ?', [employeeId]);
-          const pipCount = await safeCount('SELECT COUNT(*) AS c FROM pip_plans WHERE employee_id = ?', [employeeId]);
-          const idpCount = await safeCount('SELECT COUNT(*) AS c FROM development_plans WHERE employee_id = ?', [employeeId]);
+          const appraisalsCount = await safeCount('SELECT COUNT(*) AS c FROM appraisals WHERE employee_id = ? AND deleted_at IS NULL AND COALESCE(verified, 0) = 1', [employeeId]);
+          const appraisalsAvg = await safeNumber('SELECT ROUND(COALESCE(AVG(COALESCE(overall, 0)), 0), 2) AS avg_overall FROM appraisals WHERE employee_id = ? AND deleted_at IS NULL AND COALESCE(verified, 0) = 1', [employeeId]);
+          const disciplinaryCount = await safeCount("SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ? AND deleted_at IS NULL AND COALESCE(is_archived, 0) = 0 AND archived_at IS NULL AND ((COALESCE(preparer_signature, '') <> '' AND COALESCE(supervisor_signature, '') <> '' AND COALESCE(employee_signature, '') <> '') OR COALESCE(is_acknowledged, 0) = 1 OR acknowledged_at IS NOT NULL)", [employeeId]);
+          const disciplinaryViolationEntriesCount = await safeCount("SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ? AND deleted_at IS NULL AND COALESCE(is_archived, 0) = 0 AND archived_at IS NULL AND ((COALESCE(preparer_signature, '') <> '' AND COALESCE(supervisor_signature, '') <> '' AND COALESCE(employee_signature, '') <> '') OR COALESCE(is_acknowledged, 0) = 1 OR acknowledged_at IS NOT NULL) AND COALESCE(TRIM(violation_type), '') <> ''", [employeeId]);
+          const disciplinaryActionsCount = await safeCount("SELECT COUNT(*) AS c FROM discipline_records WHERE employee_id = ? AND deleted_at IS NULL AND COALESCE(is_archived, 0) = 0 AND archived_at IS NULL AND ((COALESCE(preparer_signature, '') <> '' AND COALESCE(supervisor_signature, '') <> '' AND COALESCE(employee_signature, '') <> '') OR COALESCE(is_acknowledged, 0) = 1 OR acknowledged_at IS NOT NULL) AND COALESCE(TRIM(action_taken), '') <> ''", [employeeId]);
+          const selfAssessmentsCount = await safeCount('SELECT COUNT(*) AS c FROM self_assessments WHERE employee_id = ? AND deleted_at IS NULL', [employeeId]);
+          const feedbackCount = await safeCount("SELECT COUNT(*) AS c FROM feedback_360 WHERE deleted_at IS NULL AND LOWER(TRIM(COALESCE(target_employee_name, ''))) = LOWER(TRIM(?))", [employeeName]);
+          const suggestionsCount = await safeCount("SELECT COUNT(*) AS c FROM suggestions WHERE employee_id = ? AND deleted_at IS NULL AND COALESCE(employee_signature, '') <> '' AND COALESCE(supervisor_signature, '') <> ''", [employeeId]);
+          const onboardingCount = await safeCount("SELECT COUNT(*) AS c FROM onboarding WHERE employee_id = ? AND deleted_at IS NULL AND COALESCE(employee_signature, '') <> '' AND COALESCE(hr_signature, '') <> ''", [employeeId]);
+          const onboardingSignedCount = await safeCount("SELECT COUNT(*) AS c FROM onboarding WHERE employee_id = ? AND deleted_at IS NULL AND COALESCE(employee_signature, '') <> '' AND COALESCE(hr_signature, '') <> ''", [employeeId]);
+          const propertyFormsCount = await safeCount("SELECT COUNT(*) AS c FROM property_accountability WHERE employee_id = ? AND deleted_at IS NULL AND COALESCE(turnover_by_sig, '') <> '' AND COALESCE(noted_by_sig, '') <> '' AND COALESCE(received_by_sig, '') <> '' AND COALESCE(audited_by_sig, '') <> ''", [employeeId]);
+          const propertySignedCount = await safeCount("SELECT COUNT(*) AS c FROM property_accountability WHERE employee_id = ? AND deleted_at IS NULL AND COALESCE(turnover_by_sig, '') <> '' AND COALESCE(noted_by_sig, '') <> '' AND COALESCE(received_by_sig, '') <> '' AND COALESCE(audited_by_sig, '') <> ''", [employeeId]);
+          const exitInterviewsCount = await safeCount("SELECT COUNT(*) AS c FROM exit_interviews WHERE deleted_at IS NULL AND LOWER(TRIM(COALESCE(employee_name, ''))) = LOWER(TRIM(?)) AND COALESCE(employee_sig, '') <> '' AND COALESCE(interviewer_sig, '') <> ''", [employeeName]);
+          const exitInterviewsSignedCount = await safeCount("SELECT COUNT(*) AS c FROM exit_interviews WHERE deleted_at IS NULL AND LOWER(TRIM(COALESCE(employee_name, ''))) = LOWER(TRIM(?)) AND COALESCE(employee_sig, '') <> '' AND COALESCE(interviewer_sig, '') <> ''", [employeeName]);
+          const coachingLogsCount = await safeCount('SELECT COUNT(*) AS c FROM coaching_logs WHERE employee_id = ? AND deleted_at IS NULL', [employeeId]);
+          const pipCount = await safeCount('SELECT COUNT(*) AS c FROM pip_plans WHERE employee_id = ? AND deleted_at IS NULL', [employeeId]);
+          const idpCount = await safeCount('SELECT COUNT(*) AS c FROM development_plans WHERE employee_id = ? AND deleted_at IS NULL', [employeeId]);
           const memberProofRatingsCount = await safeCount(
-            `SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND t.proof_review_rating IS NOT NULL`,
+            `SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND t.deleted_at IS NULL AND t.proof_review_rating IS NOT NULL`,
             [employeeId]
           );
           const memberProofRatingAvg = await safeNumber(
-            `SELECT ROUND(COALESCE(AVG(t.proof_review_rating), 0), 2) AS avg_rating FROM goal_member_tasks t WHERE t.member_employee_id = ? AND t.proof_review_rating IS NOT NULL`,
+            `SELECT ROUND(COALESCE(AVG(t.proof_review_rating), 0), 2) AS avg_rating FROM goal_member_tasks t WHERE t.member_employee_id = ? AND t.deleted_at IS NULL AND t.proof_review_rating IS NOT NULL`,
             [employeeId]
           );
           const leaderProofRatingsCount = await safeCount(
@@ -4826,47 +4828,47 @@ ${relevantGoalIdsSql}
           const delegatedGoalCount = await safeCount(`SELECT COUNT(*) AS c FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = ?`, [employeeId]);
           const teamGoalCount = await safeCount(`SELECT COUNT(*) AS c FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = ? AND COALESCE(g.scope, 'Individual') = 'Team'`, [employeeId]);
           const departmentGoalCount = await safeCount(`SELECT COUNT(*) AS c FROM goal_assignees ga INNER JOIN goals g ON g.id = ga.goal_id AND g.deleted_at IS NULL WHERE ga.employee_id = ? AND COALESCE(g.scope, 'Individual') = 'Department'`, [employeeId]);
-          const recoveryTasksTotal = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ?`, [employeeId]);
-          const recoveryTasksOpen = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.status, 'Not Started') NOT IN ('Completed', 'Cancelled')`, [employeeId]);
-          const recoveryTasksCompleted = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.status, 'Not Started') = 'Completed'`, [employeeId]);
-          const proofsApproved = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved'`, [employeeId]);
-          const proofsRejected = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Rejected'`, [employeeId]);
+          const recoveryTasksTotal = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND t.deleted_at IS NULL`, [employeeId]);
+          const recoveryTasksOpen = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND t.deleted_at IS NULL AND COALESCE(t.status, 'Not Started') NOT IN ('Completed', 'Cancelled')`, [employeeId]);
+          const recoveryTasksCompleted = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND t.deleted_at IS NULL AND COALESCE(t.status, 'Not Started') = 'Completed'`, [employeeId]);
+          const proofsApproved = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND t.deleted_at IS NULL AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Approved'`, [employeeId]);
+          const proofsRejected = await safeCount(`SELECT COUNT(*) AS c FROM goal_member_tasks t WHERE t.member_employee_id = ? AND t.deleted_at IS NULL AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Rejected'`, [employeeId]);
           const proofsNeedsRevision = await safeCount(
             `SELECT COUNT(*) AS c FROM (
                SELECT t.id
                FROM goal_member_tasks t
-               WHERE t.member_employee_id = ? AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision'
+               WHERE t.member_employee_id = ? AND t.deleted_at IS NULL AND COALESCE(t.proof_review_status, 'Not Submitted') = 'Needs Revision'
                UNION ALL
                SELECT g.id
                FROM goals g
-               WHERE g.id IN (${relevantGoalIdsSql}) AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Needs Revision'
+               WHERE g.id IN (${relevantGoalIdsSql}) AND g.deleted_at IS NULL AND COALESCE(g.proof_review_status, 'Not Submitted') = 'Needs Revision'
              ) revision_rows`,
             [employeeId, employeeId, employeeId, employeeId]
           );
           const goalRevisionsCount = proofsNeedsRevision;
           const employeeDept = String(r.dept || '');
           const teamImprovementPlans = await safeCount(
-            `SELECT COUNT(*) AS c FROM goal_improvement_plans gip INNER JOIN goals g ON g.id = gip.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Team'`,
+            `SELECT COUNT(*) AS c FROM goal_improvement_plans gip INNER JOIN goals g ON g.id = gip.goal_id WHERE gip.deleted_at IS NULL AND g.deleted_at IS NULL AND LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Team'`,
             [employeeDept]
           );
           const teamDevelopmentPlans = await safeCount(
-            `SELECT COUNT(*) AS c FROM goal_development_plans gdp INNER JOIN goals g ON g.id = gdp.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Team'`,
+            `SELECT COUNT(*) AS c FROM goal_development_plans gdp INNER JOIN goals g ON g.id = gdp.goal_id WHERE gdp.deleted_at IS NULL AND g.deleted_at IS NULL AND LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Team'`,
             [employeeDept]
           );
           const departmentImprovementPlans = await safeCount(
-            `SELECT COUNT(*) AS c FROM goal_improvement_plans gip INNER JOIN goals g ON g.id = gip.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Department'`,
+            `SELECT COUNT(*) AS c FROM goal_improvement_plans gip INNER JOIN goals g ON g.id = gip.goal_id WHERE gip.deleted_at IS NULL AND g.deleted_at IS NULL AND LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Department'`,
             [employeeDept]
           );
           const departmentDevelopmentPlans = await safeCount(
-            `SELECT COUNT(*) AS c FROM goal_development_plans gdp INNER JOIN goals g ON g.id = gdp.goal_id WHERE LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Department'`,
+            `SELECT COUNT(*) AS c FROM goal_development_plans gdp INNER JOIN goals g ON g.id = gdp.goal_id WHERE gdp.deleted_at IS NULL AND g.deleted_at IS NULL AND LOWER(TRIM(COALESCE(g.department, ''))) = LOWER(TRIM(?)) AND COALESCE(g.scope, 'Individual') = 'Department'`,
             [employeeDept]
           );
 
-          const lastSelfAssessmentAt = await safeText('SELECT MAX(created_at) AS max_created_at FROM self_assessments WHERE employee_id = ?', [employeeId]);
-          const lastAppraisalSignoff = await safeText('SELECT MAX(sign_off_date) AS max_sign_off_date FROM appraisals WHERE employee_id = ?', [employeeId]);
-          const lastDisciplinaryDate = await safeText('SELECT MAX(date_of_warning) AS max_date_of_warning FROM discipline_records WHERE employee_id = ?', [employeeId]);
-          const lastSuggestionDate = await safeText('SELECT MAX(created_at) AS max_created_at FROM suggestions WHERE employee_id = ?', [employeeId]);
-          const lastCoachingLogAt = await safeText('SELECT MAX(created_at) AS max_created_at FROM coaching_logs WHERE employee_id = ?', [employeeId]);
+          const lastSelfAssessmentAt = await safeText('SELECT MAX(created_at) AS max_created_at FROM self_assessments WHERE employee_id = ? AND deleted_at IS NULL', [employeeId]);
+          const lastAppraisalSignoff = await safeText('SELECT MAX(sign_off_date) AS max_sign_off_date FROM appraisals WHERE employee_id = ? AND deleted_at IS NULL', [employeeId]);
+          const lastDisciplinaryDate = await safeText('SELECT MAX(date_of_warning) AS max_date_of_warning FROM discipline_records WHERE employee_id = ? AND deleted_at IS NULL AND COALESCE(is_archived, 0) = 0 AND archived_at IS NULL', [employeeId]);
+          const lastSuggestionDate = await safeText('SELECT MAX(created_at) AS max_created_at FROM suggestions WHERE employee_id = ? AND deleted_at IS NULL', [employeeId]);
+          const lastCoachingLogAt = await safeText('SELECT MAX(created_at) AS max_created_at FROM coaching_logs WHERE employee_id = ? AND deleted_at IS NULL', [employeeId]);
 
           const goalsCompletionRate = goalsTotal > 0 ? Math.round((goalsCompleted / goalsTotal) * 100) : 0;
           const formsTotalCount =
