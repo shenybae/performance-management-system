@@ -148,6 +148,24 @@ export const VerificationOfReview = () => {
     return null;
   };
 
+  // Finds the stage this user owns on a record regardless of whether prior stages are signed.
+  // Returns null if user doesn't own any unsigned stage.
+  const getUserOwnRequisitionStage = (record: any) => {
+    const orderedStages: Array<'supervisor' | 'dept_head' | 'cabinet' | 'vp' | 'president'> = ['supervisor', 'dept_head', 'cabinet', 'vp', 'president'];
+    for (const stage of orderedStages) {
+      const signatureField = `${stage}_approval_sig`;
+      if (record?.[signatureField]) continue; // already signed
+      if (userMatchesRequisitionStage(record, stage)) return stage;
+    }
+    return null;
+  };
+
+  const requisitionPriorStagesSigned = (record: any, stage: 'supervisor' | 'dept_head' | 'cabinet' | 'vp' | 'president') => {
+    const order: Array<'supervisor' | 'dept_head' | 'cabinet' | 'vp' | 'president'> = ['supervisor', 'dept_head', 'cabinet', 'vp', 'president'];
+    const idx = order.indexOf(stage);
+    return order.slice(0, idx).every((s) => !!record?.[`${s}_approval_sig`]);
+  };
+
   const fetchAppraisals = async () => {
     try {
       const res = await fetch('/api/appraisals', { headers: getAuthHeaders() });
@@ -810,18 +828,20 @@ export const VerificationOfReview = () => {
     () => requisitions
       .filter((r) => sameDept(r))
       .map((r) => {
-        const nextStage = getCurrentUserPendingRequisitionStage(r);
-        if (!nextStage || nextStage === 'supervisor') return null;
-        const pendingSteps = [getRequisitionStageLabel(nextStage)];
+        const ownStage = getUserOwnRequisitionStage(r);
+        if (!ownStage || ownStage === 'supervisor') return null;
+        const priorSigned = requisitionPriorStagesSigned(r, ownStage);
+        const pendingSteps = [getRequisitionStageLabel(ownStage)];
         return {
           ...r,
           key: `req-hr-${r.id}`,
           id: r.id,
-          stage: nextStage,
+          stage: ownStage,
           pendingSteps,
           title: pendingSteps.join(' • '),
           job_title: r.job_title,
           department: r.department,
+          queueReady: priorSigned,
         };
       })
       .filter(Boolean),
@@ -2202,6 +2222,9 @@ export const VerificationOfReview = () => {
               badgeColorClass: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
               pills: [{ icon: <Building2 size={10} />, text: t.department || '—' }],
               onView: () => setGenericViewModal({ title: `Requisition — ${t.job_title || 'Requisition'}`, type: 'requisition', record: t }),
+              signDisabled: !t.queueReady,
+              signTitle: !t.queueReady ? 'Waiting for prior signatories' : undefined,
+              warningText: !t.queueReady ? 'Awaiting prior signatures before you can sign' : undefined,
               onSign: () => openGenericSign(`Sign — Requisition (${t.job_title || 'Requisition'})`, 'simple', 'hr-req', t),
             }))}
           </Card>
