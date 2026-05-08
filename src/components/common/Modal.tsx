@@ -28,7 +28,7 @@ export const Modal = ({ open, title, onClose, children, maxWidthClassName = 'max
               ✕
             </button>
           </div>
-          <div className={`px-5 py-5 max-h-[80vh] overflow-y-auto ${bodyClassName}`}>{children}</div>
+          <div className={`px-5 py-5 max-h-[80vh] overflow-y-auto overflow-x-hidden ${bodyClassName}`}>{children}</div>
         </div>
       </div>
     </div>

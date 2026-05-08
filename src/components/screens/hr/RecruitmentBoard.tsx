@@ -1274,7 +1274,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
 
             <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
               <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Comments</p>
-              <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{viewRequisition.comments || '—'}</p>
+              <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-words break-all">{viewRequisition.comments || '—'}</p>
             </div>
 
             <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
