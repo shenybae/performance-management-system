@@ -270,6 +270,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
 
   const sanitizeApplicantForm = () => ({
     ...appForm,
+    department: trimText(scopedDept, 100),
     first_name: trimText((appForm as any).first_name, 80),
     last_name: trimText((appForm as any).last_name, 80),
     name: trimText(`${trimText((appForm as any).first_name, 80)} ${trimText((appForm as any).last_name, 80)}`.trim(), 120),
@@ -365,6 +366,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
 
   const submitAppraisal = async () => {
     const cleaned = sanitizeApplicantForm();
+    if (!cleaned.department) { window.notify?.('Department scope is required. Please sign in again.', 'error'); return; }
     if (!cleaned.first_name || !cleaned.last_name) { window.notify?.('Please enter applicant first name and last name', 'error'); return; }
     if (!cleaned.position) { window.notify?.('Please select the position applied for', 'error'); return; }
     if (!cleaned.interview_date) { window.notify?.('Please enter interview date', 'error'); return; }

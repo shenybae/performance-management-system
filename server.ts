@@ -1361,6 +1361,7 @@ async function initDb() {
 
     // Applicant appraisal form migrations (interview questions, signatures, etc.)
     const applicantMigrations = [
+      'ALTER TABLE applicants ADD COLUMN department TEXT',
       'ALTER TABLE applicants ADD COLUMN interview_impression TEXT',
       'ALTER TABLE applicants ADD COLUMN dept_fit TEXT',
       'ALTER TABLE applicants ADD COLUMN previous_qualifications TEXT',
@@ -7572,9 +7573,66 @@ ${relevantGoalIdsSql}
   app.get("/api/applicants", async (req, res) => {
     try { const rows = await query("SELECT * FROM applicants ORDER BY created_at DESC"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
+
+  app.get('/api/applicants/signers/:department', authenticateToken, async (req, res) => {
+    try {
+      const actor = (req as any).user || {};
+      if (!isPrivilegedRole(actor.role) && actor.role !== 'Manager') {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      const dept = String(req.params.department || '').trim();
+      if (!dept) return res.status(400).json({ error: 'Department is required' });
+
+      const pickNameSql = `COALESCE(NULLIF(TRIM(u.full_name), ''), NULLIF(TRIM(e.name), ''), NULLIF(TRIM(u.username), ''), NULLIF(TRIM(u.email), ''))`;
+
+      const hrRows: any = await query(
+        `SELECT u.id, ${pickNameSql} AS full_name, u.email
+         FROM users u
+         LEFT JOIN employees e ON e.id = u.employee_id
+         WHERE u.deleted_at IS NULL
+           AND LOWER(TRIM(COALESCE(u.role, ''))) = 'hr'
+           AND LOWER(TRIM(COALESCE(u.dept, ''))) = LOWER(TRIM(?))
+         ORDER BY
+           CASE
+             WHEN LOWER(TRIM(COALESCE(u.position, ''))) = 'hr admin' THEN 0
+             WHEN LOWER(TRIM(COALESCE(u.position, ''))) LIKE '%hr%' THEN 1
+             ELSE 5
+           END,
+           u.created_at ASC,
+           u.id ASC
+         LIMIT 1`,
+        [dept]
+      );
+
+      const managerRows: any = await query(
+        `SELECT u.id, ${pickNameSql} AS full_name, u.email
+         FROM users u
+         LEFT JOIN employees e ON e.id = u.employee_id
+         WHERE u.deleted_at IS NULL
+           AND LOWER(TRIM(COALESCE(u.role, ''))) = 'manager'
+           AND LOWER(TRIM(COALESCE(u.dept, ''))) = LOWER(TRIM(?))
+         ORDER BY u.created_at ASC, u.id ASC
+         LIMIT 1`,
+        [dept]
+      );
+
+      const hr = Array.isArray(hrRows) ? hrRows[0] : hrRows;
+      const manager = Array.isArray(managerRows) ? managerRows[0] : managerRows;
+
+      res.json({
+        department: dept,
+        hr_admin: hr ? { id: hr.id, full_name: hr.full_name, email: hr.email } : null,
+        manager: manager ? { id: manager.id, full_name: manager.full_name, email: manager.email } : null,
+      });
+    } catch {
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
   app.post("/api/applicants", authenticateToken, async (req, res) => {
     try {
-      const { name, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
+      const { name, department, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
         interview_impression, dept_fit, previous_qualifications,
         q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
         additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
@@ -7583,15 +7641,15 @@ ${relevantGoalIdsSql}
       let hrReviewerUserId: number | null = null;
       try { hrReviewerUserId = await resolveUserIdByFullName(String(hr_reviewer_name || '')); } catch (e) { hrReviewerUserId = null; }
       let hrOwnerUserId: number | null = null;
-      try { hrOwnerUserId = await resolveDeptHrOwnerUserId(dept_fit || null); } catch (e) { hrOwnerUserId = null; }
+      try { hrOwnerUserId = await resolveDeptHrOwnerUserId(department || null); } catch (e) { hrOwnerUserId = null; }
       try {
-        await query(`INSERT INTO applicants (name, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
+        await query(`INSERT INTO applicants (name, department, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
           interview_impression, dept_fit, previous_qualifications,
           q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
           additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
           hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, hr_reviewer_user_id, hr_owner_user_id, recommendation)
-          VALUES (${Array(33).fill('?').join(', ')})`,
-          [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
+          VALUES (${Array(34).fill('?').join(', ')})`,
+          [name, department || null, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
           interview_impression, dept_fit, previous_qualifications,
           q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
           additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
@@ -7599,13 +7657,13 @@ ${relevantGoalIdsSql}
       } catch (fullInsertErr) {
         // Backward-compatible fallback for environments where newer applicant columns are not present yet.
         try {
-          await query(`INSERT INTO applicants (name, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
+          await query(`INSERT INTO applicants (name, department, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
             interview_impression, dept_fit, previous_qualifications,
             q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
             additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
             hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, recommendation)
-            VALUES (${Array(31).fill('?').join(', ')})`,
-            [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
+            VALUES (${Array(32).fill('?').join(', ')})`,
+            [name, department || null, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
             interview_impression, dept_fit, previous_qualifications,
             q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
             additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
@@ -7623,7 +7681,7 @@ ${relevantGoalIdsSql}
   });
   app.put("/api/applicants/:id", authenticateToken, async (req, res) => {
     try {
-      const { name, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
+      const { name, department, position, score, status, job_skills, asset_value, communication_skills, teamwork, overall_rating,
         interview_impression, dept_fit, previous_qualifications,
         q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
         additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
@@ -7633,22 +7691,22 @@ ${relevantGoalIdsSql}
       try { const br: any = await query('SELECT * FROM applicants WHERE id = ?', [req.params.id]); beforeApp = Array.isArray(br) ? br[0] : br; } catch (e) { beforeApp = null; }
 
       try {
-        await query(`UPDATE applicants SET name=?, position=?, score=?, status=?, job_skills=?, asset_value=?, communication_skills=?, teamwork=?, overall_rating=?,
+        await query(`UPDATE applicants SET name=?, department=?, position=?, score=?, status=?, job_skills=?, asset_value=?, communication_skills=?, teamwork=?, overall_rating=?,
           interview_impression=?, dept_fit=?, previous_qualifications=?,
           q_experience=?, q_why_interested=?, q_strengths=?, q_weakness=?, q_conflict=?, q_goals=?, q_teamwork=?, q_pressure=?, q_contribution=?, q_questions=?,
           additional_comments=?, interviewer_name=?, interviewer_title=?, interview_date=?, interviewer_signature=?,
           hr_reviewer_name=?, hr_reviewer_signature=?, hr_reviewer_date=?, recommendation=? WHERE id=?`,
-          [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
+          [name, department || null, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
           interview_impression, dept_fit, previous_qualifications,
           q_experience, q_why_interested, q_strengths, q_weakness, q_conflict, q_goals, q_teamwork, q_pressure, q_contribution, q_questions,
           additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
           hr_reviewer_name, hr_reviewer_signature, hr_reviewer_date, recommendation, req.params.id]);
       } catch (fullUpdateErr) {
         try {
-          await query(`UPDATE applicants SET name=?, position=?, score=?, status=?, job_skills=?, asset_value=?, communication_skills=?, teamwork=?, overall_rating=?,
+          await query(`UPDATE applicants SET name=?, department=?, position=?, score=?, status=?, job_skills=?, asset_value=?, communication_skills=?, teamwork=?, overall_rating=?,
             interview_impression=?, dept_fit=?, previous_qualifications=?,
             additional_comments=?, interviewer_name=?, interviewer_title=?, interview_date=?, interviewer_signature=? WHERE id=?`,
-            [name, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
+            [name, department || null, position, score || 0, status || 'Screening', job_skills, asset_value, communication_skills, teamwork, overall_rating,
             interview_impression, dept_fit, previous_qualifications,
             additional_comments, interviewer_name, interviewer_title, interview_date, interviewer_signature,
             req.params.id]);
