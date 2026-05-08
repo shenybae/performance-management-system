@@ -1646,62 +1646,27 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Job Title</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.job_title || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Department / Office</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.department || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Supervisor</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.supervisor || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Hiring Contact</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.hiring_contact || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Position Status</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.position_status || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Desired Start Date</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.start_date || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Position Type</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.position_type || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Reason for Type</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.type_reason || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Months per Year</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.months_per_year || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Hours per Week</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.hours_per_week || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Office Assignment</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.office_assignment || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Classification</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.classification || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Hiring Range</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.hiring_range || '—'}</p>
-              </div>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Hourly Rate</p>
-                <p className="text-sm text-slate-700 dark:text-slate-200">{viewRequisition.hourly_rate || '—'}</p>
-              </div>
+              {[
+                { label: 'Job Title', value: viewRequisition.job_title },
+                { label: 'Department / Office', value: viewRequisition.department },
+                { label: 'Supervisor', value: viewRequisition.supervisor },
+                { label: 'Hiring Contact', value: viewRequisition.hiring_contact },
+                { label: 'Position Status', value: viewRequisition.position_status },
+                { label: 'Desired Start Date', value: viewRequisition.start_date },
+                { label: 'Position Type', value: viewRequisition.position_type },
+                { label: 'Reason for Type', value: viewRequisition.type_reason },
+                { label: 'Months per Year', value: viewRequisition.months_per_year },
+                { label: 'Hours per Week', value: viewRequisition.hours_per_week },
+                { label: 'Office Assignment', value: viewRequisition.office_assignment },
+                { label: 'Classification', value: viewRequisition.classification },
+                { label: 'Hiring Range', value: viewRequisition.hiring_range },
+                { label: 'Hourly Rate', value: viewRequisition.hourly_rate },
+              ].map(({ label, value }) => (
+                <div key={label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 overflow-hidden">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{label}</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 break-words break-all">{value || '—'}</p>
+                </div>
+              ))}
             </div>
 
             <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
