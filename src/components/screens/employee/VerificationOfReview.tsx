@@ -22,6 +22,7 @@ export const VerificationOfReview = () => {
   const [onboardingRecords, setOnboardingRecords] = useState<any[]>([]);
   const [applicants, setApplicants] = useState<any[]>([]);
   const [requisitions, setRequisitions] = useState<any[]>([]);
+  const [requisitionSignersByDept, setRequisitionSignersByDept] = useState<Record<string, any>>({});
   const [propertyRecords, setPropertyRecords] = useState<any[]>([]);
   const [exitInterviews, setExitInterviews] = useState<any[]>([]);
 
@@ -79,16 +80,73 @@ export const VerificationOfReview = () => {
     if (isManagementSigner || isEmployee) fetchSuggestions();
   }, [isManagementSigner, isEmployee]);
 
-  const queueDept = String(user?.dept || '').trim().toLowerCase();
+  const normalizeText = (value: any) => String(value || '').trim().toLowerCase();
+  const queueDept = normalizeText(user?.dept);
   const sameDept = (record: any) => {
     if (!queueDept) return true;
-    const recDept = String(record?.employee_department || record?.dept || record?.position_dept || record?.department || '').trim().toLowerCase();
+    const recDept = normalizeText(record?.employee_department || record?.dept || record?.position_dept || record?.department);
     if (!recDept) return true;
     return recDept === queueDept;
   };
 
   const userEmpId = Number(user?.employee_id || user?.id || 0);
-  const userName = String(user?.employee_name || user?.full_name || '').trim().toLowerCase();
+  const userName = normalizeText(user?.employee_name || user?.full_name);
+  const userIdentityKeys = [user?.employee_name, user?.full_name, user?.username, user?.email]
+    .map((value) => normalizeText(value))
+    .filter(Boolean);
+  const userPosition = normalizeText(user?.position);
+
+  const getRequisitionDeptKey = (record: any) => normalizeText(record?.department || record?.dept || record?.employee_department);
+  const getRequisitionSignerFallbacks = (record: any) => requisitionSignersByDept[getRequisitionDeptKey(record)] || null;
+  const getRequisitionSignerName = (record: any, stage: 'supervisor' | 'dept_head' | 'cabinet' | 'vp' | 'president') => {
+    const fieldMap = {
+      supervisor: 'supervisor_approval',
+      dept_head: 'dept_head_approval',
+      cabinet: 'cabinet_approval',
+      vp: 'vp_approval',
+      president: 'president_approval',
+    } as const;
+    const currentValue = String(record?.[fieldMap[stage]] || '').trim();
+    if (currentValue) return currentValue;
+    const fallback = getRequisitionSignerFallbacks(record)?.[stage]?.full_name;
+    return String(fallback || '').trim();
+  };
+  const getRequisitionStageLabel = (stage: 'supervisor' | 'dept_head' | 'cabinet' | 'vp' | 'president') => {
+    const labelMap = {
+      supervisor: 'Supervisor approval signature',
+      dept_head: 'Department head approval signature',
+      cabinet: 'Cabinet member approval signature',
+      vp: 'VP for Business and Finance approval signature',
+      president: 'President approval signature',
+    } as const;
+    return labelMap[stage];
+  };
+  const userMatchesRequisitionStage = (record: any, stage: 'supervisor' | 'dept_head' | 'cabinet' | 'vp' | 'president') => {
+    const approverName = normalizeText(getRequisitionSignerName(record, stage));
+    if (stage === 'supervisor') {
+      if (!isSupervisor) return false;
+    } else if (stage === 'dept_head') {
+      const isDeptHeadSigner = userPosition === 'hr admin' || userPosition === 'department head';
+      if (!isHR || !isDeptHeadSigner) return false;
+    } else if (stage === 'cabinet') {
+      if (!isHR || userPosition !== 'cabinet member') return false;
+    } else if (stage === 'vp') {
+      if (!isHR || userPosition !== 'vp for business and finance') return false;
+    } else if (stage === 'president') {
+      if (!isHR || userPosition !== 'president') return false;
+    }
+    if (!approverName) return true;
+    return userIdentityKeys.includes(approverName);
+  };
+  const getCurrentUserPendingRequisitionStage = (record: any) => {
+    const orderedStages: Array<'supervisor' | 'dept_head' | 'cabinet' | 'vp' | 'president'> = ['supervisor', 'dept_head', 'cabinet', 'vp', 'president'];
+    for (const stage of orderedStages) {
+      const signatureField = `${stage === 'dept_head' ? 'dept_head' : stage}_approval_sig`;
+      if (record?.[signatureField]) continue;
+      return userMatchesRequisitionStage(record, stage) ? stage : null;
+    }
+    return null;
+  };
 
   const fetchAppraisals = async () => {
     try {
@@ -149,6 +207,44 @@ export const VerificationOfReview = () => {
       setRequisitions([]);
     }
   };
+
+  useEffect(() => {
+    const departments = [...new Set(
+      requisitions
+        .map((record) => String(record?.department || '').trim())
+        .filter(Boolean)
+    )].filter((dept) => !requisitionSignersByDept[normalizeText(dept)]);
+
+    if (departments.length === 0) return;
+
+    let cancelled = false;
+
+    Promise.all(
+      departments.map(async (dept) => {
+        try {
+          const res = await fetch(`/api/requisitions/signers/${encodeURIComponent(dept)}`, { headers: getAuthHeaders() });
+          if (!res.ok) return [normalizeText(dept), null] as const;
+          const data = await res.json();
+          return [normalizeText(dept), data] as const;
+        } catch {
+          return [normalizeText(dept), null] as const;
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      setRequisitionSignersByDept((prev) => {
+        const next = { ...prev };
+        entries.forEach(([deptKey, signers]) => {
+          if (deptKey && signers) next[deptKey] = signers;
+        });
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requisitions, requisitionSignersByDept]);
 
   const fetchPropertyRecords = async () => {
     try {
@@ -620,29 +716,6 @@ export const VerificationOfReview = () => {
     return pending;
   };
 
-  const getNextPendingRequisitionStage = (record: any, scope: 'management' | 'hr') => {
-    if (scope === 'management') {
-      return !record?.supervisor_approval_sig ? 'supervisor' : null;
-    }
-    if (!record?.dept_head_approval_sig) return 'dept_head';
-    if (!record?.cabinet_approval_sig) return 'cabinet';
-    if (!record?.vp_approval_sig) return 'vp';
-    if (!record?.president_approval_sig) return 'president';
-    return null;
-  };
-
-  const getRequisitionPendingSummary = (record: any, scope: 'management' | 'hr') => {
-    if (scope === 'management') {
-      return !record?.supervisor_approval_sig ? ['Supervisor approval signature'] : [];
-    }
-    return [
-      !record?.dept_head_approval_sig ? 'Department head approval signature' : null,
-      !record?.cabinet_approval_sig ? 'Cabinet approval signature' : null,
-      !record?.vp_approval_sig ? 'VP approval signature' : null,
-      !record?.president_approval_sig ? 'President approval signature' : null,
-    ].filter(Boolean) as string[];
-  };
-
   const pendingManagementPropertyTasks = useMemo(
     () => propertyRecords
       .filter((p) => sameDept(p))
@@ -672,9 +745,9 @@ export const VerificationOfReview = () => {
     () => requisitions
       .filter((r) => sameDept(r))
       .map((r) => {
-        const nextStage = getNextPendingRequisitionStage(r, 'management');
-        const pendingSteps = getRequisitionPendingSummary(r, 'management');
-        if (!nextStage || pendingSteps.length === 0) return null;
+        const nextStage = getCurrentUserPendingRequisitionStage(r);
+        if (nextStage !== 'supervisor') return null;
+        const pendingSteps = [getRequisitionStageLabel(nextStage)];
         return {
           ...r,
           key: `req-sup-${r.id}`,
@@ -687,7 +760,7 @@ export const VerificationOfReview = () => {
         };
       })
       .filter(Boolean),
-    [requisitions, queueDept]
+    [requisitions, queueDept, user?.position, user?.full_name, user?.employee_name, user?.username, user?.email, requisitionSignersByDept]
   );
 
   const pendingHrAppraisals = useMemo(() => appraisals.filter((a) => {
@@ -737,12 +810,9 @@ export const VerificationOfReview = () => {
     () => requisitions
       .filter((r) => sameDept(r))
       .map((r) => {
-        const hasOwner = r.hr_owner_user_id;
-        const isAssignedToMe = !hasOwner || r.hr_owner_user_id === user?.id;
-        if (!isAssignedToMe) return null;
-        const nextStage = getNextPendingRequisitionStage(r, 'hr');
-        const pendingSteps = getRequisitionPendingSummary(r, 'hr');
-        if (!nextStage || pendingSteps.length === 0) return null;
+        const nextStage = getCurrentUserPendingRequisitionStage(r);
+        if (!nextStage || nextStage === 'supervisor') return null;
+        const pendingSteps = [getRequisitionStageLabel(nextStage)];
         return {
           ...r,
           key: `req-hr-${r.id}`,
@@ -752,11 +822,10 @@ export const VerificationOfReview = () => {
           title: pendingSteps.join(' • '),
           job_title: r.job_title,
           department: r.department,
-          hr_owner: r.hr_owner_user_id,
         };
       })
       .filter(Boolean),
-    [requisitions, queueDept, user?.id]
+    [requisitions, queueDept, user?.position, user?.full_name, user?.employee_name, user?.username, user?.email, requisitionSignersByDept]
   );
 
   const roleSubtitle = isHR
@@ -1560,11 +1629,11 @@ export const VerificationOfReview = () => {
         <SectionCard title="Approval Details">
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {[
-              { label: 'Supervisor', name: r.supervisor_approval, signed: !!r.supervisor_approval_sig, date: r.supervisor_approval_date },
-              { label: 'Department Head', name: r.dept_head_approval, signed: !!r.dept_head_approval_sig, date: r.dept_head_approval_date },
-              { label: 'Cabinet Member', name: r.cabinet_approval, signed: !!r.cabinet_approval_sig, date: r.cabinet_approval_date },
-              { label: 'VP for Business and Finance', name: r.vp_approval, signed: !!r.vp_approval_sig, date: r.vp_approval_date },
-              { label: 'President', name: r.president_approval, signed: !!r.president_approval_sig, date: r.president_approval_date },
+              { label: 'Supervisor', name: getRequisitionSignerName(r, 'supervisor'), signed: !!r.supervisor_approval_sig, date: r.supervisor_approval_date },
+              { label: 'Department Head', name: getRequisitionSignerName(r, 'dept_head'), signed: !!r.dept_head_approval_sig, date: r.dept_head_approval_date },
+              { label: 'Cabinet Member', name: getRequisitionSignerName(r, 'cabinet'), signed: !!r.cabinet_approval_sig, date: r.cabinet_approval_date },
+              { label: 'VP for Business and Finance', name: getRequisitionSignerName(r, 'vp'), signed: !!r.vp_approval_sig, date: r.vp_approval_date },
+              { label: 'President', name: getRequisitionSignerName(r, 'president'), signed: !!r.president_approval_sig, date: r.president_approval_date },
             ].map((entry) => (
               <div key={entry.label} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/60 shadow-sm">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">{entry.label}</p>
