@@ -7740,7 +7740,15 @@ ${relevantGoalIdsSql}
          WHERE deleted_at IS NULL
            AND LOWER(TRIM(COALESCE(role, ''))) = 'hr'
            AND LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?))
-         ORDER BY created_at ASC, id ASC
+         ORDER BY
+           CASE
+             WHEN LOWER(TRIM(COALESCE(position, ''))) = 'hr admin' THEN 0
+             WHEN LOWER(TRIM(COALESCE(position, ''))) LIKE '%hr%' THEN 1
+             WHEN LOWER(TRIM(COALESCE(position, ''))) IN ('cabinet member', 'vp for business and finance', 'president') THEN 9
+             ELSE 5
+           END,
+           created_at ASC,
+           id ASC
          LIMIT 1`,
         [dept]
       ) as any[];

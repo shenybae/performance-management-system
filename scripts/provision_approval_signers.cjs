@@ -79,6 +79,17 @@ async function getDepartments() {
     { key: 'president', title: 'President' },
   ];
 
+  // Retire old per-department "Department Head" HR accounts.
+  // Department HR Admin is now treated as the department head signer.
+  const retireResult = await pool.query(
+    `UPDATE users
+     SET deleted_at = NOW()
+     WHERE deleted_at IS NULL
+       AND LOWER(TRIM(COALESCE(role, ''))) = 'hr'
+       AND LOWER(TRIM(COALESCE(position, ''))) = LOWER(TRIM($1))`,
+    ['Department Head']
+  );
+
   const out = [];
 
   for (const dept of departments) {
@@ -144,6 +155,7 @@ async function getDepartments() {
   }
 
   console.log(`Done. Provisioned signer HR accounts for ${departments.length} department(s).`);
+  console.log(`Retired Department Head accounts: ${Number(retireResult?.rowCount || 0)}`);
   console.table(out);
 
   await pool.end();
