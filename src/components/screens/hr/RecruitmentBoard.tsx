@@ -1257,6 +1257,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
                   <td className="py-3 text-xs text-slate-500 dark:text-slate-400">
                     <span className="font-bold text-slate-700 dark:text-slate-200">{requisitionSignedCount(r)}/5</span>
                     <span className="ml-1">signed</span>
+                    <span className="ml-2 text-amber-600 dark:text-amber-400">({Math.max(0, 5 - requisitionSignedCount(r))} pending)</span>
                   </td>
                   <td className="py-3 text-xs text-slate-500">{r.start_date || 'TBD'}</td>
                   <td className="py-3 flex items-center gap-2">
