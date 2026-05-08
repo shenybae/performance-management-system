@@ -888,7 +888,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
         </div>
         <div class="sig-card">
           <div class="sig-role">Manager Reviewer</div>
-          <div class="sig-title">—</div>
+          <div class="sig-title">Reviewer</div>
           ${sigBlockHtml(a.hr_reviewer_signature || null, '', a.hr_reviewer_date || '', a.hr_reviewer_name || '', 0)}
         </div>
       </div>
