@@ -7571,7 +7571,50 @@ ${relevantGoalIdsSql}
 
   // ---- Applicants CRUD ----
   app.get("/api/applicants", async (req, res) => {
-    try { const rows = await query("SELECT * FROM applicants ORDER BY created_at DESC"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
+    try {
+      const rows = await query("SELECT * FROM applicants ORDER BY created_at DESC") as any[];
+      const applicants = Array.isArray(rows) ? rows : [];
+      const needsDeptBackfill = applicants.some((a) => !String(a?.department || a?.employee_department || '').trim());
+      if (!needsDeptBackfill) return res.json(applicants);
+
+      const requisitionRows = await query(
+        `SELECT id, job_title, department, deleted_at, created_at,
+                supervisor_approval_sig, dept_head_approval_sig, cabinet_approval_sig, vp_approval_sig, president_approval_sig
+         FROM requisitions
+         WHERE COALESCE(TRIM(department), '') <> ''`
+      ) as any[];
+
+      const normalizeTitle = (value: any) => String(value || '').trim().toLowerCase();
+      const hasSig = (value: any) => String(value || '').trim().length > 0;
+      const scoreRequisition = (r: any) => {
+        const approved = hasSig(r?.supervisor_approval_sig)
+          && hasSig(r?.dept_head_approval_sig)
+          && hasSig(r?.cabinet_approval_sig)
+          && hasSig(r?.vp_approval_sig)
+          && hasSig(r?.president_approval_sig);
+        return (approved ? 100 : 0) + (r?.deleted_at ? 0 : 10);
+      };
+
+      const deptByTitle = new Map<string, { department: string; score: number }>();
+      (Array.isArray(requisitionRows) ? requisitionRows : []).forEach((r) => {
+        const key = normalizeTitle(r?.job_title);
+        const department = String(r?.department || '').trim();
+        if (!key || !department) return;
+        const score = scoreRequisition(r);
+        const existing = deptByTitle.get(key);
+        if (!existing || score > existing.score) {
+          deptByTitle.set(key, { department, score });
+        }
+      });
+
+      const resolved = applicants.map((a) => {
+        if (String(a?.department || a?.employee_department || '').trim()) return a;
+        const inferred = deptByTitle.get(normalizeTitle(a?.position))?.department;
+        return inferred ? { ...a, department: inferred } : a;
+      });
+
+      res.json(resolved);
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
 
   app.get('/api/applicants/signers/:department', authenticateToken, async (req, res) => {
@@ -9273,9 +9316,45 @@ ${relevantGoalIdsSql}
       if (!applicant) return res.status(404).json({ error: 'Applicant not found' });
 
       const actorDept = normalizeDept(actorCtx.dept || actor.dept || actor.department || null);
-      const applicantDept = normalizeDept(
+      let applicantDept = normalizeDept(
         applicant.department || applicant.dept || applicant.employee_department || applicant.position_dept || null
       );
+
+      if (!applicantDept) {
+        const inferredDeptRows: any = await query(
+          `SELECT department
+           FROM requisitions
+           WHERE LOWER(TRIM(COALESCE(job_title, ''))) = LOWER(TRIM(?))
+             AND COALESCE(TRIM(department), '') <> ''
+           ORDER BY
+             CASE WHEN deleted_at IS NULL THEN 0 ELSE 1 END,
+             CASE
+               WHEN COALESCE(TRIM(supervisor_approval_sig), '') <> ''
+                AND COALESCE(TRIM(dept_head_approval_sig), '') <> ''
+                AND COALESCE(TRIM(cabinet_approval_sig), '') <> ''
+                AND COALESCE(TRIM(vp_approval_sig), '') <> ''
+                AND COALESCE(TRIM(president_approval_sig), '') <> ''
+               THEN 0 ELSE 1 END,
+             created_at DESC,
+             id DESC
+           LIMIT 1`,
+          [String(applicant?.position || '')]
+        );
+        const inferred = Array.isArray(inferredDeptRows) ? inferredDeptRows[0] : inferredDeptRows;
+        applicantDept = normalizeDept(inferred?.department || null);
+        if (applicantDept) {
+          try {
+            await query(
+              `UPDATE applicants
+               SET department = ?
+               WHERE id = ?
+                 AND COALESCE(TRIM(department), '') = ''`,
+              [String(inferred?.department || '').trim(), req.params.id]
+            );
+          } catch {}
+        }
+      }
+
       if (applicantDept && actorDept && applicantDept !== actorDept) {
         return res.status(403).json({ error: 'Forbidden' });
       }

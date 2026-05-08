@@ -209,7 +209,14 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     const requisitionTitles = (Array.isArray(requisitions) ? requisitions : [])
       .filter((r: any) => !r?.deleted_at)
       .filter((r: any) => sameDept(r?.department, dept))
-      .filter((r: any) => requisitionApprovalStatus(r) === 'Approved')
+      .filter((r: any) => {
+        const hasSig = (v: any) => typeof v === 'string' && v.trim().length > 0;
+        return hasSig(r?.supervisor_approval_sig)
+          && hasSig(r?.dept_head_approval_sig)
+          && hasSig(r?.cabinet_approval_sig)
+          && hasSig(r?.vp_approval_sig)
+          && hasSig(r?.president_approval_sig);
+      })
       .map((r: any) => String(r?.job_title || '').trim())
       .filter(Boolean);
 
@@ -515,6 +522,34 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
     });
   }, [requisitions, requisitionSearch, requisitionStatusFilter]);
 
+  const inferredApplicantDeptByPosition = useMemo(() => {
+    const scoreRequisition = (r: any) => {
+      const approved = requisitionApprovalStatus(r) === 'Approved' ? 100 : 0;
+      const active = r?.deleted_at ? 0 : 10;
+      return approved + active;
+    };
+
+    const byPosition = new Map<string, { dept: string; score: number }>();
+    (Array.isArray(requisitions) ? requisitions : []).forEach((r: any) => {
+      const titleKey = normalize(String(r?.job_title || ''));
+      const dept = String(r?.department || '').trim();
+      if (!titleKey || !dept) return;
+      const score = scoreRequisition(r);
+      const existing = byPosition.get(titleKey);
+      if (!existing || score > existing.score) {
+        byPosition.set(titleKey, { dept, score });
+      }
+    });
+    return byPosition;
+  }, [requisitions]);
+
+  const resolveApplicantDepartment = (app: any) => {
+    const explicit = String(app?.department || app?.employee_department || '').trim();
+    if (explicit) return explicit;
+    const byPosition = inferredApplicantDeptByPosition.get(normalize(String(app?.position || '')))?.dept;
+    return String(byPosition || scopedDept || '').trim();
+  };
+
   const fetchDeptSigners = async (department: string) => {
     const dept = String(department || '').trim();
     if (!dept) return {};
@@ -537,7 +572,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
   };
 
   const openApplicantView = (app: any) => {
-    setViewApplicant(app);
+    setViewApplicant({ ...app, department: resolveApplicantDepartment(app) || app?.department || '' });
   };
 
   const openApprovals = async (r: any) => {
@@ -869,9 +904,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
 
   const applicantViewDeptSigners = useMemo(() => {
     const dept = trimText(
-      (viewApplicant as any)?.department
-      || (viewApplicant as any)?.employee_department
-      || scopedDept,
+      viewApplicant ? resolveApplicantDepartment(viewApplicant) : scopedDept,
       100,
     );
 
@@ -887,7 +920,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
       hrAdminName: displayName(hrAdmin) || '—',
       managerName: displayName(manager) || '—',
     };
-  }, [viewApplicant, scopedDept, users]);
+  }, [viewApplicant, scopedDept, users, requisitions]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -1422,7 +1455,7 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
         maxWidthClassName="max-w-5xl"
       >
         {viewApplicant && (
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-x-hidden">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-slate-500 dark:text-slate-400">{viewApplicant.position || 'No position'} {viewApplicant.interview_date ? `• Interview: ${viewApplicant.interview_date}` : ''}</p>
               <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase ${isApplicantFullySigned(viewApplicant) ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
@@ -1433,8 +1466,68 @@ export const RecruitmentBoard = ({ employees = [], users = [] }: RecruitmentBoar
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Applicant Name</p><p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewApplicant.name || '—'}</p></div>
               <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Position Applied For</p><p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewApplicant.position || '—'}</p></div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Department</p><p className="text-sm text-slate-700 dark:text-slate-200 break-words">{resolveApplicantDepartment(viewApplicant) || '—'}</p></div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Interview Date</p><p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewApplicant.interview_date || '—'}</p></div>
               <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Status</p><p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewApplicant.status || '—'}</p></div>
               <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Recommendation</p><p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewApplicant.recommendation || viewApplicant.status || '—'}</p></div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Overall Rating</p><p className="text-sm text-slate-700 dark:text-slate-200 break-words">{viewApplicant.overall_rating || viewApplicant.score || '—'}</p></div>
+            </div>
+
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+              <p className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Part I - Interview Questions</p>
+              <div className="space-y-2">
+                {[
+                  ['1. Relevant experience and qualifications', viewApplicant.q_experience],
+                  ['2. Why interested in this position', viewApplicant.q_why_interested],
+                  ['3. Key strengths', viewApplicant.q_strengths],
+                  ['4. Weaknesses and growth areas', viewApplicant.q_weakness],
+                  ['5. Conflict handling', viewApplicant.q_conflict],
+                  ['6. Career goals', viewApplicant.q_goals],
+                  ['7. Teamwork example', viewApplicant.q_teamwork],
+                  ['8. Working under pressure', viewApplicant.q_pressure],
+                  ['9. Potential contribution', viewApplicant.q_contribution],
+                  ['10. Questions from applicant', viewApplicant.q_questions],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-2">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">{label}</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-words">{String(value || '—')}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+              <p className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Part II - Evaluation Criteria (1-5)</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {[
+                  ['Job Skills', viewApplicant.job_skills],
+                  ['Communication Skills', viewApplicant.communication_skills],
+                  ['Interview Impression', viewApplicant.interview_impression],
+                  ['Previous Qualifications', viewApplicant.previous_qualifications],
+                  ['Teamwork', viewApplicant.teamwork],
+                  ['Department Fit', viewApplicant.dept_fit],
+                  ['Asset Value', viewApplicant.asset_value],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-2.5">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase">{label}</p>
+                    <p className="text-lg font-black text-slate-800 dark:text-slate-100">{String(value || '—')}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+              <p className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3">Part III - Final Assessment</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-2.5">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Additional Comments</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-words">{viewApplicant.additional_comments || '—'}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-2.5">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Interviewer Title</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-words">{viewApplicant.interviewer_title || '—'}</p>
+                </div>
+              </div>
             </div>
 
             <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">

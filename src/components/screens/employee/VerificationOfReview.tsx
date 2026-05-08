@@ -89,6 +89,39 @@ export const VerificationOfReview = () => {
     return recDept === queueDept;
   };
 
+  const applicantDeptByPosition = useMemo(() => {
+    const hasSig = (v: any) => typeof v === 'string' && v.trim().length > 0;
+    const scoreRequisition = (r: any) => {
+      const approved = hasSig(r?.supervisor_approval_sig)
+        && hasSig(r?.dept_head_approval_sig)
+        && hasSig(r?.cabinet_approval_sig)
+        && hasSig(r?.vp_approval_sig)
+        && hasSig(r?.president_approval_sig);
+      return (approved ? 100 : 0) + (r?.deleted_at ? 0 : 10);
+    };
+
+    const byTitle = new Map<string, { dept: string; score: number }>();
+    (Array.isArray(requisitions) ? requisitions : []).forEach((r: any) => {
+      const titleKey = normalizeText(r?.job_title);
+      const dept = String(r?.department || '').trim();
+      if (!titleKey || !dept) return;
+      const score = scoreRequisition(r);
+      const existing = byTitle.get(titleKey);
+      if (!existing || score > existing.score) {
+        byTitle.set(titleKey, { dept, score });
+      }
+    });
+
+    return byTitle;
+  }, [requisitions]);
+
+  const resolveApplicantDepartment = (record: any) => {
+    const explicit = String(record?.department || record?.employee_department || record?.dept || record?.position_dept || '').trim();
+    if (explicit) return explicit;
+    const inferred = applicantDeptByPosition.get(normalizeText(record?.position))?.dept;
+    return String(inferred || user?.dept || user?.department || '').trim();
+  };
+
   const userEmpId = Number(user?.employee_id || user?.id || 0);
   const userName = normalizeText(user?.employee_name || user?.full_name);
   const userIdentityKeys = [user?.employee_name, user?.full_name, user?.username, user?.email]
@@ -714,8 +747,12 @@ export const VerificationOfReview = () => {
   );
 
   const pendingManagementApplicants = useMemo(
-    () => applicants.filter((a) => !a.hr_reviewer_signature && sameDept(a)),
-    [applicants, queueDept]
+    () => applicants.filter((a) => {
+      if (a.hr_reviewer_signature) return false;
+      if (!queueDept) return true;
+      return normalizeText(resolveApplicantDepartment(a)) === queueDept;
+    }),
+    [applicants, queueDept, requisitions, user?.dept, user?.department]
   );
 
   const getNextPendingPropertyField = (record: any) => {
@@ -814,14 +851,14 @@ export const VerificationOfReview = () => {
   const pendingHrApplicants = useMemo(
     () => applicants.filter((a) => {
       if (a.interviewer_signature) return false;
-      if (!sameDept(a)) return false;
+      if (queueDept && normalizeText(resolveApplicantDepartment(a)) !== queueDept) return false;
       // If HR ownership is set, only show to assigned HR user
       if (a.hr_owner_user_id) {
         return Number(a.hr_owner_user_id) === Number(user?.id || 0);
       }
       return true;
     }),
-    [applicants, queueDept, user?.id]
+    [applicants, queueDept, requisitions, user?.id, user?.dept, user?.department]
   );
 
   const pendingHrRequisitionStages = useMemo(
@@ -1551,7 +1588,7 @@ export const VerificationOfReview = () => {
     if (type === 'applicant') return (
       <ViewShell>
         {(() => {
-          const applicantDept = r.department || r.employee_department || user?.dept || '';
+          const applicantDept = resolveApplicantDepartment(r);
           const criteriaRows = [
             { label: 'Job Skills', value: r.job_skills },
             { label: 'Communication Skills', value: r.communication_skills },
@@ -2121,7 +2158,7 @@ export const VerificationOfReview = () => {
               subtitle: `Manager reviewer signature needed • ${a.interview_date || '—'}`,
               badge: 'Manager Reviewer',
               badgeColorClass: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',
-              pills: [{ icon: <Building2 size={10} />, text: a.department || a.employee_department || '—' }],
+              pills: [{ icon: <Building2 size={10} />, text: resolveApplicantDepartment(a) || '—' }],
               onView: () => setGenericViewModal({ title: `Applicant — ${a.name || 'Applicant'}`, type: 'applicant', record: a }),
               onSign: () => openGenericSign(
                 `Sign — Applicant Manager Review (${a.name || 'Applicant'})`,
@@ -2270,7 +2307,7 @@ export const VerificationOfReview = () => {
               subtitle: 'HR interviewer signature needed',
               badge: 'HR Interviewer',
               badgeColorClass: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
-              pills: [{ icon: <Building2 size={10} />, text: a.department || a.employee_department || '—' }],
+              pills: [{ icon: <Building2 size={10} />, text: resolveApplicantDepartment(a) || '—' }],
               onView: () => setGenericViewModal({ title: `Applicant — ${a.name || 'Applicant'}`, type: 'applicant', record: a }),
               onSign: () => openGenericSign(
                 `Sign — HR Interview (${a.name || 'Applicant'})`,
