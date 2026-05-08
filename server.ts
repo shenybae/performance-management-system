@@ -2676,11 +2676,13 @@ async function startServer() {
       if (!normalizedRole) return res.status(400).json({ error: 'Invalid or missing role' });
 
       let resolvedEmployeeId: number | null = null;
+      let employeeDeptFromDirectory = '';
+      let employeePositionFromDirectory = '';
       if (normalizedRole === 'Employee') {
         const explicitEmployeeId = Number(employee_id);
         if (Number.isFinite(explicitEmployeeId) && explicitEmployeeId > 0) {
           const employeeRows = await query(
-            `SELECT id, name
+            `SELECT id, name, dept, position
              FROM employees
              WHERE id = ?
                AND UPPER(COALESCE(status, '')) IN ('PROBATIONARY', 'REGULAR', 'PERMANENT', 'HIRED')
@@ -2693,6 +2695,8 @@ async function startServer() {
           }
           resolvedEmployeeId = Number(employeeMatch.id);
           if (!normalizedFullName) normalizedFullName = String(employeeMatch.name || '').trim();
+          employeeDeptFromDirectory = String(employeeMatch.dept || '').trim();
+          employeePositionFromDirectory = String(employeeMatch.position || '').trim();
         } else {
           if (!normalizedFullName) {
             return res.status(400).json({ error: 'Select an employee from Employee Directory or provide a full name' });
@@ -2714,6 +2718,19 @@ async function startServer() {
           if (!resolvedEmployeeId) {
             return res.status(400).json({ error: 'Employee account can only be created for hired employees in Employee Master Directory' });
           }
+        }
+
+        if (resolvedEmployeeId && (!employeeDeptFromDirectory || !employeePositionFromDirectory)) {
+          const employeeMetaRows = await query(
+            `SELECT dept, position
+             FROM employees
+             WHERE id = ?
+             LIMIT 1`,
+            [resolvedEmployeeId]
+          ) as any[];
+          const employeeMeta = Array.isArray(employeeMetaRows) ? employeeMetaRows[0] : employeeMetaRows;
+          employeeDeptFromDirectory = String(employeeMeta?.dept || employeeDeptFromDirectory || '').trim();
+          employeePositionFromDirectory = String(employeeMeta?.position || employeePositionFromDirectory || '').trim();
         }
 
         const existingLinkedUserRows = await query(
@@ -2738,14 +2755,67 @@ async function startServer() {
       const finalUsername = await generateUniqueUsername(usernameSeed);
 
       const explicitLinkedUserId = Number(linked_user_id);
-      const resolvedLinkedUserId = Number.isFinite(explicitLinkedUserId) && explicitLinkedUserId > 0 ? explicitLinkedUserId : null;
-      const shouldStoreOrgMeta = normalizedRole === 'HR' || normalizedRole === 'Manager';
+      let resolvedLinkedUserId = Number.isFinite(explicitLinkedUserId) && explicitLinkedUserId > 0 ? explicitLinkedUserId : null;
       let effectiveDept = normalizedDept;
-      if (shouldStoreOrgMeta) {
+      let effectivePosition = normalizedPosition;
+      if (normalizedRole === 'Employee') {
+        effectiveDept = String(employeeDeptFromDirectory || '').trim();
+        effectivePosition = String(employeePositionFromDirectory || normalizedPosition || '').trim();
+        if (!effectiveDept) {
+          return res.status(400).json({ error: 'Employee account requires a department in Employee Master Directory' });
+        }
+      } else {
         const creatorCtx = await getActorOrgContext(Number(creatorPayload?.id || 0));
         effectiveDept = String(creatorCtx?.dept || '').trim();
         if (!effectiveDept) {
           return res.status(400).json({ error: 'Creator account must have a department to create Manager/HR users' });
+        }
+      }
+
+      if (!resolvedLinkedUserId && effectiveDept) {
+        const deptParam = effectiveDept;
+        if (normalizedRole === 'Employee') {
+          const supervisorRows = await query(
+            `SELECT id
+             FROM users
+             WHERE deleted_at IS NULL
+               AND LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?))
+               AND LOWER(TRIM(COALESCE(position, ''))) LIKE '%supervisor%'
+             ORDER BY created_at ASC, id ASC
+             LIMIT 1`,
+            [deptParam]
+          ) as any[];
+          const supervisorUser = Array.isArray(supervisorRows) ? supervisorRows[0] : supervisorRows;
+
+          if (supervisorUser?.id) {
+            resolvedLinkedUserId = Number(supervisorUser.id);
+          } else {
+            const managerRows = await query(
+              `SELECT id
+               FROM users
+               WHERE deleted_at IS NULL
+                 AND LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?))
+                 AND LOWER(TRIM(COALESCE(role, ''))) = 'manager'
+               ORDER BY created_at ASC, id ASC
+               LIMIT 1`,
+              [deptParam]
+            ) as any[];
+            const managerUser = Array.isArray(managerRows) ? managerRows[0] : managerRows;
+            if (managerUser?.id) resolvedLinkedUserId = Number(managerUser.id);
+          }
+        } else if (normalizedRole === 'Manager') {
+          const hrRows = await query(
+            `SELECT id
+             FROM users
+             WHERE deleted_at IS NULL
+               AND LOWER(TRIM(COALESCE(dept, ''))) = LOWER(TRIM(?))
+               AND LOWER(TRIM(COALESCE(role, ''))) = 'hr'
+             ORDER BY created_at ASC, id ASC
+             LIMIT 1`,
+            [deptParam]
+          ) as any[];
+          const hrUser = Array.isArray(hrRows) ? hrRows[0] : hrRows;
+          if (hrUser?.id) resolvedLinkedUserId = Number(hrUser.id);
         }
       }
 
@@ -2760,14 +2830,14 @@ async function startServer() {
           resolvedEmployeeId,
           normalizedFullName || null,
           resolvedLinkedUserId,
-          shouldStoreOrgMeta ? (normalizedPosition || null) : null,
-          shouldStoreOrgMeta ? (effectiveDept || null) : null,
+          effectivePosition || null,
+          effectiveDept || null,
           creatorPayload?.id || null,
           new Date().toISOString(),
         ]);
 
       try {
-        await recordAudit(creatorPayload, 'create', 'users', null, null, { email: effectiveEmail || null, username: finalUsername, role: normalizedRole, employee_id: resolvedEmployeeId, full_name: normalizedFullName || null, linked_user_id: resolvedLinkedUserId, position: shouldStoreOrgMeta ? (normalizedPosition || null) : null, dept: shouldStoreOrgMeta ? (effectiveDept || null) : null });
+        await recordAudit(creatorPayload, 'create', 'users', null, null, { email: effectiveEmail || null, username: finalUsername, role: normalizedRole, employee_id: resolvedEmployeeId, full_name: normalizedFullName || null, linked_user_id: resolvedLinkedUserId, position: effectivePosition || null, dept: effectiveDept || null });
       } catch (e) { /* ignore audit errors */ }
 
       res.json({ success: true });
