@@ -56,7 +56,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
   const [offForm, setOffForm] = useState({ employee_name: '', last_day: '', reason: '' });
   const emptyItem = { property_no: '', asset_category: '', brand: '', description: '', serial_no: '', uom_qty: 1, dr_si_no: '', amount: '', remarks: '' };
   const [propForm, setPropForm] = useState({
-    employee_name: '', position_dept: '', date_prepared: '',
+    employee_name: '', position_dept: scopedDept, date_prepared: '',
     items: [{ ...emptyPropRow }] as PropertyRow[],
     turnover_by_name: '', turnover_by_date: '', turnover_by_sig: '',
     noted_by_name: '', noted_by_date: '', noted_by_sig: '',
@@ -123,7 +123,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
   };
 
   const resetPropForm = () => setPropForm({
-    employee_name: '', position_dept: '', date_prepared: '',
+    employee_name: '', position_dept: scopedDept, date_prepared: '',
     items: [{ ...emptyPropRow }],
     turnover_by_name: '', turnover_by_date: '', turnover_by_sig: '',
     noted_by_name: '', noted_by_date: '', noted_by_sig: '',
@@ -137,7 +137,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
     const cleaned = {
       ...propForm,
       employee_name: trimText(propForm.employee_name),
-      position_dept: trimText(propForm.position_dept),
+      position_dept: trimText(scopedDept || propForm.position_dept),
       date_prepared: trimText(propForm.date_prepared),
       items: propForm.items.map(item => ({
         property_number: trimText(item.property_number),
@@ -520,7 +520,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                         setPropForm(prev => ({
                           ...prev,
                           employee_name: employeeName,
-                          position_dept: String((selected as any)?.dept || prev.position_dept || ''),
+                          position_dept: String(scopedDept || (selected as any)?.dept || prev.position_dept || ''),
                         }));
                       }}
                       placeholder="Select Employee..."
@@ -530,7 +530,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                     <input type="text" value={propForm.employee_name} onChange={e => setPropForm({ ...propForm, employee_name: e.target.value })} className={inputCls} maxLength={120} required />
                   )}
                 </div>
-                <div><label className={labelCls}>Position / Dept.</label><input type="text" value={propForm.position_dept} onChange={e => setPropForm({ ...propForm, position_dept: e.target.value })} className={inputCls} maxLength={120} required /></div>
+                <div><label className={labelCls}>Position / Dept.</label><input type="text" value={scopedDept || propForm.position_dept || ''} className={inputCls} readOnly required /></div>
                 <div><label className={labelCls}>Date Prepared</label><input type="date" value={propForm.date_prepared} onChange={e => setPropForm({ ...propForm, date_prepared: e.target.value })} max={todayISO} className={inputCls} required /></div>
               </div>
 
@@ -646,7 +646,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                 </div>
                 <div className="grid grid-cols-2 gap-4 mt-3">
                   <div><label className={labelCls}>Department</label><input type="text" value={scopedDept || exitForm.department || ''} className={inputCls} readOnly /></div>
-                  <div><label className={labelCls}>Supervisor</label><SearchableSelect options={departmentSupervisorOptions} value={exitForm.supervisor} onChange={(value: any) => setExitForm({ ...exitForm, supervisor: String(value) })} placeholder={scopedDept ? 'Select HR / manager / supervisor...' : 'No department assigned to your account'} allowEmpty emptyLabel="No supervisor" searchable dropdownVariant="pills-horizontal" /></div>
+                  <div><label className={labelCls}>Supervisor</label><SearchableSelect options={departmentSupervisorOptions} value={exitForm.supervisor} onChange={(value: any) => setExitForm({ ...exitForm, supervisor: String(value) })} placeholder={scopedDept ? 'Select HR / manager / supervisor...' : 'No department assigned to your account'} searchable dropdownVariant="pills-horizontal" /></div>
                 </div>
                 <div className="grid grid-cols-4 gap-4 mt-3">
                   <div><label className={labelCls}>Hire Date</label><input type="date" value={exitForm.hire_date} onChange={e => setExitForm({ ...exitForm, hire_date: e.target.value })} max={todayISO} className={inputCls} required /></div>
