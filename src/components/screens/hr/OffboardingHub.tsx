@@ -32,16 +32,17 @@ const normalize = (value?: string | null) => (value || '').toString().trim().toL
 const sameDept = (a?: string | null, b?: string | null) => normalize(a) === normalize(b) && normalize(a) !== '';
 
 export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubProps) => {
-  const currentUser = (() => {
+  const sessionUser = (() => {
     try {
-      return JSON.parse(localStorage.getItem('currentUser') || '{}');
+      return JSON.parse(localStorage.getItem('talentflow_user') || localStorage.getItem('currentUser') || '{}');
     } catch {
       return null;
     }
   })();
-  const scopedDept = String(currentUser?.dept || '').trim();
+  const scopedDept = String(sessionUser?.dept || '').trim();
   const scopedEmployees = useMemo(() => {
-    if (!scopedDept) return Array.isArray(employees) ? employees : [];
+    // Strict scoping: when no department is attached to the logged-in account, show no employee options.
+    if (!scopedDept) return [];
     return (Array.isArray(employees) ? employees : []).filter((e: any) => sameDept(e?.dept || e?.department, scopedDept));
   }, [employees, scopedDept]);
 
