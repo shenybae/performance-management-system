@@ -83,7 +83,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
     if (!dept) return [];
     return (Array.isArray(users) ? users : [])
       .filter((user: any) => sameDept(user?.dept, dept))
-      .filter((user: any) => ['hr', 'manager'].includes(normalize(user?.role)) || normalize(user?.position).includes('supervisor'))
+      .filter((user: any) => normalize(user?.position).includes('supervisor'))
       .map((user: any) => ({
         value: user.name || user.full_name || user.username || user.email || '',
         label: `${user.name || user.full_name || user.username || user.email || 'User'}${user.position ? ` — ${user.position}` : ''}`,
@@ -92,6 +92,23 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
       .filter((option: any) => option.value)
       .sort((a: any, b: any) => a.label.localeCompare(b.label));
   }, [exitForm.department, scopedDept, users]);
+
+  useEffect(() => {
+    if (departmentSupervisorOptions.length === 1) {
+      const onlySupervisor = String(departmentSupervisorOptions[0].value || '');
+      if (exitForm.supervisor !== onlySupervisor) {
+        setExitForm((prev) => ({ ...prev, supervisor: onlySupervisor }));
+      }
+      return;
+    }
+
+    if (
+      exitForm.supervisor
+      && !departmentSupervisorOptions.some((option: any) => String(option.value) === String(exitForm.supervisor))
+    ) {
+      setExitForm((prev) => ({ ...prev, supervisor: '' }));
+    }
+  }, [departmentSupervisorOptions, exitForm.supervisor]);
 
   const trimText = (value: string) => value.trim();
 
@@ -646,7 +663,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                 </div>
                 <div className="grid grid-cols-2 gap-4 mt-3">
                   <div><label className={labelCls}>Department</label><input type="text" value={scopedDept || exitForm.department || ''} className={inputCls} readOnly /></div>
-                  <div><label className={labelCls}>Supervisor</label><SearchableSelect options={departmentSupervisorOptions} value={exitForm.supervisor} onChange={(value: any) => setExitForm({ ...exitForm, supervisor: String(value) })} placeholder={scopedDept ? 'Select HR / manager / supervisor...' : 'No department assigned to your account'} searchable dropdownVariant="pills-horizontal" /></div>
+                  <div><label className={labelCls}>Supervisor</label><SearchableSelect options={departmentSupervisorOptions} value={exitForm.supervisor} onChange={(value: any) => setExitForm({ ...exitForm, supervisor: String(value) })} placeholder={scopedDept ? 'Select department supervisor...' : 'No department assigned to your account'} searchable dropdownVariant="pills-horizontal" /></div>
                 </div>
                 <div className="grid grid-cols-4 gap-4 mt-3">
                   <div><label className={labelCls}>Hire Date</label><input type="date" value={exitForm.hire_date} onChange={e => setExitForm({ ...exitForm, hire_date: e.target.value })} max={todayISO} className={inputCls} required /></div>
