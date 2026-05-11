@@ -32,6 +32,19 @@ const normalize = (value?: string | null) => (value || '').toString().trim().toL
 const sameDept = (a?: string | null, b?: string | null) => normalize(a) === normalize(b) && normalize(a) !== '';
 
 export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubProps) => {
+  const currentUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('currentUser') || '{}');
+    } catch {
+      return null;
+    }
+  })();
+  const scopedDept = String(currentUser?.dept || '').trim();
+  const scopedEmployees = useMemo(() => {
+    if (!scopedDept) return Array.isArray(employees) ? employees : [];
+    return (Array.isArray(employees) ? employees : []).filter((e: any) => sameDept(e?.dept || e?.department, scopedDept));
+  }, [employees, scopedDept]);
+
   const [activeForm, setActiveForm] = useState<'none' | 'property' | 'exit' | 'offboard'>('none');
   const [offboardingData, setOffboardingData] = useState<any[]>([]);
   const [exitInterviews, setExitInterviews] = useState<any[]>([]);
@@ -177,7 +190,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
 
     try {
       // try to resolve an employee id from the entered name so records attach to the employee file
-      const matched = (employees || []).find(e => (e.name || '').toString().trim().toLowerCase() === cleaned.employee_name.toLowerCase());
+      const matched = (scopedEmployees || []).find(e => (e.name || '').toString().trim().toLowerCase() === cleaned.employee_name.toLowerCase());
       const employeeId = matched ? matched.id : null;
 
       const res = await fetch('/api/property_accountability', {
@@ -464,9 +477,9 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
             <form className="space-y-4" onSubmit={e => { e.preventDefault(); submitOffboarding(); }}>
               <div className="grid grid-cols-3 gap-4">
                 <div><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Employee Name</label>
-                  {employees.length > 0 ? (
+                  {scopedEmployees.length > 0 ? (
                     <SearchableSelect
-                      options={employees.map(e => ({ value: e.name, label: e.name, avatarUrl: (e as any).profile_picture || null }))}
+                      options={scopedEmployees.map(e => ({ value: e.name, label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                       value={offForm.employee_name}
                       onChange={v => setOffForm({ ...offForm, employee_name: String(v) })}
                       placeholder="Select Employee..."
@@ -496,13 +509,13 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
               {/* Employee Info */}
               <div className="grid grid-cols-3 gap-4">
                 <div><label className={labelCls}>Employee Name <span className="text-red-500">*</span></label>
-                  {employees.length > 0 ? (
+                  {scopedEmployees.length > 0 ? (
                     <SearchableSelect
-                      options={employees.map(e => ({ value: e.name, label: e.name, avatarUrl: (e as any).profile_picture || null }))}
+                      options={scopedEmployees.map(e => ({ value: e.name, label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                       value={propForm.employee_name}
                       onChange={v => {
                         const employeeName = String(v);
-                        const selected = employees.find(e => String(e.name || '') === employeeName);
+                        const selected = scopedEmployees.find(e => String(e.name || '') === employeeName);
                         setPropForm(prev => ({
                           ...prev,
                           employee_name: employeeName,
@@ -615,9 +628,9 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                 <h4 className="text-xs font-bold text-teal-deep dark:text-teal-green uppercase tracking-widest mb-3 flex items-center gap-2"><FileText size={14} /> Employee Information</h4>
                 <div className="grid grid-cols-3 gap-4">
                   <div><label className={labelCls}>Employee Name <span className="text-red-500">*</span></label>
-                    {employees.length > 0 ? (
+                    {scopedEmployees.length > 0 ? (
                       <SearchableSelect
-                        options={employees.map(e => ({ value: e.name, label: e.name, avatarUrl: (e as any).profile_picture || null }))}
+                        options={scopedEmployees.map(e => ({ value: e.name, label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                         value={exitForm.employee_name}
                         onChange={v => setExitForm({ ...exitForm, employee_name: String(v) })}
                         placeholder="Select Employee..."
