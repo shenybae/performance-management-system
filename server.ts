@@ -855,6 +855,8 @@ async function initDb() {
       employee_name TEXT,
       department TEXT,
       supervisor TEXT,
+      supervisor_user_id INTEGER,
+      hr_owner_user_id INTEGER,
       reasons TEXT,
       liked_most TEXT,
       liked_least TEXT,
@@ -1689,6 +1691,7 @@ async function initDb() {
       'ALTER TABLE requisitions ADD COLUMN hr_owner_user_id INTEGER',
       'ALTER TABLE property_accountability ADD COLUMN hr_owner_user_id INTEGER',
       'ALTER TABLE exit_interviews ADD COLUMN hr_owner_user_id INTEGER',
+      'ALTER TABLE exit_interviews ADD COLUMN supervisor_user_id INTEGER',
       'ALTER TABLE suggestions ADD COLUMN hr_owner_user_id INTEGER',
       'ALTER TABLE suggestions ADD COLUMN supervisor_user_id INTEGER',
     ];

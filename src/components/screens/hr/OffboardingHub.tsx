@@ -375,7 +375,14 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
         interviewer_sig: null, interviewer_date: null,
         dismissal_details: cleaned.dismissal_details
       }) });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        let message = 'Failed to save';
+        try {
+          const payload = await res.json();
+          if (payload?.error) message = String(payload.error);
+        } catch {}
+        throw new Error(message);
+      }
       window.notify?.('Exit interview saved', 'success');
       setExitForm({
         employee_name: '', department: scopedDept, supervisor: '', interview_date: '',
@@ -392,7 +399,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
         employee_sig: '', interviewer_name: '', interviewer_sig: '', interviewer_date: ''
       });
       setActiveForm('none'); fetchData();
-    } catch { window.notify?.('Failed to save', 'error'); }
+    } catch (err: any) { window.notify?.(String(err?.message || 'Failed to save'), 'error'); }
   };
 
   const deleteOffboarding = async (id: number) => {
