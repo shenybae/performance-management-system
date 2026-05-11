@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../../common/Card';
 import { SectionHeader } from '../../common/SectionHeader';
 import { SearchableSelect } from '../../common/SearchableSelect';
+import { Modal } from '../../common/Modal';
 import { Plus, X, Box, LogOut, Download, Trash2, ChevronDown, ChevronUp, Package, FileText, Search, Eye, Archive } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { exportToCSV, getAuthHeaders } from '../../../utils/csv';
@@ -51,7 +52,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
   const [exitInterviews, setExitInterviews] = useState<any[]>([]);
   const [propertyRecords, setPropertyRecords] = useState<any[]>([]);
   const [expandedOffboarding, setExpandedOffboarding] = useState<number | null>(null);
-  const [expandedProp, setExpandedProp] = useState<number | null>(null);
+  const [viewPropertyRecord, setViewPropertyRecord] = useState<any | null>(null);
   const [propSearch, setPropSearch] = useState('');
   const [offForm, setOffForm] = useState({ employee_name: '', last_day: '', reason: '' });
   const emptyItem = { property_no: '', asset_category: '', brand: '', description: '', serial_no: '', uom_qty: 1, dr_si_no: '', amount: '', remarks: '' };
@@ -243,6 +244,18 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
   };
 
   const printPropRecord = async (rec: any) => {
+    const missingSigners = [
+      { label: 'Turnover by', sig: rec.turnover_by_sig },
+      { label: 'Noted by', sig: rec.noted_by_sig },
+      { label: 'Received by', sig: rec.received_by_sig },
+      { label: 'Audited by', sig: rec.audited_by_sig },
+    ].filter((entry) => !String(entry.sig || '').trim()).map((entry) => entry.label);
+
+    if (missingSigners.length) {
+      window.notify?.(`Cannot export PDF yet. Pending signatures: ${missingSigners.join(', ')}`, 'error');
+      return;
+    }
+
     if (!(await appConfirm('Export this property accountability form as PDF?', { title: 'Export Property PDF', confirmText: 'Export', icon: 'export' }))) return;
     const items: PropertyRow[] = (() => { try { return JSON.parse(rec.items || '[]'); } catch { return []; } })();
     const sigBlock = (label: string, name: string, sig: string, date: string) => sigBlockHtml(sig, label, date, name);
@@ -1036,16 +1049,12 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
               {filteredPropertyRecords.map((rec: any) => {
                 const items: PropertyRow[] = (() => { try { return JSON.parse(rec.items || '[]'); } catch { return []; } })();
                 const total = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
-                const isExpanded = expandedProp === rec.id;
+                const canExportPdf = !!rec.turnover_by_sig && !!rec.noted_by_sig && !!rec.received_by_sig && !!rec.audited_by_sig;
                 return (
                   <React.Fragment key={rec.id}>
-                    <tr className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors cursor-pointer"
-                      onClick={() => setExpandedProp(isExpanded ? null : rec.id)}>
-                      <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-100 flex items-center gap-2">
-                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        <div className="min-w-0">
-                          <span className="truncate max-w-55" title={rec.employee_name}>{rec.employee_name}</span>
-                        </div>
+                    <tr className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+                      <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-100">
+                        <div className="min-w-0"><span className="truncate max-w-55" title={rec.employee_name}>{rec.employee_name}</span></div>
                       </td>
                       <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
                         <div className="min-w-0"><span className="truncate max-w-55" title={rec.position_dept}>{rec.position_dept}</span></div>
@@ -1055,61 +1064,12 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                       <td className="py-3 px-4 text-right font-mono text-sm text-slate-700 dark:text-slate-200">₱{total.toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => setExpandedProp(isExpanded ? null : rec.id)} className="text-blue-500 hover:text-blue-700" title="View"><Eye size={15} /></button>
-                          <button onClick={() => printPropRecord(rec)} className="text-blue-500 hover:text-blue-700" title="Export PDF"><FileText size={15} /></button>
+                          <button onClick={() => setViewPropertyRecord(rec)} className="text-blue-500 hover:text-blue-700" title="View"><Eye size={15} /></button>
+                          <button onClick={() => printPropRecord(rec)} disabled={!canExportPdf} className={canExportPdf ? 'text-blue-500 hover:text-blue-700' : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'} title={canExportPdf ? 'Export PDF' : 'All required signatures must be completed'}><FileText size={15} /></button>
                           <button onClick={() => deletePropRecord(rec.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                         </div>
                       </td>
                     </tr>
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <tr><td colSpan={6} className="p-0">
-                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                            <div className="bg-slate-50 dark:bg-slate-900/50 p-4 border-b border-slate-200 dark:border-slate-700">
-                              <table className="w-full text-left border-collapse border border-slate-200 dark:border-slate-700 text-xs">
-                                <thead><tr className="bg-slate-100 dark:bg-slate-800">
-                                  {['Property No.','Asset Category','Brand','Description','Serial No.','UOM/QTY','DR/SI No.','Amount','Remarks'].map(h => (
-                                    <th key={h} className="py-1.5 px-2 border border-slate-200 dark:border-slate-700">{h}</th>
-                                  ))}
-                                </tr></thead>
-                                <tbody>{items.map((it, i) => (
-                                  <tr key={i} className="border-b border-slate-100 dark:border-slate-800">
-                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.property_number}</td>
-                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.asset_category}</td>
-                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.brand}</td>
-                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">
-                                      <div className="min-w-0"><span className="truncate max-w-[240px]" title={it.description}>{it.description}</span></div>
-                                    </td>
-                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.serial_no}</td>
-                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.uom_qty}</td>
-                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">{it.dr_si_no}</td>
-                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700 text-right font-mono">{parseFloat(it.amount) ? `₱${parseFloat(it.amount).toLocaleString('en', { minimumFractionDigits: 2 })}` : ''}</td>
-                                    <td className="py-1 px-2 border border-slate-200 dark:border-slate-700">
-                                      <div className="min-w-0"><span className="truncate max-w-55" title={it.remarks}>{it.remarks}</span></div>
-                                    </td>
-                                  </tr>
-                                ))}</tbody>
-                              </table>
-                              <div className="grid grid-cols-4 gap-4 mt-4">
-                                {[
-                                  { l: 'Turnover by', n: rec.turnover_by_name, s: rec.turnover_by_sig, d: rec.turnover_by_date },
-                                  { l: 'Noted by', n: rec.noted_by_name, s: rec.noted_by_sig, d: rec.noted_by_date },
-                                  { l: 'Received by', n: rec.received_by_name, s: rec.received_by_sig, d: rec.received_by_date },
-                                  { l: 'Audited by', n: rec.audited_by_name, s: rec.audited_by_sig, d: rec.audited_by_date },
-                                ].map((sig, i) => (
-                                  <div key={i} className="text-center">
-                                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{sig.l}</div>
-                                    {sig.s ? <img src={sig.s} alt={sig.l} className="h-10 mx-auto" /> : <div className="h-10 border-b border-slate-300 dark:border-slate-600" />}
-                                    <div className="text-xs text-slate-700 dark:text-slate-200 mt-1">{sig.n || '—'}</div>
-                                    <div className="text-[10px] text-slate-400">{sig.d || ''}</div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </motion.div>
-                        </td></tr>
-                      )}
-                    </AnimatePresence>
                   </React.Fragment>
                 );
               })}
@@ -1117,6 +1077,83 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
           </table>
         </div>
       </Card>
+
+      <Modal
+        open={!!viewPropertyRecord}
+        title={`Property Accountability${viewPropertyRecord?.employee_name ? ` - ${viewPropertyRecord.employee_name}` : ''}`}
+        onClose={() => setViewPropertyRecord(null)}
+        maxWidthClassName="max-w-6xl"
+      >
+        {viewPropertyRecord && (() => {
+          const items: PropertyRow[] = (() => { try { return JSON.parse(viewPropertyRecord.items || '[]'); } catch { return []; } })();
+          const total = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
+          const signatures = [
+            { l: 'Turnover by', n: viewPropertyRecord.turnover_by_name, s: viewPropertyRecord.turnover_by_sig, d: viewPropertyRecord.turnover_by_date },
+            { l: 'Noted by', n: viewPropertyRecord.noted_by_name, s: viewPropertyRecord.noted_by_sig, d: viewPropertyRecord.noted_by_date },
+            { l: 'Received by', n: viewPropertyRecord.received_by_name, s: viewPropertyRecord.received_by_sig, d: viewPropertyRecord.received_by_date },
+            { l: 'Audited by', n: viewPropertyRecord.audited_by_name, s: viewPropertyRecord.audited_by_sig, d: viewPropertyRecord.audited_by_date },
+          ];
+
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Employee</span><span className="text-slate-700 dark:text-slate-200">{viewPropertyRecord.employee_name || '—'}</span></div>
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Position / Dept.</span><span className="text-slate-700 dark:text-slate-200">{viewPropertyRecord.position_dept || '—'}</span></div>
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Date Prepared</span><span className="text-slate-700 dark:text-slate-200">{viewPropertyRecord.date_prepared || '—'}</span></div>
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Total Amount</span><span className="text-slate-700 dark:text-slate-200 font-mono">₱{total.toLocaleString('en', { minimumFractionDigits: 2 })}</span></div>
+              </div>
+
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead><tr className="bg-slate-100 dark:bg-slate-800">
+                    {['Property No.','Asset Category','Brand','Description','Serial No.','UOM/QTY','DR/SI No.','Amount','Remarks'].map(h => (
+                      <th key={h} className="py-2 px-2 border-b border-slate-200 dark:border-slate-700">{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {items.map((it, i) => (
+                      <tr key={i} className="border-b border-slate-100 dark:border-slate-800">
+                        <td className="py-1.5 px-2">{it.property_number}</td>
+                        <td className="py-1.5 px-2">{it.asset_category}</td>
+                        <td className="py-1.5 px-2">{it.brand}</td>
+                        <td className="py-1.5 px-2">{it.description}</td>
+                        <td className="py-1.5 px-2">{it.serial_no}</td>
+                        <td className="py-1.5 px-2">{it.uom_qty}</td>
+                        <td className="py-1.5 px-2">{it.dr_si_no}</td>
+                        <td className="py-1.5 px-2 font-mono">{parseFloat(it.amount) ? `₱${parseFloat(it.amount).toLocaleString('en', { minimumFractionDigits: 2 })}` : ''}</td>
+                        <td className="py-1.5 px-2">{it.remarks}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                {signatures.map((sig, i) => (
+                  <div key={i} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-center">
+                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{sig.l}</div>
+                    {sig.s ? <img src={sig.s} alt={sig.l} className="h-10 mx-auto" /> : <div className="h-10 border-b border-slate-300 dark:border-slate-600" />}
+                    <div className="text-xs text-slate-700 dark:text-slate-200 mt-1">{sig.n || '—'}</div>
+                    <div className="text-[10px] text-slate-400">{sig.d || ''}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button onClick={() => setViewPropertyRecord(null)} className="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold">Close</button>
+                <button
+                  onClick={() => printPropRecord(viewPropertyRecord)}
+                  disabled={!viewPropertyRecord.turnover_by_sig || !viewPropertyRecord.noted_by_sig || !viewPropertyRecord.received_by_sig || !viewPropertyRecord.audited_by_sig}
+                  title={!viewPropertyRecord.turnover_by_sig || !viewPropertyRecord.noted_by_sig || !viewPropertyRecord.received_by_sig || !viewPropertyRecord.audited_by_sig ? 'All required signatures must be completed' : 'Export PDF'}
+                  className={`${!viewPropertyRecord.turnover_by_sig || !viewPropertyRecord.noted_by_sig || !viewPropertyRecord.received_by_sig || !viewPropertyRecord.audited_by_sig ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-teal-deep text-white hover:bg-teal-green'} px-4 py-2 rounded-lg text-sm font-bold`}
+                >
+                  Export PDF
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
     </motion.div>
   );
 };
