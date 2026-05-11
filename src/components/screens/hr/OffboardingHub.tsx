@@ -64,7 +64,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
     audited_by_name: '', audited_by_date: '', audited_by_sig: '',
   });
   const [exitForm, setExitForm] = useState({
-    employee_name: '', department: '', supervisor: '', interview_date: '',
+    employee_name: '', department: scopedDept, supervisor: '', interview_date: '',
     ssn: '', hire_date: '', termination_date: '', starting_position: '', ending_position: '', salary: '',
     reason_category: '' as string, reason_details: [] as string[], dismissal_details: '',
     liked_most: '', liked_least: '', pay_benefits_opinion: '',
@@ -79,7 +79,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
   });
   const todayISO = new Date().toISOString().split('T')[0];
   const departmentSupervisorOptions = useMemo(() => {
-    const dept = String(exitForm.department || '').trim();
+    const dept = String(scopedDept || exitForm.department || '').trim();
     if (!dept) return [];
     return (Array.isArray(users) ? users : [])
       .filter((user: any) => sameDept(user?.dept, dept))
@@ -91,7 +91,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
       }))
       .filter((option: any) => option.value)
       .sort((a: any, b: any) => a.label.localeCompare(b.label));
-  }, [exitForm.department, users]);
+  }, [exitForm.department, scopedDept, users]);
 
   const trimText = (value: string) => value.trim();
 
@@ -268,7 +268,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
     const cleaned = {
       ...exitForm,
       employee_name: trimText(exitForm.employee_name),
-      department: trimText(exitForm.department),
+      department: trimText(scopedDept || exitForm.department),
       supervisor: trimText(exitForm.supervisor),
       interview_date: trimText(exitForm.interview_date),
       ssn: trimText(exitForm.ssn),
@@ -343,7 +343,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
       if (!res.ok) throw new Error('Failed');
       window.notify?.('Exit interview saved', 'success');
       setExitForm({
-        employee_name: '', department: '', supervisor: '', interview_date: '',
+        employee_name: '', department: scopedDept, supervisor: '', interview_date: '',
         ssn: '', hire_date: '', termination_date: '', starting_position: '', ending_position: '', salary: '',
         reason_category: '', reason_details: [], dismissal_details: '',
         liked_most: '', liked_least: '', pay_benefits_opinion: '',
@@ -633,7 +633,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                       <SearchableSelect
                         options={scopedEmployees.map(e => ({ value: e.name, label: e.name, avatarUrl: (e as any).profile_picture || null }))}
                         value={exitForm.employee_name}
-                        onChange={v => setExitForm({ ...exitForm, employee_name: String(v) })}
+                        onChange={v => setExitForm({ ...exitForm, employee_name: String(v), department: scopedDept || exitForm.department })}
                         placeholder="Select Employee..."
                         dropdownVariant="pills-horizontal"
                       />
@@ -645,8 +645,8 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                   <div><label className={labelCls}>Interview Date</label><input type="date" value={exitForm.interview_date} onChange={e => setExitForm({ ...exitForm, interview_date: e.target.value })} max={todayISO} className={inputCls} required /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4 mt-3">
-                  <div><label className={labelCls}>Department</label><SearchableSelect options={['Accounting/Financing','Sales Admin','Marketing','Pre-Technical','Post-Technical','Executives','Engineering','HR','Operations','IT'].map(d => ({ value: d, label: d }))} value={exitForm.department} onChange={v => setExitForm({ ...exitForm, department: String(v) })} placeholder="Select department..." allowEmpty emptyLabel="Select department..." searchable dropdownVariant="pills-horizontal" className="w-full" /></div>
-                  <div><label className={labelCls}>Supervisor</label><SearchableSelect options={departmentSupervisorOptions} value={exitForm.supervisor} onChange={(value: any) => setExitForm({ ...exitForm, supervisor: String(value) })} placeholder={exitForm.department ? 'Select HR / manager / supervisor...' : 'Select department first'} allowEmpty emptyLabel="No supervisor" searchable dropdownVariant="pills-horizontal" /></div>
+                  <div><label className={labelCls}>Department</label><input type="text" value={scopedDept || exitForm.department || ''} className={inputCls} readOnly /></div>
+                  <div><label className={labelCls}>Supervisor</label><SearchableSelect options={departmentSupervisorOptions} value={exitForm.supervisor} onChange={(value: any) => setExitForm({ ...exitForm, supervisor: String(value) })} placeholder={scopedDept ? 'Select HR / manager / supervisor...' : 'No department assigned to your account'} allowEmpty emptyLabel="No supervisor" searchable dropdownVariant="pills-horizontal" /></div>
                 </div>
                 <div className="grid grid-cols-4 gap-4 mt-3">
                   <div><label className={labelCls}>Hire Date</label><input type="date" value={exitForm.hire_date} onChange={e => setExitForm({ ...exitForm, hire_date: e.target.value })} max={todayISO} className={inputCls} required /></div>
