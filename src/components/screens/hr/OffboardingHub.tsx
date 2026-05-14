@@ -179,7 +179,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
   const fetchData = async () => {
     try { const r1 = await fetch('/api/offboarding', { headers: getAuthHeaders() }); const d1 = await r1.json(); setOffboardingData(Array.isArray(d1) ? d1 : []); } catch { setOffboardingData([]); }
     try { const r2 = await fetch('/api/exit_interviews', { headers: getAuthHeaders() }); const d2 = await r2.json(); setExitInterviews(Array.isArray(d2) ? d2 : []); } catch { setExitInterviews([]); }
-    try { const r3 = await fetch('/api/property_accountability'); const d3 = await r3.json(); setPropertyRecords(Array.isArray(d3) ? d3 : []); } catch { setPropertyRecords([]); }
+    try { const r3 = await fetch('/api/property_accountability', { headers: getAuthHeaders() }); const d3 = await r3.json(); setPropertyRecords(Array.isArray(d3) ? d3 : []); } catch { setPropertyRecords([]); }
   };
 
   const submitOffboarding = async () => {
