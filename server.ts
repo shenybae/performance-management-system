@@ -4236,7 +4236,7 @@ async function startServer() {
       }
 
       res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: "Database error" }); }
+    } catch (err: any) { res.status(500).json({ error: String(err?.message || 'Database error') }); }
   });
 
   // ---- Goals CRUD ----
@@ -8102,14 +8102,33 @@ ${relevantGoalIdsSql}
       let supervisorUserId: number | null = null;
       try { supervisorUserId = await resolveUserIdByFullName(String(b.supervisor || '')); } catch (e) { supervisorUserId = null; }
 
-      await query(`INSERT INTO exit_interviews (offboarding_id, employee_name, department, supervisor, reasons, liked_most, liked_least, interview_date, ssn, hire_date, termination_date, starting_position, ending_position, salary, pay_benefits_opinion, satisfaction_ratings, would_recommend, improvement_suggestions, additional_comments, employee_sig, interviewer_name, interviewer_sig, interviewer_date, dismissal_details, supervisor_user_id, hr_owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [b.offboarding_id || null, b.employee_name, b.department, b.supervisor, b.reasons, b.liked_most, b.liked_least, b.interview_date,
+      const insertSql = `INSERT INTO exit_interviews (offboarding_id, employee_name, department, supervisor, reasons, liked_most, liked_least, interview_date, ssn, hire_date, termination_date, starting_position, ending_position, salary, pay_benefits_opinion, satisfaction_ratings, would_recommend, improvement_suggestions, additional_comments, employee_sig, interviewer_name, interviewer_sig, interviewer_date, dismissal_details, supervisor_user_id, hr_owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      const insertParams = [b.offboarding_id || null, b.employee_name, b.department, b.supervisor, b.reasons, b.liked_most, b.liked_least, b.interview_date,
          b.ssn || null, b.hire_date || null, b.termination_date || null, b.starting_position || null, b.ending_position || null,
          b.salary || null, b.pay_benefits_opinion || null,
          typeof b.satisfaction_ratings === 'object' ? JSON.stringify(b.satisfaction_ratings) : (b.satisfaction_ratings || null),
          b.would_recommend || null, b.improvement_suggestions || null, b.additional_comments || null,
          b.employee_sig || null, b.interviewer_name || null, b.interviewer_sig || null, b.interviewer_date || null, b.dismissal_details || null,
-         supervisorUserId || null, hrOwnerUserId || null]);
+         supervisorUserId || null, hrOwnerUserId || null];
+
+      try {
+        await query(insertSql, insertParams);
+      } catch (insertErr: any) {
+        const msg = String(insertErr?.message || '').toLowerCase();
+        const looksLikeMissingColumn = msg.includes('does not exist') || msg.includes('undefined_column') || msg.includes('no such column') || msg.includes('column') && msg.includes('does not exist');
+        if (looksLikeMissingColumn) {
+          try {
+            await query('ALTER TABLE exit_interviews ADD COLUMN supervisor_user_id INTEGER', []);
+          } catch (e) {}
+          try {
+            await query('ALTER TABLE exit_interviews ADD COLUMN hr_owner_user_id INTEGER', []);
+          } catch (e) {}
+          // retry once
+          await query(insertSql, insertParams);
+        } else {
+          throw insertErr;
+        }
+      }
       try { await recordAudit((req as any).user || null, 'create', 'exit_interviews', null, null, b); } catch (e) {}
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Database error" }); }
