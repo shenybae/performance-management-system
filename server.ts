@@ -1113,22 +1113,6 @@ async function initDb() {
       } catch {}
     }
 
-    // Safe migrations for exit_interviews (ensure new columns exist)
-    const exitInterviewMigrations = [
-      'ALTER TABLE exit_interviews ADD COLUMN supervisor_user_id INTEGER',
-      'ALTER TABLE exit_interviews ADD COLUMN hr_owner_user_id INTEGER'
-    ];
-    for (const sql of exitInterviewMigrations) {
-      try {
-        if (usePostgres && pgPool) {
-          const c = await pgPool.connect();
-          try { await c.query(sql); } catch {} finally { c.release(); }
-        } else {
-          try { sqliteDb.exec(sql); } catch {}
-        }
-      } catch {}
-    }
-
     // Safe migrations for appraisals â€” add all missing evaluation fields
     const appraisalMigrations = [
       'ALTER TABLE appraisals ADD COLUMN form_type TEXT',
