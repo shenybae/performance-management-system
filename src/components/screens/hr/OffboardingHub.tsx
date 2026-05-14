@@ -302,7 +302,10 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
     if (!(await appConfirm('Export this property accountability form as PDF?', { title: 'Export Property PDF', confirmText: 'Export', icon: 'export' }))) return;
     const items: PropertyRow[] = (() => { try { return JSON.parse(rec.items || '[]'); } catch { return []; } })();
     const sigBlock = (label: string, name: string, sig: string, date: string) => sigBlockHtml(sig, label, date, name);
-    const auditedByName = rec.audited_by_name || getUserDisplayName(rec.hr_owner_user_id, departmentManagerName);
+    const turnoverByName = rec.turnover_by_name || propertyTurnoverByName;
+    const notedByName = rec.noted_by_name || propertyNotedByName;
+    const receivedByName = rec.received_by_name || rec.employee_name || '';
+    const auditedByName = rec.audited_by_name || getUserDisplayName(rec.hr_owner_user_id, departmentManagerName) || propertyAuditedByName;
     const w = window.open('', '_blank'); if (!w) return;
     w.document.write(`<html><head><title>Property Accountability Form</title><style>
       body{font-family:Arial,sans-serif;padding:20px;color:#000;}
@@ -325,8 +328,8 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
       <td>${it.property_number}</td><td>${it.asset_category}</td><td>${it.brand}</td><td>${it.description}</td><td>${it.serial_no}</td>
       <td>${it.uom_qty}</td><td>${it.dr_si_no}</td><td>${it.amount}</td><td>${it.remarks}</td>
     </tr>`).join('')}${items.length < 10 ? Array(10 - items.length).fill('<tr>' + '<td>&nbsp;</td>'.repeat(9) + '</tr>').join('') : ''}</tbody></table>
-    <div class="sig-row">${sigBlock('Turnover by:', rec.turnover_by_name, rec.turnover_by_sig, rec.turnover_by_date)}${sigBlock('Noted by:', rec.noted_by_name, rec.noted_by_sig, rec.noted_by_date)}</div>
-    <div class="sig-row" style="margin-top:16px;">${sigBlock('Received by:', rec.received_by_name, rec.received_by_sig, rec.received_by_date)}${sigBlock('Audited by:', auditedByName, rec.audited_by_sig, rec.audited_by_date)}</div>
+    <div class="sig-row">${sigBlock('Turnover by:', turnoverByName, rec.turnover_by_sig, rec.turnover_by_date)}${sigBlock('Noted by:', notedByName, rec.noted_by_sig, rec.noted_by_date)}</div>
+    <div class="sig-row" style="margin-top:16px;">${sigBlock('Received by:', receivedByName, rec.received_by_sig, rec.received_by_date)}${sigBlock('Audited by:', auditedByName, rec.audited_by_sig, rec.audited_by_date)}</div>
     <div style="text-align:right;font-size:10px;margin-top:16px;color:#666;">CC: 201 File / Audit / Employee</div>
     </body></html>`);
     w.document.close(); setTimeout(() => {
@@ -1239,11 +1242,14 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
         {viewPropertyRecord && (() => {
           const items: PropertyRow[] = (() => { try { return JSON.parse(viewPropertyRecord.items || '[]'); } catch { return []; } })();
           const total = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
-          const auditedByName = viewPropertyRecord.audited_by_name || getUserDisplayName(viewPropertyRecord.hr_owner_user_id, departmentManagerName);
+          const turnoverByName = viewPropertyRecord.turnover_by_name || propertyTurnoverByName;
+          const notedByName = viewPropertyRecord.noted_by_name || propertyNotedByName;
+          const receivedByName = viewPropertyRecord.received_by_name || viewPropertyRecord.employee_name || '';
+          const auditedByName = viewPropertyRecord.audited_by_name || getUserDisplayName(viewPropertyRecord.hr_owner_user_id, departmentManagerName) || propertyAuditedByName;
           const signatures = [
-            { l: 'Turnover by', n: viewPropertyRecord.turnover_by_name, s: viewPropertyRecord.turnover_by_sig, d: viewPropertyRecord.turnover_by_date },
-            { l: 'Noted by', n: viewPropertyRecord.noted_by_name, s: viewPropertyRecord.noted_by_sig, d: viewPropertyRecord.noted_by_date },
-            { l: 'Received by', n: viewPropertyRecord.received_by_name, s: viewPropertyRecord.received_by_sig, d: viewPropertyRecord.received_by_date },
+            { l: 'Turnover by', n: turnoverByName, s: viewPropertyRecord.turnover_by_sig, d: viewPropertyRecord.turnover_by_date },
+            { l: 'Noted by', n: notedByName, s: viewPropertyRecord.noted_by_sig, d: viewPropertyRecord.noted_by_date },
+            { l: 'Received by', n: receivedByName, s: viewPropertyRecord.received_by_sig, d: viewPropertyRecord.received_by_date },
             { l: 'Audited by', n: auditedByName, s: viewPropertyRecord.audited_by_sig, d: viewPropertyRecord.audited_by_date },
           ];
 
