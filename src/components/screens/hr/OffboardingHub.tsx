@@ -47,6 +47,23 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
     if (!scopedDept) return [];
     return (Array.isArray(employees) ? employees : []).filter((e: any) => sameDept(e?.dept || e?.department, scopedDept));
   }, [employees, scopedDept]);
+  const usersById = useMemo(() => {
+    const map = new Map<number, any>();
+    (Array.isArray(users) ? users : []).forEach((user: any) => {
+      const id = Number(user?.id || 0);
+      if (id) map.set(id, user);
+    });
+    return map;
+  }, [users]);
+  const departmentManagerUser = useMemo(() => {
+    if (!scopedDept) return null;
+    return (Array.isArray(users) ? users : []).find((user: any) => sameDept(user?.dept, scopedDept) && normalize(user?.role) === 'manager') || null;
+  }, [users, scopedDept]);
+  const departmentManagerName = String(departmentManagerUser?.full_name || departmentManagerUser?.name || departmentManagerUser?.username || departmentManagerUser?.email || '').trim();
+  const getUserDisplayName = (userId: any, fallback = '') => {
+    const user = usersById.get(Number(userId || 0));
+    return String(user?.full_name || user?.name || user?.username || user?.email || fallback || '').trim();
+  };
 
   const [activeForm, setActiveForm] = useState<'none' | 'property' | 'exit' | 'offboard'>('none');
   const [offboardingData, setOffboardingData] = useState<any[]>([]);
@@ -230,7 +247,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
           turnover_by_name: null, turnover_by_date: null, turnover_by_sig: null,
           noted_by_name: null, noted_by_date: null, noted_by_sig: null,
           received_by_name: null, received_by_date: null, received_by_sig: null,
-          audited_by_name: null, audited_by_date: null, audited_by_sig: null,
+          audited_by_name: departmentManagerName || null, audited_by_date: null, audited_by_sig: null,
         })
       });
       if (res.ok) {
@@ -261,6 +278,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
     if (!(await appConfirm('Export this property accountability form as PDF?', { title: 'Export Property PDF', confirmText: 'Export', icon: 'export' }))) return;
     const items: PropertyRow[] = (() => { try { return JSON.parse(rec.items || '[]'); } catch { return []; } })();
     const sigBlock = (label: string, name: string, sig: string, date: string) => sigBlockHtml(sig, label, date, name);
+    const auditedByName = rec.audited_by_name || getUserDisplayName(rec.hr_owner_user_id, departmentManagerName);
     const w = window.open('', '_blank'); if (!w) return;
     w.document.write(`<html><head><title>Property Accountability Form</title><style>
       body{font-family:Arial,sans-serif;padding:20px;color:#000;}
@@ -284,7 +302,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
       <td>${it.uom_qty}</td><td>${it.dr_si_no}</td><td>${it.amount}</td><td>${it.remarks}</td>
     </tr>`).join('')}${items.length < 10 ? Array(10 - items.length).fill('<tr>' + '<td>&nbsp;</td>'.repeat(9) + '</tr>').join('') : ''}</tbody></table>
     <div class="sig-row">${sigBlock('Turnover by:', rec.turnover_by_name, rec.turnover_by_sig, rec.turnover_by_date)}${sigBlock('Noted by:', rec.noted_by_name, rec.noted_by_sig, rec.noted_by_date)}</div>
-    <div class="sig-row" style="margin-top:16px;">${sigBlock('Received by:', rec.received_by_name, rec.received_by_sig, rec.received_by_date)}${sigBlock('Audited by:', rec.audited_by_name, rec.audited_by_sig, rec.audited_by_date)}</div>
+    <div class="sig-row" style="margin-top:16px;">${sigBlock('Received by:', rec.received_by_name, rec.received_by_sig, rec.received_by_date)}${sigBlock('Audited by:', auditedByName, rec.audited_by_sig, rec.audited_by_date)}</div>
     <div style="text-align:right;font-size:10px;margin-top:16px;color:#666;">CC: 201 File / Audit / Employee</div>
     </body></html>`);
     w.document.close(); setTimeout(() => {
@@ -489,7 +507,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
 
     <div class="sig-row">
       ${sigBlock('Employee Signature:', rec.employee_sig, rec.employee_name)}
-      ${sigBlock(`Interviewer (${rec.interviewer_name || ''})${rec.interviewer_date ? ' — ' + rec.interviewer_date : ''}:`, rec.interviewer_sig, rec.interviewer_name)}
+      ${sigBlock(`Interviewer (${rec.interviewer_name || getUserDisplayName(rec.hr_owner_user_id, currentHrName) || ''})${rec.interviewer_date ? ' — ' + rec.interviewer_date : ''}:`, rec.interviewer_sig, rec.interviewer_name || getUserDisplayName(rec.hr_owner_user_id, currentHrName))}
     </div>
     </body></html>`);
     w.document.close(); setTimeout(() => {
@@ -1047,6 +1065,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
         {viewExitInterview && (() => {
           const rec = viewExitInterview;
           const ratings: Record<string, number> = (() => { try { return JSON.parse(rec.satisfaction_ratings || '{}'); } catch { return {}; } })();
+          const interviewerName = rec.interviewer_name || getUserDisplayName(rec.hr_owner_user_id, currentHrName);
           const missingSigners = [] as string[];
           if (!rec.employee_sig) missingSigners.push('Employee');
           if (!rec.interviewer_sig) missingSigners.push('Interviewer');
@@ -1089,7 +1108,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                 <div className="text-center">
                   <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Interviewer</div>
                   {rec.interviewer_sig ? <img src={rec.interviewer_sig} alt="Interviewer sig" className="h-12 mx-auto" /> : <div className="h-12 border-b border-slate-300 dark:border-slate-600" />}
-                  <div className="text-xs text-slate-700 dark:text-slate-200 mt-1">{rec.interviewer_name || '—'}</div>
+                  <div className="text-xs text-slate-700 dark:text-slate-200 mt-1">{interviewerName || '—'}</div>
                   <div className="text-[10px] text-slate-400">{rec.interviewer_date || ''}</div>
                 </div>
               </div>
@@ -1186,11 +1205,12 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
         {viewPropertyRecord && (() => {
           const items: PropertyRow[] = (() => { try { return JSON.parse(viewPropertyRecord.items || '[]'); } catch { return []; } })();
           const total = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
+          const auditedByName = viewPropertyRecord.audited_by_name || getUserDisplayName(viewPropertyRecord.hr_owner_user_id, departmentManagerName);
           const signatures = [
             { l: 'Turnover by', n: viewPropertyRecord.turnover_by_name, s: viewPropertyRecord.turnover_by_sig, d: viewPropertyRecord.turnover_by_date },
             { l: 'Noted by', n: viewPropertyRecord.noted_by_name, s: viewPropertyRecord.noted_by_sig, d: viewPropertyRecord.noted_by_date },
             { l: 'Received by', n: viewPropertyRecord.received_by_name, s: viewPropertyRecord.received_by_sig, d: viewPropertyRecord.received_by_date },
-            { l: 'Audited by', n: viewPropertyRecord.audited_by_name, s: viewPropertyRecord.audited_by_sig, d: viewPropertyRecord.audited_by_date },
+            { l: 'Audited by', n: auditedByName, s: viewPropertyRecord.audited_by_sig, d: viewPropertyRecord.audited_by_date },
           ];
 
           return (
