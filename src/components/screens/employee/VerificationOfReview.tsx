@@ -707,20 +707,24 @@ export const VerificationOfReview = () => {
   const pendingEmployeeExitInterviews = useMemo(
     () => exitInterviews.filter((e) => {
       if (e.employee_sig) return false;
-      // If employee_user_id exists, check if current user is the employee
+      // Must be in same department
+      if (!sameDept(e)) return false;
+      // If employee_user_id exists, must match current user
       if (e.employee_user_id !== null && e.employee_user_id !== undefined) {
         return e.employee_user_id === userId;
       }
       // Fallback: match by name
       return userName && String(e.employee_name || '').trim().toLowerCase() === userName;
     }),
-    [exitInterviews, userName, userId]
+    [exitInterviews, userName, userId, queueDept]
   );
 
   const pendingEmployeePropertyTasks = useMemo(
     () => propertyRecords.filter((p) => {
       if (p.received_by_sig) return false;
-      // If received_by_user_id exists, check if current user is the receiver
+      // Must be in same department
+      if (!sameDept(p)) return false;
+      // If received_by_user_id exists, must match current user
       if (p.received_by_user_id !== null && p.received_by_user_id !== undefined) {
         return p.received_by_user_id === userId;
       }
@@ -729,7 +733,7 @@ export const VerificationOfReview = () => {
       const byName = userName && String(p.employee_name || '').trim().toLowerCase() === userName;
       return byId || byName;
     }),
-    [propertyRecords, userEmpId, userName, userId]
+    [propertyRecords, userEmpId, userName, userId, queueDept]
   );
 
   const pendingSupervisorAppraisals = useMemo(
@@ -828,13 +832,15 @@ export const VerificationOfReview = () => {
   const pendingManagementPropertyTasks = useMemo(
     () => propertyRecords
       .filter((p) => {
+        // Must be in same department
+        if (!sameDept(p)) return false;
         // If user_id columns exist, check if current user is a signer
-        if (isHR && p.noted_by_user_id !== null) return p.noted_by_user_id === userId;
-        if ((isManager || isSupervisor) && (p.turnover_by_user_id !== null || p.audited_by_user_id !== null)) {
-          return p.turnover_by_user_id === userId || p.audited_by_user_id === userId;
+        if (p.noted_by_user_id !== null || p.turnover_by_user_id !== null || p.audited_by_user_id !== null) {
+          if (isHR) return p.noted_by_user_id === userId;
+          if (isManager || isSupervisor) return p.turnover_by_user_id === userId || p.audited_by_user_id === userId;
         }
-        // Fallback: use department-based filtering for records without user_ids
-        return sameDept(p);
+        // For old records without user_ids, only allow in same department (already checked above)
+        return true;
       })
       .map((p) => {
         const nextField = getNextPendingPropertyField(p);
@@ -855,13 +861,13 @@ export const VerificationOfReview = () => {
 
   const pendingManagementExitInterviews = useMemo(
     () => exitInterviews.filter((e) => {
-      if (!e.interviewer_sig) {
-        // If interviewer_user_id exists, check if current user is the interviewer
-        if (e.interviewer_user_id !== null) return e.interviewer_user_id === userId;
-        // Fallback: use department-based filtering for old records
-        return sameDept(e);
-      }
-      return false;
+      if (e.interviewer_sig) return false;
+      // Must be in same department
+      if (!sameDept(e)) return false;
+      // If interviewer_user_id exists, must match current user
+      if (e.interviewer_user_id !== null) return e.interviewer_user_id === userId;
+      // For old records without user_ids, only allow in same department (already checked above)
+      return true;
     }),
     [exitInterviews, queueDept, userId]
   );
@@ -955,6 +961,46 @@ export const VerificationOfReview = () => {
     [requisitions, queueDept, user?.position, user?.full_name, user?.employee_name, user?.username, user?.email, requisitionSignersByDept]
   );
 
+  const pendingHrPropertyTasks = useMemo(
+    () => propertyRecords
+      .filter((p) => {
+        // Must be in same department
+        if (!sameDept(p)) return false;
+        // Check if HR user is assigned as signer (noted_by)
+        if (p.noted_by_user_id !== null) return p.noted_by_user_id === userId;
+        // Fallback for old records without user_ids
+        return !p.noted_by_sig;
+      })
+      .map((p) => {
+        const nextField = getNextPendingPropertyField(p);
+        const pendingSteps = getPropertyPendingSummary(p);
+        if (!nextField || pendingSteps.length === 0) return null;
+        return {
+          ...p,
+          key: `prop-hr-${p.id}`,
+          id: p.id,
+          field: nextField,
+          pendingSteps,
+          title: pendingSteps.join(' • '),
+        };
+      })
+      .filter(Boolean),
+    [propertyRecords, queueDept, userId]
+  );
+
+  const pendingHrExitInterviews = useMemo(
+    () => exitInterviews.filter((e) => {
+      if (e.interviewer_sig) return false;
+      // Must be in same department
+      if (!sameDept(e)) return false;
+      // Check if HR user is assigned as interviewer
+      if (e.interviewer_user_id !== null) return e.interviewer_user_id === userId;
+      // Fallback for old records without user_ids
+      return true;
+    }),
+    [exitInterviews, queueDept, userId]
+  );
+
   const roleSubtitle = isHR
     ? 'HR department signature queue (department scoped)'
     : isManagementSigner
@@ -988,6 +1034,8 @@ export const VerificationOfReview = () => {
       sections.push({ id: 'hr-onboarding', label: 'Onboarding', count: pendingHrOnboarding.length });
       sections.push({ id: 'hr-applicants', label: 'Applicants', count: pendingHrApplicants.length });
       sections.push({ id: 'hr-reqs', label: 'Requisitions', count: pendingHrRequisitionStages.length });
+      sections.push({ id: 'hr-property', label: 'Property', count: pendingHrPropertyTasks.length });
+      sections.push({ id: 'hr-exit', label: 'Exit Interviews', count: pendingHrExitInterviews.length });
     }
 
     return sections;
@@ -1012,6 +1060,8 @@ export const VerificationOfReview = () => {
     pendingHrOnboarding.length,
     pendingHrApplicants.length,
     pendingHrRequisitionStages.length,
+    pendingHrPropertyTasks.length,
+    pendingHrExitInterviews.length,
   ]);
 
   useEffect(() => {
@@ -2416,6 +2466,46 @@ export const VerificationOfReview = () => {
               signTitle: !t.queueReady ? 'Waiting for prior signatories' : undefined,
               warningText: !t.queueReady ? 'Awaiting prior signatures before you can sign' : undefined,
               onSign: () => openGenericSign(`Sign — Requisition (${t.job_title || 'Requisition'})`, 'simple', 'hr-req', t),
+            }))}
+          </Card>
+          )}
+
+          {activeQueueSection === 'hr-property' && (
+          <Card>
+            <h3 className="text-sm font-bold mb-3">Property Accountability Needing HR Signature</h3>
+            {pendingHrPropertyTasks.length === 0 && renderEmptyQueueState('No pending property accountability signatures.')}
+            {pendingHrPropertyTasks.map((p) => renderQueueCard({
+              id: p.key,
+              icon: <Package size={16} />,
+              iconColorClass: 'text-blue-600 dark:text-blue-400',
+              iconBgClass: 'bg-blue-50 dark:bg-blue-900/20',
+              title: p.employee_name || 'Property',
+              subtitle: p.title,
+              badge: 'Noted By',
+              badgeColorClass: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+              pills: [{ icon: <Building2 size={10} />, text: p.position_dept || '—' }],
+              onView: () => setGenericViewModal({ title: `Property — ${p.employee_name || 'Property'}`, type: 'property', record: p }),
+              onSign: () => openGenericSign(`Sign — Property (${p.employee_name || 'Property'})`, 'simple', 'prop-sign', p),
+            }))}
+          </Card>
+          )}
+
+          {activeQueueSection === 'hr-exit' && (
+          <Card>
+            <h3 className="text-sm font-bold mb-3">Exit Interviews Needing HR Signature</h3>
+            {pendingHrExitInterviews.length === 0 && renderEmptyQueueState('No pending exit interview signatures.')}
+            {pendingHrExitInterviews.map((e) => renderQueueCard({
+              id: `exit-${e.id}`,
+              icon: <LogOut size={16} />,
+              iconColorClass: 'text-rose-600 dark:text-rose-400',
+              iconBgClass: 'bg-rose-50 dark:bg-rose-900/20',
+              title: e.employee_name || 'Exit Interview',
+              subtitle: e.reasons || 'Exit Interview',
+              badge: 'Interviewer',
+              badgeColorClass: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300',
+              pills: [{ icon: <Building2 size={10} />, text: e.department || '—' }],
+              onView: () => setGenericViewModal({ title: `Exit Interview — ${e.employee_name || 'Exit Interview'}`, type: 'exit_interview', record: e }),
+              onSign: () => openGenericSign(`Sign — Exit Interview (${e.employee_name || 'Exit Interview'})`, 'simple', 'exit-sign', e),
             }))}
           </Card>
           )}
