@@ -83,6 +83,7 @@ export const VerificationOfReview = () => {
 
   const normalizeText = (value: any) => String(value || '').trim().toLowerCase();
   const queueDept = normalizeText(user?.dept);
+  const userId = Number(user?.id || 0);
   const sameDept = (record: any) => {
     if (!queueDept) return true;
     const recDept = normalizeText(record?.employee_department || record?.dept || record?.position_dept || record?.department);
@@ -704,18 +705,31 @@ export const VerificationOfReview = () => {
   );
 
   const pendingEmployeeExitInterviews = useMemo(
-    () => exitInterviews.filter((e) => !e.employee_sig && userName && String(e.employee_name || '').trim().toLowerCase() === userName),
-    [exitInterviews, userName]
+    () => exitInterviews.filter((e) => {
+      if (e.employee_sig) return false;
+      // If employee_user_id exists, check if current user is the employee
+      if (e.employee_user_id !== null && e.employee_user_id !== undefined) {
+        return e.employee_user_id === userId;
+      }
+      // Fallback: match by name
+      return userName && String(e.employee_name || '').trim().toLowerCase() === userName;
+    }),
+    [exitInterviews, userName, userId]
   );
 
   const pendingEmployeePropertyTasks = useMemo(
     () => propertyRecords.filter((p) => {
       if (p.received_by_sig) return false;
+      // If received_by_user_id exists, check if current user is the receiver
+      if (p.received_by_user_id !== null && p.received_by_user_id !== undefined) {
+        return p.received_by_user_id === userId;
+      }
+      // Fallback: match by employee_id or employee_name
       const byId = userEmpId > 0 && Number(p.employee_id || 0) === userEmpId;
       const byName = userName && String(p.employee_name || '').trim().toLowerCase() === userName;
       return byId || byName;
     }),
-    [propertyRecords, userEmpId, userName]
+    [propertyRecords, userEmpId, userName, userId]
   );
 
   const pendingSupervisorAppraisals = useMemo(
@@ -813,7 +827,15 @@ export const VerificationOfReview = () => {
 
   const pendingManagementPropertyTasks = useMemo(
     () => propertyRecords
-      .filter((p) => sameDept(p))
+      .filter((p) => {
+        // If user_id columns exist, check if current user is a signer
+        if (isHR && p.noted_by_user_id !== null) return p.noted_by_user_id === userId;
+        if ((isManager || isSupervisor) && (p.turnover_by_user_id !== null || p.audited_by_user_id !== null)) {
+          return p.turnover_by_user_id === userId || p.audited_by_user_id === userId;
+        }
+        // Fallback: use department-based filtering for records without user_ids
+        return sameDept(p);
+      })
       .map((p) => {
         const nextField = getNextPendingPropertyField(p);
         const pendingSteps = getPropertyPendingSummary(p);
@@ -828,12 +850,20 @@ export const VerificationOfReview = () => {
         };
       })
       .filter(Boolean),
-    [propertyRecords, queueDept]
+    [propertyRecords, queueDept, userId, isHR, isManager, isSupervisor]
   );
 
   const pendingManagementExitInterviews = useMemo(
-    () => exitInterviews.filter((e) => !e.interviewer_sig && sameDept(e)),
-    [exitInterviews, queueDept]
+    () => exitInterviews.filter((e) => {
+      if (!e.interviewer_sig) {
+        // If interviewer_user_id exists, check if current user is the interviewer
+        if (e.interviewer_user_id !== null) return e.interviewer_user_id === userId;
+        // Fallback: use department-based filtering for old records
+        return sameDept(e);
+      }
+      return false;
+    }),
+    [exitInterviews, queueDept, userId]
   );
 
   const pendingManagementRequisitionStages = useMemo(

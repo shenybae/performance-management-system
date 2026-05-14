@@ -272,6 +272,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
       // try to resolve an employee id from the entered name so records attach to the employee file
       const matched = (scopedEmployees || []).find(e => (e.name || '').toString().trim().toLowerCase() === cleaned.employee_name.toLowerCase());
       const employeeId = matched ? matched.id : null;
+      const employeeUserId = matched?.employee_id ? Number(matched.employee_id) : employeeId;
 
       const res = await fetch('/api/property_accountability', {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -283,7 +284,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
           items: JSON.stringify(cleaned.items),
           turnover_by_name: propertyTurnoverByName || null, turnover_by_date: null, turnover_by_sig: null, turnover_by_user_id: propertyTurnoverByUserId,
           noted_by_name: propertyNotedByName || null, noted_by_date: null, noted_by_sig: null, noted_by_user_id: propertyNotedByUserId,
-          received_by_name: cleaned.employee_name || null, received_by_date: null, received_by_sig: null, received_by_user_id: null,
+          received_by_name: cleaned.employee_name || null, received_by_date: null, received_by_sig: null, received_by_user_id: employeeUserId,
           audited_by_name: propertyAuditedByName || null, audited_by_date: null, audited_by_sig: null, audited_by_user_id: propertyAuditedByUserId,
         })
       });
