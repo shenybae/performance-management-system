@@ -7255,9 +7255,33 @@ ${relevantGoalIdsSql}
       const actor: any = (req as any).user || {};
       const qName = (req.query.employee_name || '').toString();
       const userId = Number(actor.id || 0);
-      const actorNames = [actor.full_name, actor.employee_name, actor.username, actor.position, actor.email]
-        .map((value) => String(value || '').trim().toLowerCase())
+      let actorDept = String(actor.dept || actor.department || '').trim();
+      let actorNames = [actor.full_name, actor.employee_name, actor.username, actor.position, actor.email]
+        .map((value) => String(value || '').trim())
         .filter(Boolean);
+
+      try {
+        const actorRows: any = await query(
+          `SELECT u.full_name, u.username, u.email, u.position, u.dept, e.name AS employee_name
+           FROM users u
+           LEFT JOIN employees e ON e.id = u.employee_id
+           WHERE u.id = ?
+           LIMIT 1`,
+          [userId]
+        );
+        const actorRow = Array.isArray(actorRows) ? actorRows[0] : actorRows;
+        actorDept = String(actorRow?.dept || actorRow?.position || actorDept || '').trim();
+        actorNames = [actorRow?.full_name, actorRow?.employee_name, actorRow?.username, actorRow?.position, actorRow?.email]
+          .map((value) => String(value || '').trim())
+          .filter(Boolean);
+      } catch {}
+
+      const actorDeptKey = String(actorDept || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\b(manager|supervisor|employee|leader|hr admin|hr)\b.*$/i, '')
+        .trim();
+      const actorNameKeys = actorNames.map((value) => value.toLowerCase());
 
       if (qName) {
         // If an employee name query param was provided, attempt to return rows
@@ -7280,19 +7304,14 @@ ${relevantGoalIdsSql}
         return res.json(rows);
       }
 
-      // Non-HR users: return only records where they are assigned as a signer
+      // Non-HR users: return department-scoped records; the UI will determine
+      // whether the current user can sign now or only view the item.
       const rows = await query(
         `SELECT * FROM property_accountability 
          WHERE deleted_at IS NULL 
-         AND (
-           turnover_by_user_id = ? OR noted_by_user_id = ? OR received_by_user_id = ? OR audited_by_user_id = ?
-           OR LOWER(TRIM(COALESCE(turnover_by_name, ''))) IN (${actorNames.length ? actorNames.map(() => '?').join(', ') : "''"})
-           OR LOWER(TRIM(COALESCE(noted_by_name, ''))) IN (${actorNames.length ? actorNames.map(() => '?').join(', ') : "''"})
-           OR LOWER(TRIM(COALESCE(received_by_name, ''))) IN (${actorNames.length ? actorNames.map(() => '?').join(', ') : "''"})
-           OR LOWER(TRIM(COALESCE(audited_by_name, ''))) IN (${actorNames.length ? actorNames.map(() => '?').join(', ') : "''"})
-         )
+         AND LOWER(TRIM(COALESCE(position_dept, employee_name, ''))) = LOWER(TRIM(?))
          ORDER BY created_at DESC`,
-        [userId, userId, userId, userId, ...actorNames, ...actorNames, ...actorNames, ...actorNames]
+        [actorDeptKey || actorDept || actorNames[0] || '']
       );
       res.json(rows);
     } catch (err) { res.status(500).json({ error: "Database error" }); }
@@ -8141,9 +8160,25 @@ ${relevantGoalIdsSql}
     try {
       const actor: any = (req as any).user || {};
       const userId = Number(actor.id || 0);
-      const actorNames = [actor.full_name, actor.employee_name, actor.username, actor.position, actor.email]
-        .map((value) => String(value || '').trim().toLowerCase())
-        .filter(Boolean);
+      let actorDept = String(actor.dept || actor.department || '').trim();
+      try {
+        const actorRows: any = await query(
+          `SELECT u.full_name, u.username, u.email, u.position, u.dept, e.name AS employee_name
+           FROM users u
+           LEFT JOIN employees e ON e.id = u.employee_id
+           WHERE u.id = ?
+           LIMIT 1`,
+          [userId]
+        );
+        const actorRow = Array.isArray(actorRows) ? actorRows[0] : actorRows;
+        actorDept = String(actorRow?.dept || actorRow?.position || actorDept || '').trim();
+      } catch {}
+
+      const actorDeptKey = String(actorDept || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\b(manager|supervisor|employee|leader|hr admin|hr)\b.*$/i, '')
+        .trim();
 
       // HR sees all records; others see only records where they are a signer
       if (actor.role === 'HR') {
@@ -8151,17 +8186,14 @@ ${relevantGoalIdsSql}
         return res.json(rows);
       }
 
-      // Non-HR users: return only exit interviews where they are the employee or interviewer
+      // Non-HR users: return department-scoped records; the UI decides if the
+      // current user can sign immediately or only view the item.
       const rows = await query(
         `SELECT * FROM exit_interviews 
          WHERE deleted_at IS NULL 
-         AND (
-           employee_user_id = ? OR interviewer_user_id = ?
-           OR LOWER(TRIM(COALESCE(employee_name, ''))) IN (${actorNames.length ? actorNames.map(() => '?').join(', ') : "''"})
-           OR LOWER(TRIM(COALESCE(interviewer_name, ''))) IN (${actorNames.length ? actorNames.map(() => '?').join(', ') : "''"})
-         )
+         AND LOWER(TRIM(COALESCE(department, employee_name, ''))) = LOWER(TRIM(?))
          ORDER BY created_at DESC`,
-        [userId, userId, ...actorNames, ...actorNames]
+        [actorDeptKey || actorDept || '']
       );
       res.json(rows);
     } catch (err) { res.status(500).json({ error: "Database error" }); }
