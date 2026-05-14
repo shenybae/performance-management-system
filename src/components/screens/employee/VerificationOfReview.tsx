@@ -1681,9 +1681,9 @@ export const VerificationOfReview = () => {
       <ViewShell>
         {(() => {
           const exitDept = normalizeText(r.department || r.employee_department || '');
-          const scopedSigners = applicantSignersByDept[exitDept] || null;
-          const scopedHrName = String(scopedSigners?.hr_admin?.full_name || '').trim();
-          const interviewerName = r.interviewer_name || scopedHrName || '—';
+          const scopedApplicantSigners = applicantSignersByDept[exitDept] || null;
+          const scopedRequisitionSigners = requisitionSignersByDept[exitDept] || null;
+          const interviewerName = r.interviewer_name || String(scopedApplicantSigners?.hr_admin?.full_name || scopedRequisitionSigners?.dept_head?.full_name || '').trim() || '—';
           const ratings: Record<string, number> = (() => {
             try { return JSON.parse(r.satisfaction_ratings || '{}'); } catch { return {}; }
           })();
@@ -1865,6 +1865,9 @@ export const VerificationOfReview = () => {
     if (type === 'property') return (
       <ViewShell>
         {(() => {
+          const deptKey = normalizeText(r.position_dept || r.department || r.employee_department || '');
+          const requisitionSigners = requisitionSignersByDept[deptKey] || null;
+          const applicantSigners = applicantSignersByDept[deptKey] || null;
           const items = (() => {
             try {
               const parsed = typeof r.items === 'string' ? JSON.parse(r.items || '[]') : (r.items || []);
@@ -1940,10 +1943,10 @@ export const VerificationOfReview = () => {
               <SectionCard title="Signature Details">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
                   {[
-                    { label: 'Turned Over By', name: r.turnover_by_name, sig: r.turnover_by_sig, date: r.turnover_by_date },
-                    { label: 'Noted By', name: r.noted_by_name, sig: r.noted_by_sig, date: r.noted_by_date },
-                    { label: 'Received By', name: r.received_by_name, sig: r.received_by_sig, date: r.received_by_date },
-                    { label: 'Audited By', name: r.audited_by_name, sig: r.audited_by_sig, date: r.audited_by_date },
+                    { label: 'Turned Over By', name: r.turnover_by_name || requisitionSigners?.supervisor?.full_name || applicantSigners?.supervisor?.full_name || '', sig: r.turnover_by_sig, date: r.turnover_by_date },
+                    { label: 'Noted By', name: r.noted_by_name || applicantSigners?.hr_admin?.full_name || requisitionSigners?.dept_head?.full_name || '', sig: r.noted_by_sig, date: r.noted_by_date },
+                    { label: 'Received By', name: r.received_by_name || r.employee_name || '', sig: r.received_by_sig, date: r.received_by_date },
+                    { label: 'Audited By', name: r.audited_by_name || applicantSigners?.manager?.full_name || requisitionSigners?.cabinet?.full_name || '', sig: r.audited_by_sig, date: r.audited_by_date },
                   ].map((sig) => (
                     <div key={sig.label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-center">
                       <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{sig.label}</div>
