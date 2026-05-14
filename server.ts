@@ -8102,7 +8102,7 @@ ${relevantGoalIdsSql}
       let supervisorUserId: number | null = null;
       try { supervisorUserId = await resolveUserIdByFullName(String(b.supervisor || '')); } catch (e) { supervisorUserId = null; }
 
-      const insertSql = `INSERT INTO exit_interviews (offboarding_id, employee_name, department, supervisor, reasons, liked_most, liked_least, interview_date, ssn, hire_date, termination_date, starting_position, ending_position, salary, pay_benefits_opinion, satisfaction_ratings, would_recommend, improvement_suggestions, additional_comments, employee_sig, interviewer_name, interviewer_sig, interviewer_date, dismissal_details, supervisor_user_id, hr_owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      const insertSql = `INSERT INTO exit_interviews (offboarding_id, employee_name, department, supervisor, reasons, liked_most, liked_least, interview_date, ssn, hire_date, termination_date, starting_position, ending_position, salary, pay_benefits_opinion, satisfaction_ratings, would_recommend, improvement_suggestions, additional_comments, employee_sig, interviewer_name, interviewer_sig, interviewer_date, dismissal_details, supervisor_user_id, hr_owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
       const insertParams = [b.offboarding_id || null, b.employee_name, b.department, b.supervisor, b.reasons, b.liked_most, b.liked_least, b.interview_date,
          b.ssn || null, b.hire_date || null, b.termination_date || null, b.starting_position || null, b.ending_position || null,
          b.salary || null, b.pay_benefits_opinion || null,
