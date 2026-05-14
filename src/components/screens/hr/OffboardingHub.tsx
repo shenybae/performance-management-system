@@ -305,7 +305,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
     const turnoverByName = rec.turnover_by_name || propertyTurnoverByName;
     const notedByName = rec.noted_by_name || propertyNotedByName;
     const receivedByName = rec.received_by_name || rec.employee_name || '';
-    const auditedByName = rec.audited_by_name || getUserDisplayName(rec.hr_owner_user_id, departmentManagerName) || propertyAuditedByName;
+    const auditedByName = rec.audited_by_name || departmentManagerName || propertyAuditedByName;
     const w = window.open('', '_blank'); if (!w) return;
     w.document.write(`<html><head><title>Property Accountability Form</title><style>
       body{font-family:Arial,sans-serif;padding:20px;color:#000;}
@@ -1245,7 +1245,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
           const turnoverByName = viewPropertyRecord.turnover_by_name || propertyTurnoverByName;
           const notedByName = viewPropertyRecord.noted_by_name || propertyNotedByName;
           const receivedByName = viewPropertyRecord.received_by_name || viewPropertyRecord.employee_name || '';
-          const auditedByName = viewPropertyRecord.audited_by_name || getUserDisplayName(viewPropertyRecord.hr_owner_user_id, departmentManagerName) || propertyAuditedByName;
+          const auditedByName = viewPropertyRecord.audited_by_name || departmentManagerName || propertyAuditedByName;
           const signatures = [
             { l: 'Turnover by', n: turnoverByName, s: viewPropertyRecord.turnover_by_sig, d: viewPropertyRecord.turnover_by_date },
             { l: 'Noted by', n: notedByName, s: viewPropertyRecord.noted_by_sig, d: viewPropertyRecord.noted_by_date },
