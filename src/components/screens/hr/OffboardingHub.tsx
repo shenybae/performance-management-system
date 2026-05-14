@@ -41,6 +41,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
     }
   })();
   const scopedDept = String(sessionUser?.dept || '').trim();
+  const currentHrName = String(sessionUser?.full_name || sessionUser?.name || sessionUser?.username || sessionUser?.email || '').trim();
   const scopedEmployees = useMemo(() => {
     // Strict scoping: when no department is attached to the logged-in account, show no employee options.
     if (!scopedDept) return [];
@@ -372,7 +373,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
         satisfaction_ratings: JSON.stringify(cleaned.satisfaction_ratings),
         would_recommend: cleaned.would_recommend, improvement_suggestions: cleaned.improvement_suggestions,
         additional_comments: cleaned.additional_comments,
-        employee_sig: null, interviewer_name: null,
+        employee_sig: null, interviewer_name: currentHrName || null,
         interviewer_sig: null, interviewer_date: null,
         dismissal_details: cleaned.dismissal_details
       }) });
@@ -397,7 +398,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
           physical_conditions: 0, benefits: 0
         },
         would_recommend: '', improvement_suggestions: '', additional_comments: '',
-        employee_sig: '', interviewer_name: '', interviewer_sig: '', interviewer_date: ''
+        employee_sig: '', interviewer_name: currentHrName, interviewer_sig: '', interviewer_date: ''
       });
       setActiveForm('none'); fetchData();
     } catch (err: any) { window.notify?.(String(err?.message || 'Failed to save'), 'error'); }
@@ -820,6 +821,16 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                   <p className="text-xs text-slate-500 dark:text-slate-300">
                     Signature fields (Employee and Interviewer/HR) are completed after saving from the <span className="font-bold">Signature Queue</span>.
                   </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className={labelCls}>Interviewer / HR Creator</label>
+                    <input type="text" value={currentHrName || 'HR not identified'} className={inputCls} readOnly />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Department</label>
+                    <input type="text" value={scopedDept || '—'} className={inputCls} readOnly />
+                  </div>
                 </div>
               </div>
 
