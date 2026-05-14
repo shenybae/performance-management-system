@@ -1679,41 +1679,66 @@ export const VerificationOfReview = () => {
 
     if (type === 'exit') return (
       <ViewShell>
-        <HeroCard
-          eyebrow="Exit Interview"
-          title={`Exit Interview — ${r.employee_name || 'Employee'}`}
-          meta={`${r.department || r.employee_department || 'No department'}${r.interview_date ? ` • Interview: ${r.interview_date}` : ''}`}
-        />
-        <SectionCard title="Employee Information">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <F label="Employee" value={r.employee_name} />
-            <F label="Department" value={r.department || r.employee_department} />
-            <F label="Starting Position" value={r.starting_position} />
-            <F label="Ending Position" value={r.ending_position} />
-            <F label="Interview Date" value={r.interview_date} />
-            <F label="Termination Date" value={r.termination_date} />
-            <F label="Salary" value={r.salary} />
-            <F label="Hire Date" value={r.hire_date} />
-          </div>
-        </SectionCard>
-        <SectionCard title="Interview Details">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <F label="Interviewer" value={r.interviewer_name} />
-            <F label="Supervisor" value={r.supervisor} />
-            <F label="Reasons for Leaving" value={r.reasons} />
-            <F label="Would Recommend" value={r.would_recommend} />
-          </div>
-        </SectionCard>
-        <SectionCard><TB label="What did you like most about working here?" value={r.liked_most} /></SectionCard>
-        <SectionCard><TB label="What did you like least about working here?" value={r.liked_least} /></SectionCard>
-        <SectionCard><TB label="Pay & Benefits Opinion" value={r.pay_benefits_opinion} /></SectionCard>
-        <SectionCard><TB label="Improvement Suggestions" value={r.improvement_suggestions} /></SectionCard>
-        <SectionCard><TB label="Additional Comments" value={r.additional_comments} /></SectionCard>
-        <SectionCard><TB label="Dismissal Details" value={r.dismissal_details} /></SectionCard>
-        <SectionCard><Sigs items={[
-          { label: `Employee (${r.employee_name || 'Employee'})`, signed: !!r.employee_sig, date: r.employee_sig_date },
-          { label: `Interviewer (${r.interviewer_name || 'Interviewer'})`, signed: !!r.interviewer_sig, date: r.interviewer_date },
-        ]} /></SectionCard>
+        {(() => {
+          const exitDept = normalizeText(r.department || r.employee_department || '');
+          const scopedSigners = applicantSignersByDept[exitDept] || null;
+          const scopedHrName = String(scopedSigners?.hr_admin?.full_name || '').trim();
+          const resolvedInterviewerName = r.interviewer_name || scopedHrName || 'HR';
+
+          return (
+            <>
+              <HeroCard
+                eyebrow="Exit Interview"
+                title={`Exit Interview — ${r.employee_name || 'Employee'}`}
+                meta={`${r.department || r.employee_department || 'No department'}${r.interview_date ? ` • Interview: ${r.interview_date}` : ''}`}
+              />
+              <SectionCard title="Employee Information">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <F label="Employee" value={r.employee_name} />
+                  <F label="Department" value={r.department || r.employee_department} />
+                  <F label="Starting Position" value={r.starting_position} />
+                  <F label="Ending Position" value={r.ending_position} />
+                  <F label="Interview Date" value={r.interview_date} />
+                  <F label="Termination Date" value={r.termination_date} />
+                  <F label="Salary" value={r.salary} />
+                  <F label="Hire Date" value={r.hire_date} />
+                </div>
+              </SectionCard>
+              <SectionCard title="Interview Details">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <F label="Interviewer" value={resolvedInterviewerName} />
+                  <F label="Supervisor" value={r.supervisor} />
+                  <F label="Reasons for Leaving" value={r.reasons} />
+                  <F label="Would Recommend" value={r.would_recommend} />
+                </div>
+              </SectionCard>
+              <SectionCard><TB label="What did you like most about working here?" value={r.liked_most} /></SectionCard>
+              <SectionCard><TB label="What did you like least about working here?" value={r.liked_least} /></SectionCard>
+              <SectionCard><TB label="Pay & Benefits Opinion" value={r.pay_benefits_opinion} /></SectionCard>
+              <SectionCard><TB label="Improvement Suggestions" value={r.improvement_suggestions} /></SectionCard>
+              <SectionCard><TB label="Additional Comments" value={r.additional_comments} /></SectionCard>
+              <SectionCard><TB label="Dismissal Details" value={r.dismissal_details} /></SectionCard>
+              <SectionCard title="Signature Details">
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+                    <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Employee</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{r.employee_name || '—'}</p>
+                    <p className={`mt-2 text-xs font-semibold ${!!r.employee_sig ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {!!r.employee_sig ? `✓ Signed on ${r.employee_sig_date || '—'}` : 'Pending'}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+                    <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Interviewer</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{resolvedInterviewerName || '—'}</p>
+                    <p className={`mt-2 text-xs font-semibold ${!!r.interviewer_sig ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {!!r.interviewer_sig ? `✓ Signed on ${r.interviewer_date || '—'}` : 'Pending'}
+                    </p>
+                  </div>
+                </div>
+              </SectionCard>
+            </>
+          );
+        })()}
       </ViewShell>
     );
 
@@ -1864,12 +1889,38 @@ export const VerificationOfReview = () => {
           } />
         </SectionCard>
         <SectionCard><TB label="Remarks" value={r.remarks} /></SectionCard>
-        <SectionCard><Sigs items={[
-          { label: `Turned Over By (${r.turnover_by_name || 'Not assigned'})`, signed: !!r.turnover_by_sig, date: r.turnover_by_date },
-          { label: `Noted By (${r.noted_by_name || 'Not assigned'})`, signed: !!r.noted_by_sig, date: r.noted_by_date },
-          { label: `Received By (${r.received_by_name || 'Not assigned'})`, signed: !!r.received_by_sig, date: r.received_by_date },
-          { label: `Audited By (${r.audited_by_name || 'Not assigned'})`, signed: !!r.audited_by_sig, date: r.audited_by_date },
-        ]} /></SectionCard>
+        <SectionCard title="Signature Details">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+              <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Turned Over By</p>
+              <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{r.turnover_by_name || '—'}</p>
+              <p className={`mt-2 text-xs font-semibold ${!!r.turnover_by_sig ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                {!!r.turnover_by_sig ? `✓ Signed on ${r.turnover_by_date || '—'}` : 'Pending'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+              <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Noted By</p>
+              <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{r.noted_by_name || '—'}</p>
+              <p className={`mt-2 text-xs font-semibold ${!!r.noted_by_sig ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                {!!r.noted_by_sig ? `✓ Signed on ${r.noted_by_date || '—'}` : 'Pending'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+              <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Received By</p>
+              <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{r.received_by_name || '—'}</p>
+              <p className={`mt-2 text-xs font-semibold ${!!r.received_by_sig ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                {!!r.received_by_sig ? `✓ Signed on ${r.received_by_date || '—'}` : 'Pending'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+              <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Audited By</p>
+              <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{r.audited_by_name || '—'}</p>
+              <p className={`mt-2 text-xs font-semibold ${!!r.audited_by_sig ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                {!!r.audited_by_sig ? `✓ Signed on ${r.audited_by_date || '—'}` : 'Pending'}
+              </p>
+            </div>
+          </div>
+        </SectionCard>
       </ViewShell>
     );
 
