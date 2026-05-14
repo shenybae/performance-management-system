@@ -121,6 +121,30 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
     return exactDepartmentSupervisor || departmentSupervisorOptions[0];
   }, [departmentSupervisorOptions]);
 
+  const propertyTurnoverByName = String(departmentSupervisor?.value || '').trim();
+  const propertyNotedByName = currentHrName;
+  const propertyAuditedByName = departmentManagerName;
+
+  useEffect(() => {
+    setPropForm((prev) => {
+      const receivedByName = prev.employee_name.trim();
+      return {
+        ...prev,
+        turnover_by_name: propertyTurnoverByName,
+        noted_by_name: propertyNotedByName,
+        received_by_name: receivedByName,
+        audited_by_name: propertyAuditedByName,
+      };
+    });
+  }, [propertyTurnoverByName, propertyNotedByName, propertyAuditedByName]);
+
+  useEffect(() => {
+    setPropForm((prev) => ({
+      ...prev,
+      received_by_name: prev.employee_name.trim(),
+    }));
+  }, [propForm.employee_name]);
+
   useEffect(() => {
     const preferredSupervisor = String(departmentSupervisor?.value || '');
     if (preferredSupervisor) {
@@ -167,10 +191,10 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
   const resetPropForm = () => setPropForm({
     employee_name: '', position_dept: scopedDept, date_prepared: '',
     items: [{ ...emptyPropRow }],
-    turnover_by_name: '', turnover_by_date: '', turnover_by_sig: '',
-    noted_by_name: '', noted_by_date: '', noted_by_sig: '',
+    turnover_by_name: propertyTurnoverByName, turnover_by_date: '', turnover_by_sig: '',
+    noted_by_name: propertyNotedByName, noted_by_date: '', noted_by_sig: '',
     received_by_name: '', received_by_date: '', received_by_sig: '',
-    audited_by_name: '', audited_by_date: '', audited_by_sig: '',
+    audited_by_name: propertyAuditedByName, audited_by_date: '', audited_by_sig: '',
   });
 
   const submitProperty = async () => {
@@ -244,10 +268,10 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
           position_dept: cleaned.position_dept,
           date_prepared: cleaned.date_prepared,
           items: JSON.stringify(cleaned.items),
-          turnover_by_name: null, turnover_by_date: null, turnover_by_sig: null,
-          noted_by_name: null, noted_by_date: null, noted_by_sig: null,
-          received_by_name: null, received_by_date: null, received_by_sig: null,
-          audited_by_name: departmentManagerName || null, audited_by_date: null, audited_by_sig: null,
+          turnover_by_name: propertyTurnoverByName || null, turnover_by_date: null, turnover_by_sig: null,
+          noted_by_name: propertyNotedByName || null, noted_by_date: null, noted_by_sig: null,
+          received_by_name: cleaned.employee_name || null, received_by_date: null, received_by_sig: null,
+          audited_by_name: propertyAuditedByName || null, audited_by_date: null, audited_by_sig: null,
         })
       });
       if (res.ok) {
