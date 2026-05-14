@@ -53,6 +53,7 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
   const [propertyRecords, setPropertyRecords] = useState<any[]>([]);
   const [expandedOffboarding, setExpandedOffboarding] = useState<number | null>(null);
   const [viewPropertyRecord, setViewPropertyRecord] = useState<any | null>(null);
+  const [viewExitInterview, setViewExitInterview] = useState<any | null>(null);
   const [propSearch, setPropSearch] = useState('');
   const [offForm, setOffForm] = useState({ employee_name: '', last_day: '', reason: '' });
   const emptyItem = { property_no: '', asset_category: '', brand: '', description: '', serial_no: '', uom_qty: 1, dr_si_no: '', amount: '', remarks: '' };
@@ -420,6 +421,13 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
   };
 
   const printExitInterview = async (rec: any) => {
+    const missingSigners = [] as string[];
+    if (!rec.employee_sig) missingSigners.push('Employee');
+    if (!rec.interviewer_sig) missingSigners.push('Interviewer');
+    if (missingSigners.length) {
+      window.notify?.(`Cannot export PDF yet. Pending signatures: ${missingSigners.join(', ')}`, 'error');
+      return;
+    }
     if (!(await appConfirm('Export this exit interview as PDF?', { title: 'Export Exit Interview PDF', confirmText: 'Export', icon: 'export' }))) return;
     const ratings: Record<string, number> = (() => { try { return JSON.parse(rec.satisfaction_ratings || '{}'); } catch { return {}; } })();
     const ratingLabels: Record<string, string> = {
@@ -940,8 +948,8 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                         <td className="py-3 px-4 text-slate-500 dark:text-slate-400 text-xs max-w-[200px] truncate">{ei.reasons}</td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
-                            <button onClick={() => setExpandedExit(isExpanded ? null : ei.id)} className="text-blue-500 hover:text-blue-700" title="View"><Eye size={15} /></button>
-                            <button onClick={() => printExitInterview(ei)} className="text-blue-500 hover:text-blue-700" title="Export PDF"><FileText size={15} /></button>
+                            <button onClick={() => setViewExitInterview(ei)} className="text-blue-500 hover:text-blue-700" title="View"><Eye size={15} /></button>
+                            <button onClick={() => printExitInterview(ei)} className={`text-blue-500 hover:text-blue-700 ${!ei.employee_sig || !ei.interviewer_sig ? 'opacity-50 pointer-events-none' : ''}`} title={!ei.employee_sig || !ei.interviewer_sig ? 'Exit interview must be signed before exporting' : 'Export PDF'}><FileText size={15} /></button>
                             <button onClick={() => deleteExitInterview(ei.id)} className="text-red-500 hover:text-red-600 p-1 rounded" title="Archive"><Archive size={15} /></button>
                           </div>
                         </td>
@@ -1017,6 +1025,79 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
             </table>
           </div>
       </Card>
+
+      {/* Exit Interview View Modal */}
+      <Modal
+        open={!!viewExitInterview}
+        title={`Exit Interview${viewExitInterview?.employee_name ? ` - ${viewExitInterview.employee_name}` : ''}`}
+        onClose={() => setViewExitInterview(null)}
+        maxWidthClassName="max-w-6xl"
+      >
+        {viewExitInterview && (() => {
+          const rec = viewExitInterview;
+          const ratings: Record<string, number> = (() => { try { return JSON.parse(rec.satisfaction_ratings || '{}'); } catch { return {}; } })();
+          const missingSigners = [] as string[];
+          if (!rec.employee_sig) missingSigners.push('Employee');
+          if (!rec.interviewer_sig) missingSigners.push('Interviewer');
+
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Employee</span><span className="text-slate-700 dark:text-slate-200">{rec.employee_name || '—'}</span></div>
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Department</span><span className="text-slate-700 dark:text-slate-200">{rec.department || '—'}</span></div>
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Interview Date</span><span className="text-slate-700 dark:text-slate-200">{rec.interview_date || '—'}</span></div>
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Supervisor</span><span className="text-slate-700 dark:text-slate-200">{rec.supervisor || '—'}</span></div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
+                <div><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Liked Best</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{rec.liked_most || '—'}</p></div>
+                <div><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Liked Least</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{rec.liked_least || '—'}</p></div>
+                {rec.pay_benefits_opinion && <div className="col-span-2"><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Pay & Benefits</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{rec.pay_benefits_opinion}</p></div>}
+              </div>
+
+              {Object.keys(ratings).length > 0 && (
+                <div>
+                  <span className="font-bold text-teal-deep dark:text-teal-green block mb-2 text-xs">Satisfaction Ratings</span>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                    {Object.entries(ratings).map(([k, v]) => (
+                      <div key={k} className="flex items-center justify-between">
+                        <span className="text-slate-600 dark:text-slate-300 capitalize">{k.replace(/_/g, ' ')}</span>
+                        <div className="flex gap-0.5">{[1,2,3,4,5].map(n => <span key={n} className={`w-4 h-4 rounded-full text-[9px] flex items-center justify-center font-bold ${n <= v ? 'bg-teal-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}>{n}</span>)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-6 mt-4">
+                <div className="text-center">
+                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Employee Signature</div>
+                  {rec.employee_sig ? <img src={rec.employee_sig} alt="Employee sig" className="h-12 mx-auto" /> : <div className="h-12 border-b border-slate-300 dark:border-slate-600" />}
+                  <div className="text-xs text-slate-700 dark:text-slate-200 mt-1">{rec.employee_name || '—'}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Interviewer</div>
+                  {rec.interviewer_sig ? <img src={rec.interviewer_sig} alt="Interviewer sig" className="h-12 mx-auto" /> : <div className="h-12 border-b border-slate-300 dark:border-slate-600" />}
+                  <div className="text-xs text-slate-700 dark:text-slate-200 mt-1">{rec.interviewer_name || '—'}</div>
+                  <div className="text-[10px] text-slate-400">{rec.interviewer_date || ''}</div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button onClick={() => setViewExitInterview(null)} className="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold">Close</button>
+                <button
+                  onClick={() => printExitInterview(rec)}
+                  disabled={!rec.employee_sig || !rec.interviewer_sig}
+                  title={!rec.employee_sig || !rec.interviewer_sig ? `Cannot export; pending signatures: ${missingSigners.join(', ')}` : 'Export PDF'}
+                  className={`${!rec.employee_sig || !rec.interviewer_sig ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-teal-deep text-white hover:bg-teal-green'} px-4 py-2 rounded-lg text-sm font-bold`}
+                >
+                  Export PDF
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
 
       {/* Property Accountability Records */}
       <Card>
