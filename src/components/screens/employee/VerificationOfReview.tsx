@@ -1683,57 +1683,67 @@ export const VerificationOfReview = () => {
           const exitDept = normalizeText(r.department || r.employee_department || '');
           const scopedSigners = applicantSignersByDept[exitDept] || null;
           const scopedHrName = String(scopedSigners?.hr_admin?.full_name || '').trim();
-          const resolvedInterviewerName = r.interviewer_name || scopedHrName || 'HR';
+          const interviewerName = r.interviewer_name || scopedHrName || '—';
+          const ratings: Record<string, number> = (() => {
+            try { return JSON.parse(r.satisfaction_ratings || '{}'); } catch { return {}; }
+          })();
 
           return (
             <>
               <HeroCard
                 eyebrow="Exit Interview"
-                title={`Exit Interview — ${r.employee_name || 'Employee'}`}
+                title={`Exit Interview - ${r.employee_name || 'Employee'}`}
                 meta={`${r.department || r.employee_department || 'No department'}${r.interview_date ? ` • Interview: ${r.interview_date}` : ''}`}
               />
-              <SectionCard title="Employee Information">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <F label="Employee" value={r.employee_name} />
-                  <F label="Department" value={r.department || r.employee_department} />
-                  <F label="Starting Position" value={r.starting_position} />
-                  <F label="Ending Position" value={r.ending_position} />
-                  <F label="Interview Date" value={r.interview_date} />
-                  <F label="Termination Date" value={r.termination_date} />
-                  <F label="Salary" value={r.salary} />
-                  <F label="Hire Date" value={r.hire_date} />
+
+              <SectionCard>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Employee</span><span className="text-slate-700 dark:text-slate-200">{r.employee_name || '—'}</span></div>
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Department</span><span className="text-slate-700 dark:text-slate-200">{r.department || r.employee_department || '—'}</span></div>
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Interview Date</span><span className="text-slate-700 dark:text-slate-200">{r.interview_date || '—'}</span></div>
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"><span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Supervisor</span><span className="text-slate-700 dark:text-slate-200">{r.supervisor || '—'}</span></div>
                 </div>
               </SectionCard>
+
               <SectionCard title="Interview Details">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <F label="Interviewer" value={resolvedInterviewerName} />
-                  <F label="Supervisor" value={r.supervisor} />
-                  <F label="Reasons for Leaving" value={r.reasons} />
-                  <F label="Would Recommend" value={r.would_recommend} />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
+                  <div><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Reasons for Leaving</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{r.reasons || '—'}</p></div>
+                  <div><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Would Recommend</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{r.would_recommend || '—'}</p></div>
+                  <div><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Liked Most</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{r.liked_most || '—'}</p></div>
+                  <div><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Liked Least</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{r.liked_least || '—'}</p></div>
+                  {r.pay_benefits_opinion && <div className="lg:col-span-2"><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Pay & Benefits</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{r.pay_benefits_opinion}</p></div>}
+                  {r.improvement_suggestions && <div className="lg:col-span-2"><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Improvement Suggestions</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{r.improvement_suggestions}</p></div>}
+                  {r.additional_comments && <div className="lg:col-span-2"><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Additional Comments</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{r.additional_comments}</p></div>}
+                  {r.dismissal_details && <div className="lg:col-span-2"><span className="font-bold text-teal-deep dark:text-teal-green block mb-1">Dismissal Details</span><p className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">{r.dismissal_details}</p></div>}
                 </div>
               </SectionCard>
-              <SectionCard><TB label="What did you like most about working here?" value={r.liked_most} /></SectionCard>
-              <SectionCard><TB label="What did you like least about working here?" value={r.liked_least} /></SectionCard>
-              <SectionCard><TB label="Pay & Benefits Opinion" value={r.pay_benefits_opinion} /></SectionCard>
-              <SectionCard><TB label="Improvement Suggestions" value={r.improvement_suggestions} /></SectionCard>
-              <SectionCard><TB label="Additional Comments" value={r.additional_comments} /></SectionCard>
-              <SectionCard><TB label="Dismissal Details" value={r.dismissal_details} /></SectionCard>
+
+              {Object.keys(ratings).length > 0 && (
+                <SectionCard title="Satisfaction Ratings">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                    {Object.entries(ratings).map(([k, v]) => (
+                      <div key={k} className="flex items-center justify-between">
+                        <span className="text-slate-600 dark:text-slate-300 capitalize">{k.replace(/_/g, ' ')}</span>
+                        <div className="flex gap-0.5">{[1,2,3,4,5].map((n) => <span key={n} className={`w-4 h-4 rounded-full text-[9px] flex items-center justify-center font-bold ${n <= v ? 'bg-teal-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}>{n}</span>)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </SectionCard>
+              )}
+
               <SectionCard title="Signature Details">
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
-                    <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Employee</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{r.employee_name || '—'}</p>
-                    <p className={`mt-2 text-xs font-semibold ${!!r.employee_sig ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                      {!!r.employee_sig ? `✓ Signed on ${r.employee_sig_date || '—'}` : 'Pending'}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
-                    <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Interviewer</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{resolvedInterviewerName || '—'}</p>
-                    <p className={`mt-2 text-xs font-semibold ${!!r.interviewer_sig ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                      {!!r.interviewer_sig ? `✓ Signed on ${r.interviewer_date || '—'}` : 'Pending'}
-                    </p>
-                  </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {[
+                    { label: 'Employee', name: r.employee_name, sig: r.employee_sig, date: r.employee_sig_date || r.interview_date },
+                    { label: 'Interviewer', name: interviewerName, sig: r.interviewer_sig, date: r.interviewer_date },
+                  ].map((sig) => (
+                    <div key={sig.label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-center">
+                      <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{sig.label}</div>
+                      {sig.sig ? <img src={sig.sig} alt={`${sig.label} signature`} className="h-12 mx-auto" /> : <div className="h-12 border-b border-slate-300 dark:border-slate-600" />}
+                      <div className="text-xs text-slate-700 dark:text-slate-200 mt-1">{sig.name || '—'}</div>
+                      <div className="text-[10px] text-slate-400">{sig.date ? `Signed on ${sig.date}` : 'Pending'}</div>
+                    </div>
+                  ))}
                 </div>
               </SectionCard>
             </>
@@ -1854,73 +1864,99 @@ export const VerificationOfReview = () => {
 
     if (type === 'property') return (
       <ViewShell>
-        <HeroCard
-          eyebrow="Property Accountability"
-          title={`Property — ${r.employee_name || 'Employee'}`}
-          meta={`${r.position_dept || 'No department'}${r.date_prepared || r.created_at?.split('T')[0] ? ` • Issued: ${r.date_prepared || r.created_at?.split('T')[0]}` : ''}`}
-        />
-        <SectionCard title="Property Information">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <F label="Employee" value={r.employee_name} />
-            <F label="Department" value={r.position_dept} />
-            <F label="Date Prepared" value={r.date_prepared || r.created_at?.split('T')[0]} />
-            <F label="Brand" value={r.brand} />
-            <F label="Serial No." value={r.serial_no} />
-            <F label="Quantity" value={r.uom_qty} />
-          </div>
-        </SectionCard>
-        <SectionCard>
-          <TB label="Items / Description" value={
-            (() => {
-              if (!r.items) return null;
-              try {
-                const parsed = typeof r.items === 'string' ? JSON.parse(r.items) : r.items;
-                if (Array.isArray(parsed)) {
-                  return parsed.map((item: any) => {
-                    if (typeof item === 'string') return item;
-                    return Object.entries(item).map(([k, v]) => `${k}: ${v}`).join('\n');
-                  }).join('\n\n');
-                }
-                return typeof parsed === 'object' ? JSON.stringify(parsed, null, 2) : String(r.items);
-              } catch {
-                return r.items;
-              }
-            })()
-          } />
-        </SectionCard>
-        <SectionCard><TB label="Remarks" value={r.remarks} /></SectionCard>
-        <SectionCard title="Signature Details">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
-              <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Turned Over By</p>
-              <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{r.turnover_by_name || '—'}</p>
-              <p className={`mt-2 text-xs font-semibold ${!!r.turnover_by_sig ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                {!!r.turnover_by_sig ? `✓ Signed on ${r.turnover_by_date || '—'}` : 'Pending'}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
-              <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Noted By</p>
-              <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{r.noted_by_name || '—'}</p>
-              <p className={`mt-2 text-xs font-semibold ${!!r.noted_by_sig ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                {!!r.noted_by_sig ? `✓ Signed on ${r.noted_by_date || '—'}` : 'Pending'}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
-              <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Received By</p>
-              <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{r.received_by_name || '—'}</p>
-              <p className={`mt-2 text-xs font-semibold ${!!r.received_by_sig ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                {!!r.received_by_sig ? `✓ Signed on ${r.received_by_date || '—'}` : 'Pending'}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
-              <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Audited By</p>
-              <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{r.audited_by_name || '—'}</p>
-              <p className={`mt-2 text-xs font-semibold ${!!r.audited_by_sig ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                {!!r.audited_by_sig ? `✓ Signed on ${r.audited_by_date || '—'}` : 'Pending'}
-              </p>
-            </div>
-          </div>
-        </SectionCard>
+        {(() => {
+          const items = (() => {
+            try {
+              const parsed = typeof r.items === 'string' ? JSON.parse(r.items || '[]') : (r.items || []);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [] as any[];
+            }
+          })();
+          const total = items.reduce((sum, item) => sum + (Number.parseFloat(item?.amount) || 0), 0);
+
+          return (
+            <>
+              <HeroCard
+                eyebrow="Property Accountability"
+                title={`Property Accountability - ${r.employee_name || 'Employee'}`}
+                meta={`${r.position_dept || 'No department'}${r.date_prepared ? ` • Issued: ${r.date_prepared}` : ''}`}
+              />
+
+              <SectionCard>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                    <span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Employee</span>
+                    <span className="text-slate-700 dark:text-slate-200">{r.employee_name || '—'}</span>
+                  </div>
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                    <span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Position / Dept.</span>
+                    <span className="text-slate-700 dark:text-slate-200">{r.position_dept || '—'}</span>
+                  </div>
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                    <span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Date Prepared</span>
+                    <span className="text-slate-700 dark:text-slate-200">{r.date_prepared || r.created_at?.split('T')[0] || '—'}</span>
+                  </div>
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                    <span className="font-bold text-slate-500 uppercase block text-[10px] mb-1">Total Amount</span>
+                    <span className="text-slate-700 dark:text-slate-200 font-mono">₱{total.toLocaleString('en', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              </SectionCard>
+
+              <SectionCard title="Property Items">
+                <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 dark:bg-slate-800">
+                        {['Property No.','Asset Category','Brand','Description','Serial No.','UOM/QTY','DR/SI No.','Amount','Remarks'].map((header) => (
+                          <th key={header} className="py-2 px-2 border-b border-slate-200 dark:border-slate-700">{header}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.length > 0 ? items.map((item: any, index: number) => (
+                        <tr key={index} className="border-b border-slate-100 dark:border-slate-800">
+                          <td className="py-1.5 px-2">{item.property_number || '—'}</td>
+                          <td className="py-1.5 px-2">{item.asset_category || '—'}</td>
+                          <td className="py-1.5 px-2">{item.brand || '—'}</td>
+                          <td className="py-1.5 px-2">{item.description || '—'}</td>
+                          <td className="py-1.5 px-2">{item.serial_no || '—'}</td>
+                          <td className="py-1.5 px-2">{item.uom_qty || '—'}</td>
+                          <td className="py-1.5 px-2">{item.dr_si_no || '—'}</td>
+                          <td className="py-1.5 px-2 font-mono">{item.amount ? `₱${Number.parseFloat(item.amount).toLocaleString('en', { minimumFractionDigits: 2 })}` : '—'}</td>
+                          <td className="py-1.5 px-2">{item.remarks || '—'}</td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td className="py-3 px-2 text-slate-400" colSpan={9}>No property items available.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </SectionCard>
+
+              <SectionCard title="Signature Details">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Turned Over By', name: r.turnover_by_name, sig: r.turnover_by_sig, date: r.turnover_by_date },
+                    { label: 'Noted By', name: r.noted_by_name, sig: r.noted_by_sig, date: r.noted_by_date },
+                    { label: 'Received By', name: r.received_by_name, sig: r.received_by_sig, date: r.received_by_date },
+                    { label: 'Audited By', name: r.audited_by_name, sig: r.audited_by_sig, date: r.audited_by_date },
+                  ].map((sig) => (
+                    <div key={sig.label} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-center">
+                      <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">{sig.label}</div>
+                      {sig.sig ? <img src={sig.sig} alt={`${sig.label} signature`} className="h-10 mx-auto" /> : <div className="h-10 border-b border-slate-300 dark:border-slate-600" />}
+                      <div className="text-xs text-slate-700 dark:text-slate-200 mt-1">{sig.name || '—'}</div>
+                      <div className="text-[10px] text-slate-400">{sig.date ? `Signed on ${sig.date}` : 'Pending'}</div>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+            </>
+          );
+        })()}
       </ViewShell>
     );
 
