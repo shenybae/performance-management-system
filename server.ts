@@ -1704,6 +1704,24 @@ async function initDb() {
       } catch {}
     }
 
+    // Safe migrations for signer user IDs in property accountability
+    const signerUserIdMigrations = [
+      'ALTER TABLE property_accountability ADD COLUMN turnover_by_user_id INTEGER',
+      'ALTER TABLE property_accountability ADD COLUMN noted_by_user_id INTEGER',
+      'ALTER TABLE property_accountability ADD COLUMN received_by_user_id INTEGER',
+      'ALTER TABLE property_accountability ADD COLUMN audited_by_user_id INTEGER',
+      'ALTER TABLE exit_interviews ADD COLUMN employee_user_id INTEGER',
+      'ALTER TABLE exit_interviews ADD COLUMN interviewer_user_id INTEGER',
+    ];
+    for (const sql of signerUserIdMigrations) {
+      try {
+        if (usePostgres && pgPool) {
+          const c = await pgPool.connect();
+          try { await c.query(sql); } catch {} finally { c.release(); }
+        } else { sqliteDb.exec(sql); }
+      } catch {}
+    }
+
     // Safe migrations for department scoping on plan tables
     const departmentPlanMigrations = [
       'ALTER TABLE pip_plans ADD COLUMN department TEXT',
@@ -7232,9 +7250,12 @@ ${relevantGoalIdsSql}
   });
 
   // ---- Property Accountability CRUD ----
-  app.get("/api/property_accountability", async (req, res) => {
+  app.get("/api/property_accountability", authenticateToken, async (req, res) => {
     try {
+      const actor: any = (req as any).user || {};
       const qName = (req.query.employee_name || '').toString();
+      const userId = Number(actor.id || 0);
+
       if (qName) {
         // If an employee name query param was provided, attempt to return rows
         // that belong to that employee by id OR where the saved employee_name
@@ -7248,7 +7269,22 @@ ${relevantGoalIdsSql}
         res.json(rows);
         return;
       }
-      const rows = await query("SELECT * FROM property_accountability ORDER BY created_at DESC");
+
+      // For role-based filtering (Signature Queue):
+      // HR: all records (for overview); managers/supervisors/employees: only records where they are a signer
+      if (actor.role === 'HR') {
+        const rows = await query("SELECT * FROM property_accountability WHERE deleted_at IS NULL ORDER BY created_at DESC");
+        return res.json(rows);
+      }
+
+      // Non-HR users: return only records where they are assigned as a signer
+      const rows = await query(
+        `SELECT * FROM property_accountability 
+         WHERE deleted_at IS NULL 
+         AND (turnover_by_user_id = ? OR noted_by_user_id = ? OR received_by_user_id = ? OR audited_by_user_id = ?)
+         ORDER BY created_at DESC`,
+        [userId, userId, userId, userId]
+      );
       res.json(rows);
     } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
@@ -7256,10 +7292,10 @@ ${relevantGoalIdsSql}
   app.post("/api/property_accountability", authenticateToken, async (req, res) => {
     try {
       let { employee_id, employee_name, position_dept, date_prepared, items,
-        turnover_by_name, turnover_by_date, turnover_by_sig,
-        noted_by_name, noted_by_date, noted_by_sig,
-        received_by_name, received_by_date, received_by_sig,
-        audited_by_name, audited_by_date, audited_by_sig } = req.body;
+        turnover_by_name, turnover_by_date, turnover_by_sig, turnover_by_user_id,
+        noted_by_name, noted_by_date, noted_by_sig, noted_by_user_id,
+        received_by_name, received_by_date, received_by_sig, received_by_user_id,
+        audited_by_name, audited_by_date, audited_by_sig, audited_by_user_id } = req.body;
 
       // Resolve employee_id server-side when possible (handles cases where the
       // client didn't provide it or the name formatting differs slightly).
@@ -7287,17 +7323,17 @@ ${relevantGoalIdsSql}
       await query(`INSERT INTO property_accountability
         (employee_id, employee_name, position_dept, date_prepared, items, brand, serial_no, uom_qty,
          hr_owner_user_id,
-         turnover_by_name, turnover_by_date, turnover_by_sig,
-         noted_by_name, noted_by_date, noted_by_sig,
-         received_by_name, received_by_date, received_by_sig,
-         audited_by_name, audited_by_date, audited_by_sig)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         turnover_by_name, turnover_by_date, turnover_by_sig, turnover_by_user_id,
+         noted_by_name, noted_by_date, noted_by_sig, noted_by_user_id,
+         received_by_name, received_by_date, received_by_sig, received_by_user_id,
+         audited_by_name, audited_by_date, audited_by_sig, audited_by_user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [employee_id, employee_name, position_dept, date_prepared, items, brand, serial_no, uom_qty,
          hrOwnerUserId,
-         turnover_by_name, turnover_by_date, turnover_by_sig,
-         noted_by_name, noted_by_date, noted_by_sig,
-         received_by_name, received_by_date, received_by_sig,
-         audited_by_name, audited_by_date, audited_by_sig]);
+         turnover_by_name, turnover_by_date, turnover_by_sig, turnover_by_user_id || null,
+         noted_by_name, noted_by_date, noted_by_sig, noted_by_user_id || null,
+         received_by_name, received_by_date, received_by_sig, received_by_user_id || null,
+         audited_by_name, audited_by_date, audited_by_sig, audited_by_user_id || null]);
 
       // Record audit (who created the property accountability record)
       try {
@@ -8092,8 +8128,27 @@ ${relevantGoalIdsSql}
   });
 
   // ---- Exit Interviews CRUD ----
-  app.get("/api/exit_interviews", async (req, res) => {
-    try { const rows = await query("SELECT * FROM exit_interviews ORDER BY created_at DESC"); res.json(rows); } catch (err) { res.status(500).json({ error: "Database error" }); }
+  app.get("/api/exit_interviews", authenticateToken, async (req, res) => {
+    try {
+      const actor: any = (req as any).user || {};
+      const userId = Number(actor.id || 0);
+
+      // HR sees all records; others see only records where they are a signer
+      if (actor.role === 'HR') {
+        const rows = await query("SELECT * FROM exit_interviews WHERE deleted_at IS NULL ORDER BY created_at DESC");
+        return res.json(rows);
+      }
+
+      // Non-HR users: return only exit interviews where they are the employee or interviewer
+      const rows = await query(
+        `SELECT * FROM exit_interviews 
+         WHERE deleted_at IS NULL 
+         AND (employee_user_id = ? OR interviewer_user_id = ?)
+         ORDER BY created_at DESC`,
+        [userId, userId]
+      );
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
   });
   app.post("/api/exit_interviews", authenticateToken, async (req, res) => {
     try {
@@ -8102,14 +8157,20 @@ ${relevantGoalIdsSql}
       let supervisorUserId: number | null = null;
       try { supervisorUserId = await resolveUserIdByFullName(String(b.supervisor || '')); } catch (e) { supervisorUserId = null; }
 
-      const insertSql = `INSERT INTO exit_interviews (offboarding_id, employee_name, department, supervisor, reasons, liked_most, liked_least, interview_date, ssn, hire_date, termination_date, starting_position, ending_position, salary, pay_benefits_opinion, satisfaction_ratings, would_recommend, improvement_suggestions, additional_comments, employee_sig, interviewer_name, interviewer_sig, interviewer_date, dismissal_details, supervisor_user_id, hr_owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      const insertSql = `INSERT INTO exit_interviews (offboarding_id, employee_name, department, supervisor, reasons, liked_most, liked_least, interview_date, ssn, hire_date, termination_date, starting_position, ending_position, salary, pay_benefits_opinion, satisfaction_ratings, would_recommend, improvement_suggestions, additional_comments, employee_sig, interviewer_name, interviewer_sig, interviewer_date, dismissal_details, supervisor_user_id, hr_owner_user_id, employee_user_id, interviewer_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      
+      let employeeUserId: number | null = null;
+      let interviewerUserId: number | null = null;
+      try { employeeUserId = b.employee_user_id || null; } catch (e) { employeeUserId = null; }
+      try { interviewerUserId = b.interviewer_user_id || null; } catch (e) { interviewerUserId = null; }
+      
       const insertParams = [b.offboarding_id || null, b.employee_name, b.department, b.supervisor, b.reasons, b.liked_most, b.liked_least, b.interview_date,
          b.ssn || null, b.hire_date || null, b.termination_date || null, b.starting_position || null, b.ending_position || null,
          b.salary || null, b.pay_benefits_opinion || null,
          typeof b.satisfaction_ratings === 'object' ? JSON.stringify(b.satisfaction_ratings) : (b.satisfaction_ratings || null),
          b.would_recommend || null, b.improvement_suggestions || null, b.additional_comments || null,
          b.employee_sig || null, b.interviewer_name || null, b.interviewer_sig || null, b.interviewer_date || null, b.dismissal_details || null,
-         supervisorUserId || null, hrOwnerUserId || null];
+         supervisorUserId || null, hrOwnerUserId || null, employeeUserId || null, interviewerUserId || null];
 
       try {
         await query(insertSql, insertParams);

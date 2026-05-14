@@ -125,6 +125,19 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
   const propertyNotedByName = currentHrName;
   const propertyAuditedByName = departmentManagerName;
 
+  // Helper to resolve user IDs for signers
+  const getUserIdByName = (name: string | null | undefined): number | null => {
+    if (!name) return null;
+    const user = (Array.isArray(users) ? users : []).find((u: any) => 
+      (u.full_name || u.name || u.username || '').trim().toLowerCase() === (name || '').trim().toLowerCase()
+    );
+    return user?.id ? Number(user.id) : null;
+  };
+
+  const propertyTurnoverByUserId = getUserIdByName(propertyTurnoverByName);
+  const propertyNotedByUserId = getUserIdByName(propertyNotedByName);
+  const propertyAuditedByUserId = departmentManagerUser?.id ? Number(departmentManagerUser.id) : null;
+
   useEffect(() => {
     setPropForm((prev) => {
       const receivedByName = prev.employee_name.trim();
@@ -268,10 +281,10 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
           position_dept: cleaned.position_dept,
           date_prepared: cleaned.date_prepared,
           items: JSON.stringify(cleaned.items),
-          turnover_by_name: propertyTurnoverByName || null, turnover_by_date: null, turnover_by_sig: null,
-          noted_by_name: propertyNotedByName || null, noted_by_date: null, noted_by_sig: null,
-          received_by_name: cleaned.employee_name || null, received_by_date: null, received_by_sig: null,
-          audited_by_name: propertyAuditedByName || null, audited_by_date: null, audited_by_sig: null,
+          turnover_by_name: propertyTurnoverByName || null, turnover_by_date: null, turnover_by_sig: null, turnover_by_user_id: propertyTurnoverByUserId,
+          noted_by_name: propertyNotedByName || null, noted_by_date: null, noted_by_sig: null, noted_by_user_id: propertyNotedByUserId,
+          received_by_name: cleaned.employee_name || null, received_by_date: null, received_by_sig: null, received_by_user_id: null,
+          audited_by_name: propertyAuditedByName || null, audited_by_date: null, audited_by_sig: null, audited_by_user_id: propertyAuditedByUserId,
         })
       });
       if (res.ok) {
@@ -408,6 +421,15 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
       return;
     }
     try {
+      // Get employee user ID
+      const employeeRecord = (Array.isArray(scopedEmployees) ? scopedEmployees : []).find((e: any) =>
+        (e.name || '').trim().toLowerCase() === (cleaned.employee_name || '').trim().toLowerCase()
+      );
+      const employeeUserId = employeeRecord?.employee_id || employeeRecord?.id ? Number(employeeRecord.employee_id || employeeRecord.id) : null;
+      
+      // Get interviewer (current HR) user ID
+      const interviewerUserId = sessionUser?.id ? Number(sessionUser.id) : null;
+
       const res = await fetch('/api/exit_interviews', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({
         employee_name: cleaned.employee_name, department: cleaned.department, supervisor: cleaned.supervisor,
         interview_date: cleaned.interview_date, reasons: `${cleaned.reason_category}: ${cleaned.reason_details.join(', ')}`,
@@ -420,7 +442,9 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
         additional_comments: cleaned.additional_comments,
         employee_sig: null, interviewer_name: currentHrName || null,
         interviewer_sig: null, interviewer_date: null,
-        dismissal_details: cleaned.dismissal_details
+        dismissal_details: cleaned.dismissal_details,
+        employee_user_id: employeeUserId,
+        interviewer_user_id: interviewerUserId
       }) });
       if (!res.ok) {
         let message = 'Failed to save';
