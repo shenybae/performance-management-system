@@ -126,10 +126,17 @@ export const VerificationOfReview = () => {
 
   const userEmpId = Number(user?.employee_id || user?.id || 0);
   const userName = normalizeText(user?.employee_name || user?.full_name);
+  const userIdentityNames = [user?.full_name, user?.employee_name, user?.username, user?.email, user?.position]
+    .map((value) => normalizeText(value))
+    .filter(Boolean);
   const userIdentityKeys = [user?.employee_name, user?.full_name, user?.username, user?.email]
     .map((value) => normalizeText(value))
     .filter(Boolean);
   const userPosition = normalizeText(user?.position);
+  const matchesCurrentIdentity = (...values: any[]) => values.some((value) => {
+    const normalized = normalizeText(value);
+    return !!normalized && userIdentityNames.includes(normalized);
+  });
 
   const getRequisitionDeptKey = (record: any) => normalizeText(record?.department || record?.dept || record?.employee_department);
   const getRequisitionSignerFallbacks = (record: any) => requisitionSignersByDept[getRequisitionDeptKey(record)] || null;
@@ -834,10 +841,15 @@ export const VerificationOfReview = () => {
       .filter((p) => {
         // Must be in same department
         if (!sameDept(p)) return false;
-        // If user_id columns exist, check if current user is a signer
+        // If user_id columns exist, prefer them but still allow an exact signer-name match.
         if (p.noted_by_user_id !== null || p.turnover_by_user_id !== null || p.audited_by_user_id !== null) {
-          if (isHR) return p.noted_by_user_id === userId;
-          if (isManager || isSupervisor) return p.turnover_by_user_id === userId || p.audited_by_user_id === userId;
+          if (isHR) return p.noted_by_user_id === userId || matchesCurrentIdentity(p.noted_by_name);
+          if (isManager || isSupervisor) {
+            return p.turnover_by_user_id === userId
+              || p.audited_by_user_id === userId
+              || matchesCurrentIdentity(p.turnover_by_name)
+              || matchesCurrentIdentity(p.audited_by_name);
+          }
         }
         // For old records without user_ids, only allow in same department (already checked above)
         return true;
@@ -856,7 +868,7 @@ export const VerificationOfReview = () => {
         };
       })
       .filter(Boolean),
-    [propertyRecords, queueDept, userId, isHR, isManager, isSupervisor]
+    [propertyRecords, queueDept, userId, isHR, isManager, isSupervisor, userIdentityNames]
   );
 
   const pendingManagementExitInterviews = useMemo(
@@ -864,12 +876,12 @@ export const VerificationOfReview = () => {
       if (e.interviewer_sig) return false;
       // Must be in same department
       if (!sameDept(e)) return false;
-      // If interviewer_user_id exists, must match current user
-      if (e.interviewer_user_id !== null) return e.interviewer_user_id === userId;
+      // If interviewer_user_id exists, prefer it but still allow matching the visible interviewer name.
+      if (e.interviewer_user_id !== null) return e.interviewer_user_id === userId || matchesCurrentIdentity(e.interviewer_name);
       // For old records without user_ids, only allow in same department (already checked above)
-      return true;
+      return matchesCurrentIdentity(e.interviewer_name) || !e.interviewer_user_id;
     }),
-    [exitInterviews, queueDept, userId]
+    [exitInterviews, queueDept, userId, userIdentityNames]
   );
 
   const pendingManagementRequisitionStages = useMemo(
@@ -967,9 +979,9 @@ export const VerificationOfReview = () => {
         // Must be in same department
         if (!sameDept(p)) return false;
         // Check if HR user is assigned as signer (noted_by)
-        if (p.noted_by_user_id !== null) return p.noted_by_user_id === userId;
+        if (p.noted_by_user_id !== null) return p.noted_by_user_id === userId || matchesCurrentIdentity(p.noted_by_name);
         // Fallback for old records without user_ids
-        return !p.noted_by_sig;
+        return matchesCurrentIdentity(p.noted_by_name) || !p.noted_by_sig;
       })
       .map((p) => {
         const nextField = getNextPendingPropertyField(p);
@@ -985,7 +997,7 @@ export const VerificationOfReview = () => {
         };
       })
       .filter(Boolean),
-    [propertyRecords, queueDept, userId]
+    [propertyRecords, queueDept, userId, userIdentityNames]
   );
 
   const pendingHrExitInterviews = useMemo(
@@ -994,11 +1006,11 @@ export const VerificationOfReview = () => {
       // Must be in same department
       if (!sameDept(e)) return false;
       // Check if HR user is assigned as interviewer
-      if (e.interviewer_user_id !== null) return e.interviewer_user_id === userId;
+      if (e.interviewer_user_id !== null) return e.interviewer_user_id === userId || matchesCurrentIdentity(e.interviewer_name);
       // Fallback for old records without user_ids
-      return true;
+      return matchesCurrentIdentity(e.interviewer_name) || !e.interviewer_sig;
     }),
-    [exitInterviews, queueDept, userId]
+    [exitInterviews, queueDept, userId, userIdentityNames]
   );
 
   const roleSubtitle = isHR
