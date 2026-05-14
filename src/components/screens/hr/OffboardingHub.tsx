@@ -670,6 +670,16 @@ export const OffboardingHub = ({ employees = [], users = [] }: OffboardingHubPro
                     Signature fields (Turnover, Noted, Received, Audited) are completed after saving from the <span className="font-bold">Signature Queue</span>.
                   </p>
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className={labelCls}>Audited by (Department Manager)</label>
+                    <input type="text" value={departmentManagerName || 'Department manager not identified'} className={inputCls} readOnly />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Audited Department</label>
+                    <input type="text" value={scopedDept || '—'} className={inputCls} readOnly />
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
