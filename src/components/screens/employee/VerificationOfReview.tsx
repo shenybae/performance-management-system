@@ -70,6 +70,16 @@ export const VerificationOfReview = () => {
     setGenericSignModal(null);
   };
 
+  const resolveScopedDepartment = (value: any) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const stripped = raw
+      .replace(/\b(manager|supervisor|employee|leader|hr admin|hr)\b.*$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return stripped || raw;
+  };
+
   useEffect(() => {
     fetchAppraisals();
     fetchDisciplineRecords();
@@ -82,7 +92,7 @@ export const VerificationOfReview = () => {
   }, [isManagementSigner, isEmployee]);
 
   const normalizeText = (value: any) => String(value || '').trim().toLowerCase();
-  const queueDept = normalizeText(user?.dept);
+  const queueDept = normalizeText(resolveScopedDepartment(user?.department || user?.dept || user?.workspace_department || user?.workspaceDept || user?.dept_name));
   const userId = Number(user?.id || 0);
   const sameDept = (record: any) => {
     if (!queueDept) return true;
