@@ -7255,6 +7255,9 @@ ${relevantGoalIdsSql}
       const actor: any = (req as any).user || {};
       const qName = (req.query.employee_name || '').toString();
       const userId = Number(actor.id || 0);
+      const actorNames = [actor.full_name, actor.employee_name, actor.username, actor.position, actor.email]
+        .map((value) => String(value || '').trim().toLowerCase())
+        .filter(Boolean);
 
       if (qName) {
         // If an employee name query param was provided, attempt to return rows
@@ -7281,9 +7284,15 @@ ${relevantGoalIdsSql}
       const rows = await query(
         `SELECT * FROM property_accountability 
          WHERE deleted_at IS NULL 
-         AND (turnover_by_user_id = ? OR noted_by_user_id = ? OR received_by_user_id = ? OR audited_by_user_id = ?)
+         AND (
+           turnover_by_user_id = ? OR noted_by_user_id = ? OR received_by_user_id = ? OR audited_by_user_id = ?
+           OR LOWER(TRIM(COALESCE(turnover_by_name, ''))) IN (${actorNames.length ? actorNames.map(() => '?').join(', ') : "''"})
+           OR LOWER(TRIM(COALESCE(noted_by_name, ''))) IN (${actorNames.length ? actorNames.map(() => '?').join(', ') : "''"})
+           OR LOWER(TRIM(COALESCE(received_by_name, ''))) IN (${actorNames.length ? actorNames.map(() => '?').join(', ') : "''"})
+           OR LOWER(TRIM(COALESCE(audited_by_name, ''))) IN (${actorNames.length ? actorNames.map(() => '?').join(', ') : "''"})
+         )
          ORDER BY created_at DESC`,
-        [userId, userId, userId, userId]
+        [userId, userId, userId, userId, ...actorNames, ...actorNames, ...actorNames, ...actorNames]
       );
       res.json(rows);
     } catch (err) { res.status(500).json({ error: "Database error" }); }
@@ -8132,6 +8141,9 @@ ${relevantGoalIdsSql}
     try {
       const actor: any = (req as any).user || {};
       const userId = Number(actor.id || 0);
+      const actorNames = [actor.full_name, actor.employee_name, actor.username, actor.position, actor.email]
+        .map((value) => String(value || '').trim().toLowerCase())
+        .filter(Boolean);
 
       // HR sees all records; others see only records where they are a signer
       if (actor.role === 'HR') {
@@ -8143,9 +8155,13 @@ ${relevantGoalIdsSql}
       const rows = await query(
         `SELECT * FROM exit_interviews 
          WHERE deleted_at IS NULL 
-         AND (employee_user_id = ? OR interviewer_user_id = ?)
+         AND (
+           employee_user_id = ? OR interviewer_user_id = ?
+           OR LOWER(TRIM(COALESCE(employee_name, ''))) IN (${actorNames.length ? actorNames.map(() => '?').join(', ') : "''"})
+           OR LOWER(TRIM(COALESCE(interviewer_name, ''))) IN (${actorNames.length ? actorNames.map(() => '?').join(', ') : "''"})
+         )
          ORDER BY created_at DESC`,
-        [userId, userId]
+        [userId, userId, ...actorNames, ...actorNames]
       );
       res.json(rows);
     } catch (err) { res.status(500).json({ error: "Database error" }); }
