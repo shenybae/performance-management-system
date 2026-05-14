@@ -1688,19 +1688,31 @@ export const VerificationOfReview = () => {
           <div className="grid sm:grid-cols-2 gap-4">
             <F label="Employee" value={r.employee_name} />
             <F label="Department" value={r.department || r.employee_department} />
-            <F label="Position" value={r.position} />
+            <F label="Starting Position" value={r.starting_position} />
+            <F label="Ending Position" value={r.ending_position} />
             <F label="Interview Date" value={r.interview_date} />
-            <F label="Last Day" value={r.last_day} />
-            <F label="Interviewer" value={r.interviewer_name} />
+            <F label="Termination Date" value={r.termination_date} />
+            <F label="Salary" value={r.salary} />
+            <F label="Hire Date" value={r.hire_date} />
           </div>
         </SectionCard>
-        <SectionCard><TB label="Reason for Leaving" value={r.reason_for_leaving} /></SectionCard>
-        <SectionCard><TB label="What did you like about working here?" value={r.liked_about_work} /></SectionCard>
-        <SectionCard><TB label="What could be improved?" value={r.improvements} /></SectionCard>
-        <SectionCard><TB label="Additional Comments" value={r.comments} /></SectionCard>
+        <SectionCard title="Interview Details">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <F label="Interviewer" value={r.interviewer_name} />
+            <F label="Supervisor" value={r.supervisor} />
+            <F label="Reasons for Leaving" value={r.reasons} />
+            <F label="Would Recommend" value={r.would_recommend} />
+          </div>
+        </SectionCard>
+        <SectionCard><TB label="What did you like most about working here?" value={r.liked_most} /></SectionCard>
+        <SectionCard><TB label="What did you like least about working here?" value={r.liked_least} /></SectionCard>
+        <SectionCard><TB label="Pay & Benefits Opinion" value={r.pay_benefits_opinion} /></SectionCard>
+        <SectionCard><TB label="Improvement Suggestions" value={r.improvement_suggestions} /></SectionCard>
+        <SectionCard><TB label="Additional Comments" value={r.additional_comments} /></SectionCard>
+        <SectionCard><TB label="Dismissal Details" value={r.dismissal_details} /></SectionCard>
         <SectionCard><Sigs items={[
-          { label: 'Employee', signed: !!r.employee_sig, date: r.employee_sig_date },
-          { label: 'Interviewer', signed: !!r.interviewer_sig, date: r.interviewer_sig_date },
+          { label: `Employee (${r.employee_name || 'Employee'})`, signed: !!r.employee_sig, date: r.employee_sig_date },
+          { label: `Interviewer (${r.interviewer_name || 'Interviewer'})`, signed: !!r.interviewer_sig, date: r.interviewer_date },
         ]} /></SectionCard>
       </ViewShell>
     );
@@ -1820,23 +1832,43 @@ export const VerificationOfReview = () => {
         <HeroCard
           eyebrow="Property Accountability"
           title={`Property — ${r.employee_name || 'Employee'}`}
-          meta={`${r.department || r.employee_department || 'No department'}${r.date_issued || r.created_at?.split('T')[0] ? ` • Issued: ${r.date_issued || r.created_at?.split('T')[0]}` : ''}`}
+          meta={`${r.position_dept || 'No department'}${r.date_prepared || r.created_at?.split('T')[0] ? ` • Issued: ${r.date_prepared || r.created_at?.split('T')[0]}` : ''}`}
         />
         <SectionCard title="Property Information">
           <div className="grid sm:grid-cols-2 gap-4">
             <F label="Employee" value={r.employee_name} />
-            <F label="Department" value={r.department || r.employee_department} />
-            <F label="Date Issued" value={r.date_issued || r.created_at?.split('T')[0]} />
-            <F label="Property Type" value={r.property_type} />
+            <F label="Department" value={r.position_dept} />
+            <F label="Date Prepared" value={r.date_prepared || r.created_at?.split('T')[0]} />
+            <F label="Brand" value={r.brand} />
+            <F label="Serial No." value={r.serial_no} />
+            <F label="Quantity" value={r.uom_qty} />
           </div>
         </SectionCard>
-        <SectionCard><TB label="Items / Description" value={r.items || r.description} /></SectionCard>
+        <SectionCard>
+          <TB label="Items / Description" value={
+            (() => {
+              if (!r.items) return null;
+              try {
+                const parsed = typeof r.items === 'string' ? JSON.parse(r.items) : r.items;
+                if (Array.isArray(parsed)) {
+                  return parsed.map((item: any) => {
+                    if (typeof item === 'string') return item;
+                    return Object.entries(item).map(([k, v]) => `${k}: ${v}`).join('\n');
+                  }).join('\n\n');
+                }
+                return typeof parsed === 'object' ? JSON.stringify(parsed, null, 2) : String(r.items);
+              } catch {
+                return r.items;
+              }
+            })()
+          } />
+        </SectionCard>
         <SectionCard><TB label="Remarks" value={r.remarks} /></SectionCard>
         <SectionCard><Sigs items={[
-          { label: 'Turned Over By', signed: !!r.turnover_by_sig },
-          { label: 'Noted By', signed: !!r.noted_by_sig },
-          { label: 'Received By', signed: !!r.received_by_sig },
-          { label: 'Audited By', signed: !!r.audited_by_sig },
+          { label: `Turned Over By (${r.turnover_by_name || 'Not assigned'})`, signed: !!r.turnover_by_sig, date: r.turnover_by_date },
+          { label: `Noted By (${r.noted_by_name || 'Not assigned'})`, signed: !!r.noted_by_sig, date: r.noted_by_date },
+          { label: `Received By (${r.received_by_name || 'Not assigned'})`, signed: !!r.received_by_sig, date: r.received_by_date },
+          { label: `Audited By (${r.audited_by_name || 'Not assigned'})`, signed: !!r.audited_by_sig, date: r.audited_by_date },
         ]} /></SectionCard>
       </ViewShell>
     );
@@ -2504,7 +2536,7 @@ export const VerificationOfReview = () => {
               badge: 'Interviewer',
               badgeColorClass: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300',
               pills: [{ icon: <Building2 size={10} />, text: e.department || '—' }],
-              onView: () => setGenericViewModal({ title: `Exit Interview — ${e.employee_name || 'Exit Interview'}`, type: 'exit_interview', record: e }),
+              onView: () => setGenericViewModal({ title: `Exit Interview — ${e.employee_name || 'Exit Interview'}`, type: 'exit', record: e }),
               onSign: () => openGenericSign(`Sign — Exit Interview (${e.employee_name || 'Exit Interview'})`, 'simple', 'exit-sign', e),
             }))}
           </Card>
